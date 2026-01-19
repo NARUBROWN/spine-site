@@ -8,7 +8,7 @@ export default withMermaid(defineConfig({
     head: [['link', { rel: 'icon', href: '/logo.png' }]],
 
     themeConfig: {
-        logo: '/logo.png',
+        logo: '/header_logo.png',
         siteTitle: false,
         // https://vitepress.dev/reference/default-theme-config
         socialLinks: [
@@ -133,31 +133,29 @@ export default withMermaid(defineConfig({
                         {
                             text: '핵심 개념',
                             items: [
-                                { text: '파이프라인', link: '/ko/learn/core-concepts/pipeline' },
-                                { text: '실행 컨텍스트', link: '/ko/learn/core-concepts/execution-context' },
-                                { text: '핸들러 메타', link: '/ko/learn/core-concepts/handler-meta' },
+                                { text: '실행 파이프라인', link: '/ko/learn/core-concepts/pipeline' },
+                                { text: 'ExecutionContext', link: '/ko/learn/core-concepts/execution-context' },
+                                { text: 'HandlerMeta', link: '/ko/learn/core-concepts/handler-meta' },
                                 { text: 'query.Values', link: '/ko/learn/core-concepts/query-values' },
-                                { text: 'httperr', link: '/ko/learn/core-concepts/httperr' }
+                                { text: 'httperr 패키지', link: '/ko/learn/core-concepts/httperr' }
                             ]
-                        }
+                        },
+
                     ],
                     '/ko/reference/': [
                         {
-                            text: 'API 참조',
+                            text: 'API 문서',
                             items: [
                                 { text: 'spine.App', link: '/ko/reference/api/spine-app' },
-                                { text: 'ExecutionContext', link: '/ko/reference/api/execution-context' },
-                                { text: 'Interceptor', link: '/ko/reference/api/interceptor' },
+                                { text: 'core.ExecutionContext', link: '/ko/reference/api/execution-context' },
+                                { text: 'core.Interceptor', link: '/ko/reference/api/interceptor' },
                                 { text: 'query.Values', link: '/ko/reference/api/query-values' }
                             ]
                         },
                         {
-                            text: '예제',
+                            text: '예제 모음',
                             items: [
-                                { text: 'CRUD', link: '/ko/reference/examples/crud' },
-                                { text: 'JWT 인증', link: '/ko/reference/examples/jwt' },
-                                { text: '파일 업로드', link: '/ko/reference/examples/file-upload' },
-                                { text: '웹소켓', link: '/ko/reference/examples/websocket' }
+                                { text: 'CRUD 기본', link: '/ko/reference/examples/crud' }
                             ]
                         }
                     ],

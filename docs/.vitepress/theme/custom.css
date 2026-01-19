@@ -16,6 +16,7 @@
 
 /* Ensure Korean text in Hero doesn't break mid-word */
 .VPHero .name,
-.VPHero .text {
+.VPHero .text,
+.VPHero .tagline {
     word-break: keep-all;
 }

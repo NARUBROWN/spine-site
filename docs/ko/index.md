@@ -72,38 +72,48 @@ Router는 실행 대상을 선택할 뿐이며,
 
 ## 보이는 것이 전부입니다
 
+<p style="text-align: center; color: var(--vp-c-text-2);">어노테이션 없이, 모듈 정의 없이</p>
+
 <FrameworkTabs>
   <template #spine>
 
 ### main.go
 ```go
+// main.go
 func main() {
     app := spine.New()
-
+    
     // ✅ 생성자만 등록하면 의존성 자동 해결
+    // ✅ 순서 상관없이 등록 가능
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
+    
     routes.RegisterUserRoutes(app)
     app.Run(":8080")
 }
 ```
 
-### routes/user_routes.go
+### routes.go
 ```go
+// routes.go
 func RegisterUserRoutes(app spine.App) {
     // ✅ 라우트와 핸들러의 연결이 명시적
+    // ✅ 어떤 메서드가 어떤 경로인지 한눈에 파악
     app.Route("GET", "/users", (*UserController).GetUser)
     app.Route("POST", "/users", (*UserController).CreateUser)
 }
 ```
 
-### controller.go - 어노테이션, 데코레이터 없음
+### controller.go
 ```go
+// controller.go
 // ✅ 어노테이션 없음 — 순수한 Go 구조체
+// ✅ 테스트 시 모킹이 쉬움
 type UserController struct {
     svc *UserService
 }
 
 // ✅ 생성자 파라미터 = 의존성 선언
+// ✅ 숨겨진 마법 없음
 func NewUserController(svc *UserService) *UserController {
     return &UserController{svc: svc}
 }
@@ -113,14 +123,12 @@ func NewUserController(svc *UserService) *UserController {
 func (c *UserController) GetUser(ctx context.Context, q query.Values) (UserResponse, error) {
     return c.svc.Get(ctx, q.Int("id", 0))
 }
-
-func (c *UserController) CreateUser(ctx context.Context, req CreateUserRequest) (UserResponse, error) {
-    return c.svc.Create(ctx, req)
-}
 ```
 
-### service.go - 어노테이션, 데코레이터 없음
+### service.go
 ```go
+// service.go
+// ✅ 어노테이션 없음
 type UserService struct {
     repo *UserRepository
 }
@@ -128,32 +136,18 @@ type UserService struct {
 func NewUserService(repo *UserRepository) *UserService {
     return &UserService{repo: repo}
 }
-
-func (s *UserService) Get(ctx context.Context, id int) (UserResponse, error) {
-    return s.repo.FindByID(ctx, id)
-}
-
-func (s *UserService) Create(ctx context.Context, req CreateUserRequest) (UserResponse, error) {
-    return s.repo.Save(ctx, req)
-}
 ```
 
-### repository.go - 어노테이션, 데코레이터 없음
+### repository.go
 ```go
+// repository.go
+// ✅ 어노테이션 없음
 type UserRepository struct {
-    db *sql.DB
+    db *bun.DB
 }
 
-func NewUserRepository(db *sql.DB) *UserRepository {
+func NewUserRepository(db *bun.DB) *UserRepository {
     return &UserRepository{db: db}
-}
-
-func (r *UserRepository) FindByID(ctx context.Context, id int) (UserResponse, error) {
-    // DB 조회
-}
-
-func (r *UserRepository) Save(ctx context.Context, req CreateUserRequest) (UserResponse, error) {
-    // DB 저장
 }
 ```
   </template>
@@ -162,14 +156,16 @@ func (r *UserRepository) Save(ctx context.Context, req CreateUserRequest) (UserR
 
 ### main.ts
 ```typescript
+// main.ts
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
     await app.listen(3000);
 }
 ```
 
-### app.module.ts - 모듈 정의 필수
+### app.module.ts
 ```typescript
+// app.module.ts
 // ⚠️ 모듈 정의 필수 — 보일러플레이트 증가
 // ⚠️ 앱이 커지면 모듈 간 의존성 관리 복잡
 @Module({
@@ -178,9 +174,9 @@ async function bootstrap() {
 export class AppModule {}
 ```
 
-### user.module.ts - 모듈 정의 필수
-
+### user.module.ts
 ```typescript
+// user.module.ts
 // ⚠️ 컨트롤러, 서비스마다 모듈에 등록해야 함
 // ⚠️ 빠뜨리면 런타임 에러
 @Module({
@@ -190,8 +186,9 @@ export class AppModule {}
 export class UserModule {}
 ```
 
-### controller.ts - 데코레이터 필수
+### controller.ts
 ```typescript
+// controller.ts
 // ⚠️ 데코레이터 없으면 동작 안 함
 // ⚠️ 라우트 정보가 클래스/메서드에 분산
 @Controller('users')
@@ -203,45 +200,26 @@ export class UserController {
     getUser(@Query('id') id: string) {
         return this.svc.get(+id);
     }
-
-    @Post()
-    createUser(@Body() req: CreateUserRequest) {
-        return this.svc.create(req);
-    }
 }
 ```
 
-### service.ts - 데코레이터 필수
+### service.ts
 ```typescript
+// service.ts
 // ⚠️ @Injectable 없으면 주입 안 됨
 @Injectable()
 export class UserService {
     constructor(private readonly repo: UserRepository) {}
-
-    get(id: number) {
-        return this.repo.findById(id);
-    }
-
-    create(req: CreateUserRequest) {
-        return this.repo.save(req);
-    }
 }
 ```
 
-### repository.ts - 데코레이터 필수
+### repository.ts
 ```typescript
+// repository.ts
 // ⚠️ @Injectable + @InjectRepository 둘 다 필요
 @Injectable()
 export class UserRepository {
     constructor(@InjectRepository(User) private repo: Repository<User>) {}
-
-    findById(id: number) {
-        // DB 조회
-    }
-
-    save(req: CreateUserRequest) {
-        // DB 저장
-    }
 }
 ```
   </template>
@@ -250,7 +228,8 @@ export class UserRepository {
 
 ### Application.java
 ```java
-@SpringBootApplication // ⚠️ 이 안에서 무슨 일이 일어나는지 알기 어려움
+// Application.java
+@SpringBootApplication  // ⚠️ 이 안에서 무슨 일이 일어나는지 알기 어려움
 public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
@@ -258,58 +237,54 @@ public class Application {
 }
 ```
 
-### Controller.java - 어노테이션 필수
+### Controller.java
 ```java
-// ⚠️ 어노테이션 없으면 동작 안 함
-// ⚠️ 라우트 정보가 분산됨
-@RestController
-@RequestMapping("/users")
+// Controller.java
+@RestController  // ⚠️ 어노테이션 없으면 동작 안 함
+@RequestMapping("/users")  // ⚠️ 라우트 정보가 분산됨
 public class UserController {
     
-    @Autowired
+    @Autowired  // ⚠️ 필드 주입 — 테스트 시 모킹 어려움
     private UserService svc;
 
-    // ⚠️ 메서드마다 어노테이션 필요
-    @GetMapping
-    public UserResponse getUser(@RequestParam Long id) {
+    @GetMapping  // ⚠️ 메서드마다 어노테이션 필요
+    public UserResponse getUser(@RequestParam Long id) {  // ⚠️ 파라미터마다 어노테이션
         return svc.get(id);
     }
-
-    @PostMapping
-    public UserResponse createUser(@RequestBody CreateUserRequest req) {
-        return svc.create(req);
-    }
 }
 ```
 
-### Service.java - 어노테이션 필수
+### Service.java
 ```java
-// ⚠️ 어노테이션 없으면 빈 등록 안 됨
-@Service
+// Service.java
+@Service  // ⚠️ 어노테이션 없으면 빈 등록 안 됨
 public class UserService {
-    @Autowired
+    
+    @Autowired  // ⚠️ 순환 참조 문제 발생 가능
     private UserRepository repo;
-
-    public UserResponse get(Long id) {
-        return repo.findById(id);
-    }
-
-    public UserResponse create(CreateUserRequest req) {
-        return repo.save(req);
-    }
 }
 ```
 
-### Repository.java - 어노테이션 필수
+### Repository.java
 ```java
-@Repository
-// ⚠️ JpaRepository 상속 필수 — 강한 결합
+// Repository.java
+@Repository  // ⚠️ 어노테이션 필수
 public interface UserRepository extends JpaRepository<User, Long> {
-    // DB 조회/저장
+    // ⚠️ JpaRepository 상속 필수 — 강한 결합
 }
 ```
   </template>
 </FrameworkTabs>
+
+### 한눈에 비교
+
+| | Spine | NestJS | Spring Boot |
+|---|:---:|:---:|:---:|
+| 모듈 정의 | ✅ 불필요 | ⚠️ 필수 | ✅ 불필요 |
+| 어노테이션/데코레이터 | ✅ 없음 | ⚠️ 필수 | ⚠️ 필수 |
+| DI 방식 | ✅ 생성자 파라미터 | 데코레이터 + 생성자 | 어노테이션 |
+| 라우트 정의 | ✅ 한 곳에 모아서 | ⚠️ 클래스에 분산 | ⚠️ 클래스에 분산 |
+| 테스트 용이성 | ✅ 순수 구조체 | 모킹 설정 필요 | 모킹 설정 필요 |
 
 <div style="text-align: center; margin-top: 2rem;">
   <a href="/ko/learn/getting-started/intro" style="display: inline-block; padding: 0.8rem 1.6rem; background-color: var(--vp-c-brand-1); color: white; border-radius: 2rem; font-weight: bold; text-decoration: none;">5분 튜토리얼 시작 →</a>
