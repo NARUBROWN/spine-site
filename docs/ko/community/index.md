@@ -1,3 +1,3 @@
 # 커뮤니티 개요
 
-(Documentation in progress)
+커뮤니티 섹션은 현재 준비 중입니다. 나중에 다시 확인해 주세요!
