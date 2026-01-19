@@ -190,5 +190,5 @@ func (c *ProductController) Filter(q query.Values) []Product {
 
 ## 참고
 
-- [query.Pagination](/docs/api/pagination) - 페이지네이션 헬퍼
-- [ArgumentResolver](/docs/concepts/argument-resolver) - 파라미터 해석
+- query.Pagination - 페이지네이션 헬퍼
+- [ArgumentResolver](/ko/learn/core-concepts/pipeline) - 파라미터 해석

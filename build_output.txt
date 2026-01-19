@@ -1,0 +1,67 @@
+
+> spine-site@1.0.0 docs:build
+> vitepress build docs
+
+
+  vitepress v1.6.4
+
+- building client + server bundles...
+
+
+(!) Found dead link /learn/tutorial/1-project-structure in file en/learn/getting-started/first-app.md
+(!) Found dead link /learn/tutorial/4-interceptor in file en/learn/getting-started/first-app.md
+(!) Found dead link /learn/tutorial/5-database in file en/learn/getting-started/first-app.md
+(!) Found dead link /learn/getting-started/first-app in file en/learn/getting-started/installation.md
+(!) Found dead link /learn/getting-started/first-app in file en/learn/getting-started/intro.md
+(!) Found dead link /learn/tutorial/2-controller in file en/learn/tutorial/1-project-structure.md
+(!) Found dead link /learn/tutorial/3-dependency-injection in file en/learn/tutorial/1-project-structure.md
+(!) Found dead link /learn/tutorial/4-interceptor in file en/learn/tutorial/1-project-structure.md
+(!) Found dead link /learn/tutorial/4-interceptor in file en/learn/tutorial/3-dependency-injection.md
+(!) Found dead link /learn/tutorial/5-database in file en/learn/tutorial/3-dependency-injection.md
+(!) Found dead link /learn/tutorial/6-transaction in file en/learn/tutorial/5-database.md
+(!) Found dead link /learn/tutorial/7-error-handling in file en/learn/tutorial/5-database.md
+(!) Found dead link /learn/tutorial/3-dependency-injection in file en/learn/tutorial/2-controller.md
+(!) Found dead link /learn/tutorial/4-interceptor in file en/learn/tutorial/2-controller.md
+(!) Found dead link /learn/tutorial/7-error-handling in file en/learn/tutorial/6-transaction.md
+(!) Found dead link /reference/api/spine-app in file en/learn/tutorial/6-transaction.md
+(!) Found dead link /learn/core-concepts/pipeline in file en/reference/api/query-values.md
+(!) Found dead link /reference/api/spine-app in file en/learn/tutorial/8-swagger.md
+(!) Found dead link /reference/examples/crud in file en/learn/tutorial/8-swagger.md
+(!) Found dead link /reference/api/interceptor in file en/reference/api/execution-context.md
+(!) Found dead link /reference/api/execution-context in file en/reference/api/interceptor.md
+(!) Found dead link /learn/core-concepts/handler-meta in file en/reference/api/interceptor.md
+(!) Found dead link /reference/api/interceptor in file en/reference/api/spine-app.md
+(!) Found dead link /learn/core-concepts/pipeline in file en/reference/api/spine-app.md
+(!) Found dead link /learn/getting-started/intro in file en/reference/api/spine-app.md
+(!) Found dead link /learn/tutorial/5-database in file en/learn/tutorial/4-interceptor.md
+(!) Found dead link /learn/tutorial/7-error-handling in file en/learn/tutorial/4-interceptor.md
+(!) Found dead link /ko/learn/tutorial/project-structure in file ko/learn/getting-started/first-app.md
+(!) Found dead link /ko/learn/tutorial/interceptor in file ko/learn/getting-started/first-app.md
+(!) Found dead link /ko/learn/tutorial/database in file ko/learn/getting-started/first-app.md
+(!) Found dead link /ko/learn/tutorial/dependency-injection in file ko/learn/tutorial/2-controller.md
+(!) Found dead link /ko/learn/tutorial/interceptor in file ko/learn/tutorial/2-controller.md
+(!) Found dead link /ko/learn/tutorial/controller in file ko/learn/tutorial/1-project-structure.md
+(!) Found dead link /ko/learn/tutorial/dependency-injection in file ko/learn/tutorial/1-project-structure.md
+(!) Found dead link /ko/learn/tutorial/interceptor in file ko/learn/tutorial/1-project-structure.md
+(!) Found dead link /ko/learn/tutorial/interceptor in file ko/learn/tutorial/3-dependency-injection.md
+(!) Found dead link /ko/learn/tutorial/database in file ko/learn/tutorial/3-dependency-injection.md
+(!) Found dead link /ko/learn/tutorial/database in file ko/learn/tutorial/4-interceptor.md
+(!) Found dead link /ko/learn/tutorial/error-handling in file ko/learn/tutorial/4-interceptor.md
+(!) Found dead link /ko/learn/tutorial/transaction in file ko/learn/tutorial/5-database.md
+(!) Found dead link /ko/learn/tutorial/error-handling in file ko/learn/tutorial/5-database.md
+(!) Found dead link /ko/learn/tutorial/error-handling in file ko/learn/tutorial/6-transaction.md
+
+If this is expected, you can disable this check via config. Refer: https://vitepress.dev/reference/site-config#ignoredeadlinks
+
+x Build failed in 4.76s
+[31m✖[0m building client + server bundles...
+build error:
+[vitepress] 42 dead link(s) found.
+[vitepress] 42 dead link(s) found.
+    at Object.renderStart (file:///Users/kim-wonjeong/Antigravity/spine-site/node_modules/vitepress/dist/node/chunk-D3CUZ4fa.js:45027:15)
+    at file:///Users/kim-wonjeong/Antigravity/spine-site/node_modules/rollup/dist/es/shared/node-entry.js:22567:40
+    at async Promise.all (index 0)
+    at async PluginDriver.hookParallel (file:///Users/kim-wonjeong/Antigravity/spine-site/node_modules/rollup/dist/es/shared/node-entry.js:22477:9)
+    at async Bundle.generate (file:///Users/kim-wonjeong/Antigravity/spine-site/node_modules/rollup/dist/es/shared/node-entry.js:20639:13)
+    at async file:///Users/kim-wonjeong/Antigravity/spine-site/node_modules/rollup/dist/es/shared/node-entry.js:23554:27
+    at async catchUnfinishedHookActions (file:///Users/kim-wonjeong/Antigravity/spine-site/node_modules/rollup/dist/es/shared/node-entry.js:22921:16)

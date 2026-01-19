@@ -1,38 +1,37 @@
-# 데이터베이스 연결
+# Database Connection
 
-Bun을 사용하여 데이터베이스에 연결하기.
+Connecting to a database using Bun.
+
+## What is Bun?
+
+[Bun](https://bun.uptrace.dev/) is a lightweight ORM for Go.
+
+- SQL-friendly — Queries are intuitive
+- Type-safe — Compile-time validation
+- Fast performance — Minimized reflection
+
+Spine does not enforce a specific ORM, but recommends combining with Bun.
 
 
-## Bun이란?
-
-[Bun](https://bun.uptrace.dev/)은 Go를 위한 경량 ORM입니다.
-
-- SQL 친화적 — 쿼리가 직관적
-- 타입 안전 — 컴파일 타임 검증
-- 빠른 성능 — 리플렉션 최소화
-
-Spine은 특정 ORM을 강제하지 않지만, Bun과의 조합을 권장합니다.
-
-
-## 설치
+## Installation
 
 ```bash
-# Bun 코어
+# Bun Core
 go get github.com/uptrace/bun
 
-# MySQL 드라이버 + 방언
+# MySQL Driver + Dialect
 go get github.com/uptrace/bun/dialect/mysqldialect
 go get github.com/go-sql-driver/mysql
 
-# PostgreSQL을 사용한다면
+# If using PostgreSQL
 # go get github.com/uptrace/bun/dialect/pgdialect
 # go get github.com/jackc/pgx/v5/stdlib
 ```
 
 
-## 데이터베이스 연결
+## Connecting to Database
 
-### 연결 함수 작성
+### Writing Connection Function
 
 ```go
 // db.go
@@ -47,7 +46,7 @@ import (
 )
 
 func NewDB() *bun.DB {
-    // MySQL 연결
+    // MySQL Connection
     sqldb, err := sql.Open("mysql", 
         "user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local",
     )
@@ -55,19 +54,19 @@ func NewDB() *bun.DB {
         panic(err)
     }
     
-    // 연결 확인
+    // Check Connection
     if err := sqldb.Ping(); err != nil {
         panic(err)
     }
     
-    // Bun DB 생성
+    // Create Bun DB
     db := bun.NewDB(sqldb, mysqldialect.New())
     
     return db
 }
 ```
 
-### Spine에 등록
+### Registering in Spine
 
 ```go
 // main.go
@@ -75,7 +74,7 @@ func main() {
     app := spine.New()
     
     app.Constructor(
-        NewDB,  // *bun.DB 생성
+        NewDB,  // Creates *bun.DB
         // ...
     )
     
@@ -83,7 +82,7 @@ func main() {
 }
 ```
 
-## PostgreSQL 연결
+## PostgreSQL Connection
 
 ```go
 // db.go
@@ -112,9 +111,9 @@ func NewDB() *bun.DB {
 ```
 
 
-## 환경 변수 사용
+## Using Environment Variables
 
-하드코딩 대신 환경 변수를 사용하세요.
+Use environment variables instead of hardcoding.
 
 ```go
 // db.go
@@ -141,9 +140,9 @@ go run main.go
 ```
 
 
-## Entity 정의
+## Entity Definition
 
-데이터베이스 테이블과 매핑되는 구조체입니다.
+Structs that map to database tables.
 
 ```go
 // entity/user.go
@@ -160,24 +159,24 @@ type User struct {
 }
 ```
 
-### Bun 태그
+### Bun Tags
 
-| 태그 | 설명 |
+| Tag | Description |
 |------|------|
 | `pk` | Primary Key |
-| `autoincrement` | 자동 증가 |
+| `autoincrement` | Auto Increment |
 | `notnull` | NOT NULL |
-| `unique` | UNIQUE 제약 |
-| `nullzero` | Go 제로값을 NULL로 처리 |
-| `default:value` | 기본값 |
+| `unique` | UNIQUE Constraint |
+| `nullzero` | Treat Go zero value as NULL |
+| `default:value` | Default Value |
 
 ---
 
-## Repository 작성
+## Writing Repository
 
-### bun.IDB 인터페이스 사용
+### Using bun.IDB Interface
 
-`bun.IDB`를 사용하면 `*bun.DB`와 `*bun.Tx` 모두 수용할 수 있습니다.
+Using `bun.IDB` allows accepting both `*bun.DB` and `*bun.Tx`.
 
 ```go
 // repository/user_repository.go
@@ -191,7 +190,7 @@ import (
 )
 
 type UserRepository struct {
-    db bun.IDB  // *bun.DB 또는 *bun.Tx 모두 가능
+    db bun.IDB  // Can be *bun.DB or *bun.Tx
 }
 
 func NewUserRepository(db bun.IDB) *UserRepository {
@@ -199,7 +198,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 }
 ```
 
-### 조회
+### Reading
 
 ```go
 func (r *UserRepository) FindByID(ctx context.Context, id int) (*entity.User, error) {
@@ -239,7 +238,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity
 }
 ```
 
-### 생성
+### Creating
 
 ```go
 func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
@@ -251,7 +250,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
 }
 ```
 
-### 수정
+### Updating
 
 ```go
 func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
@@ -264,7 +263,7 @@ func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
 }
 ```
 
-### 삭제
+### Deleting
 
 ```go
 func (r *UserRepository) Delete(ctx context.Context, id int) error {
@@ -278,9 +277,9 @@ func (r *UserRepository) Delete(ctx context.Context, id int) error {
 ```
 
 
-## 마이그레이션
+## Migration
 
-### 마이그레이션 파일 작성
+### Writing Migration Files
 
 ```sql
 -- migrations/001_create_users.up.sql
@@ -298,7 +297,7 @@ CREATE TABLE users (
 DROP TABLE IF EXISTS users;
 ```
 
-### 마이그레이션 실행 코드
+### Migration Execution Code
 
 ```go
 // main.go
@@ -319,13 +318,13 @@ import (
 var sqlMigrations embed.FS
 
 func main() {
-    // CLI 플래그
+    // CLI Flags
     migrateOnly := flag.Bool("migrate", false, "Run migrations and exit")
     flag.Parse()
 
     db := NewDB()
 
-    // 마이그레이션만 실행
+    // Run migrations only
     if *migrateOnly {
         if err := runMigrations(context.Background(), db); err != nil {
             fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
@@ -335,7 +334,7 @@ func main() {
         return
     }
 
-    // 서버 시작
+    // Start Server
     app := spine.New()
     // ...
     app.Run(":8080")
@@ -350,12 +349,12 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 
     migrator := migrate.NewMigrator(db, migrations)
 
-    // 마이그레이션 테이블 생성
+    // Create migration table
     if err := migrator.Init(ctx); err != nil {
         return err
     }
 
-    // 마이그레이션 실행
+    // Execute migration
     if _, err := migrator.Migrate(ctx); err != nil {
         return err
     }
@@ -364,27 +363,27 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 }
 ```
 
-### 실행
+### Execution
 
 ```bash
-# 마이그레이션 실행
+// Run Migrations
 go run . -migrate
 
-# 서버 실행
+// Run Server
 go run .
 ```
 
 
-## 전체 구조
+## Overall Structure
 
 ```
 myapp/
 ├── main.go
-├── db.go                    # DB 연결
+├── db.go                    # DB Connection
 ├── entity/
-│   └── user.go              # 테이블 매핑
+│   └── user.go              # Table Mapping
 ├── repository/
-│   └── user_repository.go   # 데이터 접근
+│   └── user_repository.go   # Data Access
 ├── service/
 │   └── user_service.go
 ├── controller/
@@ -396,7 +395,7 @@ myapp/
     └── 001_create_users.down.sql
 ```
 
-## Spine과 통합
+## Integrating with Spine
 
 ```go
 // main.go
@@ -418,15 +417,15 @@ func main() {
 
 ```go
 // repository/user_repository.go
-// bun.IDB를 받으므로 *bun.DB가 자동 주입됨
+// Accepts bun.IDB, so *bun.DB is automatically injected
 func NewUserRepository(db bun.IDB) *UserRepository {
     return &UserRepository{db: db}
 }
 ```
 
-## 쿼리 예제
+## Query Examples
 
-### 조건 조회
+### Conditional Select
 
 ```go
 // WHERE name LIKE '%alice%'
@@ -449,7 +448,7 @@ err := r.db.NewSelect().
     Scan(ctx)
 ```
 
-### 정렬 및 페이징
+### Sort and Pagination
 
 ```go
 // ORDER BY created_at DESC LIMIT 10 OFFSET 20
@@ -461,7 +460,7 @@ err := r.db.NewSelect().
     Scan(ctx)
 ```
 
-### 집계
+### Aggregation
 
 ```go
 // SELECT COUNT(*) FROM users
@@ -470,7 +469,7 @@ count, err := r.db.NewSelect().
     Count(ctx)
 ```
 
-### 조인
+### Join
 
 ```go
 // SELECT * FROM users JOIN orders ON users.id = orders.user_id
@@ -481,17 +480,17 @@ err := r.db.NewSelect().
 ```
 
 
-## 핵심 정리
+## Key Takeaways
 
-| 개념 | 설명 |
+| Concept | Description |
 |------|------|
-| **bun.IDB** | DB와 Tx 모두 수용하는 인터페이스 |
-| **Entity** | 테이블과 매핑되는 Go 구조체 |
-| **Repository** | 데이터 접근 계층 |
-| **Migration** | SQL 파일로 스키마 관리 |
+| **bun.IDB** | Interface accepting both DB and Tx |
+| **Entity** | Go struct mapping to table |
+| **Repository** | Data access layer |
+| **Migration** | Schema management with SQL files |
 
 
-## 다음 단계
+## Next Steps
 
-- [튜토리얼: 트랜잭션](/ko/learn/tutorial/6-transaction) — 트랜잭션 인터셉터
-- [튜토리얼: 에러 처리](/ko/learn/tutorial/7-error-handling) — httperr 사용법
+- [Tutorial: Transaction](/en/learn/tutorial/6-transaction) — Transaction Interceptor
+- [Tutorial: Error Handling](/en/learn/tutorial/7-error-handling) — httperr usage

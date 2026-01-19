@@ -1,46 +1,45 @@
-# 컨트롤러
+# Controller
 
-Spine에서 컨트롤러 작성하기.
+Writing Controllers in Spine.
 
+## What is a Controller?
 
-## 컨트롤러란?
+The Controller is the layer that receives HTTP requests and delegates them to the Service.
 
-컨트롤러는 HTTP 요청을 받아 서비스에 위임하는 계층입니다.
-
-Spine의 컨트롤러는 **순수한 Go 구조체**입니다. 어노테이션도, 데코레이터도, 특별한 인터페이스 구현도 필요 없습니다.
+A Spine Controller is a **pure Go struct**. No annotations, decorators, or special interface implementations are required.
 
 ```go
-// 이게 전부입니다
+// This is all
 type UserController struct {
     svc *service.UserService
 }
 ```
 
-## 기본 구조
+## Basic Structure
 
-### 1. 구조체 정의
+### 1. Define Struct
 
 ```go
 package controller
 
 type UserController struct {
-    svc *service.UserService  // 의존성
+    svc *service.UserService  // Dependency
 }
 ```
 
-### 2. 생성자 작성
+### 2. Write Constructor
 
 ```go
-// 생성자 파라미터 = 의존성 선언
+// Constructor parameters = Dependency declaration
 func NewUserController(svc *service.UserService) *UserController {
     return &UserController{svc: svc}
 }
 ```
 
-### 3. 핸들러 메서드 작성
+### 3. Write Handler Method
 
 ```go
-// 함수 시그니처가 곧 API 스펙
+// Function signature IS the API spec
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
@@ -49,38 +48,38 @@ func (c *UserController) GetUser(
 }
 ```
 
-### 4. 라우트 등록
+### 4. Register Route
 
 ```go
 app.Route("GET", "/users", (*UserController).GetUser)
 ```
 
 
-## 핸들러 시그니처
+## Handler Signature
 
-Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 바인딩합니다.
+Spine analyzes the handler's function signature to automatically bind inputs.
 
-### 지원하는 파라미터 타입
+### Supported Parameter Types
 
-| 타입 | 설명 | 예시 |
+| Type | Description | Example |
 |------|------|------|
-| `context.Context` | 요청 컨텍스트 | `ctx context.Context` |
-| `query.Values` | 쿼리 파라미터 | `q query.Values` |
-| `struct` (DTO) | JSON 요청 본문 | `req CreateUserRequest` |
+| `context.Context` | Request Context | `ctx context.Context` |
+| `query.Values` | Query Parameters | `q query.Values` |
+| `struct` (DTO) | JSON Request Body | `req CreateUserRequest` |
 
-### 지원하는 반환 타입
+### Supported Return Types
 
-| 타입 | 설명 |
+| Type | Description |
 |------|------|
-| `(T, error)` | 응답 객체와 에러 |
-| `error` | 에러만 반환 (응답 본문 없음) |
+| `(T, error)` | Response object and error |
+| `error` | Error only (no response body) |
 
 
-## 입력 받기
+## Receiving Input
 
-### 쿼리 파라미터
+### Query Parameters
 
-`query.Values`를 사용해 쿼리 스트링을 파싱합니다.
+Use `query.Values` to parse query strings.
 
 ```go
 // GET /users?id=1&name=alice
@@ -89,26 +88,26 @@ func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
 ) (dto.UserResponse, error) {
-    id := q.Int("id", 0)           // int64, 기본값 0
-    name := q.String("name", "")   // string, 기본값 ""
+    id := q.Int("id", 0)           // int64, default 0
+    name := q.String("name", "")   // string, default ""
     
     return c.svc.Get(ctx, int(id))
 }
 ```
 
-#### query.Values 메서드
+#### query.Values Methods
 
-| 메서드 | 반환 타입 | 설명 |
+| Method | Return Type | Description |
 |--------|----------|------|
-| `String(key, default)` | `string` | 문자열 값 |
-| `Int(key, default)` | `int64` | 정수 값 |
-| `Bool(key, default)` | `bool` | 불리언 값 |
-| `Float(key, default)` | `float64` | 실수 값 |
+| `String(key, default)` | `string` | String value |
+| `Int(key, default)` | `int64` | Integer value |
+| `Bool(key, default)` | `bool` | Boolean value |
+| `Float(key, default)` | `float64` | Float value |
 
 
-### JSON 요청 본문
+### JSON Request Body
 
-DTO 구조체를 파라미터로 선언하면 자동으로 JSON이 바인딩됩니다.
+Declaring a DTO struct as a parameter automatically binds JSON.
 
 ```go
 // POST /users
@@ -116,7 +115,7 @@ DTO 구조체를 파라미터로 선언하면 자동으로 JSON이 바인딩됩�
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req dto.CreateUserRequest,  // ← 자동 바인딩
+    req dto.CreateUserRequest,  // ← Auto binding
 ) (dto.UserResponse, error) {
     return c.svc.Create(ctx, req.Name, req.Email)
 }
@@ -130,7 +129,7 @@ type CreateUserRequest struct {
 }
 ```
 
-### 쿼리 + JSON 본문 함께 사용
+### Using Query + JSON Body Together
 
 ```go
 // PUT /users?id=1
@@ -146,11 +145,11 @@ func (c *UserController) UpdateUser(
 }
 ```
 
-## 응답 반환
+## Returning Reponse
 
-### 성공 응답
+### Success Response
 
-구조체를 반환하면 자동으로 JSON 응답이 됩니다.
+Returning a struct automatically results in a JSON response.
 
 ```go
 func (c *UserController) GetUser(
@@ -175,7 +174,7 @@ type UserResponse struct {
 }
 ```
 
-응답:
+Response:
 ```json
 {
   "id": 1,
@@ -184,9 +183,9 @@ type UserResponse struct {
 }
 ```
 
-### 에러 응답
+### Error Response
 
-`httperr` 패키지를 사용해 HTTP 상태 코드와 메시지를 반환합니다.
+Use the `httperr` package to return HTTP status codes and messages.
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/httperr"
@@ -198,16 +197,16 @@ func (c *UserController) GetUser(
     user, err := c.svc.Get(ctx, int(q.Int("id", 0)))
     if err != nil {
         // 404 Not Found
-        return dto.UserResponse{}, httperr.NotFound("유저를 찾을 수 없습니다.")
+        return dto.UserResponse{}, httperr.NotFound("User not found.")
     }
     
     return user, nil
 }
 ```
 
-#### httperr 함수
+#### httperr Functions
 
-| 함수 | 상태 코드 |
+| Function | Status Code |
 |------|----------|
 | `httperr.BadRequest(msg)` | 400 |
 | `httperr.Unauthorized(msg)` | 401 |
@@ -216,9 +215,9 @@ func (c *UserController) GetUser(
 | `httperr.InternalServerError(msg)` | 500 |
 
 
-### 응답 본문 없이 반환
+### Returning Without Response Body
 
-삭제 등 응답 본문이 필요 없는 경우 `error`만 반환합니다.
+If no response body is needed, such as for deletions, return only `error`.
 
 ```go
 func (c *UserController) DeleteUser(
@@ -226,14 +225,14 @@ func (c *UserController) DeleteUser(
     q query.Values,
 ) error {
     id := int(q.Int("id", 0))
-    return c.svc.Delete(ctx, id)  // ← 성공 시 200 OK (본문 없음)
+    return c.svc.Delete(ctx, id)  // ← 200 OK on success (no body)
 }
 ```
 
 
-## 라우트 등록
+## Registering Routes
 
-컨트롤러 메서드를 라우트에 연결합니다.
+Connect Controller methods to routes.
 
 ```go
 // routes/user_routes.go
@@ -262,7 +261,7 @@ func main() {
 }
 ```
 
-## 전체 예제
+## Complete Example
 
 ```go
 // controller/user_controller.go
@@ -295,7 +294,7 @@ func (c *UserController) GetUser(
     
     user, err := c.svc.Get(ctx, id)
     if err != nil {
-        return dto.UserResponse{}, httperr.NotFound("유저를 찾을 수 없습니다.")
+        return dto.UserResponse{}, httperr.NotFound("User not found.")
     }
     
     return user, nil
@@ -319,7 +318,7 @@ func (c *UserController) UpdateUser(
     
     user, err := c.svc.Update(ctx, id, req.Name)
     if err != nil {
-        return dto.UserResponse{}, httperr.NotFound("유저를 찾을 수 없습니다.")
+        return dto.UserResponse{}, httperr.NotFound("User not found.")
     }
     
     return user, nil
@@ -336,17 +335,17 @@ func (c *UserController) DeleteUser(
 ```
 
 
-## 핵심 정리
+## Key Takeaways
 
-| 개념 | 설명 |
+| Concept | Description |
 |------|------|
-| **어노테이션 없음** | 순수 Go 구조체와 메서드 |
-| **생성자 = 의존성** | 파라미터가 곧 의존성 선언 |
-| **시그니처 = API 스펙** | 입력/출력 타입이 명시적 |
-| **자동 바인딩** | query, JSON 본문 자동 파싱 |
+| **No Annotations** | Pure Go structs and methods |
+| **Constructor = Dependency** | Parameters dictate dependencies |
+| **Signature = API Spec** | Explicit Input/Output types |
+| **Auto Binding** | Automatic parsing of query, JSON body |
 
 
-## 다음 단계
+## Next Steps
 
-- [튜토리얼: 의존성 주입](/ko/learn/tutorial/3-dependency-injection) — DI 동작 원리
-- [튜토리얼: 인터셉터](/ko/learn/tutorial/4-interceptor) — 요청 전/후 처리
+- [Tutorial: Dependency Injection](/en/learn/tutorial/3-dependency-injection) — How DI works
+- [Tutorial: Interceptor](/en/learn/tutorial/4-interceptor) — Pre/Post request processing

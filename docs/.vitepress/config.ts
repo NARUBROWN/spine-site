@@ -17,76 +17,77 @@ export default withMermaid(defineConfig({
     },
 
     locales: {
-        root: {
+        en: {
             label: 'English',
             lang: 'en',
+            link: '/en/',
             themeConfig: {
                 nav: [
-                    { text: 'Learn', link: '/learn/getting-started/intro' },
-                    { text: 'Reference', link: '/reference/api/spine-app' },
-                    { text: 'Community', link: '/community/' }
+                    { text: 'Learn', link: '/en/learn/getting-started/intro' },
+                    { text: 'Reference', link: '/en/reference/api/spine-app' },
+                    { text: 'Community', link: '/en/community/' }
                 ],
                 sidebar: {
-                    '/learn/': [
+                    '/en/learn/': [
                         {
                             text: 'Getting Started',
                             items: [
-                                { text: 'Introduction', link: '/learn/getting-started/intro' },
-                                { text: 'Installation', link: '/learn/getting-started/installation' },
-                                { text: 'First App', link: '/learn/getting-started/first-app' }
+                                { text: 'Introduction', link: '/en/learn/getting-started/intro' },
+                                { text: 'Installation', link: '/en/learn/getting-started/installation' },
+                                { text: 'First App', link: '/en/learn/getting-started/first-app' }
                             ]
                         },
                         {
                             text: 'Tutorial',
                             items: [
-                                { text: '1. Project Structure', link: '/learn/tutorial/1-project-structure' },
-                                { text: '2. Controller', link: '/learn/tutorial/2-controller' },
-                                { text: '3. Dependency Injection', link: '/learn/tutorial/3-dependency-injection' },
-                                { text: '4. Interceptor', link: '/learn/tutorial/4-interceptor' },
-                                { text: '5. Database', link: '/learn/tutorial/5-database' },
-                                { text: '6. Transaction', link: '/learn/tutorial/6-transaction' },
-                                { text: '7. Error Handling', link: '/learn/tutorial/7-error-handling' },
-                                { text: '8. Swagger', link: '/learn/tutorial/8-swagger' }
+                                { text: '1. Project Structure', link: '/en/learn/tutorial/1-project-structure' },
+                                { text: '2. Controller', link: '/en/learn/tutorial/2-controller' },
+                                { text: '3. Dependency Injection', link: '/en/learn/tutorial/3-dependency-injection' },
+                                { text: '4. Interceptor', link: '/en/learn/tutorial/4-interceptor' },
+                                { text: '5. Database', link: '/en/learn/tutorial/5-database' },
+                                { text: '6. Transaction', link: '/en/learn/tutorial/6-transaction' },
+                                { text: '7. Error Handling', link: '/en/learn/tutorial/7-error-handling' },
+                                { text: '8. Swagger', link: '/en/learn/tutorial/8-swagger' }
                             ]
                         },
                         {
                             text: 'Core Concepts',
                             items: [
-                                { text: 'Pipeline', link: '/learn/core-concepts/pipeline' },
-                                { text: 'ExecutionContext', link: '/learn/core-concepts/execution-context' },
-                                { text: 'HandlerMeta', link: '/learn/core-concepts/handler-meta' },
-                                { text: 'query.Values', link: '/learn/core-concepts/query-values' },
-                                { text: 'httperr', link: '/learn/core-concepts/httperr' }
+                                { text: 'Pipeline', link: '/en/learn/core-concepts/pipeline' },
+                                { text: 'ExecutionContext', link: '/en/learn/core-concepts/execution-context' },
+                                { text: 'HandlerMeta', link: '/en/learn/core-concepts/handler-meta' },
+                                { text: 'query.Values', link: '/en/learn/core-concepts/query-values' },
+                                { text: 'httperr', link: '/en/learn/core-concepts/httperr' }
                             ]
                         }
                     ],
-                    '/reference/': [
+                    '/en/reference/': [
                         {
                             text: 'API Reference',
                             items: [
-                                { text: 'spine.App', link: '/reference/api/spine-app' },
-                                { text: 'ExecutionContext', link: '/reference/api/execution-context' },
-                                { text: 'Interceptor', link: '/reference/api/interceptor' },
-                                { text: 'query.Values', link: '/reference/api/query-values' }
+                                { text: 'spine.App', link: '/en/reference/api/spine-app' },
+                                { text: 'ExecutionContext', link: '/en/reference/api/execution-context' },
+                                { text: 'Interceptor', link: '/en/reference/api/interceptor' },
+                                { text: 'query.Values', link: '/en/reference/api/query-values' }
                             ]
                         },
                         {
                             text: 'Examples',
                             items: [
-                                { text: 'CRUD', link: '/reference/examples/crud' },
-                                { text: 'JWT Auth', link: '/reference/examples/jwt' },
-                                { text: 'File Upload', link: '/reference/examples/file-upload' },
-                                { text: 'WebSocket', link: '/reference/examples/websocket' }
+                                { text: 'CRUD', link: '/en/reference/examples/crud' },
+                                { text: 'JWT Auth', link: '/en/reference/examples/jwt' },
+                                { text: 'File Upload', link: '/en/reference/examples/file-upload' },
+                                { text: 'WebSocket', link: '/en/reference/examples/websocket' }
                             ]
                         }
                     ],
-                    '/community/': [
+                    '/en/community/': [
                         {
                             text: 'Community',
                             items: [
-                                { text: 'Overview', link: '/community/' },
-                                { text: 'Contributing', link: '/community/contributing' },
-                                { text: 'Changelog', link: '/community/changelog' }
+                                { text: 'Overview', link: '/en/community/' },
+                                { text: 'Contributing', link: '/en/community/contributing' },
+                                { text: 'Changelog', link: '/en/community/changelog' }
                             ]
                         }
                     ]

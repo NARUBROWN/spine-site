@@ -1,32 +1,29 @@
-# 스웨거 문서화
+# Swagger Documentation
 
-API 문서 생성하기.
+Generating API documentation.
 
+## Overview
 
-## 개요
+Spine uses [Swaggo](https://github.com/swaggo/swag) to automatically generate Swagger documentation.
 
-Spine은 [Swaggo](https://github.com/swaggo/swag)를 사용해 Swagger 문서를 자동 생성합니다.
+- Extract API specs from code comments
+- Provide documentation via Swagger UI
+- API testing capabilities
 
-- 코드 주석에서 API 스펙 추출
-- Swagger UI로 문서 제공
-- API 테스트 가능
-
-
-## 설치
+## Installation
 
 ```bash
-# Swag CLI 설치
+# Install Swag CLI
 go install github.com/swaggo/swag/cmd/swag@latest
 
-# 필요한 패키지 설치
+# Install required packages
 go get github.com/swaggo/swag
 go get github.com/swaggo/http-swagger
 ```
 
+## Project Configuration
 
-## 프로젝트 설정
-
-### main.go 주석 추가
+### Adding Comments to main.go
 
 ```go
 // main.go
@@ -41,12 +38,12 @@ import (
     "github.com/labstack/echo/v4"
     httpSwagger "github.com/swaggo/http-swagger"
 
-    _ "myapp/docs"  // 생성된 docs 패키지 import
+    _ "myapp/docs"  // Import generated docs package
 )
 
 // @title My App API
 // @version 1.0.0
-// @description Spine 기반 REST API
+// @description REST API based on Spine
 
 // @host localhost:8080
 // @BasePath /
@@ -60,7 +57,7 @@ func main() {
 
     routes.RegisterUserRoutes(app)
 
-    // Swagger UI 등록
+    // Register Swagger UI
     app.Transport(func(t any) {
         e := t.(*echo.Echo)
         e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
@@ -70,20 +67,20 @@ func main() {
 }
 ```
 
-### main.go 주석 태그
+### main.go Annotation Tags
 
-| 태그 | 설명 | 예시 |
+| Tag | Description | Example |
 |------|------|------|
-| `@title` | API 제목 | `My App API` |
-| `@version` | API 버전 | `1.0.0` |
-| `@description` | API 설명 | `Spine 기반 REST API` |
-| `@host` | 호스트 주소 | `localhost:8080` |
-| `@BasePath` | 기본 경로 | `/` |
+| `@title` | API Title | `My App API` |
+| `@version` | API Version | `1.0.0` |
+| `@description` | API Description | `REST API based on Spine` |
+| `@host` | Host Address | `localhost:8080` |
+| `@BasePath` | Base Path | `/` |
 
 
-## 컨트롤러 문서화
+## Controller Documentation
 
-### 기본 형식
+### Basic Format
 
 ```go
 // controller/user_controller.go
@@ -108,8 +105,8 @@ func NewUserController(svc *service.UserService) *UserController {
 }
 
 // GetUser godoc
-// @Summary 유저 조회
-// @Description ID로 유저 정보를 조회합니다
+// @Summary Get User
+// @Description key words: Get user info by ID
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200 {object} dto.UserResponse
@@ -123,20 +120,19 @@ func (c *UserController) GetUser(
 
     user, err := c.svc.Get(ctx, id)
     if err != nil {
-        return dto.UserResponse{}, httperr.NotFound("유저를 찾을 수 없습니다.")
+        return dto.UserResponse{}, httperr.NotFound("User not found.")
     }
 
     return user, nil
 }
 ```
 
-
-### CRUD 전체 예시
+### CRUD Complete Example
 
 ```go
 // GetUser godoc
-// @Summary 유저 조회
-// @Description ID로 유저 정보를 조회합니다
+// @Summary Get User
+// @Description Get user info by ID
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200 {object} dto.UserResponse
@@ -150,12 +146,12 @@ func (c *UserController) GetUser(
 }
 
 // CreateUser godoc
-// @Summary 유저 생성
-// @Description 새로운 유저를 생성합니다
+// @Summary Create User
+// @Description Create a new user
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param body body dto.CreateUserRequest true "유저 생성 요청"
+// @Param body body dto.CreateUserRequest true "User creation request"
 // @Success 200 {object} dto.UserResponse
 // @Failure 400 {object} ErrorResponse
 // @Router /users [post]
@@ -167,13 +163,13 @@ func (c *UserController) CreateUser(
 }
 
 // UpdateUser godoc
-// @Summary 유저 수정
-// @Description 유저 정보를 수정합니다
+// @Summary Update User
+// @Description Update user info
 // @Tags users
 // @Accept json
 // @Produce json
 // @Param id query int true "User ID"
-// @Param body body dto.UpdateUserRequest true "유저 수정 요청"
+// @Param body body dto.UpdateUserRequest true "User update request"
 // @Success 200 {object} dto.UserResponse
 // @Failure 404 {object} ErrorResponse
 // @Router /users [put]
@@ -186,8 +182,8 @@ func (c *UserController) UpdateUser(
 }
 
 // DeleteUser godoc
-// @Summary 유저 삭제
-// @Description 유저를 삭제합니다
+// @Summary Delete User
+// @Description Delete a user
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200
@@ -202,152 +198,152 @@ func (c *UserController) DeleteUser(
 ```
 
 
-## 주석 태그 레퍼런스
+## Annotation Tag Reference
 
-### 기본 태그
+### Basic Tags
 
-| 태그 | 설명 | 예시 |
+| Tag | Description | Example |
 |------|------|------|
-| `@Summary` | 요약 (한 줄) | `유저 조회` |
-| `@Description` | 상세 설명 | `ID로 유저 정보를 조회합니다` |
-| `@Tags` | 그룹 태그 | `users` |
-| `@Router` | 경로와 메서드 | `/users [get]` |
+| `@Summary` | Summary (One line) | `Get User` |
+| `@Description` | Detailed Description | `Get user info by ID` |
+| `@Tags` | Group Tag | `users` |
+| `@Router` | Path and Method | `/users [get]` |
 
-### 요청 태그
+### Request Tags
 
-| 태그 | 설명 | 예시 |
+| Tag | Description | Example |
 |------|------|------|
-| `@Accept` | 요청 Content-Type | `json` |
-| `@Produce` | 응답 Content-Type | `json` |
-| `@Param` | 파라미터 정의 | `id query int true "User ID"` |
+| `@Accept` | Request Content-Type | `json` |
+| `@Produce` | Response Content-Type | `json` |
+| `@Param` | Parameter Definition | `id query int true "User ID"` |
 
-### 응답 태그
+### Response Tags
 
-| 태그 | 설명 | 예시 |
+| Tag | Description | Example |
 |------|------|------|
-| `@Success` | 성공 응답 | `200 {object} dto.UserResponse` |
-| `@Failure` | 실패 응답 | `404 {object} ErrorResponse` |
+| `@Success` | Success Response | `200 {object} dto.UserResponse` |
+| `@Failure` | Failure Response | `404 {object} ErrorResponse` |
 
 
-## @Param 형식
+## @Param Format
 
 ```
-@Param [이름] [위치] [타입] [필수여부] "[설명]"
+@Param [Name] [Location] [Type] [Required] "[Description]"
 ```
 
-### 위치 (in)
+### Location (in)
 
-| 위치 | 설명 | 예시 |
+| Location | Description | Example |
 |------|------|------|
-| `query` | 쿼리 스트링 | `/users?id=1` |
-| `path` | URL 경로 | `/users/{id}` |
-| `body` | 요청 본문 | JSON body |
-| `header` | 헤더 | `Authorization` |
-| `formData` | 폼 데이터 | 파일 업로드 |
+| `query` | Query String | `/users?id=1` |
+| `path` | URL Path | `/users/{id}` |
+| `body` | Request Body | JSON body |
+| `header` | Header | `Authorization` |
+| `formData` | Form Data | File Upload |
 
-### 타입
+### Type
 
-| 타입 | 설명 |
+| Type | Description |
 |------|------|
-| `int`, `integer` | 정수 |
-| `string` | 문자열 |
-| `bool`, `boolean` | 불리언 |
-| `number` | 실수 |
-| `object` | 객체 (DTO) |
-| `array` | 배열 |
+| `int`, `integer` | Integer |
+| `string` | String |
+| `bool`, `boolean` | Boolean |
+| `number` | Float/Double |
+| `object` | Object (DTO) |
+| `array` | Array |
 
-### 예시
+### Examples
 
 ```go
-// 쿼리 파라미터
+// Query Parameter
 // @Param id query int true "User ID"
 // @Param name query string false "User name"
 // @Param active query bool false "Active status"
 
-// 요청 본문
-// @Param body body dto.CreateUserRequest true "유저 생성 요청"
+// Request Body
+// @Param body body dto.CreateUserRequest true "User creation request"
 
-// 헤더
-// @Param Authorization header string true "Bearer 토큰"
+// Header
+// @Param Authorization header string true "Bearer Token"
 ```
 
 
-## DTO 문서화
+## DTO Documentation
 
-### 요청 DTO
+### Request DTO
 
 ```go
 // dto/user_request.go
 package dto
 
-// CreateUserRequest 유저 생성 요청
+// CreateUserRequest User creation request
 type CreateUserRequest struct {
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// UpdateUserRequest 유저 수정 요청
+// UpdateUserRequest User update request
 type UpdateUserRequest struct {
     Name  string `json:"name" example:"Alice Updated"`
     Email string `json:"email" example:"alice.new@example.com"`
 }
 ```
 
-### 응답 DTO
+### Response DTO
 
 ```go
 // dto/user_response.go
 package dto
 
-// UserResponse 유저 응답
+// UserResponse User response
 type UserResponse struct {
     ID    int    `json:"id" example:"1"`
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// ErrorResponse 에러 응답
+// ErrorResponse Error response
 type ErrorResponse struct {
-    Error string `json:"error" example:"유저를 찾을 수 없습니다."`
+    Error string `json:"error" example:"User not found."`
 }
 ```
 
-### DTO 태그
+### DTO Tags
 
-| 태그 | 설명 | 예시 |
+| Tag | Description | Example |
 |------|------|------|
-| `example` | 예시 값 | `example:"Alice"` |
-| `enums` | 허용 값 목록 | `enums:"active,inactive"` |
-| `minimum` | 최소값 | `minimum:"1"` |
-| `maximum` | 최대값 | `maximum:"100"` |
-| `default` | 기본값 | `default:"10"` |
+| `example` | Example Value | `example:"Alice"` |
+| `enums` | Allowed Values | `enums:"active,inactive"` |
+| `minimum` | Minimum Value | `minimum:"1"` |
+| `maximum` | Maximum Value | `maximum:"100"` |
+| `default` | Default Value | `default:"10"` |
 
 
-## 문서 생성
+## Generating Documentation
 
-### 명령어 실행
+### Running Command
 
 ```bash
-# 프로젝트 루트에서 실행
+// Run at project root
 swag init
 
-# 또는 main.go 경로 지정
+// Or specify main.go path
 swag init -g main.go
 ```
 
-### 생성 결과
+### Generated Result
 
 ```
 myapp/
 ├── docs/
-│   ├── docs.go       # Go 코드
-│   ├── swagger.json  # JSON 스펙
-│   └── swagger.yaml  # YAML 스펙
+├── docs.go       # Go Code
+├── swagger.json  # JSON Spec
+└── swagger.yaml  # YAML Spec
 ├── main.go
 └── ...
 ```
 
-### 생성된 docs/docs.go
+### Generated docs/docs.go
 
 ```go
 // Package docs Code generated by swaggo/swag. DO NOT EDIT
@@ -367,7 +363,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
     Version:     "1.0.0",
     Title:       "My App API",
-    Description: "Spine 기반 REST API",
+    Description: "REST API based on Spine",
     // ...
 }
 
@@ -376,25 +372,25 @@ func init() {
 }
 ```
 
-## Swagger UI 접속
+## Accessing Swagger UI
 
-### 서버 실행
+### Running Server
 
 ```bash
 go run main.go
 ```
 
-### 브라우저에서 접속
+### Browsing
 
 ```
 http://localhost:8080/swagger/index.html
 ```
 
-## 자동 재생성
+## Auto Regeneration
 
-코드 수정 시 문서를 자동으로 재생성하려면:
+To auto-regenerate docs on code change:
 
-### Makefile 사용
+### Using Makefile
 
 ```makefile
 # Makefile
@@ -412,7 +408,7 @@ run: swagger
 make run
 ```
 
-### 스크립트 사용
+### Using Script
 
 ```bash
 #!/bin/bash
@@ -427,9 +423,9 @@ chmod +x run.sh
 ./run.sh
 ```
 
-## 전체 예제
+## Complete Example
 
-### 프로젝트 구조
+### Project Structure
 
 ```
 myapp/
@@ -468,7 +464,7 @@ import (
 
 // @title My App API
 // @version 1.0.0
-// @description Spine 기반 REST API
+// @description REST API based on Spine
 
 // @host localhost:8080
 // @BasePath /
@@ -482,7 +478,7 @@ func main() {
 
     routes.RegisterUserRoutes(app)
 
-    // Swagger UI 등록
+    // Register Swagger UI
     app.Transport(func(t any) {
         e := t.(*echo.Echo)
         e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
@@ -516,8 +512,8 @@ func NewUserController(svc *service.UserService) *UserController {
 }
 
 // GetUser godoc
-// @Summary 유저 조회
-// @Description ID로 유저 정보를 조회합니다
+// @Summary Get User
+// @Description Get user info by ID
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200 {object} dto.UserResponse
@@ -531,19 +527,19 @@ func (c *UserController) GetUser(
 
     user, err := c.svc.Get(ctx, id)
     if err != nil {
-        return dto.UserResponse{}, httperr.NotFound("유저를 찾을 수 없습니다.")
+        return dto.UserResponse{}, httperr.NotFound("User not found.")
     }
 
     return user, nil
 }
 
 // CreateUser godoc
-// @Summary 유저 생성
-// @Description 새로운 유저를 생성합니다
+// @Summary Create User
+// @Description Create a new user
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param body body dto.CreateUserRequest true "유저 생성 요청"
+// @Param body body dto.CreateUserRequest true "User creation request"
 // @Success 200 {object} dto.UserResponse
 // @Failure 400 {object} dto.ErrorResponse
 // @Router /users [post]
@@ -556,18 +552,18 @@ func (c *UserController) CreateUser(
 ```
 
 
-## 핵심 정리
+## Key Takeaways
 
-| 단계 | 명령/작업 |
+| Step | Command/Action |
 |------|----------|
-| 1. 설치 | `go install github.com/swaggo/swag/cmd/swag@latest` |
-| 2. 주석 작성 | `// @Summary`, `// @Param`, `// @Router` 등 |
-| 3. 문서 생성 | `swag init` |
-| 4. UI 등록 | `e.GET("/swagger/*", ...)` |
-| 5. 접속 | `http://localhost:8080/swagger/index.html` |
+| 1. Install | `go install github.com/swaggo/swag/cmd/swag@latest` |
+| 2. Add Comments | `// @Summary`, `// @Param`, `// @Router` etc. |
+| 3. Generate Docs | `swag init` |
+| 4. Register UI | `e.GET("/swagger/*", ...)` |
+| 5. Access | `http://localhost:8080/swagger/index.html` |
 
 
-## 다음 단계
+## Next Steps
 
-- [레퍼런스: API](/ko/reference/api/spine-app) — Spine API 문서
-- [레퍼런스: 예제](/ko/reference/examples/crud) — 전체 예제 프로젝트
+- [Reference: API](/en/reference/api/spine-app) — Spine API Docs
+- [Reference: Examples](/en/reference/examples/crud) — Complete Example Project

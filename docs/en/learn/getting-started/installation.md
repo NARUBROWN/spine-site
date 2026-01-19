@@ -1,40 +1,40 @@
-# 설치
+# Installation
 
-Spine을 설치하는 방법.
+How to install Spine.
 
-## 요구사항
+## Requirements
 
-- **Go 1.21 이상**
+- **Go 1.21 or higher**
 
 ```bash
-# Go 버전 확인
+# Check Go version
 go version
 ```
 
-## 설치
+## Installation
 
-### 새 프로젝트 시작
+### Start a New Project
 
 ```bash
-# 1. 프로젝트 폴더 생성
+# 1. Create project folder
 mkdir my-app && cd my-app
 
-# 2. Go 모듈 초기화
+# 2. Initialize Go module
 go mod init my-app
 
-# 3. Spine 설치
+# 3. Install Spine
 go get github.com/NARUBROWN/spine
 ```
 
-### 기존 프로젝트에 추가
+### Add to Existing Project
 
 ```bash
 go get github.com/NARUBROWN/spine
 ```
 
-## 설치 확인
+## Verify Installation
 
-`main.go` 파일을 생성하고 다음 코드를 작성하세요.
+Create a `main.go` file and write the following code.
 
 ```go
 package main
@@ -47,13 +47,13 @@ func main() {
 }
 ```
 
-서버를 실행합니다.
+Run the server.
 
 ```bash
 go run main.go
 ```
 
-터미널에 다음과 같이 출력되면 성공입니다.
+Success if you see the following output in the terminal.
 
 ```
 ________       _____             
@@ -65,8 +65,8 @@ ____/ /__  /_/ /  / _  / / /  __/
 2026/01/19 14:37:59 [Bootstrap] Spine version: v0.2.1
 ```
 
-## 다음 단계
+## Next Steps
 
-설치가 완료되었습니다!
+Installation is complete!
 
-[5분 퀵스타트 →](/ko/learn/getting-started/first-app)에서 첫 번째 API를 만들어보세요.
+Create your first API at [5-Minute Quickstart →](/en/learn/getting-started/first-app).

@@ -144,4 +144,4 @@ func (c *UserController) CreateUser(
 go get github.com/NARUBROWN/spine
 ```
 
-[5분 퀵스타트 →](/guide/quickstart)
+[5분 퀵스타트 →](/ko/learn/getting-started/first-app)

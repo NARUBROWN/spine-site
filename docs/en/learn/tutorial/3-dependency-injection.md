@@ -1,29 +1,28 @@
-# 의존성 주입
+# Dependency Injection
 
-Spine의 DI 이해하기.
+Understanding DI in Spine.
 
+## Core Concepts
 
-## 핵심 개념
+Spine's Dependency Injection is **constructor-based**.
 
-Spine의 의존성 주입은 **생성자 기반**입니다.
-
-- 어노테이션 없음 (`@Autowired`, `@Injectable` 불필요)
-- 설정 파일 없음
-- 생성자 파라미터가 곧 의존성 선언
+- No annotations (No `@Autowired`, `@Injectable`)
+- No configuration files
+- Constructor parameters are the dependency declarations
 
 ```go
-// 파라미터 타입을 보고 자동으로 의존성 주입
+// Automatically injects dependency based on parameter type
 func NewUserService(repo *UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 ```
 
 
-## 기본 사용법
+## Basic Usage
 
-### 1. 생성자 작성
+### 1. Write Constructors
 
-각 컴포넌트는 생성자 함수를 가집니다.
+Each component has a constructor function.
 
 ```go
 // repository.go
@@ -54,48 +53,48 @@ func NewUserController(svc *UserService) *UserController {
 }
 ```
 
-### 2. 생성자 등록
+### 2. Register Constructors
 
-`app.Constructor()`에 생성자를 등록합니다.
+Register constructors in `app.Constructor()`.
 
 ```go
 func main() {
     app := spine.New()
     
     app.Constructor(
-        NewDB,              // *bun.DB 반환
-        NewUserRepository,  // *bun.DB 필요 → *UserRepository 반환
-        NewUserService,     // *UserRepository 필요 → *UserService 반환
-        NewUserController,  // *UserService 필요 → *UserController 반환
+        NewDB,              // Returns *bun.DB
+        NewUserRepository,  // Needs *bun.DB → Returns *UserRepository
+        NewUserService,     // Needs *UserRepository → Returns *UserService
+        NewUserController,  // Needs *UserService → Returns *UserController
     )
     
     app.Run(":8080")
 }
 ```
 
-### 3. 자동 해결
+### 3. Automatic Resolution
 
-Spine이 의존성 그래프를 분석하고 올바른 순서로 인스턴스를 생성합니다.
+Spine analyzes the dependency graph and creates instances in the correct order.
 
 ```
-등록 순서: 아무렇게나
-실행 순서: DB → Repository → Service → Controller
+Registration Order: Any
+Execution Order: DB → Repository → Service → Controller
 ```
 
-## 순서 무관
+## Order Independence
 
-등록 순서는 상관없습니다. Spine이 의존성을 분석해 자동으로 정렬합니다.
+Registration order does not matter. Spine automatically sorts them by analyzing dependencies.
 
 ```go
-// 이렇게 등록해도
+// Even if registered like this
 app.Constructor(
-    NewUserController,  // UserService 필요
-    NewUserService,     // UserRepository 필요
-    NewUserRepository,  // bun.DB 필요
+    NewUserController,  // Needs UserService
+    NewUserService,     // Needs UserRepository
+    NewUserRepository,  // Needs bun.DB
     NewDB,
 )
 
-// 실제 생성 순서는
+// Actual creation order:
 // 1. NewDB()
 // 2. NewUserRepository(db)
 // 3. NewUserService(repo)
@@ -103,9 +102,9 @@ app.Constructor(
 ```
 
 
-## 의존성 그래프
+## Dependency Graph
 
-### 시각화
+### Visualization
 
 ```mermaid
 graph TD
@@ -113,13 +112,13 @@ graph TD
         Code["app.Constructor(<br/>NewDB,<br/>NewUserRepository,<br/>NewUserService,<br/>NewUserController<br/>)"]
     end
 
-    subgraph Step2 [의존성 그래프 분석]
+    subgraph Step2 [Dependency Graph Analysis]
         D1[NewDB] --> D2["NewUserRepository(db)"]
         D2 --> D3["NewUserService(repo)"]
         D3 --> D4["NewUserController(svc)"]
     end
 
-    subgraph Step3 [인스턴스 생성 완료]
+    subgraph Step3 [Instance Creation Complete]
         R1["*bun.DB"]
         R2["*UserRepository"]
         R3["*UserService"]
@@ -131,34 +130,34 @@ graph TD
 ```
 
 
-## 생성자 규칙
+## Constructor Rules
 
-### 파라미터
+### Parameters
 
-생성자 파라미터는 **이미 등록된 타입**이어야 합니다.
+Constructor parameters must be **already registered types**.
 
 ```go
-// ✅ 올바른 예
+// ✅ Correct Example
 func NewUserService(repo *UserRepository) *UserService
 
-// ✅ 여러 의존성도 가능
+// ✅ Multiple dependencies allowed
 func NewUserController(svc *UserService, logger *Logger) *UserController
 
-// ✅ 의존성 없음도 가능
+// ✅ No dependency also allowed
 func NewLogger() *Logger
 ```
 
-### 반환 타입
+### Return Types
 
-생성자는 **단일 값** 또는 **(값, error)**를 반환합니다.
+Constructors return a **single value** or **(value, error)**.
 
 ```go
-// ✅ 단일 값 반환
+// ✅ Return single value
 func NewUserService(repo *UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 
-// ✅ 에러 반환 가능
+// ✅ Return with error
 func NewDB() (*bun.DB, error) {
     db, err := sql.Open("mysql", "...")
     if err != nil {
@@ -168,25 +167,25 @@ func NewDB() (*bun.DB, error) {
 }
 ```
 
-## 인터페이스 활용
+## Using Interfaces
 
-### 문제 상황
+### Problem Scenario
 
-트랜잭션을 사용할 때, Repository는 `*bun.DB`와 `*bun.Tx` 모두 처리해야 합니다.
+When using transactions, Repository needs to handle both `*bun.DB` and `*bun.Tx`.
 
 ```go
-// ❌ 이렇게 하면 트랜잭션 사용 불가
+// ❌ Cannot use transaction with this
 type UserRepository struct {
-    db *bun.DB  // *bun.Tx를 받을 수 없음
+    db *bun.DB  // Cannot accept *bun.Tx
 }
 ```
 
-### 해결: 인터페이스 사용
+### Solution: Use Interfaces
 
-`bun.IDB` 인터페이스를 사용하면 둘 다 수용할 수 있습니다.
+Using the `bun.IDB` interface accepts both.
 
 ```go
-// ✅ bun.IDB는 *bun.DB와 *bun.Tx 모두 구현
+// ✅ bun.IDB implements both *bun.DB and *bun.Tx
 type UserRepository struct {
     db bun.IDB
 }
@@ -196,7 +195,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 }
 ```
 
-### 인터셉터에서 트랜잭션 주입
+### Injecting Transaction in Interceptor
 
 ```go
 // interceptor/tx_interceptor.go
@@ -206,7 +205,7 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
         return err
     }
     
-    ctx.Set("tx", tx)  // 트랜잭션 저장
+    ctx.Set("tx", tx)  // Store transaction
     return nil
 }
 
@@ -225,29 +224,29 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 ```
 
 
-## 여러 컴포넌트 등록
+## Registering Multiple Components
 
-### 도메인별 분리
+### Separation by Domain
 
 ```go
 func main() {
     app := spine.New()
     
-    // 인프라
+    // Infrastructure
     app.Constructor(
         NewDB,
         NewRedisClient,
         NewLogger,
     )
     
-    // User 도메인
+    // User Domain
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
         controller.NewUserController,
     )
     
-    // Order 도메인
+    // Order Domain
     app.Constructor(
         repository.NewOrderRepository,
         service.NewOrderService,
@@ -258,9 +257,9 @@ func main() {
 }
 ```
 
-### 여러 번 호출 가능
+### Multiple Calls Allowed
 
-`app.Constructor()`는 여러 번 호출할 수 있습니다.
+`app.Constructor()` can be called multiple times.
 
 ```go
 app.Constructor(NewDB)
@@ -268,15 +267,15 @@ app.Constructor(NewUserRepository, NewUserService)
 app.Constructor(NewUserController)
 ```
 
-## 동일 타입 여러 개
+## Multiple Instances of Same Type
 
-같은 타입의 인스턴스가 여러 개 필요한 경우, 래퍼 타입을 사용합니다.
+If you need multiple instances of the same type, use wrapper types.
 
 ```go
-// ❌ 구분 불가
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 어떤 게 어떤 건지?
+// ❌ Indistinguishable
+func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // Which is which?
 
-// ✅ 래퍼 타입으로 구분
+// ✅ Distinguish with wrapper types
 type PrimaryDB struct{ *bun.DB }
 type ReplicaDB struct{ *bun.DB }
 
@@ -297,16 +296,16 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
 ```
 
 
-## Spring/NestJS와 비교
+## Comparison with Spring/NestJS
 
 ### Spring Boot
 
 ```java
-// ⚠️ 어노테이션 필수
+// ⚠️ Annotation required
 @Service
 public class UserService {
     
-    @Autowired  // ⚠️ 주입 방식이 숨겨짐
+    @Autowired  // ⚠️ Injection method hidden
     private UserRepository repo;
 }
 ```
@@ -314,13 +313,13 @@ public class UserService {
 ### NestJS
 
 ```typescript
-// ⚠️ 데코레이터 필수
+// ⚠️ Decorator required
 @Injectable()
 export class UserService {
     constructor(private readonly repo: UserRepository) {}
 }
 
-// ⚠️ 모듈에도 등록 필수
+// ⚠️ Must also register in Module
 @Module({
     providers: [UserService, UserRepository],
 })
@@ -330,56 +329,56 @@ export class UserModule {}
 ### Spine
 
 ```go
-// ✅ 어노테이션 없음
+// ✅ No annotations
 type UserService struct {
     repo *UserRepository
 }
 
-// ✅ 생성자 파라미터 = 의존성
+// ✅ Constructor parameter = Dependency
 func NewUserService(repo *UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 
-// ✅ 모듈 정의 불필요
+// ✅ No module definition needed
 app.Constructor(NewUserRepository, NewUserService)
 ```
 
-## 에러 처리
+## Error Handling
 
-### 순환 의존성
+### Circular Dependency
 
 ```go
-// ❌ A → B → A 순환
+// ❌ A → B → A Circular
 func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
-// 부팅 시 에러 발생
-// panic: 순환 의존성 감지: *A
+// Error at boot time
+// panic: circular dependency detected: *A
 ```
 
-### 누락된 의존성
+### Missing Dependency
 
 ```go
-// UserRepository를 등록하지 않으면
+// If UserRepository is not registered
 app.Constructor(
-    NewUserService,     // *UserRepository 필요
+    NewUserService,     // Needs *UserRepository
     NewUserController,
 )
 
-// 부팅 시 에러 발생
-// panic: 등록된 생성자가 없습니다: *repository.UserRepository
+// Error at boot time
+// panic: no constructor registered for: *repository.UserRepository
 ```
 
-## 핵심 정리
+## Key Takeaways
 
-| 개념 | 설명 |
+| Concept | Description |
 |------|------|
-| **생성자 기반** | 파라미터 타입으로 의존성 선언 |
-| **자동 해결** | 등록 순서 무관, 그래프 분석 후 생성 |
-| **타입 매칭** | 같은 타입이면 자동 주입 |
-| **인터페이스** | 유연한 의존성 처리 가능 |
+| **Constructor-Based** | Parameter types declare dependencies |
+| **Auto Resolution** | Registration order irrelevant, created after graph analysis |
+| **Type Matching** | Auto-injected if types match |
+| **Interfaces** | Allows flexible dependency handling |
 
-## 다음 단계
+## Next Steps
 
-- [튜토리얼: 인터셉터](/ko/learn/tutorial/4-interceptor) — 요청 전/후 처리
-- [튜토리얼: 데이터베이스](/ko/learn/tutorial/5-database) — Bun ORM 연결
+- [Tutorial: Interceptor](/en/learn/tutorial/4-interceptor) — Pre/Post request processing
+- [Tutorial: Database](/en/learn/tutorial/5-database) — Bun ORM connection

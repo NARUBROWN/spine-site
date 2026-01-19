@@ -1,8 +1,8 @@
-# 첫 번째 앱
+# First App
 
-5분 안에 사용자 조회 API를 만들어봅니다.
+Create a user lookup API in 5 minutes.
 
-## 완성된 모습
+## Completed Result
 
 ```bash
 curl "http://localhost:8080/users?id=1"
@@ -17,7 +17,7 @@ curl "http://localhost:8080/users?id=1"
 ```
 
 
-## 1. 프로젝트 생성
+## 1. Create Project
 
 ```bash
 mkdir hello-spine && cd hello-spine
@@ -26,7 +26,7 @@ go get github.com/NARUBROWN/spine
 ```
 
 
-## 2. 프로젝트 구조
+## 2. Project Structure
 
 ```
 hello-spine/
@@ -39,7 +39,7 @@ hello-spine/
     └── routes.go
 ```
 
-## 3. 코드 작성
+## 3. Writing Code
 
 ### main.go
 
@@ -57,16 +57,16 @@ import (
 func main() {
     app := spine.New()
 
-    // 생성자 등록 — 순서 상관없음
+    // Register constructors — order doesn't matter
     app.Constructor(
         service.NewUserService,
         controller.NewUserController,
     )
 
-    // 라우트 등록
+    // Register routes
     routes.RegisterRoutes(app)
 
-    // 서버 시작
+    // Start server
     app.Run(":8080")
 }
 ```
@@ -76,25 +76,25 @@ func main() {
 ```go
 package service
 
-// UserResponse 응답 구조체
+// UserResponse struct
 type UserResponse struct {
     ID    int    `json:"id"`
     Name  string `json:"name"`
     Email string `json:"email"`
 }
 
-// UserService 사용자 서비스
+// UserService
 type UserService struct {
-    // 실제로는 Repository를 주입받지만, 여기선 간단히 구현
+    // Usually inject Repository, but simplified here
 }
 
 func NewUserService() *UserService {
     return &UserService{}
 }
 
-// Get 사용자 조회 (하드코딩된 데이터)
+// Get user (hardcoded data)
 func (s *UserService) Get(id int) (UserResponse, error) {
-    // 실제로는 DB에서 조회
+    // usually select from DB
     users := map[int]UserResponse{
         1: {ID: 1, Name: "Alice", Email: "alice@example.com"},
         2: {ID: 2, Name: "Bob", Email: "bob@example.com"},
@@ -125,13 +125,13 @@ type UserController struct {
     svc *service.UserService
 }
 
-// NewUserController 생성자 — 파라미터가 곧 의존성
+// NewUserController — parameters are dependencies
 func NewUserController(svc *service.UserService) *UserController {
     return &UserController{svc: svc}
 }
 
-// GetUser 사용자 조회 핸들러
-// 함수 시그니처가 곧 API 스펙
+// GetUser handler
+// Function signature is the API spec
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
@@ -157,7 +157,7 @@ func RegisterRoutes(app spine.App) {
 }
 ```
 
-## 4. 실행
+## 4. Run
 
 ```bash
 go run main.go
@@ -173,10 +173,10 @@ ____/ /__  /_/ /  / _  / / /  __/
 2026/01/19 14:37:59 [Bootstrap] Spine version: v0.2.1
 ```
 
-## 5. 테스트
+## 5. Test
 
 ```bash
-# Alice 조회
+# Get Alice
 curl "http://localhost:8080/users?id=1"
 ```
 
@@ -185,7 +185,7 @@ curl "http://localhost:8080/users?id=1"
 ```
 
 ```bash
-# Bob 조회
+# Get Bob
 curl "http://localhost:8080/users?id=2"
 ```
 
@@ -193,27 +193,27 @@ curl "http://localhost:8080/users?id=2"
 {"id":2,"name":"Bob","email":"bob@example.com"}
 ```
 
-## 🎉 완성!
+## 🎉 Done!
 
-5분 만에 첫 번째 Spine 앱을 만들었습니다.
+You built your first Spine app in 5 minutes.
 
-### 지금까지 배운 것
+### What we learned
 
-| 개념 | 코드 |
+| Concept | Code |
 |------|------|
-| 앱 생성 | `spine.New()` |
-| 의존성 등록 | `app.Constructor(...)` |
-| 라우트 등록 | `app.Route("GET", "/users", ...)` |
-| 서버 시작 | `app.Run(":8080")` |
+| Create App | `spine.New()` |
+| Register Dependency | `app.Constructor(...)` |
+| Register Route | `app.Route("GET", "/users", ...)` |
+| Start Server | `app.Run(":8080")` |
 
-### 핵심 포인트
+### Key Points
 
-- **생성자 파라미터 = 의존성 선언** — 어노테이션 불필요
-- **함수 시그니처 = API 스펙** — 입출력이 명확
-- **라우트 한 곳에서 관리** — 흐름이 보임
+- **Constructor Parameter = Dependency Declaration** — No annotations needed
+- **Function Signature = API Spec** — Clear input/output
+- **Routes Managed in One Place** — Visible flow
 
-## 다음 단계
+## Next Steps
 
-- [튜토리얼: 프로젝트 구조](/ko/learn/tutorial/1-project-structure) — 실제 프로젝트 구조 잡기
-- [튜토리얼: 인터셉터](/ko/learn/tutorial/4-interceptor) — 트랜잭션, 로깅 추가하기
-- [튜토리얼: 데이터베이스](/ko/learn/tutorial/5-database) — Bun ORM 연결하기
+- [Tutorial: Project Structure](/en/learn/tutorial/1-project-structure) — Setup real project structure
+- [Tutorial: Interceptor](/en/learn/tutorial/4-interceptor) — Add transaction, logging
+- [Tutorial: Database](/en/learn/tutorial/5-database) — Connect Bun ORM

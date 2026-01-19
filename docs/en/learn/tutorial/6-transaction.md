@@ -1,27 +1,27 @@
-# 트랜잭션 관리
+# Transaction Management
 
-Spine에서 트랜잭션 처리하기.
+Handling transactions in Spine.
 
-## 개요
+## Overview
 
-Spine은 **인터셉터 기반**으로 트랜잭션을 관리합니다.
+Spine manages transactions based on **Interceptors**.
 
 ```
 Request
    │
-   ├─→ TxInterceptor.PreHandle      // 트랜잭션 시작
+   ├─→ TxInterceptor.PreHandle      // Start Transaction
    │
    ├─→ Controller → Service → Repository
    │
-   └─→ TxInterceptor.AfterCompletion // 커밋 또는 롤백
+   └─→ TxInterceptor.AfterCompletion // Commit or Rollback
    
 Response
 ```
 
-- 성공 시 → 자동 커밋
-- 에러 시 → 자동 롤백
+- On success → Auto Commit
+- On error → Auto Rollback
 
-## TxInterceptor 구현
+## TxInterceptor Implementation
 
 ```go
 // interceptor/tx_interceptor.go
@@ -38,33 +38,33 @@ type TxInterceptor struct {
     db *bun.DB
 }
 
-// 생성자 — DB 의존성 주입
+// Constructor — DB Dependency Injection
 func NewTxInterceptor(db *bun.DB) *TxInterceptor {
     return &TxInterceptor{db: db}
 }
 
-// PreHandle — 트랜잭션 시작
+// PreHandle — Start Transaction
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     reqCtx := ctx.Context()
     if reqCtx == nil {
         return errors.New("execution context has no request context")
     }
 
-    // 트랜잭션 시작
+    // Start Transaction
     tx, err := i.db.BeginTx(reqCtx, nil)
     if err != nil {
         return err
     }
 
-    // ExecutionContext에 저장
+    // Store in ExecutionContext
     ctx.Set("tx", tx)
     return nil
 }
 
-// PostHandle — 아무것도 안 함
+// PostHandle — Do nothing
 func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
-// AfterCompletion — 커밋 또는 롤백
+// AfterCompletion — Commit or Rollback
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     v, ok := ctx.Get("tx")
     if !ok {
@@ -76,7 +76,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    // 에러 여부에 따라 롤백/커밋
+    // Rollback/Commit based on error
     if err != nil {
         _ = tx.Rollback()
     } else {
@@ -85,14 +85,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-## 등록
+## Registration
 
 ```go
 // main.go
 func main() {
     app := spine.New()
 
-    // 1. 생성자 등록
+    // 1. Register Constructors
     app.Constructor(
         NewDB,
         interceptor.NewTxInterceptor,
@@ -101,7 +101,7 @@ func main() {
         controller.NewUserController,
     )
 
-    // 2. 인터셉터 등록 (타입 참조)
+    // 2. Register Interceptor (Type reference)
     app.Interceptor(
         (*interceptor.TxInterceptor)(nil),
     )
@@ -111,23 +111,23 @@ func main() {
 }
 ```
 
-## bun.IDB 인터페이스
+## bun.IDB Interface
 
-트랜잭션을 Repository에서 사용하려면 `bun.IDB` 인터페이스가 핵심입니다.
+The `bun.IDB` interface is key to using transactions in Repositories.
 
-### 문제
+### Problem
 
 ```go
-// ❌ *bun.DB만 받으면 트랜잭션 사용 불가
+// ❌ Cannot use transaction if it receives only *bun.DB
 type UserRepository struct {
     db *bun.DB
 }
 ```
 
-### 해결
+### Solution
 
 ```go
-// ✅ bun.IDB는 *bun.DB와 *bun.Tx 모두 구현
+// ✅ bun.IDB implements both *bun.DB and *bun.Tx
 type UserRepository struct {
     db bun.IDB
 }
@@ -137,19 +137,19 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 }
 ```
 
-### bun.IDB란?
+### What is bun.IDB?
 
-| 타입 | bun.IDB 구현 |
+| Type | bun.IDB Implementation |
 |------|-------------|
 | `*bun.DB` | ✅ |
 | `*bun.Tx` | ✅ |
 
-동일한 메서드(`NewSelect`, `NewInsert` 등)를 사용할 수 있습니다.
+You can use the same methods (`NewSelect`, `NewInsert`, etc.).
 
 
-## 트랜잭션 흐름
+## Transaction Flow
 
-### 성공 시
+### On Success
 
 ```
 1. TxInterceptor.PreHandle
@@ -158,7 +158,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 
 2. Controller.CreateUser
    └─→ Service.Create
-       └─→ Repository.Save  // tx 사용
+       └─→ Repository.Save  // Uses tx
    └─→ return user, nil  ✓
 
 3. TxInterceptor.AfterCompletion
@@ -166,7 +166,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ tx.Commit()  ✓
 ```
 
-### 실패 시
+### On Failure
 
 ```
 1. TxInterceptor.PreHandle
@@ -175,7 +175,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 
 2. Controller.CreateUser
    └─→ Service.Create
-       └─→ Repository.Save  // tx 사용
+       └─→ Repository.Save  // Uses tx
    └─→ return error  ✗
 
 3. TxInterceptor.AfterCompletion
@@ -183,9 +183,9 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ tx.Rollback()  ✓
 ```
 
-## Repository에서 트랜잭션 사용
+## Using Transactions in Repository
 
-현재 구조에서는 Repository가 생성 시점에 `bun.IDB`를 주입받습니다.
+In the current structure, Repository receives `bun.IDB` at creation time.
 
 ```go
 // repository/user_repository.go
@@ -205,9 +205,9 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
 }
 ```
 
-### 트랜잭션 컨텍스트에서 사용하기
+### Using in Transaction Context
 
-인터셉터에서 저장한 트랜잭션을 가져와 사용하는 헬퍼 함수를 만들 수 있습니다.
+You can create helper functions to retrieve the transaction stored by the interceptor.
 
 ```go
 // db/context.go
@@ -223,7 +223,7 @@ type ctxKey string
 
 const txKey ctxKey = "tx"
 
-// 컨텍스트에서 트랜잭션 가져오기
+// Get transaction from context
 func GetTx(ctx context.Context) bun.IDB {
     if tx, ok := ctx.Value(txKey).(bun.IDB); ok {
         return tx
@@ -231,17 +231,17 @@ func GetTx(ctx context.Context) bun.IDB {
     return nil
 }
 
-// 컨텍스트에 트랜잭션 저장하기
+// Store transaction in context
 func WithTx(ctx context.Context, tx bun.IDB) context.Context {
     return context.WithValue(ctx, txKey, tx)
 }
 ```
 
-## 여러 Repository 사용
+## Using Multiple Repositories
 
-하나의 트랜잭션에서 여러 Repository를 사용하는 경우입니다.
+Using multiple repositories within a single transaction.
 
-### Service 예시
+### Service Example
 
 ```go
 // service/order_service.go
@@ -261,39 +261,39 @@ func NewOrderService(
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item) error {
-    // 1. 사용자 조회
+    // 1. Find User
     user, err := s.userRepo.FindByID(ctx, userID)
     if err != nil {
-        return err  // 롤백됨
+        return err  // Rolled back
     }
 
-    // 2. 주문 생성
+    // 2. Create Order
     order := &entity.Order{UserID: user.ID, Items: items}
     if err := s.orderRepo.Save(ctx, order); err != nil {
-        return err  // 롤백됨
+        return err  // Rolled back
     }
 
-    // 3. 사용자 포인트 차감
+    // 3. Deduct User Points
     user.Points -= calculateTotal(items)
     if err := s.userRepo.Update(ctx, user); err != nil {
-        return err  // 롤백됨
+        return err  // Rolled back
     }
 
-    return nil  // 모두 성공 → 커밋
+    return nil  // All success → Commit
 }
 ```
 
-모든 작업이 같은 트랜잭션 안에서 실행됩니다.
+All operations execute within the same transaction.
 
-## 트랜잭션 옵션
+## Transaction Options
 
-### 읽기 전용 트랜잭션
+### Read-Only Transaction
 
 ```go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     reqCtx := ctx.Context()
     
-    // 읽기 전용 트랜잭션
+    // Read-only transaction
     tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
         ReadOnly: true,
     })
@@ -306,17 +306,17 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 }
 ```
 
-### 격리 수준 설정
+### Isolation Level
 
 ```go
 import "database/sql"
 
 tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
-    Isolation: sql.LevelSerializable,  // 직렬화 가능
+    Isolation: sql.LevelSerializable,  // Serializable
 })
 ```
 
-| 격리 수준 | 상수 |
+| Isolation Level | Constant |
 |----------|------|
 | Read Uncommitted | `sql.LevelReadUncommitted` |
 | Read Committed | `sql.LevelReadCommitted` |
@@ -324,22 +324,22 @@ tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
 | Serializable | `sql.LevelSerializable` |
 
 
-## 선택적 트랜잭션
+## Optional Transaction
 
-모든 요청에 트랜잭션이 필요하지 않을 수 있습니다.
+Transactions may not be needed for all requests.
 
-### 방법 1: 메서드 이름으로 구분
+### Method 1: Distinguish by Method Name
 
 ```go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     methodName := meta.Method.Name
     
-    // Get으로 시작하는 메서드는 트랜잭션 스킵
+    // Skip transaction for methods starting with Get
     if strings.HasPrefix(methodName, "Get") || strings.HasPrefix(methodName, "List") {
         return nil
     }
     
-    // 트랜잭션 시작
+    // Start transaction
     tx, err := i.db.BeginTx(ctx.Context(), nil)
     if err != nil {
         return err
@@ -352,7 +352,7 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     v, ok := ctx.Get("tx")
     if !ok {
-        return  // 트랜잭션 없으면 스킵
+        return  // Skip if no transaction
     }
     
     tx := v.(*bun.Tx)
@@ -364,11 +364,11 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-### 방법 2: HTTP 메서드로 구분
+### Method 2: Distinguish by HTTP Method
 
 ```go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // GET 요청은 트랜잭션 스킵
+    // Skip transaction for GET requests
     if ctx.Method() == "GET" {
         return nil
     }
@@ -383,9 +383,9 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 }
 ```
 
-## 에러 로깅
+## Error Logging
 
-트랜잭션 롤백 시 로깅을 추가할 수 있습니다.
+You can add logging upon transaction rollback.
 
 ```go
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
@@ -406,7 +406,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-## 전체 예제
+## Complete Example
 
 ```go
 // main.go
@@ -472,17 +472,17 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-## 핵심 정리
+## Key Takeaways
 
-| 개념 | 설명 |
+| Concept | Description |
 |------|------|
-| **인터셉터 기반** | PreHandle에서 시작, AfterCompletion에서 종료 |
-| **자동 커밋/롤백** | 에러 여부에 따라 자동 처리 |
-| **bun.IDB** | DB와 Tx 모두 수용하는 인터페이스 |
-| **컨텍스트 공유** | `ctx.Set("tx", tx)`로 전달 |
+| **Interceptor-Based** | Start in PreHandle, End in AfterCompletion |
+| **Auto Commit/Rollback** | Processed automatically based on error |
+| **bun.IDB** | Interface accepting both DB and Tx |
+| **Context Sharing** | Pass via `ctx.Set("tx", tx)` |
 
 
-## 다음 단계
+## Next Steps
 
-- [튜토리얼: 에러 처리](/ko/learn/tutorial/7-error-handling) — httperr 사용법
-- [레퍼런스: API](/ko/reference/api/spine-app) — Spine API 문서
+- [Tutorial: Error Handling](/en/learn/tutorial/7-error-handling) — httperr usage
+- [Reference: API](/en/reference/api/spine-app) — Spine API Docs

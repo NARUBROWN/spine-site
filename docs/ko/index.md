@@ -276,16 +276,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
   </template>
 </FrameworkTabs>
 
-### 한눈에 비교
-
-| | Spine | NestJS | Spring Boot |
-|---|:---:|:---:|:---:|
-| 모듈 정의 | ✅ 불필요 | ⚠️ 필수 | ✅ 불필요 |
-| 어노테이션/데코레이터 | ✅ 없음 | ⚠️ 필수 | ⚠️ 필수 |
-| DI 방식 | ✅ 생성자 파라미터 | 데코레이터 + 생성자 | 어노테이션 |
-| 라우트 정의 | ✅ 한 곳에 모아서 | ⚠️ 클래스에 분산 | ⚠️ 클래스에 분산 |
-| 테스트 용이성 | ✅ 순수 구조체 | 모킹 설정 필요 | 모킹 설정 필요 |
-
 <div style="text-align: center; margin-top: 2rem;">
   <a href="/ko/learn/getting-started/intro" style="display: inline-block; padding: 0.8rem 1.6rem; background-color: var(--vp-c-brand-1); color: white; border-radius: 2rem; font-weight: bold; text-decoration: none;">5분 튜토리얼 시작 →</a>
 </div>

@@ -1,18 +1,16 @@
 # core.ExecutionContext
 
-ExecutionContext에 대한 API 참조.
+API Reference for ExecutionContext.
 
+## Overview
 
-## 개요
-
-`ExecutionContext`는 Spine 파이프라인에서 HTTP 요청 정보에 접근하고, 컴포넌트 간 데이터를 공유하는 인터페이스입니다. 사용자는 Interceptor를 구현할 때 이 인터페이스를 사용합니다.
+`ExecutionContext` is an interface for accessing HTTP request information and sharing data between components in the Spine pipeline. Users use this interface when implementing Interceptors.
 
 ```go
 import "github.com/NARUBROWN/spine/core"
 ```
 
-
-## 인터페이스 정의
+## Interface Definition
 
 ```go
 type ExecutionContext interface {
@@ -28,7 +26,7 @@ type ExecutionContext interface {
 }
 ```
 
-## 메서드
+## Methods
 
 ### Context
 
@@ -36,12 +34,12 @@ type ExecutionContext interface {
 Context() context.Context
 ```
 
-Go 표준 라이브러리의 `context.Context`를 반환합니다.
+Returns `context.Context` from the Go standard library.
 
-**반환값**
-- `context.Context` - 요청 스코프 컨텍스트
+**Returns**
+- `context.Context` - Request scope context
 
-**예시**
+**Example**
 ```go
 func (i *TimeoutInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     select {
@@ -59,21 +57,20 @@ func (i *TimeoutInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 Method() string
 ```
 
-HTTP 요청 메서드를 반환합니다.
+Returns the HTTP request method.
 
-**반환값**
-- `string` - `"GET"`, `"POST"`, `"PUT"`, `"DELETE"` 등
+**Returns**
+- `string` - `"GET"`, `"POST"`, `"PUT"`, `"DELETE"`, etc.
 
-**예시**
+**Example**
 ```go
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     if ctx.Method() == "OPTIONS" {
-        // Preflight 요청 처리
+        // Handle Preflight Request
     }
     return nil
 }
 ```
-
 
 ### Path
 
@@ -81,17 +78,16 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 Path() string
 ```
 
-HTTP 요청 경로를 반환합니다. 쿼리 스트링은 포함되지 않습니다.
+Returns the HTTP request path. Query string is not included.
 
-**반환값**
-- `string` - 요청 경로 (예: `"/users/123"`)
+**Returns**
+- `string` - Request path (e.g., `"/users/123"`)
 
-**예시**
+**Example**
 ```go
 log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
 // [REQ] GET /users/123
 ```
-
 
 ### Header
 
@@ -99,20 +95,19 @@ log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
 Header(name string) string
 ```
 
-지정한 이름의 HTTP 헤더 값을 반환합니다.
+Returns the value of the specified HTTP header.
 
-**매개변수**
-- `name` - 헤더 이름 (대소문자 구분 없음)
+**Parameters**
+- `name` - Header name (Case-insensitive)
 
-**반환값**
-- `string` - 헤더 값. 없으면 빈 문자열
+**Returns**
+- `string` - Header value. Empty string if not present.
 
-**예시**
+**Example**
 ```go
 origin := ctx.Header("Origin")
 auth := ctx.Header("Authorization")
 ```
-
 
 ### Params
 
@@ -120,12 +115,12 @@ auth := ctx.Header("Authorization")
 Params() map[string]string
 ```
 
-모든 경로 파라미터를 맵으로 반환합니다.
+Returns all path parameters as a map.
 
-**반환값**
-- `map[string]string` - 경로 파라미터 맵
+**Returns**
+- `map[string]string` - Path parameter map
 
-**예시**
+**Example**
 ```go
 // Route: /users/:userId/posts/:postId
 // Request: /users/123/posts/456
@@ -133,25 +128,23 @@ Params() map[string]string
 params := ctx.Params()  // {"userId": "123", "postId": "456"}
 ```
 
-
 ### PathKeys
 
 ```go
 PathKeys() []string
 ```
 
-경로 파라미터 키를 선언 순서대로 반환합니다.
+Returns path parameter keys in declaration order.
 
-**반환값**
-- `[]string` - 키 슬라이스
+**Returns**
+- `[]string` - Slice of keys
 
-**예시**
+**Example**
 ```go
 // Route: /users/:userId/posts/:postId
 
 ctx.PathKeys()  // ["userId", "postId"]
 ```
-
 
 ### Queries
 
@@ -159,12 +152,12 @@ ctx.PathKeys()  // ["userId", "postId"]
 Queries() map[string][]string
 ```
 
-모든 쿼리 파라미터를 맵으로 반환합니다.
+Returns all query parameters as a map.
 
-**반환값**
-- `map[string][]string` - 쿼리 파라미터 맵
+**Returns**
+- `map[string][]string` - Query parameter map
 
-**예시**
+**Example**
 ```go
 // Request: /users?status=active&tag=go&tag=web
 
@@ -172,25 +165,23 @@ queries := ctx.Queries()
 // {"status": ["active"], "tag": ["go", "web"]}
 ```
 
-
 ### Set
 
 ```go
 Set(key string, value any)
 ```
 
-내부 저장소에 값을 저장합니다.
+Stores a value in the internal storage.
 
-**매개변수**
-- `key` - 저장할 키
-- `value` - 저장할 값
+**Parameters**
+- `key` - Key to store
+- `value` - Value to store
 
-**예시**
+**Example**
 ```go
 ctx.Set("auth.user", authenticatedUser)
 ctx.Set("request.startTime", time.Now())
 ```
-
 
 ### Get
 
@@ -198,35 +189,34 @@ ctx.Set("request.startTime", time.Now())
 Get(key string) (any, bool)
 ```
 
-내부 저장소에서 값을 조회합니다.
+Retrieves a value from the internal storage.
 
-**매개변수**
-- `key` - 조회할 키
+**Parameters**
+- `key` - Key to retrieve
 
-**반환값**
-- `any` - 저장된 값
-- `bool` - 키 존재 여부
+**Returns**
+- `any` - Stored value
+- `bool` - Existence of key
 
-**예시**
+**Example**
 ```go
 if rw, ok := ctx.Get("spine.response_writer"); ok {
     responseWriter := rw.(core.ResponseWriter)
 }
 ```
 
+## Reserved Keys
 
-## 예약된 키
-
-| 키 | 타입 | 설명 |
+| Key | Type | Description |
 |----|------|------|
-| `spine.response_writer` | `core.ResponseWriter` | 응답 출력 인터페이스 |
-| `spine.params` | `map[string]string` | 경로 파라미터 |
-| `spine.pathKeys` | `[]string` | 경로 파라미터 키 순서 |
+| `spine.response_writer` | `core.ResponseWriter` | Response Writer Interface |
+| `spine.params` | `map[string]string` | Path parameters |
+| `spine.pathKeys` | `[]string` | Path parameter key order |
 
 
-## Interceptor에서 사용
+## Usage in Interceptor
 
-`ExecutionContext`는 Interceptor의 모든 메서드에서 첫 번째 인자로 전달됩니다.
+`ExecutionContext` is passed as the first argument to all methods of an Interceptor.
 
 ```go
 type Interceptor interface {
@@ -236,7 +226,7 @@ type Interceptor interface {
 }
 ```
 
-### 로깅 예시
+### Logging Example
 
 ```go
 type LoggingInterceptor struct{}
@@ -262,7 +252,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 }
 ```
 
-### CORS 예시
+### CORS Example
 
 ```go
 type CORSInterceptor struct {
@@ -290,8 +280,7 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 }
 ```
 
+## See Also
 
-## 참고
-
-- [Interceptor](/ko/reference/api/interceptor) - 횡단 관심사 처리
-- core.ResponseWriter - 응답 출력 인터페이스
+- [Interceptor](/en/reference/api/interceptor) - Cross-cutting concern handling
+- core.ResponseWriter - Response Writer Interface

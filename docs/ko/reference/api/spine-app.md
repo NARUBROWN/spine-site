@@ -203,6 +203,6 @@ func main() {
 
 ## 참고
 
-- [Interceptor](/docs/api/interceptor) - Interceptor 인터페이스
-- [실행 파이프라인](/docs/concepts/execution-pipeline) - 요청 처리 흐름
-- [IoC Container](/docs/concepts/ioc-container) - 의존성 주입
+- [Interceptor](/ko/reference/api/interceptor) - Interceptor 인터페이스
+- [실행 파이프라인](/ko/learn/core-concepts/pipeline) - 요청 처리 흐름
+- [IoC Container](/ko/learn/getting-started/intro) - 의존성 주입

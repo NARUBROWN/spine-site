@@ -1,50 +1,49 @@
-# 프로젝트 구조
+# Project Structure
 
-Spine 프로젝트를 구조화하는 방법.
+How to structure a Spine project.
 
-
-## 권장 구조
+## Recommended Structure
 
 ```
 my-app/
-├── main.go                  # 앱 진입점
+├── main.go                  # App entry point
 ├── go.mod
 ├── go.sum
 │
-├── controller/              # 컨트롤러 계층
+├── controller/              # Controller layer
 │   └── user_controller.go
 │
-├── service/                 # 서비스 계층 (비즈니스 로직)
+├── service/                 # Service layer (Business logic)
 │   └── user_service.go
 │
-├── repository/              # 리포지토리 계층 (데이터 접근)
+├── repository/              # Repository layer (Data access)
 │   └── user_repository.go
 │
-├── entity/                  # 데이터베이스 엔티티
+├── entity/                  # Database entities
 │   └── user.go
 │
-├── dto/                     # 요청/응답 객체
+├── dto/                     # Request/Response objects
 │   ├── user_request.go
 │   └── user_response.go
 │
-├── routes/                  # 라우트 정의
+├── routes/                  # Route definitions
 │   └── user_routes.go
 │
-├── interceptor/             # 인터셉터
+├── interceptor/             # Interceptors
 │   ├── tx_interceptor.go
 │   └── logging_interceptor.go
 │
-└── migrations/              # DB 마이그레이션
+└── migrations/              # DB migrations
     ├── 001_create_users.up.sql
     └── 001_create_users.down.sql
 ```
 
 
-## 각 계층의 역할
+## Role of Each Layer
 
 ### main.go
 
-앱의 진입점입니다. 생성자 등록, 인터셉터 설정, 라우트 등록을 수행합니다.
+Entry point of the app. Performs constructor registration, interceptor setup, and route registration.
 
 ```go
 package main
@@ -52,7 +51,7 @@ package main
 func main() {
     app := spine.New()
 
-    // 1. 생성자 등록
+    // 1. Register Constructors
     app.Constructor(
         NewDB,
         repository.NewUserRepository,
@@ -61,37 +60,37 @@ func main() {
         interceptor.NewTxInterceptor,
     )
 
-    // 2. 인터셉터 등록
+    // 2. Register Interceptors
     app.Interceptor(
         (*interceptor.TxInterceptor)(nil),
         &interceptor.LoggingInterceptor{},
     )
 
-    // 3. 라우트 등록
+    // 3. Register Routes
     routes.RegisterUserRoutes(app)
 
-    // 4. 서버 시작
+    // 4. Start Server
     app.Run(":8080")
 }
 ```
 
 ### controller/
 
-HTTP 요청을 받아 서비스에 위임합니다. 비즈니스 로직을 포함하지 않습니다.
+Receives HTTP requests and delegates to services. Does not contain business logic.
 
 ```go
 // controller/user_controller.go
 package controller
 
 type UserController struct {
-    svc *service.UserService  // 서비스 의존성
+    svc *service.UserService  // Service dependency
 }
 
 func NewUserController(svc *service.UserService) *UserController {
     return &UserController{svc: svc}
 }
 
-// 함수 시그니처가 곧 API 스펙
+// Function signature is the API spec
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
@@ -111,14 +110,14 @@ func (c *UserController) CreateUser(
 
 ### service/
 
-비즈니스 로직을 담당합니다. 리포지토리를 통해 데이터에 접근합니다.
+Handles business logic. Accesses data via repositories.
 
 ```go
 // service/user_service.go
 package service
 
 type UserService struct {
-    repo *repository.UserRepository  // 리포지토리 의존성
+    repo *repository.UserRepository  // Repository dependency
 }
 
 func NewUserService(repo *repository.UserRepository) *UserService {
@@ -156,14 +155,14 @@ func (s *UserService) Create(ctx context.Context, name, email string) (dto.UserR
 
 ### repository/
 
-데이터베이스 접근을 담당합니다. SQL 쿼리나 ORM 호출이 여기에 위치합니다.
+Handles database access. SQL queries or ORM calls are located here.
 
 ```go
 // repository/user_repository.go
 package repository
 
 type UserRepository struct {
-    db bun.IDB  // bun.DB 또는 bun.Tx 모두 수용
+    db bun.IDB  // Accepts both bun.DB or bun.Tx
 }
 
 func NewUserRepository(db bun.IDB) *UserRepository {
@@ -190,7 +189,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
 
 ### entity/
 
-데이터베이스 테이블과 매핑되는 구조체입니다.
+Structures mapped to database tables.
 
 ```go
 // entity/user.go
@@ -208,7 +207,7 @@ type User struct {
 
 ### dto/
 
-요청/응답 객체입니다. API 계약을 정의합니다.
+Request/Response objects. Defines API contracts.
 
 ```go
 // dto/user_request.go
@@ -239,7 +238,7 @@ type UserResponse struct {
 
 ### routes/
 
-라우트를 한 곳에서 관리합니다. 어떤 경로가 어떤 핸들러와 연결되는지 한눈에 파악할 수 있습니다.
+Manages routes in one place. You can see at a glance which path is connected to which handler.
 
 ```go
 // routes/user_routes.go
@@ -256,7 +255,7 @@ func RegisterUserRoutes(app spine.App) {
 
 ### interceptor/
 
-요청 전/후 처리 로직입니다. 트랜잭션, 로깅, 인증 등을 담당합니다.
+Logic for pre/post-processing of requests. Handles transactions, logging, authentication, etc.
 
 ```go
 // interceptor/logging_interceptor.go
@@ -281,21 +280,21 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 ```
 
 
-## 의존성 흐름
+## Dependency Flow
 
 ```mermaid
 graph TD
     Main[main.go]
 
-    subgraph Constructor [Constructor 등록]
+    subgraph Constructor [Constructor Registration]
         Flow1["Controller → Service → Repository → DB"]
     end
 
-    subgraph Interceptor [Interceptor 등록]
+    subgraph Interceptor [Interceptor Registration]
         Flow2["Tx → Logging → ..."]
     end
 
-    subgraph Routes [Routes 등록]
+    subgraph Routes [Routes Registration]
         Flow3["GET /users → UserController.GetUser<br/>POST /users → UserController.CreateUser"]
     end
 
@@ -305,18 +304,18 @@ graph TD
 ```
 
 
-## 핵심 원칙
+## Core Principles
 
-| 원칙 | 설명 |
+| Principle | Description |
 |------|------|
-| **단방향 의존성** | Controller → Service → Repository (역방향 금지) |
-| **관심사 분리** | 각 계층은 자신의 역할만 수행 |
-| **생성자 주입** | 모든 의존성은 생성자를 통해 주입 |
-| **인터페이스 활용** | Repository는 `bun.IDB`로 DB/Tx 모두 수용 |
+| **Unidirectional Dependency** | Controller → Service → Repository (Reverse prohibited) |
+| **Separation of Concerns** | Each layer performs only its role |
+| **Constructor Injection** | All dependencies are injected via constructors |
+| **Interface Usage** | Repository accepts `bun.IDB` to support both DB/Tx |
 
 
-## 다음 단계
+## Next Steps
 
-- [튜토리얼: 컨트롤러](/ko/learn/tutorial/2-controller) — 컨트롤러 작성법
-- [튜토리얼: 의존성 주입](/ko/learn/tutorial/3-dependency-injection) — DI 심화
-- [튜토리얼: 인터셉터](/ko/learn/tutorial/4-interceptor) — 트랜잭션, 로깅 구현
+- [Tutorial: Controller](/en/learn/tutorial/2-controller) — How to write controllers
+- [Tutorial: Dependency Injection](/en/learn/tutorial/3-dependency-injection) — Deep dive into DI
+- [Tutorial: Interceptor](/en/learn/tutorial/4-interceptor) — Transaction, Logging implementation

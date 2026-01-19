@@ -1,41 +1,41 @@
-# 인터셉터
+# Interceptor
 
-인터셉터 생성 및 사용하기.
+Creating and using Interceptors.
 
-## 인터셉터란?
+## What is an Interceptor?
 
-인터셉터는 요청 전/후에 실행되는 로직입니다.
+Interceptors are logic executed before/after requests.
 
-- 트랜잭션 관리
-- 로깅
-- 인증/인가
-- 요청 검증
+- Transaction Management
+- Logging
+- Authentication/Authorization
+- Request Validation
 
-Spring의 `HandlerInterceptor`와 동일한 패턴입니다.
+It is the same pattern as Spring's `HandlerInterceptor`.
 
 
-## 라이프사이클
+## Lifecycle
 
-인터셉터는 3단계 라이프사이클을 가집니다.
+Interceptors have a 3-stage lifecycle.
 
 ```mermaid
 graph TD
     Request
-    Request --> Pre["PreHandle<br/>- 요청 전 실행<br/>- 에러 반환 시 요청 중단"]
+    Request --> Pre["PreHandle<br/>- Execute before request<br/>- Stop request on error"]
     
-    Pre --> Controller["Controller.Method()<br/>- 비즈니스 로직 필요"]
+    Pre --> Controller["Controller.Method()<br/>- Business logic required"]
     
-    Controller -- 성공 --> Post["PostHandle<br/>- 요청 성공 시 실행<br/>- 에러 발생 시 스킵"]
+    Controller -- Success --> Post["PostHandle<br/>- Execute on success<br/>- Skip on error"]
     
-    Post --> After["AfterCompletion<br/>- 항상 실행 (성공/실패 무관)<br/>- 리소스 정리, 트랜잭션 커밋/롤백"]
+    Post --> After["AfterCompletion<br/>- Always execute (Success/Fail)<br/>- Resource cleanup, TX commit/rollback"]
     
-    Controller -- 에러 --> After
+    Controller -- Error --> After
     
     After --> Response
 ```
 
 
-## 인터페이스
+## Interface
 
 ```go
 type Interceptor interface {
@@ -45,14 +45,14 @@ type Interceptor interface {
 }
 ```
 
-| 메서드 | 실행 시점 | 반환 | 용도 |
+| Method | Execution timing | Return | Purpose |
 |--------|----------|------|------|
-| `PreHandle` | 컨트롤러 실행 전 | `error` | 인증, 검증, 트랜잭션 시작 |
-| `PostHandle` | 컨트롤러 성공 후 | 없음 | 응답 가공 |
-| `AfterCompletion` | 항상 (성공/실패) | 없음 | 리소스 정리, 커밋/롤백 |
+| `PreHandle` | Before Controller execution | `error` | Auth, Validation, TX Start |
+| `PostHandle` | After Controller success | None | Response Modification |
+| `AfterCompletion` | Always (Success/Fail) | None | Resource cleanup, Commit/Rollback |
 
 
-## 기본 예제: 로깅 인터셉터
+## Basic Example: Logging Interceptor
 
 ```go
 // interceptor/logging_interceptor.go
@@ -93,7 +93,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 }
 ```
 
-### 등록
+### Registration
 
 ```go
 func main() {
@@ -107,20 +107,20 @@ func main() {
 }
 ```
 
-### 출력 예시
+### Output Example
 
 ```
 [REQ] GET /users → UserController.GetUser
 [RES] GET /users OK
 
 [REQ] GET /users → UserController.GetUser
-[ERR] GET /users : 유저를 찾을 수 없습니다.
+[ERR] GET /users : User not found.
 ```
 
 
-## 트랜잭션 인터셉터
+## Transaction Interceptor
 
-데이터베이스 트랜잭션을 자동으로 관리합니다.
+Automatically manages database transactions.
 
 ```go
 // interceptor/tx_interceptor.go
@@ -136,7 +136,7 @@ type TxInterceptor struct {
     db *bun.DB
 }
 
-// 생성자 — DB 의존성 주입
+// Constructor — DB Dependency Injection
 func NewTxInterceptor(db *bun.DB) *TxInterceptor {
     return &TxInterceptor{db: db}
 }
@@ -147,19 +147,19 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
         return errors.New("execution context has no request context")
     }
     
-    // 트랜잭션 시작
+    // Start Transaction
     tx, err := i.db.BeginTx(reqCtx, nil)
     if err != nil {
         return err
     }
     
-    // ExecutionContext에 저장
+    // Store in ExecutionContext
     ctx.Set("tx", tx)
     return nil
 }
 
 func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    // 아무것도 안 함
+    // Do nothing
 }
 
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
@@ -173,7 +173,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
     
-    // 에러 여부에 따라 롤백/커밋
+    // Rollback/Commit based on error
     if err != nil {
         tx.Rollback()
     } else {
@@ -182,23 +182,23 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-### 등록 (의존성 주입 필요)
+### Registration (Requires Dependency Injection)
 
-생성자가 있는 인터셉터는 `Constructor`에 먼저 등록합니다.
+Interceptors with constructors are registered in `Constructor` first.
 
 ```go
 func main() {
     app := spine.New()
     
-    // 1. 생성자 등록
+    // 1. Register Constructors
     app.Constructor(
         NewDB,
-        interceptor.NewTxInterceptor,  // DB 의존성 필요
+        interceptor.NewTxInterceptor,  // DB dependency needed
     )
     
-    // 2. 인터셉터 등록 (타입으로 참조)
+    // 2. Register Interceptor (Reference by type)
     app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),  // ← 이미 생성된 인스턴스 사용
+        (*interceptor.TxInterceptor)(nil),  // ← Uses already created instance
     )
     
     app.Run(":8080")
@@ -208,31 +208,31 @@ func main() {
 
 ## ExecutionContext
 
-요청 컨텍스트에서 값을 저장하고 조회합니다.
+Store and retrieve values from the request context.
 
-### 메서드
+### Methods
 
-| 메서드 | 설명 |
+| Method | Description |
 |--------|------|
-| `Context()` | `context.Context` 반환 |
-| `Method()` | HTTP 메서드 (GET, POST 등) |
-| `Path()` | 요청 경로 |
-| `Set(key, value)` | 값 저장 |
-| `Get(key)` | 값 조회 |
+| `Context()` | Returns `context.Context` |
+| `Method()` | HTTP Method (GET, POST, etc.) |
+| `Path()` | Request Path |
+| `Set(key, value)` | Store value |
+| `Get(key)` | Retrieve value |
 
-### 사용 예시
+### Usage Example
 
 ```go
-// PreHandle에서 저장
+// Store in PreHandle
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     user := validateToken(ctx)
-    ctx.Set("currentUser", user)  // 저장
+    ctx.Set("currentUser", user)  // Store
     return nil
 }
 
-// 다른 인터셉터나 컨트롤러에서 조회
+// Retrieve in other interceptors or controllers
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    user, ok := ctx.Get("currentUser")  // 조회
+    user, ok := ctx.Get("currentUser")  // Retrieve
     if ok {
         log.Printf("User: %v", user)
     }
@@ -243,39 +243,39 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 
 ## HandlerMeta
 
-실행될 핸들러의 메타 정보입니다.
+Meta information of the handler to be executed.
 
-| 필드 | 타입 | 설명 |
+| Field | Type | Description |
 |------|------|------|
-| `ControllerType` | `reflect.Type` | 컨트롤러 타입 |
-| `Method` | `reflect.Method` | 핸들러 메서드 |
+| `ControllerType` | `reflect.Type` | Controller Type |
+| `Method` | `reflect.Method` | Handler Method |
 
-### 사용 예시
+### Usage Example
 
 ```go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("컨트롤러: %s", meta.ControllerType.Name())  // UserController
-    log.Printf("메서드: %s", meta.Method.Name)              // GetUser
+    log.Printf("Controller: %s", meta.ControllerType.Name())  // UserController
+    log.Printf("Method: %s", meta.Method.Name)              // GetUser
     return nil
 }
 ```
 
 
-## 인터셉터 체인
+## Interceptor Chain
 
-여러 인터셉터를 순서대로 실행합니다.
+Executes multiple interceptors in order.
 
-### 등록 순서 = 실행 순서
+### Registration Order = Execution Order
 
 ```go
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),     // 1번
-    &interceptor.AuthInterceptor{},        // 2번
-    &interceptor.LoggingInterceptor{},     // 3번
+    (*interceptor.TxInterceptor)(nil),     // 1st
+    &interceptor.AuthInterceptor{},        // 2nd
+    &interceptor.LoggingInterceptor{},     // 3rd
 )
 ```
 
-### 실행 흐름
+### Execution Flow
 
 ```
 Request
@@ -297,22 +297,22 @@ Request
 Response
 ```
 
-- `PreHandle`: 등록 순서대로 (1 → 2 → 3)
-- `PostHandle`: 역순 (3 → 2 → 1)
-- `AfterCompletion`: 역순 (3 → 2 → 1)
+- `PreHandle`: Registration order (1 → 2 → 3)
+- `PostHandle`: Reverse order (3 → 2 → 1)
+- `AfterCompletion`: Reverse order (3 → 2 → 1)
 
 
-## 에러 처리
+## Error Handling
 
-### PreHandle에서 에러 반환
+### Returning Error in PreHandle
 
-`PreHandle`에서 에러를 반환하면 요청이 중단됩니다.
+If `PreHandle` returns an error, the request is stopped.
 
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := getToken(ctx)
     if token == "" {
-        return httperr.Unauthorized("인증이 필요합니다.")  // 요청 중단
+        return httperr.Unauthorized("Authentication required.")  // Stop request
     }
     return nil
 }
@@ -322,7 +322,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 Request
    │
    ├─→ Tx.PreHandle        ✓
-   ├─→ Auth.PreHandle      ✗ (에러 반환)
+   ├─→ Auth.PreHandle      ✗ (Error returned)
    │
    ├─→ Auth.AfterCompletion
    └─→ Tx.AfterCompletion
@@ -331,7 +331,7 @@ Response (401 Unauthorized)
 ```
 
 
-## 인증 인터셉터 예제
+## Auth Interceptor Example
 
 ```go
 // interceptor/auth_interceptor.go
@@ -345,17 +345,17 @@ import (
 type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // 헤더에서 토큰 추출
+    // Extract token from header
     // token := ctx.Request().Header.Get("Authorization")
     
-    // 토큰 검증 (예시)
-    token := "valid"  // 실제로는 헤더에서 추출
+    // Validate token (example)
+    token := "valid"  // Actually extract from header
     
     if token == "" {
-        return httperr.Unauthorized("인증이 필요합니다.")
+        return httperr.Unauthorized("Authentication required.")
     }
     
-    // 사용자 정보 저장
+    // Store user info
     user := validateAndGetUser(token)
     ctx.Set("currentUser", user)
     
@@ -367,12 +367,12 @@ func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Handle
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 
 func validateAndGetUser(token string) interface{} {
-    // 토큰 검증 로직
+    // Token validtion logic
     return map[string]string{"id": "1", "name": "Alice"}
 }
 ```
 
-## 요청 시간 측정 인터셉터
+## Timing Interceptor
 
 ```go
 // interceptor/timing_interceptor.go
@@ -409,11 +409,11 @@ func (i *TimingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core
 ```
 
 
-## 등록 방법 정리
+## Registration Method Summary
 
-### 의존성 없는 인터셉터
+### Interceptors without Dependencies
 
-인스턴스를 직접 전달합니다.
+Pass instance directly.
 
 ```go
 app.Interceptor(
@@ -422,24 +422,24 @@ app.Interceptor(
 )
 ```
 
-### 의존성 있는 인터셉터
+### Interceptors with Dependencies
 
-`Constructor`에 등록 후 타입으로 참조합니다.
+Register in `Constructor` and reference by type.
 
 ```go
-// 1. 생성자 등록
+// 1. Register Constructor
 app.Constructor(
     NewDB,
     interceptor.NewTxInterceptor,
 )
 
-// 2. 타입으로 참조
+// 2. Reference by Type
 app.Interceptor(
     (*interceptor.TxInterceptor)(nil),
 )
 ```
 
-### 혼합 사용
+### Mixed Usage
 
 ```go
 app.Constructor(
@@ -448,24 +448,24 @@ app.Constructor(
 )
 
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),     // 의존성 있음 (타입 참조)
-    &interceptor.AuthInterceptor{},        // 의존성 없음 (인스턴스)
-    &interceptor.LoggingInterceptor{},     // 의존성 없음 (인스턴스)
+    (*interceptor.TxInterceptor)(nil),     // Has dependency (Type reference)
+    &interceptor.AuthInterceptor{},        // No dependency (Instance)
+    &interceptor.LoggingInterceptor{},     // No dependency (Instance)
 )
 ```
 
 
-## 핵심 정리
+## Key Takeaways
 
-| 개념 | 설명 |
+| Concept | Description |
 |------|------|
-| **3단계 라이프사이클** | PreHandle → PostHandle → AfterCompletion |
-| **체인 실행** | 등록 순서대로 Pre, 역순으로 Post/After |
-| **에러 시 중단** | PreHandle 에러 → 컨트롤러 스킵 |
-| **컨텍스트 공유** | `ctx.Set()` / `ctx.Get()`으로 데이터 전달 |
+| **3-Stage Lifecycle** | PreHandle → PostHandle → AfterCompletion |
+| **Chain Execution** | Pre in order, Post/After in reverse |
+| **Stop on Error** | PreHandle Error → Skip Controller |
+| **Context Sharing** | Pass data with `ctx.Set()` / `ctx.Get()` |
 
 
-## 다음 단계
+## Next Steps
 
-- [튜토리얼: 데이터베이스](/ko/learn/tutorial/5-database) — Bun ORM 연결
-- [튜토리얼: 에러 처리](/ko/learn/tutorial/7-error-handling) — httperr 사용법
+- [Tutorial: Database](/en/learn/tutorial/5-database) — Bun ORM connection
+- [Tutorial: Error Handling](/en/learn/tutorial/7-error-handling) — httperr usage
