@@ -1,0 +1,21 @@
+/* custom.css */
+:root {
+    --vp-c-brand-1: #646cff;
+    /* Example brand color */
+}
+
+/* Fix for Mermaid text truncation - allow text to overflow container if needed */
+.mermaid svg g.node foreignObject {
+    overflow: visible !important;
+}
+
+/* Optional: Adjust line-height to help text fit */
+.mermaid .label {
+    line-height: 1.5;
+}
+
+/* Ensure Korean text in Hero doesn't break mid-word */
+.VPHero .name,
+.VPHero .text {
+    word-break: keep-all;
+}
