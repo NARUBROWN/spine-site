@@ -334,4 +334,38 @@ onMounted(() => {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@media (max-width: 640px) {
+  .window {
+    font-size: 10px;
+    margin: 16px -16px; /* Break out of container padding slightly or just reduce margin */
+    /* Actually better not to use negative margins unless sure about parent */
+    margin: 10px 0;
+    border-radius: 4px;
+  }
+  
+  .content {
+    min-height: 200px;
+    padding: 8px;
+  }
+  
+  .title-bar {
+    padding: 6px 8px;
+  }
+  
+  .mac-btn {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .title {
+    font-size: 10px;
+  }
+  
+  /* Log lines modification for mobile? 
+     Maybe reduce line-height further? */
+  .line {
+    line-height: 1.3;
+  }
+}
 </style>

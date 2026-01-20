@@ -136,9 +136,13 @@ onMounted(() => {
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  height: 85vh; /* Limit height to viewport height or reasonable hero size */
+  max-height: 900px;
   overflow: hidden;
-  z-index: 0; /* Behind content but in front of background color if any */
+  z-index: 0; 
   pointer-events: none;
+  /* Mask to fade out the bottom */
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
 }
 </style>
