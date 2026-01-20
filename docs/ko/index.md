@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: GitHub
       link: https://github.com/NARUBROWN/spine
+    - theme: alt
+      text: 커뮤니티 참여하기
+      link: https://discord.gg/8C7tAVzRKe
 ---
 
 <div style="text-align: center; margin-top: 2rem; margin-bottom: 4rem; color: var(--vp-c-text-2);">
@@ -38,6 +41,8 @@ func NewUserController(svc *UserService) *UserController {
 ### 2. 빠른 시작
 JVM 워밍업이 필요 없습니다. Node.js 런타임 초기화도 없습니다. 컴파일된 Go 바이너리가 즉시 요청을 받습니다.
 
+<TerminalBoot />
+
 ### 3. 적은 코드
 `@Injectable`, `@Controller`, `@Autowired` 없이도 타입 시스템만으로 의존성을 표현합니다.
 
@@ -49,7 +54,6 @@ JVM 워밍업이 필요 없습니다. Node.js 런타임 초기화도 없습니�
 인증, 트랜잭션, 로깅 같은 횡단 관심사를  
 비즈니스 코드와 분리해 실행 흐름에 배치합니다.
 
-Spring의 HandlerInterceptor와 **유사한 사용 경험을 제공하지만**,  
 실행 순서는 Spine의 파이프라인이 명시적으로 제어합니다.
 
 ```go

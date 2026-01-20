@@ -3,6 +3,7 @@ import DefaultTheme from 'vitepress/theme'
 import { h } from 'vue'
 import FrameworkTabs from '../components/FrameworkTabs.vue'
 import HeroBackground from './components/HeroBackground.vue'
+import TerminalBoot from './components/TerminalBoot.vue'
 import './custom.css'
 
 export default {
@@ -14,5 +15,6 @@ export default {
     },
     enhanceApp({ app }) {
         app.component('FrameworkTabs', FrameworkTabs)
+        app.component('TerminalBoot', TerminalBoot)
     }
 } satisfies Theme

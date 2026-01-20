@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: GitHub
       link: https://github.com/NARUBROWN/spine
+    - theme: alt
+      text: Join Community
+      link: https://discord.gg/8C7tAVzRKe
 ---
 
 <div style="text-align: center; margin-top: 2rem; margin-bottom: 4rem; color: var(--vp-c-text-2);">
@@ -36,7 +39,12 @@ func NewUserController(svc *UserService) *UserController {
 ```
 
 ### 2. Fast Start
+::: warning Notice
+Global localization is planned for the future. If you need it, please leave your opinion on the [Spine Issue](https://github.com/NARUBROWN/spine/issues). We will address it quickly.
+:::
 No JVM warmup required. No Node.js runtime initialization. The compiled Go binary receives requests immediately.
+
+<TerminalBoot />
 
 ### 3. Less Code
 Express dependencies with only the type system, without `@Injectable`, `@Controller`, or `@Autowired`.
