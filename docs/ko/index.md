@@ -244,7 +244,7 @@ public class Application {
 @RequestMapping("/users")  // ⚠️ 라우트 정보가 분산됨
 public class UserController {
     
-    @Autowired  // ⚠️ 필드 주입 — 테스트 시 모킹 어려움
+    @Autowired 
     private UserService svc;
 
     @GetMapping  // ⚠️ 메서드마다 어노테이션 필요
@@ -260,7 +260,7 @@ public class UserController {
 @Service  // ⚠️ 어노테이션 없으면 빈 등록 안 됨
 public class UserService {
     
-    @Autowired  // ⚠️ 순환 참조 문제 발생 가능
+    @Autowired 
     private UserRepository repo;
 }
 ```

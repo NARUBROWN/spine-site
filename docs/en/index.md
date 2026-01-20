@@ -244,7 +244,7 @@ public class Application {
 @RequestMapping("/users")  // ⚠️ Route info is scattered
 public class UserController {
     
-    @Autowired  // ⚠️ Field injection — Hard to mock for testing
+    @Autowired
     private UserService svc;
 
     @GetMapping  // ⚠️ Annotation needed for each method
@@ -260,7 +260,7 @@ public class UserController {
 @Service  // ⚠️ Bean registration doesn't work without annotation
 public class UserService {
     
-    @Autowired  // ⚠️ Circular reference issues possible
+    @Autowired 
     private UserRepository repo;
 }
 ```
