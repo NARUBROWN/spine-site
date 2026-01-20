@@ -1,33 +1,30 @@
-# Interceptor
+# Interceptors
 
-Creating and using Interceptors.
+Creating and using interceptors.
 
 ## What is an Interceptor?
 
-Interceptors are logic executed before/after requests.
+Interceptors are logic that runs before and after requests.
 
-- Transaction Management
+- Transaction management
 - Logging
 - Authentication/Authorization
-- Request Validation
-
-It is the same pattern as Spring's `HandlerInterceptor`.
-
+- Request validation
 
 ## Lifecycle
 
-Interceptors have a 3-stage lifecycle.
+Interceptors have a 3-phase lifecycle.
 
 ```mermaid
 graph TD
     Request
-    Request --> Pre["PreHandle<br/>- Execute before request<br/>- Stop request on error"]
+    Request --> Pre["PreHandle<br/>- Runs before request<br/>- Aborts request on error"]
     
-    Pre --> Controller["Controller.Method()<br/>- Business logic required"]
+    Pre --> Controller["Controller.Method()<br/>- Business logic execution"]
     
-    Controller -- Success --> Post["PostHandle<br/>- Execute on success<br/>- Skip on error"]
+    Controller -- Success --> Post["PostHandle<br/>- Runs on request success<br/>- Skipped on error"]
     
-    Post --> After["AfterCompletion<br/>- Always execute (Success/Fail)<br/>- Resource cleanup, TX commit/rollback"]
+    Post --> After["AfterCompletion<br/>- Always runs (success/failure)<br/>- Resource cleanup, transaction commit/rollback"]
     
     Controller -- Error --> After
     
@@ -45,14 +42,30 @@ type Interceptor interface {
 }
 ```
 
-| Method | Execution timing | Return | Purpose |
-|--------|----------|------|------|
-| `PreHandle` | Before Controller execution | `error` | Auth, Validation, TX Start |
-| `PostHandle` | After Controller success | None | Response Modification |
-| `AfterCompletion` | Always (Success/Fail) | None | Resource cleanup, Commit/Rollback |
+| Method | Execution Timing | Return | Purpose |
+|--------|------------------|--------|---------|
+| `PreHandle` | Before controller execution | `error` | Auth, validation, transaction start |
+| `PostHandle` | After controller success | none | Response processing |
+| `AfterCompletion` | Always (success/failure) | none | Resource cleanup, commit/rollback |
 
 
-## Basic Example: Logging Interceptor
+## Global Interceptors vs Route Interceptors
+
+Spine supports two levels of interceptors.
+
+| Type | Global Interceptor | Route Interceptor |
+|------|-------------------|-------------------|
+| Scope | All requests | Specific routes only |
+| Registration | `app.Interceptor()` | `route.WithInterceptors()` |
+| Use cases | CORS, logging, transactions | Authentication, permission checks |
+| Execution order | Runs first | Runs after global |
+
+
+## Global Interceptors
+
+Interceptors that apply to all requests.
+
+### Logging Interceptor Example
 
 ```go
 // interceptor/logging_interceptor.go
@@ -93,12 +106,13 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 }
 ```
 
-### Registration
+### Registering Global Interceptors
 
 ```go
 func main() {
     app := spine.New()
     
+    // Global interceptor — applies to all requests
     app.Interceptor(
         &interceptor.LoggingInterceptor{},
     )
@@ -107,231 +121,12 @@ func main() {
 }
 ```
 
-### Output Example
 
-```
-[REQ] GET /users → UserController.GetUser
-[RES] GET /users OK
+## Route Interceptors
 
-[REQ] GET /users → UserController.GetUser
-[ERR] GET /users : User not found.
-```
+Interceptors that apply only to specific routes.
 
-
-## Transaction Interceptor
-
-Automatically manages database transactions.
-
-```go
-// interceptor/tx_interceptor.go
-package interceptor
-
-import (
-    "errors"
-    "github.com/NARUBROWN/spine/core"
-    "github.com/uptrace/bun"
-)
-
-type TxInterceptor struct {
-    db *bun.DB
-}
-
-// Constructor — DB Dependency Injection
-func NewTxInterceptor(db *bun.DB) *TxInterceptor {
-    return &TxInterceptor{db: db}
-}
-
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    reqCtx := ctx.Context()
-    if reqCtx == nil {
-        return errors.New("execution context has no request context")
-    }
-    
-    // Start Transaction
-    tx, err := i.db.BeginTx(reqCtx, nil)
-    if err != nil {
-        return err
-    }
-    
-    // Store in ExecutionContext
-    ctx.Set("tx", tx)
-    return nil
-}
-
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    // Do nothing
-}
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return
-    }
-    
-    tx, ok := v.(*bun.Tx)
-    if !ok {
-        return
-    }
-    
-    // Rollback/Commit based on error
-    if err != nil {
-        tx.Rollback()
-    } else {
-        tx.Commit()
-    }
-}
-```
-
-### Registration (Requires Dependency Injection)
-
-Interceptors with constructors are registered in `Constructor` first.
-
-```go
-func main() {
-    app := spine.New()
-    
-    // 1. Register Constructors
-    app.Constructor(
-        NewDB,
-        interceptor.NewTxInterceptor,  // DB dependency needed
-    )
-    
-    // 2. Register Interceptor (Reference by type)
-    app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),  // ← Uses already created instance
-    )
-    
-    app.Run(":8080")
-}
-```
-
-
-## ExecutionContext
-
-Store and retrieve values from the request context.
-
-### Methods
-
-| Method | Description |
-|--------|------|
-| `Context()` | Returns `context.Context` |
-| `Method()` | HTTP Method (GET, POST, etc.) |
-| `Path()` | Request Path |
-| `Set(key, value)` | Store value |
-| `Get(key)` | Retrieve value |
-
-### Usage Example
-
-```go
-// Store in PreHandle
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    user := validateToken(ctx)
-    ctx.Set("currentUser", user)  // Store
-    return nil
-}
-
-// Retrieve in other interceptors or controllers
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    user, ok := ctx.Get("currentUser")  // Retrieve
-    if ok {
-        log.Printf("User: %v", user)
-    }
-    return nil
-}
-```
-
-
-## HandlerMeta
-
-Meta information of the handler to be executed.
-
-| Field | Type | Description |
-|------|------|------|
-| `ControllerType` | `reflect.Type` | Controller Type |
-| `Method` | `reflect.Method` | Handler Method |
-
-### Usage Example
-
-```go
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("Controller: %s", meta.ControllerType.Name())  // UserController
-    log.Printf("Method: %s", meta.Method.Name)              // GetUser
-    return nil
-}
-```
-
-
-## Interceptor Chain
-
-Executes multiple interceptors in order.
-
-### Registration Order = Execution Order
-
-```go
-app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),     // 1st
-    &interceptor.AuthInterceptor{},        // 2nd
-    &interceptor.LoggingInterceptor{},     // 3rd
-)
-```
-
-### Execution Flow
-
-```
-Request
-   │
-   ├─→ Tx.PreHandle        (1)
-   ├─→ Auth.PreHandle      (2)
-   ├─→ Logging.PreHandle   (3)
-   │
-   ├─→ Controller.Method
-   │
-   ├─→ Logging.PostHandle  (3)
-   ├─→ Auth.PostHandle     (2)
-   ├─→ Tx.PostHandle       (1)
-   │
-   ├─→ Logging.AfterCompletion  (3)
-   ├─→ Auth.AfterCompletion     (2)
-   └─→ Tx.AfterCompletion       (1)
-   
-Response
-```
-
-- `PreHandle`: Registration order (1 → 2 → 3)
-- `PostHandle`: Reverse order (3 → 2 → 1)
-- `AfterCompletion`: Reverse order (3 → 2 → 1)
-
-
-## Error Handling
-
-### Returning Error in PreHandle
-
-If `PreHandle` returns an error, the request is stopped.
-
-```go
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    token := getToken(ctx)
-    if token == "" {
-        return httperr.Unauthorized("Authentication required.")  // Stop request
-    }
-    return nil
-}
-```
-
-```
-Request
-   │
-   ├─→ Tx.PreHandle        ✓
-   ├─→ Auth.PreHandle      ✗ (Error returned)
-   │
-   ├─→ Auth.AfterCompletion
-   └─→ Tx.AfterCompletion
-   
-Response (401 Unauthorized)
-```
-
-
-## Auth Interceptor Example
+### Auth Interceptor Example
 
 ```go
 // interceptor/auth_interceptor.go
@@ -345,20 +140,18 @@ import (
 type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // Extract token from header
-    // token := ctx.Request().Header.Get("Authorization")
-    
-    // Validate token (example)
-    token := "valid"  // Actually extract from header
+    token := ctx.Header("Authorization")
     
     if token == "" {
         return httperr.Unauthorized("Authentication required.")
     }
     
-    // Store user info
-    user := validateAndGetUser(token)
-    ctx.Set("currentUser", user)
+    user, err := validateToken(token)
+    if err != nil {
+        return httperr.Unauthorized("Invalid token.")
+    }
     
+    ctx.Set("currentUser", user)
     return nil
 }
 
@@ -366,80 +159,290 @@ func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Handle
 
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 
-func validateAndGetUser(token string) interface{} {
-    // Token validtion logic
-    return map[string]string{"id": "1", "name": "Alice"}
+func validateToken(token string) (map[string]string, error) {
+    // Token validation logic
+    return map[string]string{"id": "1", "name": "Alice"}, nil
 }
 ```
 
-## Timing Interceptor
+### Registering Route Interceptors
+
+Use `route.WithInterceptors()`.
 
 ```go
-// interceptor/timing_interceptor.go
-package interceptor
-
 import (
-    "log"
-    "time"
-    "github.com/NARUBROWN/spine/core"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/route"
 )
 
-type TimingInterceptor struct{}
+func main() {
+    app := spine.New()
+    
+    app.Constructor(
+        NewUserController,
+    )
+    
+    // Route without authentication
+    app.Route(
+        "POST",
+        "/login",
+        (*UserController).Login,
+    )
+    
+    // Route requiring authentication
+    app.Route(
+        "GET",
+        "/users/:id",
+        (*UserController).GetUser,
+        route.WithInterceptors(&interceptor.AuthInterceptor{}),
+    )
+    
+    // Route requiring authentication
+    app.Route(
+        "PUT",
+        "/users/:id",
+        (*UserController).UpdateUser,
+        route.WithInterceptors(&interceptor.AuthInterceptor{}),
+    )
+    
+    app.Run(":8080")
+}
+```
 
-func (i *TimingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    ctx.Set("startTime", time.Now())
+
+## Combining Global + Route Interceptors
+
+In real applications, both are used together.
+
+```go
+func main() {
+    app := spine.New()
+    
+    app.Constructor(
+        NewUserController,
+    )
+    
+    // Global interceptors — apply to all requests
+    app.Interceptor(
+        &interceptor.LoggingInterceptor{},
+        cors.New(cors.Config{
+            AllowOrigins: []string{"*"},
+            AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
+        }),
+    )
+    
+    // Public routes — only global interceptors apply
+    app.Route("POST", "/login", (*UserController).Login)
+    app.Route("POST", "/signup", (*UserController).Signup)
+    
+    // Protected routes — global + Auth interceptor
+    app.Route(
+        "GET",
+        "/users/:id",
+        (*UserController).GetUser,
+        route.WithInterceptors(&interceptor.AuthInterceptor{}),
+    )
+    
+    app.Route(
+        "GET",
+        "/me",
+        (*UserController).GetMe,
+        route.WithInterceptors(&interceptor.AuthInterceptor{}),
+    )
+    
+    app.Run(":8080")
+}
+```
+
+
+## Execution Order
+
+Global interceptors run first, route interceptors run after.
+
+### Registration Example
+
+```go
+// Global interceptors
+app.Interceptor(
+    &interceptor.LoggingInterceptor{},   // Global 1
+    &interceptor.CORSInterceptor{},      // Global 2
+)
+
+// Route interceptor
+app.Route(
+    "GET",
+    "/users/:id",
+    (*UserController).GetUser,
+    route.WithInterceptors(&interceptor.AuthInterceptor{}),  // Route 1
+)
+```
+
+### Execution Flow
+
+```
+Request (GET /users/1)
+   │
+   ├─→ Logging.PreHandle     (Global 1)
+   ├─→ CORS.PreHandle        (Global 2)
+   ├─→ Auth.PreHandle        (Route 1)
+   │
+   ├─→ UserController.GetUser
+   │
+   ├─→ Auth.PostHandle       (Route 1)
+   ├─→ CORS.PostHandle       (Global 2)
+   ├─→ Logging.PostHandle    (Global 1)
+   │
+   ├─→ Auth.AfterCompletion       (Route 1)
+   ├─→ CORS.AfterCompletion       (Global 2)
+   └─→ Logging.AfterCompletion    (Global 1)
+   
+Response
+```
+
+- `PreHandle`: Global → Route order
+- `PostHandle`: Route → Global reverse order
+- `AfterCompletion`: Route → Global reverse order
+
+
+## Error Handling
+
+### Returning Error from PreHandle
+
+When `PreHandle` returns an error, the request is aborted.
+
+```go
+func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    token := ctx.Header("Authorization")
+    if token == "" {
+        return httperr.Unauthorized("Authentication required.")
+    }
+    return nil
+}
+```
+
+```
+Request (GET /users/1, no token)
+   │
+   ├─→ Logging.PreHandle     ✓
+   ├─→ CORS.PreHandle        ✓
+   ├─→ Auth.PreHandle        ✗ (error returned)
+   │
+   ├─→ Auth.AfterCompletion
+   ├─→ CORS.AfterCompletion
+   └─→ Logging.AfterCompletion
+   
+Response (401 Unauthorized)
+```
+
+
+## ExecutionContext
+
+Store and retrieve values from the request context.
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `Context()` | Returns `context.Context` |
+| `Method()` | HTTP method (GET, POST, etc.) |
+| `Path()` | Request path |
+| `Header(name)` | Get header value |
+| `Set(key, value)` | Store value |
+| `Get(key)` | Retrieve value |
+
+### Passing Data Between Interceptors
+
+```go
+// AuthInterceptor — store user info
+func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    token := ctx.Header("Authorization")
+    user, _ := validateToken(token)
+    ctx.Set("currentUser", user)
     return nil
 }
 
-func (i *TimingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+// Retrieve in another interceptor
+func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    user, ok := ctx.Get("currentUser")
+    if ok {
+        log.Printf("User %v accessing %s", user, ctx.Path())
+    }
+    return nil
+}
+```
 
-func (i *TimingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    startTime, ok := ctx.Get("startTime")
+
+## HandlerMeta
+
+Metadata about the handler to be executed.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ControllerType` | `reflect.Type` | Controller type |
+| `Method` | `reflect.Method` | Handler method |
+| `Interceptors` | `[]Interceptor` | Interceptors bound to the route |
+
+### Usage Example
+
+```go
+func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    log.Printf("Controller: %s", meta.ControllerType.Name())  // UserController
+    log.Printf("Method: %s", meta.Method.Name)                // GetUser
+    return nil
+}
+```
+
+
+## Interceptors with Dependency Injection
+
+Interceptors with constructors must be registered with `Constructor` first.
+
+### Transaction Interceptor Example
+
+```go
+// interceptor/tx_interceptor.go
+package interceptor
+
+import (
+    "github.com/NARUBROWN/spine/core"
+    "github.com/uptrace/bun"
+)
+
+type TxInterceptor struct {
+    db *bun.DB
+}
+
+func NewTxInterceptor(db *bun.DB) *TxInterceptor {
+    return &TxInterceptor{db: db}
+}
+
+func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    tx, err := i.db.BeginTx(ctx.Context(), nil)
+    if err != nil {
+        return err
+    }
+    ctx.Set("tx", tx)
+    return nil
+}
+
+func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+
+func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
+    v, ok := ctx.Get("tx")
     if !ok {
         return
     }
     
-    duration := time.Since(startTime.(time.Time))
-    log.Printf("[TIMING] %s %s took %v",
-        ctx.Method(),
-        ctx.Path(),
-        duration,
-    )
+    tx := v.(*bun.Tx)
+    if err != nil {
+        tx.Rollback()
+    } else {
+        tx.Commit()
+    }
 }
 ```
 
-
-## Registration Method Summary
-
-### Interceptors without Dependencies
-
-Pass instance directly.
-
-```go
-app.Interceptor(
-    &interceptor.LoggingInterceptor{},
-    &interceptor.TimingInterceptor{},
-)
-```
-
-### Interceptors with Dependencies
-
-Register in `Constructor` and reference by type.
-
-```go
-// 1. Register Constructor
-app.Constructor(
-    NewDB,
-    interceptor.NewTxInterceptor,
-)
-
-// 2. Reference by Type
-app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),
-)
-```
-
-### Mixed Usage
+### Registration (Global)
 
 ```go
 app.Constructor(
@@ -448,24 +451,76 @@ app.Constructor(
 )
 
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),     // Has dependency (Type reference)
-    &interceptor.AuthInterceptor{},        // No dependency (Instance)
-    &interceptor.LoggingInterceptor{},     // No dependency (Instance)
+    (*interceptor.TxInterceptor)(nil),  // Reference by type
+)
+```
+
+### Registration (Route)
+
+```go
+app.Constructor(
+    NewDB,
+    interceptor.NewTxInterceptor,
+)
+
+app.Route(
+    "POST",
+    "/orders",
+    (*OrderController).CreateOrder,
+    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // Reference by type
 )
 ```
 
 
-## Key Takeaways
+## Registration Methods Summary
+
+### Global Interceptors
+
+| Method | Code | When to Use |
+|--------|------|-------------|
+| Direct instance | `&interceptor.LoggingInterceptor{}` | No dependencies |
+| Type reference | `(*interceptor.TxInterceptor)(nil)` | Has dependencies |
+
+```go
+app.Interceptor(
+    &interceptor.LoggingInterceptor{},      // Instance
+    (*interceptor.TxInterceptor)(nil),      // Type reference
+)
+```
+
+### Route Interceptors
+
+| Method | Code | When to Use |
+|--------|------|-------------|
+| Direct instance | `&interceptor.AuthInterceptor{}` | No dependencies |
+| Type reference | `(*interceptor.TxInterceptor)(nil)` | Has dependencies |
+
+```go
+app.Route(
+    "GET",
+    "/users/:id",
+    (*UserController).GetUser,
+    route.WithInterceptors(
+        &interceptor.AuthInterceptor{},         // Instance
+        (*interceptor.TxInterceptor)(nil),      // Type reference
+    ),
+)
+```
+
+
+## Key Summary
 
 | Concept | Description |
-|------|------|
-| **3-Stage Lifecycle** | PreHandle → PostHandle → AfterCompletion |
-| **Chain Execution** | Pre in order, Post/After in reverse |
-| **Stop on Error** | PreHandle Error → Skip Controller |
-| **Context Sharing** | Pass data with `ctx.Set()` / `ctx.Get()` |
+|---------|-------------|
+| **Global Interceptor** | `app.Interceptor()` — applies to all requests |
+| **Route Interceptor** | `route.WithInterceptors()` — specific routes only |
+| **Execution Order** | Global → Route (Post/After in reverse) |
+| **3-Phase Lifecycle** | PreHandle → PostHandle → AfterCompletion |
+| **Abort on Error** | PreHandle error → controller skipped |
+| **Context Sharing** | Pass data via `ctx.Set()` / `ctx.Get()` |
 
 
 ## Next Steps
 
 - [Tutorial: Database](/en/learn/tutorial/5-database) — Bun ORM connection
-- [Tutorial: Error Handling](/en/learn/tutorial/7-error-handling) — httperr usage
+- [Tutorial: Error Handling](/en/learn/tutorial/7-error-handling) — Using httperr
