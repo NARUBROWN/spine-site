@@ -295,55 +295,6 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
     }
 }
 ```
-
-
-## Spring/NestJS와 비교
-
-### Spring Boot
-
-```java
-// ⚠️ 어노테이션 필수
-@Service
-public class UserService {
-    
-    @Autowired  // ⚠️ 주입 방식이 숨겨짐
-    private UserRepository repo;
-}
-```
-
-### NestJS
-
-```typescript
-// ⚠️ 데코레이터 필수
-@Injectable()
-export class UserService {
-    constructor(private readonly repo: UserRepository) {}
-}
-
-// ⚠️ 모듈에도 등록 필수
-@Module({
-    providers: [UserService, UserRepository],
-})
-export class UserModule {}
-```
-
-### Spine
-
-```go
-// ✅ 어노테이션 없음
-type UserService struct {
-    repo *UserRepository
-}
-
-// ✅ 생성자 파라미터 = 의존성
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// ✅ 모듈 정의 불필요
-app.Constructor(NewUserRepository, NewUserService)
-```
-
 ## 에러 처리
 
 ### 순환 의존성

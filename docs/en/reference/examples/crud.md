@@ -425,7 +425,7 @@ import (
 func main() {
     app := spine.New()
 
-    // Constructor Registration (in dependency order)
+    // Constructor Registration 
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
@@ -448,10 +448,8 @@ func main() {
         }),
     )
 
-    log.Println("Server starting on :8080")
-    if err := app.Run(":8080"); err != nil {
-        log.Fatal(err)
-    }
+    // Start Server
+    app.Run(":8080");
 }
 ```
 

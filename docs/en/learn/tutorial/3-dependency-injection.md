@@ -295,54 +295,6 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
 }
 ```
 
-
-## Comparison with Spring/NestJS
-
-### Spring Boot
-
-```java
-// ⚠️ Annotation required
-@Service
-public class UserService {
-    
-    @Autowired  // ⚠️ Injection method hidden
-    private UserRepository repo;
-}
-```
-
-### NestJS
-
-```typescript
-// ⚠️ Decorator required
-@Injectable()
-export class UserService {
-    constructor(private readonly repo: UserRepository) {}
-}
-
-// ⚠️ Must also register in Module
-@Module({
-    providers: [UserService, UserRepository],
-})
-export class UserModule {}
-```
-
-### Spine
-
-```go
-// ✅ No annotations
-type UserService struct {
-    repo *UserRepository
-}
-
-// ✅ Constructor parameter = Dependency
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// ✅ No module definition needed
-app.Constructor(NewUserRepository, NewUserService)
-```
-
 ## Error Handling
 
 ### Circular Dependency

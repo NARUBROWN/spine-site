@@ -425,7 +425,7 @@ import (
 func main() {
     app := spine.New()
 
-    // 생성자 등록 (의존성 순서대로)
+    // 생성자 등록
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
@@ -448,10 +448,8 @@ func main() {
         }),
     )
 
-    log.Println("Server starting on :8080")
-    if err := app.Run(":8080"); err != nil {
-        log.Fatal(err)
-    }
+    // 앱 시작
+    app.Run(":8080"); 
 }
 ```
 
