@@ -37,6 +37,11 @@ func New() App
 **예시**
 ```go
 app := spine.New()
+app.Run(boot.Options{
+    Address:                ":8080",
+    EnableGracefulShutdown: true,
+    ShutdownTimeout:        10 * time.Second,
+})
 ```
 
 ## 메서드
@@ -132,20 +137,20 @@ app.Interceptor(
 ### Run
 
 ```go
-Run(address string) error
+Run(opts boot.Options) error
 ```
 
 HTTP 서버를 시작합니다. 이 메서드는 블로킹됩니다.
 
 **매개변수**
-- `address` - 리스닝 주소 (예: `":8080"`, `"127.0.0.1:3000"`)
+- `opts` - Address, EnableGracefulShutdown 등을 포함한 부트 옵션
 
 **반환값**
 - `error` - 서버 시작 실패 시 에러
 
 **예시**
 ```go
-if err := app.Run(":8080"); err != nil {
+if err := app.Run(boot.Options{Address: ":8080"}); err != nil {
     log.Fatal(err)
 }
 ```
@@ -158,6 +163,7 @@ package main
 import (
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
+    "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func main() {
@@ -183,7 +189,11 @@ func main() {
     )
 
     // 서버 실행
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

@@ -117,7 +117,11 @@ func main() {
         &interceptor.LoggingInterceptor{},
     )
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -205,7 +209,11 @@ func main() {
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -250,7 +258,11 @@ func main() {
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

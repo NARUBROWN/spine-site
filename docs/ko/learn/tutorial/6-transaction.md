@@ -107,7 +107,11 @@ func main() {
     )
 
     routes.RegisterUserRoutes(app)
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -432,7 +436,11 @@ func main() {
     routes.RegisterUserRoutes(app)
     routes.RegisterOrderRoutes(app)
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

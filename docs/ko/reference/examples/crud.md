@@ -416,6 +416,7 @@ import (
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
+    "github.com/NARUBROWN/spine/pkg/boot"
 
     "spine-user-demo/controller"
     "spine-user-demo/repository"
@@ -449,7 +450,11 @@ func main() {
     )
 
     // 앱 시작
-    app.Run(":8080"); 
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	}); 
 }
 ```
 

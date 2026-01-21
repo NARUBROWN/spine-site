@@ -19,7 +19,11 @@ func main() {
     // 라우트 — 어떤 메서드가 어떤 경로인지 명확
     app.Route("GET", "/users", (*UserController).GetUser)
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

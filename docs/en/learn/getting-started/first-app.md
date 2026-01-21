@@ -52,6 +52,7 @@ import (
     "hello-spine/service"
 
     "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func main() {
@@ -67,7 +68,11 @@ func main() {
     routes.RegisterRoutes(app)
 
     // Start server
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -204,7 +209,7 @@ You built your first Spine app in 5 minutes.
 | Create App | `spine.New()` |
 | Register Dependency | `app.Constructor(...)` |
 | Register Route | `app.Route("GET", "/users", ...)` |
-| Start Server | `app.Run(":8080")` |
+| Start Server | `app.Run(boot.Options{...})` |
 
 ### Key Points
 

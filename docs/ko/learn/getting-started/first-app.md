@@ -52,6 +52,7 @@ import (
     "hello-spine/service"
 
     "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func main() {
@@ -67,7 +68,11 @@ func main() {
     routes.RegisterRoutes(app)
 
     // 서버 시작
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -204,7 +209,7 @@ curl "http://localhost:8080/users?id=2"
 | 앱 생성 | `spine.New()` |
 | 의존성 등록 | `app.Constructor(...)` |
 | 라우트 등록 | `app.Route("GET", "/users", ...)` |
-| 서버 시작 | `app.Run(":8080")` |
+| 서버 시작 | `app.Run(boot.Options{...})` |
 
 ### 핵심 포인트
 

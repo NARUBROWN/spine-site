@@ -70,7 +70,11 @@ func main() {
     routes.RegisterUserRoutes(app)
 
     // 4. Start Server
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

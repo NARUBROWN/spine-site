@@ -78,7 +78,11 @@ func main() {
         // ...
     )
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -137,6 +141,7 @@ func NewDB() *bun.DB {
 ```bash
 export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
 go run main.go
+
 ```
 
 
@@ -337,7 +342,11 @@ func main() {
     // Start Server
     app := spine.New()
     // ...
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 
 func runMigrations(ctx context.Context, db *bun.DB) error {
@@ -411,7 +420,11 @@ func main() {
     
     routes.RegisterUserRoutes(app)
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

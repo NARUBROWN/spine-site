@@ -39,11 +39,20 @@ Create a `main.go` file and write the following code.
 ```go
 package main
 
-import "github.com/NARUBROWN/spine"
+import (
+    "time"
+
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+)
 
 func main() {
     app := spine.New()
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

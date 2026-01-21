@@ -37,6 +37,11 @@ Creates a new Spine application instance.
 **Example**
 ```go
 app := spine.New()
+app.Run(boot.Options{
+    Address:                ":8080",
+    EnableGracefulShutdown: true,
+    ShutdownTimeout:        10 * time.Second,
+})
 ```
 
 ## Methods
@@ -132,20 +137,20 @@ app.Interceptor(
 ### Run
 
 ```go
-Run(address string) error
+Run(opts boot.Options) error
 ```
 
 Starts the HTTP server. This method blocks.
 
 **Parameters**
-- `address` - Listening address (e.g., `":8080"`, `"127.0.0.1:3000"`)
+- `opts` - Boot options including Address, EnableGracefulShutdown, etc.
 
 **Returns**
 - `error` - Error if server start fails
 
 **Example**
 ```go
-if err := app.Run(":8080"); err != nil {
+if err := app.Run(boot.Options{Address: ":8080"}); err != nil {
     log.Fatal(err)
 }
 ```
@@ -158,6 +163,7 @@ package main
 import (
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
+    "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func main() {
@@ -183,7 +189,11 @@ func main() {
     )
 
     // Run Server
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

@@ -68,7 +68,11 @@ func main() {
         NewUserController,  // Needs *UserService → Returns *UserController
     )
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -253,7 +257,11 @@ func main() {
         controller.NewOrderController,
     )
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

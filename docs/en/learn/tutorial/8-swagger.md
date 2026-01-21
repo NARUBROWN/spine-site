@@ -35,6 +35,7 @@ import (
     "myapp/service"
 
     "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
     "github.com/labstack/echo/v4"
     httpSwagger "github.com/swaggo/http-swagger"
 
@@ -63,7 +64,11 @@ func main() {
         e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
     })
 
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -456,6 +461,7 @@ import (
     "myapp/service"
 
     "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
     "github.com/labstack/echo/v4"
     httpSwagger "github.com/swaggo/http-swagger"
 
@@ -484,7 +490,11 @@ func main() {
         e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
     })
 
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 

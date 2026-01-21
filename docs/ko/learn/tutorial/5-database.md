@@ -79,7 +79,11 @@ func main() {
         // ...
     )
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
@@ -338,7 +342,11 @@ func main() {
     // 서버 시작
     app := spine.New()
     // ...
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 
 func runMigrations(ctx context.Context, db *bun.DB) error {
@@ -412,7 +420,11 @@ func main() {
     
     routes.RegisterUserRoutes(app)
     
-    app.Run(":8080")
+    app.Run(boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	})
 }
 ```
 
