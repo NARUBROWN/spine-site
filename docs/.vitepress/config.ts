@@ -77,7 +77,8 @@ export default withMermaid(defineConfig({
                                 { text: 'CRUD', link: '/en/reference/examples/crud' },
                                 { text: 'JWT Auth', link: '/en/reference/examples/jwt' },
                                 { text: 'File Upload', link: '/en/reference/examples/file-upload' },
-                                { text: 'WebSocket', link: '/en/reference/examples/websocket' }
+                                { text: 'WebSocket', link: '/en/reference/examples/websocket' },
+                                { text: 'JWT Login', link: '/en/reference/examples/login' }
                             ]
                         }
                     ],
