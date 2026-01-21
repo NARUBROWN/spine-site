@@ -156,7 +156,8 @@ export default withMermaid(defineConfig({
                         {
                             text: '예제 모음',
                             items: [
-                                { text: 'CRUD 기본', link: '/ko/reference/examples/crud' }
+                                { text: 'CRUD 기본', link: '/ko/reference/examples/crud' },
+                                { text: 'JWT 로그인', link: '/ko/reference/examples/login' }
                             ]
                         }
                     ],
