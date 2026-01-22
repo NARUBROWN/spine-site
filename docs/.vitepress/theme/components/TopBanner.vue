@@ -167,25 +167,33 @@ onMounted(() => {
   .banner-content {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
-    padding: 12px 20px;
+    gap: 16px;
+    padding: 16px 20px;
+    padding-right: 48px; /* close button space */
   }
   
   .banner-text {
     flex-wrap: wrap;
     gap: 8px;
     white-space: normal;
+    line-height: 1.5;
   }
   
   .right-section {
     width: 100%;
-    justify-content: space-between;
+    margin-top: 4px;
+  }
+
+  .cta-button {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
   }
   
   .close-button {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 12px;
+    right: 12px;
   }
 }
 </style>
