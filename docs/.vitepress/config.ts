@@ -7,8 +7,8 @@ export default withMermaid(defineConfig({
     description: "Spine is a backend framework for explicit request execution. It makes the entire execution flow visible and controllable — from request resolution to completion. No magic. No hidden behavior. Just execution.",
     head: [
         ['link', { rel: 'icon', href: '/logo.png' }],
-        ['meta', { property: 'og:image', content: '/og-image.png' }],
-        ['meta', { name: 'twitter:image', content: '/og-image.png' }]
+        ['meta', { property: 'og:image', content: 'https://spine.na2ru2.me/og-image.png' }],
+        ['meta', { name: 'twitter:image', content: 'https://spine.na2ru2.me/og-image.png' }]
     ],
 
     themeConfig: {
