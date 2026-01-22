@@ -5,7 +5,11 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 export default withMermaid(defineConfig({
     title: "Spine",
     description: "Spine is a backend framework for explicit request execution. It makes the entire execution flow visible and controllable — from request resolution to completion. No magic. No hidden behavior. Just execution.",
-    head: [['link', { rel: 'icon', href: '/logo.png' }]],
+    head: [
+        ['link', { rel: 'icon', href: '/logo.png' }],
+        ['meta', { property: 'og:image', content: '/og-image.png' }],
+        ['meta', { name: 'twitter:image', content: '/og-image.png' }]
+    ],
 
     themeConfig: {
         logo: '/header_logo.png',
