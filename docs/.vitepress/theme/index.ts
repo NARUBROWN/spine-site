@@ -4,12 +4,14 @@ import { h } from 'vue'
 import FrameworkTabs from '../components/FrameworkTabs.vue'
 import HeroBackground from './components/HeroBackground.vue'
 import TerminalBoot from './components/TerminalBoot.vue'
+import TopBanner from './components/TopBanner.vue'
 import './custom.css'
 
 export default {
     extends: DefaultTheme,
     Layout: () => {
         return h(DefaultTheme.Layout, null, {
+            'layout-top': () => h(TopBanner),
             'home-hero-before': () => h(HeroBackground)
         })
     },
