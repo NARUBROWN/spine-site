@@ -257,7 +257,7 @@ func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
     return &response, nil
 }
 
-func (s *UserService) CreateUser(req dto.CreateUserRequest) (*dto.UserResponse, error) {
+func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
     // Check Email Duplicate
     if s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
@@ -273,7 +273,7 @@ func (s *UserService) CreateUser(req dto.CreateUserRequest) (*dto.UserResponse, 
     return &response, nil
 }
 
-func (s *UserService) UpdateUser(id int64, req dto.UpdateUserRequest) (*dto.UserResponse, error) {
+func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.UserResponse, error) {
     user, err := s.repo.FindByID(id)
     if err != nil {
         return nil, err
@@ -342,7 +342,7 @@ func (c *UserController) GetByID(id path.Int) (dto.UserResponse, error) {
 }
 
 // POST /users
-func (c *UserController) Create(req dto.CreateUserRequest) (dto.UserResponse, error) {
+func (c *UserController) Create(req *dto.CreateUserRequest) (dto.UserResponse, error) {
     if req.Name == "" {
         return dto.UserResponse{}, httperr.BadRequest("Name is required")
     }
@@ -359,7 +359,7 @@ func (c *UserController) Create(req dto.CreateUserRequest) (dto.UserResponse, er
 }
 
 // PUT /users/:id
-func (c *UserController) Update(id path.Int, req dto.UpdateUserRequest) (dto.UserResponse, error) {
+func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (dto.UserResponse, error) {
     if id.Value <= 0 {
         return dto.UserResponse{}, httperr.BadRequest("Invalid user ID")
     }

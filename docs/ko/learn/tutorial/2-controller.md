@@ -66,7 +66,9 @@ Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 �
 |------|------|------|
 | `context.Context` | 요청 컨텍스트 | `ctx context.Context` |
 | `query.Values` | 쿼리 파라미터 | `q query.Values` |
-| `struct` (DTO) | JSON 요청 본문 | `req CreateUserRequest` |
+| `struct` (DTO) | JSON 요청 본문 | `req *CreateUserRequest` |
+| `struct` (Form) | Form Data | `form *CreatePostForm` |
+| `multipart.UploadedFiles` | Multipart 파일 | `files multipart.UploadedFiles` |
 
 ### 지원하는 반환 타입
 
@@ -116,7 +118,7 @@ DTO 구조체를 파라미터로 선언하면 자동으로 JSON이 바인딩됩�
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req dto.CreateUserRequest,  // ← 자동 바인딩
+    req *dto.CreateUserRequest,  // ← 자동 바인딩
 ) (dto.UserResponse, error) {
     return c.svc.Create(ctx, req.Name, req.Email)
 }
@@ -139,7 +141,7 @@ type CreateUserRequest struct {
 func (c *UserController) UpdateUser(
     ctx context.Context,
     q query.Values,
-    req dto.UpdateUserRequest,
+    req *dto.UpdateUserRequest,
 ) (dto.UserResponse, error) {
     id := int(q.Int("id", 0))
     return c.svc.Update(ctx, id, req.Name)
@@ -231,6 +233,125 @@ func (c *UserController) DeleteUser(
 ```
 
 
+## Form DTO 및 Multipart 사용
+
+Spine에서는 **Form DTO**, **Multipart**, 그리고 이 둘을 함께 사용하는 **정석 패턴**을 지원합니다.
+
+Spine의 핵심 원칙은 다음과 같습니다.
+
+- DTO는 반드시 `*Struct` (포인터)로 받는다
+- 값 타입 `Struct`는 의미 타입(Semantic Type)이다
+- 파일 업로드는 DTO가 아니라 별도의 의미 타입으로 처리한다
+- Resolver는 하나의 의미만 담당한다
+
+### 1. Form DTO 예제 (multipart/form-data)
+
+Form DTO는 `multipart/form-data` 또는 `application/x-www-form-urlencoded` 요청에서 **텍스트 필드만 바인딩**하기 위한 DTO입니다.
+
+#### Form DTO 정의
+
+```go
+type CreatePostForm struct {
+	Title   string `form:"title"`
+	Content string `form:"content"`
+}
+```
+
+#### Controller
+
+```go
+func (c *PostController) Create(
+	form *CreatePostForm, // Form DTO
+) string {
+
+	fmt.Println("Title  :", form.Title)
+	fmt.Println("Content:", form.Content)
+
+	return "OK"
+}
+```
+
+#### 요청 예시 (curl)
+
+```bash
+curl -X POST http://localhost:8080/posts \
+  -F "title=hello" \
+  -F "content=spine"
+```
+
+### 2. Multipart 파일 업로드 예제
+
+파일 업로드는 **DTO가 아닌 의미 타입**으로 처리합니다.
+
+#### Multipart 의미 타입
+
+`github.com/NARUBROWN/spine/pkg/multipart` 패키지의 타입을 사용합니다.
+
+```go
+import "github.com/NARUBROWN/spine/pkg/multipart"
+```
+
+#### Controller
+
+```go
+func (c *FileController) Upload(
+	files multipart.UploadedFiles, // Multipart files
+) string {
+
+	fmt.Println("Files count:", len(files.Files))
+
+	for _, f := range files.Files {
+		fmt.Println(
+			"field:", f.FieldName,
+			"name:", f.Filename,
+			"size:", f.Size,
+		)
+	}
+
+	return "OK"
+}
+```
+
+#### 요청 예시 (curl)
+
+```bash
+curl -X POST http://localhost:8080/upload \
+  -F "file=@test1.png" \
+  -F "file=@test2.jpg"
+```
+
+### 3. Form DTO + Multipart + Query 함께 사용하기
+
+#### Controller
+
+```go
+func (c *PostController) Upload(
+	form  *CreatePostForm, // form fields
+	files multipart.UploadedFiles,   // multipart files
+	page  Pagination,      // query
+) string {
+
+	fmt.Println("[FORM] Title  :", form.Title)
+	fmt.Println("[FORM] Content:", form.Content)
+
+	fmt.Println("[QUERY] Page:", page.Page)
+	fmt.Println("[QUERY] Size:", page.Size)
+
+	fmt.Println("[FILES] Count:", len(files.Files))
+
+	return "OK"
+}
+```
+
+### 4. Spine DTO 규칙 요약
+
+```
+*Struct  → DTO (JSON / Form)
+ Struct  → 의미 타입 (Query / Path / Multipart)
+```
+
+이 규칙을 따르면 실행 흐름이 시그니처에 그대로 드러납니다.
+
 ## 라우트 등록
 
 컨트롤러 메서드를 라우트에 연결합니다.
@@ -308,7 +429,7 @@ func (c *UserController) GetUser(
 // POST /users
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req dto.CreateUserRequest,
+    req *dto.CreateUserRequest,
 ) (dto.UserResponse, error) {
     return c.svc.Create(ctx, req.Name, req.Email)
 }
@@ -317,7 +438,7 @@ func (c *UserController) CreateUser(
 func (c *UserController) UpdateUser(
     ctx context.Context,
     q query.Values,
-    req dto.UpdateUserRequest,
+    req *dto.UpdateUserRequest,
 ) (dto.UserResponse, error) {
     id := int(q.Int("id", 0))
     
