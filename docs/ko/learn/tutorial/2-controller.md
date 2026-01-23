@@ -213,9 +213,7 @@ func (c *UserController) GetUser(
 |------|----------|
 | `httperr.BadRequest(msg)` | 400 |
 | `httperr.Unauthorized(msg)` | 401 |
-| `httperr.Forbidden(msg)` | 403 |
 | `httperr.NotFound(msg)` | 404 |
-| `httperr.InternalServerError(msg)` | 500 |
 
 
 ### 응답 본문 없이 반환
