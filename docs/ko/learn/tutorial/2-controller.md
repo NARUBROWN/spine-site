@@ -69,6 +69,7 @@ Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 �
 | `struct` (DTO) | JSON 요청 본문 | `req *CreateUserRequest` |
 | `struct` (Form) | Form Data | `form *CreatePostForm` |
 | `multipart.UploadedFiles` | Multipart 파일 | `files multipart.UploadedFiles` |
+| `path.*` | Path 파라미터 | `pid path.Int` |
 
 ### 지원하는 반환 타입
 
@@ -106,6 +107,41 @@ func (c *UserController) GetUser(
 | `Int(key, default)` | `int64` | 정수 값 |
 | `Bool(key, default)` | `bool` | 불리언 값 |
 | `Float(key, default)` | `float64` | 실수 값 |
+
+
+
+### Path 파라미터
+
+`path` 패키지의 타입을 사용하여 라우트 경로의 파라미터를 바인딩합니다.
+
+```go
+// GET /users/:id
+
+func (c *UserController) GetUser(
+    ctx context.Context,
+    id path.Int,
+) (dto.UserResponse, error) {
+    return c.svc.Get(ctx, int(id.Value))
+}
+```
+
+#### path 패키지 구조체
+
+```go
+package path
+
+type Int struct {
+	Value int64
+}
+
+type String struct {
+	Value string
+}
+
+type Boolean struct {
+	Value bool
+}
+```
 
 
 ### JSON 요청 본문

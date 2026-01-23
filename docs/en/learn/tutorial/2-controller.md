@@ -68,6 +68,7 @@ Spine analyzes the handler's function signature to automatically bind inputs.
 | `struct` (DTO) | JSON Request Body | `req *CreateUserRequest` |
 | `struct` (Form) | Form Data | `form *CreatePostForm` |
 | `multipart.UploadedFiles` | Multipart Files | `files multipart.UploadedFiles` |
+| `path.*` | Path Parameters | `pid path.Int` |
 
 ### Supported Return Types
 
@@ -105,6 +106,41 @@ func (c *UserController) GetUser(
 | `Int(key, default)` | `int64` | Integer value |
 | `Bool(key, default)` | `bool` | Boolean value |
 | `Float(key, default)` | `float64` | Float value |
+
+
+
+### Path Parameters
+
+Use types from the `path` package to bind route path parameters.
+
+```go
+// GET /users/:id
+
+func (c *UserController) GetUser(
+    ctx context.Context,
+    id path.Int,
+) (dto.UserResponse, error) {
+    return c.svc.Get(ctx, int(id.Value))
+}
+```
+
+#### path Package Structs
+
+```go
+package path
+
+type Int struct {
+	Value int64
+}
+
+type String struct {
+	Value string
+}
+
+type Boolean struct {
+	Value bool
+}
+```
 
 
 ### JSON Request Body
