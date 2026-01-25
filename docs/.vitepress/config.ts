@@ -79,7 +79,8 @@ export default withMermaid(defineConfig({
                             text: 'Examples',
                             items: [
                                 { text: 'CRUD', link: '/en/reference/examples/crud' },
-                                { text: 'JWT Login', link: '/en/reference/examples/login' }
+                                { text: 'JWT Login', link: '/en/reference/examples/login' },
+                                { text: 'Kafka MSA', link: '/en/reference/examples/msa' }
                             ]
                         }
                     ],
@@ -159,7 +160,8 @@ export default withMermaid(defineConfig({
                             text: '예제 모음',
                             items: [
                                 { text: 'CRUD 기본', link: '/ko/reference/examples/crud' },
-                                { text: 'JWT 로그인', link: '/ko/reference/examples/login' }
+                                { text: 'JWT 로그인', link: '/ko/reference/examples/login' },
+                                { text: 'Kafka MSA', link: '/ko/reference/examples/msa' }
                             ]
                         }
                     ],
