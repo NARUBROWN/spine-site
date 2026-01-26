@@ -575,5 +575,4 @@ func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta Pa
 ## 참고
 
 - [Interceptor](/ko/reference/api/interceptor) - 횡단 관심사 처리
-- [core.ResponseWriter](/ko/reference/api/response-writer) - 응답 출력 인터페이스
 - [실행 컨텍스트 개념](/ko/learn/core-concepts/execution-context) - 상세 설명

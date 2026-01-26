@@ -575,5 +575,4 @@ func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta Pa
 ## See Also
 
 - [Interceptor](/en/reference/api/interceptor) - Cross-cutting concerns
-- [core.ResponseWriter](/en/reference/api/response-writer) - Response output interface
 - [Execution Context Concepts](/en/learn/core-concepts/execution-context) - Detailed explanation
