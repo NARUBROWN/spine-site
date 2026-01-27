@@ -47,6 +47,7 @@ Creates a new Spine application instance.
 app := spine.New()
 app.Run(boot.Options{
     Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
 })
 ```
 
@@ -280,7 +281,10 @@ Starts the application. runs the HTTP server and event consumer runtime together
 
 **Example**
 ```go
-if err := app.Run(boot.Options{Address: ":8080"}); err != nil {
+if err := app.Run(boot.Options{
+    Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
+}); err != nil {
     log.Fatal(err)
 }
 ```
@@ -313,6 +317,20 @@ type Options struct {
     // RabbitMQ Event Infrastructure Configuration
     // If nil, RabbitMQ is not configured
     RabbitMQ *RabbitMqOptions
+
+    // HTTP Runtime Configuration
+    // If nil, HTTP server is not started
+    HTTP *HTTPOptions
+}
+
+/*
+HTTP Runtime Options.
+Affects only the HTTP request execution flow.
+*/
+type HTTPOptions struct {
+    // HTTP API Global Prefix (e.g., "/api/v1")
+    // If empty, no prefix is applied.
+    GlobalPrefix string
 }
 ```
 
@@ -321,6 +339,7 @@ type Options struct {
 ```go
 app.Run(boot.Options{
     Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
 })
 ```
 
@@ -331,6 +350,9 @@ app.Run(boot.Options{
     Address:                ":8080",
     EnableGracefulShutdown: true,
     ShutdownTimeout:        10 * time.Second,
+    HTTP: &boot.HTTPOptions{
+        GlobalPrefix: "/api/v1/",
+    },
 })
 ```
 
@@ -381,6 +403,7 @@ app.Run(boot.Options{
         Write: &boot.KafkaWriteOptions{
             TopicPrefix: "myapp.",
         },
+        HTTP: &boot.HTTPOptions{},
     },
 })
 ```
@@ -437,6 +460,7 @@ app.Run(boot.Options{
             Exchange:   "events-exchange",
             RoutingKey: "order.created",
         },
+        HTTP: &boot.HTTPOptions{},
     },
 })
 ```
@@ -557,6 +581,7 @@ func main() {
                 TopicPrefix: "",
             },
         },
+        HTTP: &boot.HTTPOptions{},
     })
 }
 

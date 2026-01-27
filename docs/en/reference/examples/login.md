@@ -361,6 +361,7 @@ func main() {
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
+		HTTP: &boot.HTTPOptions{},
 	})
 }
 ```

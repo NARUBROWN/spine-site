@@ -149,6 +149,7 @@ func main() {
                 TopicPrefix: "",
             },
         },
+        HTTP: &boot.HTTPOptions{},
     })
 }
 ```
@@ -227,6 +228,7 @@ func main() {
                 GroupID: "stock-service",
             },
         },
+        HTTP: &boot.HTTPOptions{},
     })
 }
 ```

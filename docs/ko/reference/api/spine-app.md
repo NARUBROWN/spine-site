@@ -47,6 +47,7 @@ func New() App
 app := spine.New()
 app.Run(boot.Options{
     Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
 })
 ```
 
@@ -281,7 +282,10 @@ Run(opts boot.Options) error
 
 **예시**
 ```go
-if err := app.Run(boot.Options{Address: ":8080"}); err != nil {
+if err := app.Run(boot.Options{
+    Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
+}); err != nil {
     log.Fatal(err)
 }
 ```
@@ -315,6 +319,20 @@ type Options struct {
     // RabbitMQ 이벤트 인프라 설정
     // nil인 경우 RabbitMQ는 구성되지 않음
     RabbitMQ *RabbitMqOptions
+
+    // HTTP Runtime 전용 설정
+    // nil인 경우 HTTP 서버는 실행되지 않음
+    HTTP *HTTPOptions
+}
+
+/*
+HTTP Runtime 설정입니다.
+HTTP 요청 실행 흐름에만 영향을 줍니다.
+*/
+type HTTPOptions struct {
+    // HTTP API 전역 Prefix (예: "/api/v1")
+    // 빈 값이면 Prefix를 적용하지 않습니다.
+    GlobalPrefix string
 }
 ```
 
@@ -323,6 +341,7 @@ type Options struct {
 ```go
 app.Run(boot.Options{
     Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
 })
 ```
 
@@ -333,6 +352,9 @@ app.Run(boot.Options{
     Address:                ":8080",
     EnableGracefulShutdown: true,
     ShutdownTimeout:        10 * time.Second,
+    HTTP: &boot.HTTPOptions{
+        GlobalPrefix: "/api/v1/",
+    },
 })
 ```
 
@@ -384,6 +406,7 @@ app.Run(boot.Options{
         Write: &boot.KafkaWriteOptions{
             TopicPrefix: "myapp.",
         },
+        HTTP: &boot.HTTPOptions{},
     },
 })
 ```
@@ -441,6 +464,7 @@ app.Run(boot.Options{
             Exchange:   "events-exchange",
             RoutingKey: "order.created",
         },
+        HTTP: &boot.HTTPOptions{},
     },
 })
 ```
@@ -563,6 +587,7 @@ func main() {
                 TopicPrefix: "",
             },
         },
+        HTTP: &boot.HTTPOptions{},
     })
 }
 
