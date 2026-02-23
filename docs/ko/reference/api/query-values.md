@@ -42,7 +42,7 @@ func NewValues(values map[string][]string) Values
 func (q Values) Get(key string) string
 ```
 
-지정한 키의 첫 번째 값을 반환합니다. `String()`의 별칭입니다.
+지정한 키의 첫 번째 값을 반환합니다.
 
 **매개변수**
 - `key` - 쿼리 파라미터 키
@@ -63,7 +63,7 @@ q.Get("missing")  // ""
 func (q Values) String(key string) string
 ```
 
-지정한 키의 첫 번째 값을 문자열로 반환합니다.
+지정한 키의 첫 번째 값을 문자열로 반환합니다. `Get()`과 동일한 구현입니다.
 
 **매개변수**
 - `key` - 쿼리 파라미터 키
@@ -85,7 +85,7 @@ q.String("missing") // ""
 func (q Values) Int(key string, def int64) int64
 ```
 
-지정한 키의 값을 정수로 파싱합니다.
+지정한 키의 값을 정수로 파싱합니다. 내부적으로 `Get()`을 호출하여 값을 가져온 뒤 `strconv.ParseInt`로 변환합니다.
 
 **매개변수**
 - `key` - 쿼리 파라미터 키
@@ -111,13 +111,15 @@ q.Int("page", 1)    // 1 (파싱 실패)
 func (q Values) GetBoolByKey(key string, def bool) bool
 ```
 
-지정한 키의 값을 불리언으로 파싱합니다.
+지정한 키의 값을 불리언으로 파싱합니다. 내부적으로 `Get()`을 호출한 뒤 소문자로 변환하여 판별합니다.
 
 **true로 인식되는 값** (대소문자 무시)
 - `"true"`, `"1"`, `"yes"`, `"y"`, `"on"`
 
 **false로 인식되는 값** (대소문자 무시)
 - `"false"`, `"0"`, `"no"`, `"n"`, `"off"`
+
+위에 해당하지 않는 값은 기본값을 반환합니다.
 
 **매개변수**
 - `key` - 쿼리 파라미터 키
@@ -159,6 +161,31 @@ q.Has("status")  // true
 q.Has("empty")   // true (값이 비어도 키는 존재)
 q.Has("missing") // false
 ```
+
+
+## QueryValuesResolver
+
+`query.Values` 타입을 Controller 파라미터로 선언하면 `QueryValuesResolver`가 자동으로 값을 생성합니다.
+
+```go
+// internal/resolver/query_values_resolver.go
+type QueryValuesResolver struct{}
+
+func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
+    return pm.Type == reflect.TypeFor[query.Values]()
+}
+
+func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
+    httpCtx, ok := ctx.(core.HttpRequestContext)
+    if !ok {
+        return nil, fmt.Errorf("HTTP 요청 컨텍스트가 아닙니다")
+    }
+    return query.NewValues(httpCtx.Queries()), nil
+}
+```
+
+Resolver는 `core.ExecutionContext`를 `core.HttpRequestContext`로 타입 단언한 뒤 `Queries()`로 전체 쿼리 맵을 가져옵니다. HTTP 요청이 아닌 컨텍스트(Consumer, WebSocket)에서는 에러를 반환합니다.
+
 
 ## Controller에서 사용
 

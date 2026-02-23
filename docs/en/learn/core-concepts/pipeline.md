@@ -13,26 +13,32 @@ graph TD
     Request["HTTP Request"]
     
     ExecutionContext["ExecutionContext<br>(Create Request Context)"]
+    GlobalPre["Global Interceptor.PreHandle<br>(Global Pre-processing)"]
     Router["Router<br>(Select HandlerMeta)"]
     ParamMeta["ParameterMeta Builder<br>(Construct Parameter Meta)"]
     ArgResolver["ArgumentResolver Chain<br>(Generate Argument Values)"]
-    InterPre["Interceptor.PreHandle<br>(Pre-processing)"]
+    RoutePre["Route Interceptor.PreHandle<br>(Route Pre-processing)"]
     Invoker["Invoker<br>(Call Controller Method)"]
     ReturnHandler["ReturnValueHandler<br>(Convert Return Value → Response)"]
-    InterPost["Interceptor.PostHandle<br>(Post-processing)"]
-    InterAfter["Interceptor.AfterCompletion<br>(Cleanup - Always Executed)"]
+    PostHook["PostExecutionHook<br>(Event Publishing)"]
+    RoutePost["Route Interceptor.PostHandle<br>(Route Post-processing)"]
+    GlobalPost["Global Interceptor.PostHandle<br>(Global Post-processing)"]
+    AfterCompletion["Interceptor.AfterCompletion<br>(Cleanup - Always Executed)"]
     Response["HTTP Response"]
 
     Request --> ExecutionContext
-    ExecutionContext --> Router
+    ExecutionContext --> GlobalPre
+    GlobalPre --> Router
     Router --> ParamMeta
     ParamMeta --> ArgResolver
-    ArgResolver --> InterPre
-    InterPre --> Invoker
+    ArgResolver --> RoutePre
+    RoutePre --> Invoker
     Invoker --> ReturnHandler
-    ReturnHandler --> InterPost
-    InterPost --> InterAfter
-    InterAfter --> Response
+    ReturnHandler --> PostHook
+    PostHook --> RoutePost
+    RoutePost --> GlobalPost
+    GlobalPost --> AfterCompletion
+    AfterCompletion --> Response
 ```
 
 
@@ -57,7 +63,39 @@ func (s *Server) handle(c echo.Context) error {
 `ExecutionContext` is a request-scoped context shared throughout the pipeline. It provides access to all request information such as HTTP method, path, headers, query parameters, etc.
 
 
-## 2. Router - Select HandlerMeta
+## Interceptor Scopes
+
+Spine introduces the concepts of **Global Interceptors** and **Route Interceptors** to clearly separate concerns.
+
+| Scope | Execution Point | Main Use Cases |
+|------|-----------|-----------|
+| **Global** | Before routing | CORS preflight, global logging, Request ID generation |
+| **Route** | After routing | Authentication/Authorization, Tenant validation, business validation |
+
+**Crucial Difference**:
+- Global Interceptors do not know the `HandlerMeta` during `PreHandle` (since routing hasn't happened yet).
+- Route Interceptors can use `HandlerMeta` during `PreHandle` to make decisions based on the Controller or Method.
+
+
+## 2. Global Interceptor (PreHandle)
+
+Deals with concerns that must be handled before the routing determines the execution target.
+
+```go
+// internal/pipeline/pipeline.go
+globalMeta := core.HandlerMeta{}
+for _, it := range p.interceptors {
+    if err := it.PreHandle(ctx, globalMeta); err != nil {
+        if errors.Is(err, core.ErrAbortPipeline) {
+            return nil
+        }
+        return err
+    }
+}
+```
+
+
+## 3. Router - Select HandlerMeta
 
 The Router determines which Controller method to execute based on the request path and method.
 
@@ -95,7 +133,7 @@ type HandlerMeta struct {
 ```
 
 
-## 3. Construct ParameterMeta
+## 4. Construct ParameterMeta
 
 Analyzes the signature of the Controller method to generate meta-information for each parameter.
 
@@ -138,7 +176,7 @@ func GetPost(userId path.Int, postId path.Int) // ✓ Matches order
 ```
 
 
-## 4. ArgumentResolver Chain
+## 5. ArgumentResolver Chain
 
 Resolvers corresponding to each parameter type generate the actual values.
 
@@ -193,16 +231,16 @@ type ArgumentResolver interface {
 ```
 
 
-## 5. Interceptor.PreHandle
+## 6. Route Interceptor (PreHandle)
 
-Handles cross-cutting concerns before Controller invocation.
+Handles cross-cutting concerns that apply specifically to the resolved route before Controller invocation.
 
 ```go
 // internal/pipeline/pipeline.go
-for _, it := range p.interceptors {
+for _, it := range routeInterceptors {
     if err := it.PreHandle(ctx, meta); err != nil {
         if errors.Is(err, core.ErrAbortPipeline) {
-            // Intentional termination (e.g., CORS preflight)
+            // Intentional termination (e.g., Auth failure)
             return nil
         }
         return err
@@ -228,7 +266,7 @@ type Interceptor interface {
 
 ### Aborting the Pipeline
 
-Returning `core.ErrAbortPipeline` in `PreHandle` skips subsequent steps. Often used in CORS preflight handling:
+Returning `core.ErrAbortPipeline` in `PreHandle` skips subsequent steps (but `AfterCompletion` is always executed).
 
 ```go
 // interceptor/cors/cors.go
@@ -239,7 +277,7 @@ if ctx.Method() == "OPTIONS" {
 ```
 
 
-## 6. Invoker - Call Controller Method
+## 7. Invoker - Call Controller Method
 
 Retrieves the Controller instance from the IoC Container and calls the method.
 
@@ -283,7 +321,7 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 ```
 
 
-## 7. ReturnValueHandler
+## 8. ReturnValueHandler
 
 Converts the Controller's return value into an HTTP response.
 
@@ -345,13 +383,33 @@ return rw.WriteJSON(status, map[string]any{
 ```
 
 
-## 8. Interceptor.PostHandle & AfterCompletion
+## 9. PostExecutionHook
+
+Executes post-execution logic such as dispatching collected domain events after the ReturnValueHandler completes.
+
+```go
+// internal/pipeline/pipeline.go
+for _, hook := range p.postHooks {
+    hook.AfterExecution(ctx, results, returnError)
+}
+```
+
+If the controller returned an error or if an error occurred in ReturnValueHandler, it is passed via `returnError`.
+
+
+## 10. Interceptor PostHandle & AfterCompletion
 
 ### PostHandle
 
-Executed in reverse order after ReturnValueHandler processing:
+Executed in reverse order after all normal execution (including hooks) has finished.
 
 ```go
+// Route Interceptor PostHandle
+for i := len(routeInterceptors) - 1; i >= 0; i-- {
+    routeInterceptors[i].PostHandle(ctx, meta)
+}
+
+// Global Interceptor PostHandle
 for i := len(p.interceptors) - 1; i >= 0; i-- {
     p.interceptors[i].PostHandle(ctx, meta)
 }
@@ -359,9 +417,17 @@ for i := len(p.interceptors) - 1; i >= 0; i-- {
 
 ### AfterCompletion
 
-**Always** executed regardless of success/failure. Guaranteed by `defer`:
+**Always** executed regardless of success/failure, thanks to `defer`.
 
 ```go
+// Route Interceptors
+defer func() {
+    for i := len(routeInterceptors) - 1; i >= 0; i-- {
+        routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
+    }
+}()
+
+// Global Interceptors
 defer func() {
     for i := len(p.interceptors) - 1; i >= 0; i-- {
         p.interceptors[i].AfterCompletion(ctx, meta, finalErr)
@@ -372,43 +438,72 @@ defer func() {
 Used for resource cleanup, logging, metrics collection, etc.
 
 
-## Context Separation Design
+## Error Safety Net (handleExecutionError)
 
-Spine clearly separates Context into two layers:
-
-### ExecutionContext
-
-Context for execution flow control used throughout the pipeline:
+If an error occurs during Pipeline execution, it falls back to write a final safety-net response. Prevents double response if already committed.
 
 ```go
-type ExecutionContext interface {
-    Context() context.Context
-    Method() string
-    Path() string
-    Params() map[string]string
-    Header(name string) string
-    PathKeys() []string
-    Queries() map[string][]string
-    Set(key string, value any)
-    Get(key string) (any, bool)
+// internal/pipeline/pipeline.go
+defer func() {
+    if finalErr != nil {
+        p.handleExecutionError(ctx, finalErr)
+    }
+}()
+
+func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
+    rwAny, ok := ctx.Get("spine.response_writer")
+    if !ok {
+        return
+    }
+    rw, ok := rwAny.(core.ResponseWriter)
+    if !ok {
+        return
+    }
+    
+    // Check if already committed to avoid double response
+    if rw.IsCommitted() {
+        return
+    }
+    
+    var httpErr *httperr.HTTPError
+    if errors.As(err, &httpErr) {
+        rw.WriteJSON(httpErr.Status, map[string]any{
+            "message": httpErr.Message,
+        })
+        return
+    }
+    
+    rw.WriteJSON(500, map[string]any{
+        "message": "Internal server error",
+    })
 }
 ```
 
-### RequestContext
+## Interceptor Execution Order Details
 
-Context dedicated to input interpretation, used only in ArgumentResolver:
+The actual execution order verified by tests:
 
-```go
-type RequestContext interface {
-    Param(name string) string
-    Query(name string) string
-    Params() map[string]string
-    Queries() map[string][]string
-    Bind(out any) error
-}
+### Normal Flow
+
+```
+pre:global → pre:route → [Controller] → post:route → post:global → after:route → after:global
 ```
 
-**Design Principle**: Controller and Resolver do not directly reference `ExecutionContext`. This achieves complete separation of execution model and business logic.
+### Abort in Route Interceptor (ErrAbortPipeline)
+
+```
+pre:global → pre:route → after:route → after:global
+```
+
+The Controller is not called, but `AfterCompletion` is always executed.
+
+### Abort in Global Interceptor (ErrAbortPipeline)
+
+```
+pre:global → after:global
+```
+
+The Router isn't called, which means Route Interceptors are not executed.
 
 
 ## Full Execution Flow Code
@@ -416,23 +511,57 @@ type RequestContext interface {
 ```go
 // internal/pipeline/pipeline.go
 func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
-    // 1. Router determines execution target
+    // Error safety net: write response on error
+    defer func() {
+        if finalErr != nil {
+            p.handleExecutionError(ctx, finalErr)
+        }
+    }()
+
+    // Global Interceptor AfterCompletion (Always executed)
+    globalMeta := core.HandlerMeta{}
+    defer func() {
+        for i := len(p.interceptors) - 1; i >= 0; i-- {
+            p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
+        }
+    }()
+
+    // 1. Global Interceptor PreHandle (Before routing)
+    for _, it := range p.interceptors {
+        if err := it.PreHandle(ctx, globalMeta); err != nil {
+            if errors.Is(err, core.ErrAbortPipeline) {
+                return nil
+            }
+            return err
+        }
+    }
+
+    // 2. Router determines execution target
     meta, err := p.router.Route(ctx)
     if err != nil {
         return err
     }
-    
-    // 2. Create ParameterMeta
+
+    routeInterceptors := meta.Interceptors
+
+    // Route Interceptor AfterCompletion (Always executed)
+    defer func() {
+        for i := len(routeInterceptors) - 1; i >= 0; i-- {
+            routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
+        }
+    }()
+
+    // 3. Create ParameterMeta
     paramMetas := buildParameterMeta(meta.Method, ctx)
-    
-    // 3. Application ArgumentResolver Chain
+
+    // 4. ArgumentResolver Chain
     args, err := p.resolveArguments(ctx, paramMetas)
     if err != nil {
         return err
     }
-    
-    // 4. Interceptor PreHandle
-    for _, it := range p.interceptors {
+
+    // 5. Route Interceptor PreHandle
+    for _, it := range routeInterceptors {
         if err := it.PreHandle(ctx, meta); err != nil {
             if errors.Is(err, core.ErrAbortPipeline) {
                 return nil
@@ -440,33 +569,54 @@ func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
             return err
         }
     }
-    
-    // 5. Call Controller Method
+
+    // 6. Call Controller Method
     results, err := p.invoker.Invoke(meta.ControllerType, meta.Method, args)
     if err != nil {
         return err
     }
-    
-    // 6. Process ReturnValueHandler
-    if err := p.handleReturn(ctx, results); err != nil {
-        return err
+
+    // 7. Process ReturnValueHandler
+    returnError := p.handleReturn(ctx, results)
+
+    // 8. PostExecutionHook (Domain event dispatch)
+    for _, hook := range p.postHooks {
+        hook.AfterExecution(ctx, results, returnError)
     }
-    
-    // 7. Interceptor PostHandle (Reverse Order)
+
+    if returnError != nil {
+        return returnError
+    }
+
+    // 9. Route Interceptor PostHandle (Reverse Order)
+    for i := len(routeInterceptors) - 1; i >= 0; i-- {
+        routeInterceptors[i].PostHandle(ctx, meta)
+    }
+
+    // 10. Global Interceptor PostHandle (Reverse Order)
     for i := len(p.interceptors) - 1; i >= 0; i-- {
         p.interceptors[i].PostHandle(ctx, meta)
     }
-    
-    // 8. AfterCompletion (Always Executed)
-    defer func() {
-        for i := len(p.interceptors) - 1; i >= 0; i-- {
-            p.interceptors[i].AfterCompletion(ctx, meta, finalErr)
-        }
-    }()
-    
+
     return nil
 }
 ```
+
+## Pipeline Struct
+
+```go
+// internal/pipeline/pipeline.go
+type Pipeline struct {
+    router            router.Router
+    interceptors      []core.Interceptor
+    argumentResolvers []resolver.ArgumentResolver
+    returnHandlers    []handler.ReturnValueHandler
+    invoker           *invoker.Invoker
+    postHooks         []hook.PostExecutionHook
+}
+```
+
+Pipeline is used not only for HTTP pipelines but identically for Consumer Pipelines and WebSocket Pipelines. Separate Pipeline instances are created per Transport, with just different Resolvers and Handlers configured.
 
 
 ## Summary
@@ -474,13 +624,17 @@ func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
 | Step | Component | Responsibility |
 |------|----------|------|
 | 1 | Transport Adapter | HTTP → ExecutionContext Conversion |
-| 2 | Router | Request Path → HandlerMeta Mapping |
-| 3 | ParameterMeta Builder | Method Signature Analysis |
-| 4 | ArgumentResolver | Parameter Type → Actual Value Generation |
-| 5 | Interceptor.PreHandle | Pre-processing (Auth, Logging, etc.) |
-| 6 | Invoker | Controller Method Invocation |
-| 7 | ReturnValueHandler | Return Value → HTTP Response Conversion |
-| 8 | Interceptor.PostHandle | Post-processing |
-| 9 | Interceptor.AfterCompletion | Cleanup (Always Executed) |
+| 2 | Global Interceptor.PreHandle | Global Pre-processing (CORS, etc.) before routing |
+| 3 | Router | Request Path → HandlerMeta Mapping |
+| 4 | ParameterMeta Builder | Method Signature Analysis |
+| 5 | ArgumentResolver | Parameter Type → Actual Value Generation |
+| 6 | Route Interceptor.PreHandle | Route Pre-processing (Auth, etc.) |
+| 7 | Invoker | Controller Method Invocation |
+| 8 | ReturnValueHandler | Return Value → HTTP Response Conversion |
+| 9 | PostExecutionHook | Domain event dispatch & post-processing |
+| 10 | Route Interceptor.PostHandle ↩ | Route Post-processing (Reverse Order) |
+| 11 | Global Interceptor.PostHandle ↩ | Global Post-processing (Reverse Order) |
+| 12 | AfterCompletion ↩ | Cleanup (Route → Global, Always Executed) |
+| 13 | handleExecutionError | Error Safety Net (prevents double response) |
 
 This order is **not hidden and is not implicitly changed.** This is Spine's "No Magic" philosophy.

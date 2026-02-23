@@ -11,7 +11,7 @@ graph TD
     subgraph Bootstrap [Route 등록 (부트스트랩)]
         MethodExpr["(*UserController).GetUser<br>(메서드 표현식)"]
         NewMeta["NewHandlerMeta()"]
-        MetaStruct["HandlerMeta<br>ControllerType: *UserController<br>Method: GetUser"]
+        MetaStruct["HandlerMeta<br>ControllerType: *UserController<br>Method: GetUser<br>Interceptors: []Interceptor"]
     end
 
     subgraph Runtime [런타임]
@@ -38,6 +38,9 @@ type HandlerMeta struct {
     
     // 호출할 메서드
     Method reflect.Method
+    
+    // 핸들러에 적용된 인터셉터
+    Interceptors []Interceptor
 }
 ```
 
@@ -59,6 +62,14 @@ meta.ControllerType  // reflect.Type of *UserController
 meta.Method.Name           // "GetUser"
 meta.Method.Type           // func(*UserController, path.Int) (User, error)
 meta.Method.Func           // 호출 가능한 reflect.Value
+```
+
+#### Interceptors
+
+해당 라우트에만 적용되는 인터셉터 목록입니다. 글로벌 인터셉터와 별도로, 라우트 단위로 횡단 관심사를 적용할 수 있습니다.
+
+```go
+meta.Interceptors  // []core.Interceptor (라우트 레벨)
 ```
 
 
@@ -83,6 +94,28 @@ app.Route(
 // 메서드 표현식의 실제 타입
 func(*UserController, path.Int) (User, error)
 //   ↑ receiver가 첫 번째 인자로 변환됨
+```
+
+### RouteOption으로 라우트 인터셉터 적용
+
+`route.WithInterceptors`를 사용해 라우트 단위 인터셉터를 지정할 수 있습니다.
+
+```go
+app.Route(
+    "GET",
+    "/users/:id",
+    (*UserController).GetUser,
+    route.WithInterceptors(&AuthInterceptor{}),
+)
+```
+
+```go
+// pkg/route/route_options.go
+func WithInterceptors(interceptors ...core.Interceptor) router.RouteOption {
+    return func(rs *router.RouteSpec) {
+        rs.Interceptors = append(rs.Interceptors, interceptors...)
+    }
+}
 ```
 
 ### NewHandlerMeta 함수
@@ -120,6 +153,10 @@ func NewHandlerMeta(handler any) (core.HandlerMeta, error) {
     fullName := fn.Name()
     // 예: github.com/NARUBROWN/spine-demo.(*UserController).GetUser
     lastDot := strings.LastIndex(fullName, ".")
+    if lastDot == -1 {
+        return core.HandlerMeta{}, fmt.Errorf("메서드 이름 파싱 실패: %s", fullName)
+    }
+    
     methodName := fullName[lastDot+1:]
     
     // 5. 리플렉션으로 메서드 정보 획득
@@ -154,7 +191,7 @@ t.In(1)    // path.Int
 
 #### Step 3: 메서드 이름 추출
 
-`runtime.FuncForPC`로 함수의 전체 경로를 얻고, 마지막 `.` 이후의 문자열이 메서드 이름입니다.
+`runtime.FuncForPC`로 함수의 전체 경로를 얻고, 마지막 `.` 이후의 문자열이 메서드 이름입니다. `lastDot == -1`인 경우 파싱 실패 에러를 반환합니다.
 
 ```go
 fn.Name()  // "github.com/NARUBROWN/spine-demo.(*UserController).GetUser"
@@ -180,7 +217,7 @@ method, _ := reflect.TypeOf(&UserController{}).MethodByName("GetUser")
 type Route struct {
     Method string           // HTTP 메서드
     Path   string           // URL 패턴
-    Meta   core.HandlerMeta // 핸들러 메타데이터
+    Meta   core.HandlerMeta // 핸들러 메타데이터 (Interceptors 포함)
 }
 
 func (r *DefaultRouter) Register(method string, path string, meta core.HandlerMeta) {
@@ -209,14 +246,104 @@ func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, erro
         ctx.Set("spine.params", params)
         ctx.Set("spine.pathKeys", keys)
         
-        return route.Meta, nil  // HandlerMeta 반환
+        return route.Meta, nil  // HandlerMeta 반환 (Interceptors 포함)
     }
-    return core.HandlerMeta{}, fmt.Errorf("핸들러가 없습니다.")
+    return core.HandlerMeta{}, httperr.NotFound("핸들러가 없습니다.")
 }
 ```
 
 
 ## Pipeline에서의 사용
+
+### 글로벌 + 라우트 인터셉터 실행 흐름
+
+Pipeline은 글로벌 인터셉터와 라우트 인터셉터를 분리하여 실행합니다.
+
+```go
+// internal/pipeline/pipeline.go
+func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
+    globalMeta := core.HandlerMeta{}
+    
+    // AfterCompletion은 성공/실패와 관계없이 보장
+    defer func() {
+        for i := len(p.interceptors) - 1; i >= 0; i-- {
+            p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
+        }
+    }()
+
+    // 1. 글로벌 Interceptor PreHandle (라우팅 전)
+    for _, it := range p.interceptors {
+        if err := it.PreHandle(ctx, globalMeta); err != nil {
+            if errors.Is(err, core.ErrAbortPipeline) {
+                return nil
+            }
+            return err
+        }
+    }
+
+    // 2. Router가 실행 대상을 결정
+    meta, err := p.router.Route(ctx)
+    if err != nil {
+        return err
+    }
+
+    routeInterceptors := meta.Interceptors
+
+    // 라우트 Interceptor AfterCompletion은 무조건 보장
+    defer func() {
+        for i := len(routeInterceptors) - 1; i >= 0; i-- {
+            routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
+        }
+    }()
+
+    // 3. ArgumentResolver 체인 실행
+    paramMetas := buildParameterMeta(meta.Method, ctx)
+    args, err := p.resolveArguments(ctx, paramMetas)
+    if err != nil {
+        return err
+    }
+
+    // 4. 라우트 Interceptor PreHandle
+    for _, it := range routeInterceptors {
+        if err := it.PreHandle(ctx, meta); err != nil {
+            if errors.Is(err, core.ErrAbortPipeline) {
+                return nil
+            }
+            return err
+        }
+    }
+
+    // 5. Controller Method 호출
+    results, err := p.invoker.Invoke(meta.ControllerType, meta.Method, args)
+    if err != nil {
+        return err
+    }
+
+    // 6. ReturnValueHandler 처리
+    returnError := p.handleReturn(ctx, results)
+
+    // 7. PostExecutionHook (이벤트 발행 등)
+    for _, hook := range p.postHooks {
+        hook.AfterExecution(ctx, results, returnError)
+    }
+
+    if returnError != nil {
+        return returnError
+    }
+
+    // 8. 라우트 Interceptor PostHandle (역순)
+    for i := len(routeInterceptors) - 1; i >= 0; i-- {
+        routeInterceptors[i].PostHandle(ctx, meta)
+    }
+
+    // 9. 글로벌 Interceptor PostHandle (역순)
+    for i := len(p.interceptors) - 1; i >= 0; i-- {
+        p.interceptors[i].PostHandle(ctx, meta)
+    }
+
+    return nil
+}
+```
 
 ### ParameterMeta 생성
 
@@ -240,7 +367,9 @@ func buildParameterMeta(method reflect.Method, ctx core.ExecutionContext) []reso
         }
         
         if isPathType(pt) {
-            if pathIdx < len(pathKeys) {
+            if pathIdx >= len(pathKeys) {
+                pm.PathKey = ""
+            } else {
                 pm.PathKey = pathKeys[pathIdx]
             }
             pathIdx++
@@ -250,6 +379,11 @@ func buildParameterMeta(method reflect.Method, ctx core.ExecutionContext) []reso
     }
     
     return metas
+}
+
+func isPathType(pt reflect.Type) bool {
+    pathPkg := reflect.TypeFor[path.Int]().PkgPath()
+    return pt.PkgPath() == pathPkg
 }
 ```
 
@@ -289,7 +423,7 @@ func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, arg
 Interceptor의 모든 메서드는 `HandlerMeta`를 받아 실행 대상 정보에 접근할 수 있습니다.
 
 ```go
-// cmd/demo/loggin_interceptor.go
+// cmd/demo/logging_interceptor.go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     log.Printf(
         "[REQ] %s %s -> %s.%s",
@@ -310,22 +444,38 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 ```go
 // cmd/demo/main.go
 app.Route("GET", "/users/:id", (*UserController).GetUser)
+
+// 라우트 인터셉터와 함께
+app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
+    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil 포인터 → Container에서 Resolve
+)
 ```
 
 ### 2. RouteSpec 수집
 
 ```go
 // app.go
-func (a *app) Route(method string, path string, handler any) {
-    a.routes = append(a.routes, router.RouteSpec{
+func (a *app) Route(method string, path string, handler any, opts ...router.RouteOption) {
+    // HTTP 메서드를 대문자로 변환해 대소문자 불일치 방지
+    method = strings.ToUpper(strings.TrimSpace(method))
+
+    spec := router.RouteSpec{
         Method:  method,
         Path:    path,
-        Handler: handler,  // 메서드 표현식
-    })
+        Handler: handler,
+    }
+
+    for _, opt := range opts {
+        opt(&spec)
+    }
+
+    a.routes = append(a.routes, spec)
 }
 ```
 
-### 3. HandlerMeta 생성 및 등록
+### 3. HandlerMeta 생성 및 라우트 인터셉터 Resolve
+
+부트스트랩 시점에 `NewHandlerMeta`로 메타데이터를 생성하고, 라우트 인터셉터를 처리합니다. nil 포인터로 전달된 인터셉터는 IoC Container에서 Resolve됩니다.
 
 ```go
 // internal/bootstrap/bootstrap.go
@@ -337,8 +487,30 @@ for _, route := range config.Routes {
     if err != nil {
         return err
     }
-    
-    router.Register(route.Method, route.Path, meta)
+
+    // 라우트 인터셉터 Resolve
+    resolved := make([]core.Interceptor, len(route.Interceptors))
+    for i, interceptor := range route.Interceptors {
+        interceptorType := reflect.TypeOf(interceptor)
+        value := reflect.ValueOf(interceptor)
+
+        if interceptorType.Kind() == reflect.Pointer && value.IsNil() {
+            // nil 포인터 → Container에서 Resolve
+            inst, err := container.Resolve(interceptorType)
+            if err != nil {
+                panic(err)
+            }
+            resolved[i] = inst.(core.Interceptor)
+        } else {
+            // 인스턴스 직접 사용
+            resolved[i] = interceptor
+        }
+    }
+
+    meta.Interceptors = resolved
+
+    fullPath := joinPath(prefix, route.Path)
+    router.Register(route.Method, fullPath, meta)
 }
 ```
 
@@ -381,36 +553,45 @@ if err := container.WarmUp(router.ControllerTypes()); err != nil {
 ```mermaid
 graph TD
     subgraph Bootstrap [부트스트랩 시점]
-        RouteDef["app.Route('GET', '/users/:id', (*UserController).GetUser)"]
+        RouteDef["app.Route('GET', '/users/:id',<br>(*UserController).GetUser,<br>route.WithInterceptors(...))"]
         NewHandlerMeta["NewHandlerMeta()"]
-        HandlerMeta["HandlerMeta<br>Type: *UserCtrl<br>Method: GetUser"]
+        ResolveInterceptors["라우트 Interceptor Resolve"]
+        HandlerMeta["HandlerMeta<br>Type: *UserCtrl<br>Method: GetUser<br>Interceptors: [...]"]
         Register["Router.Register()"]
 
         RouteDef --> NewHandlerMeta
-        NewHandlerMeta --> HandlerMeta
+        NewHandlerMeta --> ResolveInterceptors
+        ResolveInterceptors --> HandlerMeta
         HandlerMeta --> Register
     end
 
     subgraph Runtime [런타임 시점]
         Request["GET /users/123"]
+        
+        GlobalPre["글로벌 Interceptor PreHandle"]
         RouteCall["Router.Route(ctx)"]
         MetaReturn["HandlerMeta 반환"]
         
         BuildMeta["buildParameterMeta(meta.Method)"]
-        PreHandle["Interceptor.PreHandle(ctx, meta)"]
+        ResolveArgs["ArgumentResolver 체인"]
+        RoutePre["라우트 Interceptor PreHandle"]
         Invoke["Invoker.Invoke(meta.ControllerType, meta.Method)"]
-        ResolveCtrl["Container.Resolve(meta.ControllerType)"]
-        MethodCall["meta.Method.Func.Call(args)"]
-        PostHandle["Interceptor.PostHandle(ctx, meta)"]
+        ReturnHandle["ReturnValueHandler"]
+        PostHook["PostExecutionHook"]
+        RoutePost["라우트 Interceptor PostHandle ↩"]
+        GlobalPost["글로벌 Interceptor PostHandle ↩"]
 
-        Request --> RouteCall
+        Request --> GlobalPre
+        GlobalPre --> RouteCall
         RouteCall --> MetaReturn
         MetaReturn --> BuildMeta
-        MetaReturn --> PreHandle
-        MetaReturn --> Invoke
-        Invoke --> ResolveCtrl
-        Invoke --> MethodCall
-        MetaReturn --> PostHandle
+        BuildMeta --> ResolveArgs
+        ResolveArgs --> RoutePre
+        RoutePre --> Invoke
+        Invoke --> ReturnHandle
+        ReturnHandle --> PostHook
+        PostHook --> RoutePost
+        RoutePost --> GlobalPost
     end
 ```
 
@@ -457,14 +638,30 @@ if err != nil {
 }
 ```
 
+### 4. 글로벌 vs 라우트 인터셉터 분리
+
+글로벌 인터셉터는 `app.Interceptor()`로 등록하고, 라우트 인터셉터는 `route.WithInterceptors()`로 등록합니다. Pipeline에서 실행 순서가 다릅니다.
+
+```go
+// 글로벌: 모든 요청에 적용 (라우팅 전 실행)
+app.Interceptor(&CORSInterceptor{})
+
+// 라우트: 특정 핸들러에만 적용 (라우팅 후, Controller 호출 전 실행)
+app.Route("GET", "/admin/:id", (*AdminController).Get,
+    route.WithInterceptors(&AuthInterceptor{}),
+)
+```
+
+
 ## 요약
 
 | 구성 요소 | 역할 |
 |----------|------|
-| `HandlerMeta` | Controller 타입과 메서드 정보를 담는 메타데이터 |
+| `HandlerMeta` | Controller 타입, 메서드 정보, 라우트 인터셉터를 담는 메타데이터 |
 | `NewHandlerMeta()` | 메서드 표현식 → HandlerMeta 변환 |
-| `Router` | 요청 매칭 시 HandlerMeta 반환 |
+| `RouteOption` / `WithInterceptors()` | 라우트 단위 인터셉터 지정 |
+| `Router` | 요청 매칭 시 HandlerMeta 반환 (Interceptors 포함) |
 | `Invoker` | HandlerMeta로 Controller 인스턴스 resolve 및 메서드 호출 |
 | `Interceptor` | HandlerMeta로 실행 대상 정보 접근 |
 
-**핵심**: HandlerMeta는 "무엇을 실행할 것인가"에 대한 메타데이터입니다. 부트스트랩 시점에 생성되어 런타임에 사용되며, 실행 모델과 비즈니스 로직을 연결하는 핵심 고리 역할을 합니다.
+**핵심**: HandlerMeta는 "무엇을 실행할 것인가"에 대한 메타데이터입니다. 부트스트랩 시점에 생성되어 런타임에 사용되며, 실행 모델과 비즈니스 로직을 연결하는 핵심 고리 역할을 합니다. 라우트 인터셉터를 포함함으로써 핸들러 단위의 횡단 관심사 적용도 지원합니다.

@@ -5,7 +5,7 @@ ExecutionContext에 대한 API 참조.
 
 ## 개요
 
-`ExecutionContext`는 Spine 파이프라인에서 요청 정보에 접근하고, 컴포넌트 간 데이터를 공유하는 인터페이스입니다. HTTP 요청과 이벤트 메시지 모두를 처리하는 통합 실행 컨텍스트입니다.
+`ExecutionContext`는 Spine 파이프라인에서 요청 정보에 접근하고, 컴포넌트 간 데이터를 공유하는 인터페이스입니다. HTTP 요청, 이벤트 메시지, WebSocket 메시지 모두를 처리하는 통합 실행 컨텍스트입니다.
 
 ```go
 import "github.com/NARUBROWN/spine/core"
@@ -17,21 +17,26 @@ import "github.com/NARUBROWN/spine/core"
 Spine은 Context를 계층적으로 분리합니다.
 
 ```
-ContextCarrier ──────┬──► RequestContext ──┬──► HttpRequestContext
-                     │                     │
-EventBusCarrier ─────┤                     └──► ConsumerRequestContext
+ContextCarrier ──────┬──► ExecutionContext ──► WebSocketContext
                      │
-                     └──► ExecutionContext
+EventBusCarrier ─────┤
+                     │
+                     ├──► HttpRequestContext
+                     │
+                     ├──► ConsumerRequestContext
+                     │
+                     └──► ControllerContext (읽기 전용 Facade)
 ```
 
 | 인터페이스 | 역할 | 사용 위치 |
 |-----------|------|----------|
 | `ContextCarrier` | Go context 전달 | 모든 곳 |
 | `EventBusCarrier` | 이벤트 발행 | Controller, Consumer |
-| `RequestContext` | Resolver 최소 계약 | ArgumentResolver 기반 |
 | `ExecutionContext` | 실행 흐름 제어 | Router, Pipeline, Interceptor |
+| `ControllerContext` | ExecutionContext 읽기 전용 Facade | Controller |
 | `HttpRequestContext` | HTTP 입력 해석 | HTTP ArgumentResolver |
 | `ConsumerRequestContext` | 이벤트 입력 해석 | Consumer ArgumentResolver |
+| `WebSocketContext` | WebSocket 입력 해석 | WebSocket ArgumentResolver |
 
 
 ## 인터페이스 정의
@@ -44,14 +49,11 @@ type ContextCarrier interface {
 }
 
 type EventBusCarrier interface {
-    EventBus() publish.EventBus
-}
-
-type RequestContext interface {
-    ContextCarrier
-    EventBusCarrier
+    EventBus() EventBus
 }
 ```
+
+> **참고**: `EventBusCarrier`의 반환 타입은 `core.EventBus`입니다. `core.EventBus`는 `Publish(events ...publish.DomainEvent)`와 `Drain() []publish.DomainEvent` 메서드를 가지는 인터페이스입니다.
 
 ### ExecutionContext
 
@@ -62,8 +64,8 @@ type ExecutionContext interface {
 
     Method() string
     Path() string
-    Header(name string) string
     Params() map[string]string
+    Header(name string) string
     PathKeys() []string
     Queries() map[string][]string
     Set(key string, value any)
@@ -71,32 +73,67 @@ type ExecutionContext interface {
 }
 ```
 
+### ControllerContext
+
+Controller 전용 읽기 전용 Facade입니다. Interceptor가 `Set()`으로 주입한 값을 Controller에서 `Get()`으로 참조하기 위한 공식 통로입니다.
+
+```go
+type ControllerContext interface {
+    Get(key string) (any, bool)
+}
+```
+
 ### HttpRequestContext
 
-HTTP 전용 확장 인터페이스입니다.
+HTTP 전용 확장 인터페이스입니다. `ContextCarrier`와 `EventBusCarrier`를 직접 임베딩합니다.
 
 ```go
 type HttpRequestContext interface {
-    RequestContext
+    ContextCarrier
+    EventBusCarrier
 
+    // 개별 접근
     Param(name string) string
     Query(name string) string
+    Header(name string) string
+
+    // 전체 뷰 접근
     Params() map[string]string
     Queries() map[string][]string
+    Headers() map[string][]string
+
+    // body
     Bind(out any) error
+
+    // Multipart
     MultipartForm() (*multipart.Form, error)
 }
 ```
 
 ### ConsumerRequestContext
 
-이벤트 컨슈머 전용 확장 인터페이스입니다.
+이벤트 컨슈머 전용 확장 인터페이스입니다. `ContextCarrier`와 `EventBusCarrier`를 직접 임베딩합니다.
 
 ```go
 type ConsumerRequestContext interface {
-    RequestContext
+    ContextCarrier
+    EventBusCarrier
 
     EventName() string
+    Payload() []byte
+}
+```
+
+### WebSocketContext
+
+WebSocket 전용 확장 인터페이스입니다. `ExecutionContext`를 임베딩합니다.
+
+```go
+type WebSocketContext interface {
+    ExecutionContext
+
+    ConnID() string
+    MessageType() int
     Payload() []byte
 }
 ```
@@ -130,13 +167,13 @@ func (i *TimeoutInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 ### EventBus
 
 ```go
-EventBus() publish.EventBus
+EventBus() core.EventBus
 ```
 
 요청 스코프의 EventBus를 반환합니다. 도메인 이벤트 발행에 사용됩니다.
 
 **반환값**
-- `publish.EventBus` - 이벤트 버스 인스턴스
+- `core.EventBus` - 이벤트 버스 인스턴스
 
 **예시**
 ```go
@@ -166,6 +203,7 @@ Method() string
 **반환값**
 - HTTP: `"GET"`, `"POST"`, `"PUT"`, `"DELETE"` 등
 - Consumer: `"EVENT"`
+- WebSocket: `"WS"`
 
 **예시**
 ```go
@@ -189,12 +227,14 @@ Path() string
 **반환값**
 - HTTP: 요청 경로 (예: `"/users/123"`)
 - Consumer: 이벤트 이름 (예: `"order.created"`)
+- WebSocket: WebSocket 경로 (예: `"/ws/chat"`)
 
 **예시**
 ```go
 log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
-// HTTP: [REQ] GET /users/123
-// Consumer: [REQ] EVENT order.created
+// HTTP:      [REQ] GET /users/123
+// Consumer:  [REQ] EVENT order.created
+// WebSocket: [REQ] WS /ws/chat
 ```
 
 
@@ -211,7 +251,7 @@ Header(name string) string
 
 **반환값**
 - `string` - 헤더 값. 없으면 빈 문자열
-- Consumer에서는 항상 빈 문자열
+- Consumer/WebSocket에서는 항상 빈 문자열
 
 **예시**
 ```go
@@ -230,7 +270,7 @@ Params() map[string]string
 
 **반환값**
 - `map[string]string` - 경로 파라미터 맵
-- Consumer에서는 빈 맵
+- Consumer/WebSocket에서는 빈 맵
 
 **예시**
 ```go
@@ -251,7 +291,7 @@ PathKeys() []string
 
 **반환값**
 - `[]string` - 키 슬라이스
-- Consumer에서는 빈 슬라이스
+- Consumer/WebSocket에서는 빈 슬라이스
 
 **예시**
 ```go
@@ -271,7 +311,7 @@ Queries() map[string][]string
 
 **반환값**
 - `map[string][]string` - 쿼리 파라미터 맵
-- Consumer에서는 빈 맵
+- Consumer/WebSocket에서는 빈 맵
 
 **예시**
 ```go
@@ -324,6 +364,47 @@ if rw, ok := ctx.Get("spine.response_writer"); ok {
 ```
 
 
+## ControllerContext
+
+Controller에서 Interceptor가 주입한 값을 읽기 위한 전용 뷰입니다.
+
+### Get
+
+```go
+Get(key string) (any, bool)
+```
+
+`ExecutionContext.Get()`에 위임합니다. `Set()` 메서드는 제공하지 않습니다.
+
+**구현**
+```go
+// internal/runtime/controller_ctx.go
+type controllerCtxView struct {
+    ec core.ExecutionContext
+}
+
+func NewControllerContext(ec core.ExecutionContext) core.ControllerContext {
+    return controllerCtxView{ec: ec}
+}
+
+func (v controllerCtxView) Get(key string) (any, bool) {
+    return v.ec.Get(key)
+}
+```
+
+**사용 예시**
+```go
+func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (User, error) {
+    // Interceptor가 Set("auth.user", ...)으로 주입한 값을 읽기
+    if authUser, ok := ctx.Get("auth.user"); ok {
+        user := authUser.(*AuthUser)
+        // ...
+    }
+    return c.repo.FindByID(userId.Value)
+}
+```
+
+
 ## HttpRequestContext 메서드
 
 HTTP ArgumentResolver에서 사용되는 추가 메서드입니다.
@@ -352,6 +433,20 @@ Query(name string) string
 **예시**
 ```go
 page := ctx.Query("page")  // "1"
+```
+
+### Headers
+
+```go
+Headers() map[string][]string
+```
+
+모든 HTTP 헤더를 맵으로 반환합니다.
+
+**예시**
+```go
+headers := ctx.Headers()
+// {"Content-Type": ["application/json"], "Accept": ["text/html", "application/json"]}
 ```
 
 ### Bind
@@ -423,6 +518,58 @@ json.Unmarshal(payload, &event)
 ```
 
 
+## WebSocketContext 메서드
+
+WebSocket ArgumentResolver에서 사용되는 메서드입니다.
+
+### ConnID
+
+```go
+ConnID() string
+```
+
+WebSocket 연결의 고유 식별자를 반환합니다.
+
+**예시**
+```go
+connID := ctx.ConnID()  // "a1b2c3d4-..."
+```
+
+### MessageType
+
+```go
+MessageType() int
+```
+
+WebSocket 메시지 타입을 반환합니다.
+
+**반환값**
+- `1` - TextMessage
+- `2` - BinaryMessage
+
+**예시**
+```go
+if ctx.MessageType() == ws.TextMessage {
+    // 텍스트 메시지 처리
+}
+```
+
+### Payload
+
+```go
+Payload() []byte
+```
+
+WebSocket 메시지의 원시 페이로드를 반환합니다.
+
+**예시**
+```go
+payload := ctx.Payload()  // []byte
+var msg ChatMessage
+json.Unmarshal(payload, &msg)
+```
+
+
 ## 예약된 키
 
 | 키 | 타입 | 설명 |
@@ -487,6 +634,7 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     origin := ctx.Header("Origin")
     if origin != "" && i.isAllowedOrigin(origin) {
         rw.SetHeader("Access-Control-Allow-Origin", origin)
+        rw.SetHeader("Vary", "Origin")
     }
     
     if ctx.Method() == "OPTIONS" {
@@ -501,7 +649,7 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 ## ArgumentResolver에서 사용
 
-ArgumentResolver는 `ExecutionContext`를 받고, 필요에 따라 프로토콜별 Context로 타입 단언합니다.
+ArgumentResolver는 `core.ExecutionContext`를 받고, 필요에 따라 프로토콜별 Context로 타입 단언합니다.
 
 ### HTTP Resolver 예시
 
@@ -541,9 +689,23 @@ func (r *EventNameResolver) Resolve(ctx core.ExecutionContext, meta ParameterMet
 }
 ```
 
+### WebSocket Resolver 예시
+
+```go
+func (r *ConnectionIDResolver) Resolve(ctx core.ExecutionContext, meta ParameterMeta) (any, error) {
+    // WebSocketContext로 타입 단언
+    wsCtx, ok := ctx.(core.WebSocketContext)
+    if !ok {
+        return nil, fmt.Errorf("WebSocketContext가 아닙니다")
+    }
+
+    return ws.ConnectionID{Value: wsCtx.ConnID()}, nil
+}
+```
+
 ### 공통 Resolver 예시
 
-HTTP와 Consumer 모두에서 동작하는 Resolver입니다.
+HTTP, Consumer, WebSocket 모두에서 동작하는 Resolver입니다.
 
 ```go
 func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
@@ -557,19 +719,37 @@ func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta Pa
 }
 ```
 
+### ControllerContext Resolver 예시
 
-## HTTP vs Consumer 동작 차이
+```go
+func (r *ControllerContextResolver) Resolve(ctx core.ExecutionContext, _ ParameterMeta) (any, error) {
+    return runtime.NewControllerContext(ctx), nil
+}
+```
 
-| 메서드 | HTTP | Consumer |
-|--------|------|----------|
-| `Method()` | `"GET"`, `"POST"` 등 | `"EVENT"` |
-| `Path()` | `/users/123` | `order.created` |
-| `Header()` | 헤더 값 | 빈 문자열 |
-| `Params()` | path params | 빈 맵 |
-| `PathKeys()` | key 순서 | 빈 슬라이스 |
-| `Queries()` | query params | 빈 맵 |
-| `EventBus()` | EventBus | EventBus |
-| `Context()` | 요청 context | 요청 context |
+
+## 프로토콜별 동작 차이
+
+| 메서드 | HTTP | Consumer | WebSocket |
+|--------|------|----------|-----------|
+| `Method()` | `"GET"`, `"POST"` 등 | `"EVENT"` | `"WS"` |
+| `Path()` | `/users/123` | `order.created` | `/ws/chat` |
+| `Header()` | 헤더 값 | 빈 문자열 | 빈 문자열 |
+| `Params()` | path params | 빈 맵 | 빈 맵 |
+| `PathKeys()` | key 순서 | 빈 슬라이스 | 빈 슬라이스 |
+| `Queries()` | query params | 빈 맵 | 빈 맵 |
+| `EventBus()` | EventBus | EventBus | EventBus |
+| `Context()` | 요청 context | 요청 context | 요청 context |
+
+
+## 구현체
+
+| 구현체 | 인터페이스 | 위치 |
+|--------|-----------|------|
+| `echoContext` | `ExecutionContext` + `HttpRequestContext` | `internal/adapter/echo/context_impl.go` |
+| `ConsumerRequestContextImpl` | `ExecutionContext` + `ConsumerRequestContext` | `internal/event/consumer/request_context_impl.go` |
+| `WSExecutionContext` | `WebSocketContext` (⊃ `ExecutionContext`) | `internal/ws/context_impl.go` |
+| `controllerCtxView` | `ControllerContext` | `internal/runtime/controller_ctx.go` |
 
 
 ## 참고

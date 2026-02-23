@@ -11,7 +11,7 @@ graph TD
     subgraph Bootstrap [Route Registration (Bootstrap)]
         MethodExpr["(*UserController).GetUser<br>(Method Expression)"]
         NewMeta["NewHandlerMeta()"]
-        MetaStruct["HandlerMeta<br>ControllerType: *UserController<br>Method: GetUser"]
+        MetaStruct["HandlerMeta<br>ControllerType: *UserController<br>Method: GetUser<br>Interceptors: []Interceptor"]
     end
 
     subgraph Runtime [Runtime]
@@ -38,6 +38,9 @@ type HandlerMeta struct {
     
     // Method to call
     Method reflect.Method
+    
+    // Interceptors applied to the handler
+    Interceptors []Interceptor
 }
 ```
 
@@ -61,6 +64,13 @@ meta.Method.Type           // func(*UserController, path.Int) (User, error)
 meta.Method.Func           // Callable reflect.Value
 ```
 
+#### Interceptors
+
+List of Interceptors applied exclusively to this route. Allows applying cross-cutting concerns at the route level, distinct from global interceptors.
+
+```go
+meta.Interceptors  // []core.Interceptor (Route level)
+```
 
 ## Creating HandlerMeta
 
@@ -83,6 +93,28 @@ The method expression `(*UserController).GetUser` is treated as a regular functi
 // Actual type of method expression
 func(*UserController, path.Int) (User, error)
 //   ↑ receiver is converted to the first argument
+```
+
+### RouteOption for Route Interceptors
+
+You can apply route-level interceptors by using `route.WithInterceptors`.
+
+```go
+app.Route(
+    "GET",
+    "/users/:id",
+    (*UserController).GetUser,
+    route.WithInterceptors(&AuthInterceptor{}),
+)
+```
+
+```go
+// pkg/route/route_options.go
+func WithInterceptors(interceptors ...core.Interceptor) router.RouteOption {
+    return func(rs *router.RouteSpec) {
+        rs.Interceptors = append(rs.Interceptors, interceptors...)
+    }
+}
 ```
 
 ### NewHandlerMeta Function
@@ -120,6 +152,10 @@ func NewHandlerMeta(handler any) (core.HandlerMeta, error) {
     fullName := fn.Name()
     // e.g.: github.com/NARUBROWN/spine-demo.(*UserController).GetUser
     lastDot := strings.LastIndex(fullName, ".")
+    if lastDot == -1 {
+        return core.HandlerMeta{}, fmt.Errorf("failed to parse method name: %s", fullName)
+    }
+    
     methodName := fullName[lastDot+1:]
     
     // 5. Get method info via reflection
@@ -154,7 +190,7 @@ t.In(1)    // path.Int
 
 #### Step 3: Extract Method Name
 
-Get the full path of the function using `runtime.FuncForPC`, and the string after the last `.` is the method name.
+Get the full path of the function using `runtime.FuncForPC`, and the string after the last `.` is the method name. Returns a parsing failure error if `lastDot == -1`.
 
 ```go
 fn.Name()  // "github.com/NARUBROWN/spine-demo.(*UserController).GetUser"
@@ -180,7 +216,7 @@ method, _ := reflect.TypeOf(&UserController{}).MethodByName("GetUser")
 type Route struct {
     Method string           // HTTP Method
     Path   string           // URL Pattern
-    Meta   core.HandlerMeta // Handler Metadata
+    Meta   core.HandlerMeta // Handler Metadata (Includes Interceptors)
 }
 
 func (r *DefaultRouter) Register(method string, path string, meta core.HandlerMeta) {
@@ -209,14 +245,78 @@ func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, erro
         ctx.Set("spine.params", params)
         ctx.Set("spine.pathKeys", keys)
         
-        return route.Meta, nil  // Return HandlerMeta
+        return route.Meta, nil  // Return HandlerMeta (Includes Interceptors)
     }
-    return core.HandlerMeta{}, fmt.Errorf("Handler not found.")
+    return core.HandlerMeta{}, httperr.NotFound("Handler not found.")
 }
 ```
 
-
 ## Usage in Pipeline
+
+### Global + Route Interceptor Execution Flow
+
+The Pipeline separates the execution of global interceptors and route interceptors.
+
+```go
+// internal/pipeline/pipeline.go
+func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
+    globalMeta := core.HandlerMeta{}
+    
+    // AfterCompletion is guaranteed regardless of success/failure
+    defer func() {
+        for i := len(p.interceptors) - 1; i >= 0; i-- {
+            p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
+        }
+    }()
+
+    // 1. Global Interceptor PreHandle (Before routing)
+    for _, it := range p.interceptors {
+        if err := it.PreHandle(ctx, globalMeta); err != nil {
+            if errors.Is(err, core.ErrAbortPipeline) {
+                return nil
+            }
+            return err
+        }
+    }
+
+    // 2. Router determines the execution target
+    meta, err := p.router.Route(ctx)
+    if err != nil {
+        return err
+    }
+
+    routeInterceptors := meta.Interceptors
+
+    // Route Interceptor AfterCompletion is unconditionally guaranteed
+    defer func() {
+        for i := len(routeInterceptors) - 1; i >= 0; i-- {
+            routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
+        }
+    }()
+
+    // 3. ArgumentResolver chain execution
+    paramMetas := buildParameterMeta(meta.Method, ctx)
+    args, err := p.resolveArguments(ctx, paramMetas)
+    if err != nil {
+        return err
+    }
+
+    // 4. Route Interceptor PreHandle
+    for _, it := range routeInterceptors {
+        if err := it.PreHandle(ctx, meta); err != nil {
+            if errors.Is(err, core.ErrAbortPipeline) {
+                return nil
+            }
+            return err
+        }
+    }
+
+    // 5. Controller Method invocation
+    results, err := p.invoker.Invoke(meta.ControllerType, meta.Method, args)
+    if err != nil {
+        return err
+    }
+
 
 ### ParameterMeta Creation
 

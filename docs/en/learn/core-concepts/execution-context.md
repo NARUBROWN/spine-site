@@ -8,9 +8,9 @@ The core of Spine requests.
 
 ```mermaid
 graph TD
-    Request["HTTP Request / Event Message"]
+    Request["HTTP Request / Event Message / WebSocket Message"]
     
-    Transport["Transport Adapter<br>• Echo (HTTP)<br>• Kafka/RabbitMQ (Event)"]
+    Transport["Transport Adapter<br>• Echo (HTTP)<br>• Kafka/RabbitMQ (Event)<br>• WebSocket"]
     
     Context["ExecutionContext<br>• Method, Path, Headers<br>• Path Parameters<br>• Query Parameters<br>• EventBus<br>• Internal Store"]
     
@@ -32,34 +32,37 @@ graph TD
 
 ## Context Hierarchy
 
-Spine **separates Context hierarchically**. This design allows HTTP and Event Consumers to be handled by the same pipeline model.
+Spine **separates Context hierarchically**. This design allows HTTP, Event Consumers, and WebSocket to be handled by the same pipeline model.
 
 ```mermaid
 graph TB
     subgraph "Base Contracts"
         ContextCarrier["ContextCarrier<br>Context() context.Context"]
-        EventBusCarrier["EventBusCarrier<br>EventBus() publish.EventBus"]
-    end
-    
-    subgraph "Minimal Contact"
-        RequestContext["RequestContext<br>• ContextCarrier<br>• EventBusCarrier"]
+        EventBusCarrier["EventBusCarrier<br>EventBus() core.EventBus"]
     end
     
     subgraph "Execution Contract"
         ExecutionContext["ExecutionContext<br>• Method(), Path()<br>• Params(), Queries()<br>• Set(), Get()"]
     end
     
-    subgraph "Protocol-specific Extensions"
-        HttpRequestContext["HttpRequestContext<br>• Param(), Query()<br>• Bind()<br>• MultipartForm()"]
-        ConsumerRequestContext["ConsumerRequestContext<br>• EventName()<br>• Payload()"]
+    subgraph "Controller Specific"
+        ControllerContext["ControllerContext<br>• Get()"]
     end
     
-    ContextCarrier --> RequestContext
-    EventBusCarrier --> RequestContext
-    RequestContext --> HttpRequestContext
-    RequestContext --> ConsumerRequestContext
+    subgraph "Protocol-specific Extensions"
+        HttpRequestContext["HttpRequestContext<br>• Param(), Query()<br>• Bind(), Headers()<br>• MultipartForm()"]
+        ConsumerRequestContext["ConsumerRequestContext<br>• EventName()<br>• Payload()"]
+        WebSocketContext["WebSocketContext<br>• ConnID()<br>• MessageType()<br>• Payload()"]
+    end
+    
     ContextCarrier --> ExecutionContext
     EventBusCarrier --> ExecutionContext
+    ExecutionContext --> ControllerContext
+    ContextCarrier --> HttpRequestContext
+    EventBusCarrier --> HttpRequestContext
+    ExecutionContext --> WebSocketContext
+    ContextCarrier --> ConsumerRequestContext
+    EventBusCarrier --> ConsumerRequestContext
 ```
 
 ### Why separation?
@@ -67,13 +70,14 @@ graph TB
 | Layer | Responsibility | Usage Location |
 |------|------|----------|
 | `ContextCarrier` | Carry Go standard context | Everywhere |
-| `EventBusCarrier` | Publish domain events | Controller, Consumer |
-| `RequestContext` | Resolver common minimal contract | ArgumentResolver base |
+| `EventBusCarrier` | Publish domain events (`core.EventBus`) | Controller, Consumer |
 | `ExecutionContext` | Control execution flow | Router, Pipeline, Interceptor |
+| `ControllerContext` | Read-only Facade for ExecutionContext | Controller (Access values injected by Interceptors) |
 | `HttpRequestContext` | Interpret HTTP input | HTTP ArgumentResolver |
 | `ConsumerRequestContext` | Interpret Event input | Consumer ArgumentResolver |
+| `WebSocketContext` | Interpret WebSocket input | WebSocket ArgumentResolver |
 
-**Goal**: Enable HTTP and Event Consumers to share the same pipeline model while allowing input interpretation tailored to each protocol's characteristics.
+**Goal**: Enable HTTP, Event Consumers, and WebSocket to share the same pipeline model while allowing input interpretation tailored to each protocol's characteristics.
 
 ## Base Interfaces
 
@@ -90,28 +94,26 @@ type ContextCarrier interface {
 
 ### EventBusCarrier
 
-Contract for accessing EventBus to publish domain events.
+Contract for accessing EventBus to publish domain events. The return type is `core.EventBus`.
 
 ```go
 // core/context.go
 type EventBusCarrier interface {
-    EventBus() publish.EventBus
+    EventBus() EventBus
 }
 ```
 
-## RequestContext Interface
-
-Common minimal contract for Resolvers. Used by both HTTP and Consumers.
+`core.EventBus` is the minimal contract for collecting domain events and publishing them all at once after execution.
 
 ```go
-// core/context.go
-type RequestContext interface {
-    ContextCarrier
-    EventBusCarrier
+// core/event_bus.go
+type EventBus interface {
+    Publish(events ...publish.DomainEvent)
+    Drain() []publish.DomainEvent
 }
 ```
 
-`RequestContext` is a combination of the two base interfaces. All ArgumentResolvers operate on this contract.
+> **Note**: `internal/event/publish.EventBus` is a type alias for `core.EventBus` (`type EventBus = core.EventBus`), and the internal implementation is configured to satisfy this type.
 
 ## ExecutionContext Interface
 
@@ -123,10 +125,10 @@ type ExecutionContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // HTTP Request Info (Different meaning in Consumer)
-    Method() string                    // HTTP: GET, POST... / Consumer: "EVENT"
-    Path() string                      // HTTP: /users/123 / Consumer: EventName
-    Header(name string) string         // HTTP Header (Empty string for Consumer)
+    // HTTP Request Info (Different meaning in Consumer/WebSocket)
+    Method() string                    // HTTP: GET, POST... / Consumer: "EVENT" / WS: "WS"
+    Path() string                      // HTTP: /users/123 / Consumer: EventName / WS: path
+    Header(name string) string         // HTTP Header (Empty string for Consumer, WS)
     
     // Parameter Access
     Params() map[string]string         // Path parameters
@@ -163,7 +165,7 @@ func (c *echoContext) EventBus() publish.EventBus {
 
 #### Method() / Path()
 
-Returns the method and path of the HTTP request. Used with different meanings in Consumers.
+Returns the method and path of the HTTP request. Used with different meanings in Consumers and WebSockets.
 
 ```go
 // HTTP
@@ -173,6 +175,10 @@ ctx.Path()    // "/users/123/posts/456"
 // Consumer
 ctx.Method()  // "EVENT"
 ctx.Path()    // "order.created" (EventName)
+
+// WebSocket
+ctx.Method()  // "WS"
+ctx.Path()    // WebSocket path
 ```
 
 #### Params() / PathKeys()
@@ -215,6 +221,46 @@ ctx.Set("spine.response_writer", NewEchoResponseWriter(c))
 rw, ok := ctx.Get("spine.response_writer")
 ```
 
+## ControllerContext Interface
+
+Controller-specific Context View. It is a read-only Facade of `ExecutionContext`, acting as the official channel for the Controller to reference values injected by Interceptors.
+
+```go
+// core/context.go
+type ControllerContext interface {
+    Get(key string) (any, bool)
+}
+```
+
+### Implementation
+
+```go
+// internal/runtime/controller_ctx.go
+type controllerCtxView struct {
+    ec core.ExecutionContext
+}
+
+func NewControllerContext(ec core.ExecutionContext) core.ControllerContext {
+    return controllerCtxView{ec: ec}
+}
+
+func (v controllerCtxView) Get(key string) (any, bool) {
+    return v.ec.Get(key)
+}
+```
+
+### Usage Example
+
+```go
+// Reference value injected by Interceptor in Controller
+func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) User {
+    authInfo, _ := cc.Get("auth.user")
+    // ...
+}
+```
+
+> **Note**: In `pkg/spine/types.go`, the `Ctx` interface (`Get(key string) (any, bool)`) is defined, allowing user code to access it via `spine.Ctx` as well.
+
 ## HttpRequestContext Interface
 
 HTTP-specific extension interface. Used in HTTP ArgumentResolvers.
@@ -222,15 +268,18 @@ HTTP-specific extension interface. Used in HTTP ArgumentResolvers.
 ```go
 // core/context.go
 type HttpRequestContext interface {
-    RequestContext
+    ContextCarrier
+    EventBusCarrier
 
     // Access individual parameters
     Param(name string) string          // Specific path param
     Query(name string) string          // Specific query param (first value)
+    Header(name string) string         // Specific header
     
     // Access full view
     Params() map[string]string         // All path params
     Queries() map[string][]string      // All query params
+    Headers() map[string][]string      // All headers
     
     // Body Binding
     Bind(out any) error                // JSON body → struct
@@ -239,6 +288,8 @@ type HttpRequestContext interface {
     MultipartForm() (*multipart.Form, error)
 }
 ```
+
+> **Note**: `HttpRequestContext` does not embed `RequestContext`. It directly embeds `ContextCarrier` and `EventBusCarrier`. Additionally, the `Headers() map[string][]string` method is added to access the full header map.
 
 ### Method Details
 
@@ -304,7 +355,8 @@ Event Consumer-specific extension interface.
 ```go
 // core/context.go
 type ConsumerRequestContext interface {
-    RequestContext
+    ContextCarrier
+    EventBusCarrier
 
     EventName() string    // Event name (e.g., "order.created")
     Payload() []byte      // Event payload (JSON, etc.)
@@ -340,6 +392,45 @@ func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.Parameter
     }
 
     payload := consumerCtx.Payload()
+    if payload == nil {
+        return nil, fmt.Errorf("Payload is empty, cannot create DTO")
+    }
+
+    dtoPtr := reflect.New(meta.Type)
+    if err := json.Unmarshal(payload, dtoPtr.Interface()); err != nil {
+        return nil, fmt.Errorf("Failed to deserialize DTO: %w", err)
+    }
+
+    return dtoPtr.Elem().Interface(), nil
+}
+```
+
+## WebSocketContext Interface
+
+WebSocket-specific ExecutionContext extension. It embeds `ExecutionContext` to maintain pipeline compatibility.
+
+```go
+// core/context.go
+type WebSocketContext interface {
+    ExecutionContext
+
+    ConnID() string       // Connection ID
+    MessageType() int     // Message type (Text, Binary, etc.)
+    Payload() []byte      // Message payload
+}
+```
+
+### WebSocket Resolver Example
+
+```go
+// internal/ws/resolver/dto_resolver.go
+func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
+    wsCtx, ok := ctx.(core.WebSocketContext)
+    if !ok {
+        return nil, fmt.Errorf("Not a WebSocketContext")
+    }
+
+    payload := wsCtx.Payload()
     if payload == nil {
         return nil, fmt.Errorf("Payload is empty, cannot create DTO")
     }
@@ -399,17 +490,15 @@ func (e *echoContext) Param(name string) string {
 
 #### Params() - Defensive Copy
 
-Returns a copy to prevent modification of the original map from outside.
+Returns a copy to prevent modification of the original map from outside. Uses `maps.Copy`.
 
 ```go
 func (e *echoContext) Params() map[string]string {
     if raw, ok := e.store["spine.params"]; ok {
         if m, ok := raw.(map[string]string); ok {
-            // Defensive copy
+            // return a shallow copy to avoid mutation
             copyMap := make(map[string]string, len(m))
-            for k, v := range m {
-                copyMap[k] = v
-            }
+            maps.Copy(copyMap, m)
             return copyMap
         }
     }
@@ -423,6 +512,16 @@ func (e *echoContext) Params() map[string]string {
         }
     }
     return params
+}
+```
+
+#### Headers()
+
+Returns all HTTP headers as a map.
+
+```go
+func (e *echoContext) Headers() map[string][]string {
+    return e.echo.Request().Header
 }
 ```
 
@@ -470,12 +569,12 @@ Since Consumers are not HTTP, some methods behave differently.
 ```go
 func (c *ConsumerRequestContextImpl) Method() string {
     // Consumer execution has no concept of HTTP Method
-    // Use "EVENT" for routing distinction
+    // We use "EVENT" for routing distinction
     return "EVENT"
 }
 
 func (c *ConsumerRequestContextImpl) Path() string {
-    // In Consumer routing, Path is the EventName
+    // In Consumer routing, Path directly uses the EventName
     return c.msg.EventName
 }
 
@@ -487,6 +586,79 @@ func (c *ConsumerRequestContextImpl) Header(key string) string {
 func (c *ConsumerRequestContextImpl) Params() map[string]string {
     // Consumer has no concept of Path Parameters
     return map[string]string{}
+}
+
+func (c *ConsumerRequestContextImpl) PathKeys() []string {
+    // Consumer has no concept of Path Keys
+    return []string{}
+}
+
+func (c *ConsumerRequestContextImpl) Queries() map[string][]string {
+    // Consumer has no concept of Query Parameters
+    return map[string][]string{}
+}
+```
+
+## WebSocket Adapter Implementation
+
+Context implementation for WebSocket. Implements `core.WebSocketContext`.
+
+```go
+// internal/ws/context_impl.go
+type WSExecutionContext struct {
+    ctx         context.Context
+    connID      string
+    path        string
+    messageType int
+    payload     []byte
+    eventBus    publish.EventBus
+    store       map[string]any
+}
+
+func NewWSExecutionContext(
+    ctx context.Context,
+    connID string,
+    path string,
+    messageType int,
+    payload []byte,
+    eventBus publish.EventBus,
+    sendFn func(int, []byte) error,
+) core.WebSocketContext {
+    ctx = context.WithValue(ctx, pkgws.SenderKey, &connSender{send: sendFn})
+
+    return &WSExecutionContext{
+        ctx:         ctx,
+        connID:      connID,
+        path:        path,
+        messageType: messageType,
+        payload:     payload,
+        eventBus:    eventBus,
+        store:       make(map[string]any),
+    }
+}
+```
+
+### Special Behaviors of WebSocket Context
+
+```go
+func (w *WSExecutionContext) Method() string {
+    return "WS"
+}
+
+func (w *WSExecutionContext) ConnID() string {
+    return w.connID
+}
+
+func (w *WSExecutionContext) MessageType() int {
+    return w.messageType
+}
+
+func (w *WSExecutionContext) Payload() []byte {
+    return w.payload
+}
+
+func (w *WSExecutionContext) EventBus() core.EventBus {
+    return w.eventBus
 }
 ```
 
@@ -549,7 +721,7 @@ func (r *EventNameResolver) Resolve(ctx core.ExecutionContext, meta resolver.Par
 
 ### Common Resolver Example
 
-`StdContextResolver` works for both HTTP and Consumers.
+`StdContextResolver` works for HTTP, Consumer, and WebSocket.
 
 ```go
 // internal/resolver/std_context_resolver.go
@@ -560,6 +732,17 @@ func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta Pa
         return context.WithValue(baseCtx, publish.PublisherKey, bus), nil
     }
     return baseCtx, nil
+}
+```
+
+### ControllerContext Resolver
+
+`ControllerContextResolver` wraps the `ExecutionContext` in a read-only `ControllerContext`.
+
+```go
+// internal/resolver/controller_context_resolver.go
+func (r *ControllerContextResolver) Resolve(ctx core.ExecutionContext, _ ParameterMeta) (any, error) {
+    return runtime.NewControllerContext(ctx), nil
 }
 ```
 
@@ -586,7 +769,25 @@ func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, erro
         
         return route.Meta, nil
     }
-    return core.HandlerMeta{}, fmt.Errorf("Handler not found.")
+    return core.HandlerMeta{}, httperr.NotFound("Handler not found.")
+}
+```
+
+### Pipeline - Execute Flow
+
+```go
+// internal/pipeline/pipeline.go
+func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
+    // 1. Global Interceptor PreHandle (Before routing)
+    // 2. Router determines the execution target
+    // 3. Route Interceptor PreHandle
+    // 4. ArgumentResolver chain execution
+    // 5. Controller Method invocation (Invoker)
+    // 6. ReturnValueHandler processing
+    // 7. PostExecutionHook (Event dispatch, etc.)
+    // 8. Route Interceptor PostHandle (Reverse order)
+    // 9. Global Interceptor PostHandle (Reverse order)
+    // 10. AfterCompletion (Guaranteed regardless of success/failure, reverse order)
 }
 ```
 
@@ -690,7 +891,7 @@ func (h *JSONReturnHandler) Handle(value any, ctx core.ExecutionContext) error {
 
 ## EventBus Integration
 
-As of Spine 0.3.0, EventBus is integrated into `ExecutionContext`.
+`core.EventBus` is integrated into `ExecutionContext`.
 
 ### Publishing Events in Controller
 
@@ -722,11 +923,31 @@ func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta Pa
 }
 ```
 
+### Event Dispatch in PostExecutionHook
+
+Dispatches all collected events at once after the Pipeline execution completes.
+
+```go
+// internal/event/hook/post_execution.go
+func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []any, err error) {
+    if err != nil {
+        return
+    }
+
+    events := ctx.EventBus().Drain()
+    if len(events) == 0 {
+        return
+    }
+
+    h.Dispatcher.Dispatch(ctx.Context(), events)
+}
+```
+
 ## Design Principles
 
-### 1. Controllers Do Not Know Context
+### 1. Controllers Do Not Know ExecutionContext
 
-Controllers do not directly receive `ExecutionContext` or `HttpRequestContext`. Instead, they receive only necessary values via semantic types (`path.Int`, `query.Values`, etc.) and `context.Context`.
+Controllers do not directly receive `ExecutionContext` or `HttpRequestContext`. Instead, they receive only necessary values via semantic types (`path.Int`, `query.Values`, etc.), `context.Context`, and `ControllerContext` if needed.
 
 ```go
 // ❌ Anti-pattern
@@ -734,11 +955,14 @@ func (c *UserController) GetUser(ctx core.ExecutionContext) User
 
 // ✓ Spine way
 func (c *UserController) GetUser(ctx context.Context, userId path.Int) User
+
+// ✓ When injected values from Interceptors are needed
+func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) User
 ```
 
 ### 2. Resolvers Receive ExecutionContext and Assert Types
 
-ArgumentResolvers receive `ExecutionContext`. If protocol-specific features are needed, they type assert to `HttpRequestContext` or `ConsumerRequestContext`.
+ArgumentResolvers receive `ExecutionContext`. If protocol-specific features are needed, they type assert to `HttpRequestContext`, `ConsumerRequestContext`, or `WebSocketContext`.
 
 ```go
 func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
@@ -752,14 +976,22 @@ func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta Param
 
 ### 3. Single Pipeline, Multiple Protocols
 
-HTTP and Event Consumers share the same pipeline structure. Context hierarchy separation supports protocol-specific characteristics while maximizing code reuse.
+HTTP, Event Consumers, and WebSocket share the same pipeline structure. Context hierarchy separation supports protocol-specific characteristics while maximizing code reuse.
 
 ```go
 // HTTP Pipeline
 httpPipeline.AddArgumentResolver(
-    &resolver.StdContextResolver{},      // Common
-    &resolver.PathIntResolver{},         // HTTP specific
-    &resolver.DTOResolver{},             // HTTP specific
+    &resolver.StdContextResolver{},           // Common
+    &resolver.ControllerContextResolver{},    // Common
+    &resolver.HeaderResolver{},               // HTTP specific
+    &resolver.PathIntResolver{},              // HTTP specific
+    &resolver.PathStringResolver{},           // HTTP specific
+    &resolver.PathBooleanResolver{},          // HTTP specific
+    &resolver.PaginationResolver{},           // HTTP specific
+    &resolver.QueryValuesResolver{},          // HTTP specific
+    &resolver.DTOResolver{},                  // HTTP specific
+    &resolver.FormDTOResolver{},              // HTTP specific
+    &resolver.UploadedFilesResolver{},        // HTTP specific
 )
 
 // Consumer Pipeline
@@ -768,6 +1000,13 @@ consumerPipeline.AddArgumentResolver(
     &eventResolver.EventNameResolver{},       // Consumer specific
     &eventResolver.DTOResolver{},             // Consumer specific
 )
+
+// WebSocket Pipeline
+wsPipeline.AddArgumentResolver(
+    &resolver.StdContextResolver{},           // Common
+    &wsResolver.ConnectionIDResolver{},       // WebSocket specific
+    &wsResolver.DTOResolver{},                // WebSocket specific
+)
 ```
 
 ## Summary
@@ -775,10 +1014,11 @@ consumerPipeline.AddArgumentResolver(
 | Interface | Role | Main Methods | Usage Location |
 |-----------|------|------------|----------|
 | `ContextCarrier` | Carry Go context | `Context()` | Everywhere |
-| `EventBusCarrier` | Publish events | `EventBus()` | Controller, Consumer |
-| `RequestContext` | Resolver minimal contract | (Combined) | ArgumentResolver base |
-| `ExecutionContext` | Control execution flow | `Method()`, `Path()`, `Set()`, `Get()` | Router, Pipeline, Interceptor |
-| `HttpRequestContext` | Interpret HTTP input | `Param()`, `Query()`, `Bind()`, `MultipartForm()` | HTTP ArgumentResolver |
+| `EventBusCarrier` | Publish events (`core.EventBus`) | `EventBus()` | Controller, Consumer |
+| `ExecutionContext` | Control execution flow | `Method()`, `Path()`, `Header()`, `Set()`, `Get()` | Router, Pipeline, Interceptor |
+| `ControllerContext` | Read-only Facade for ExecutionContext | `Get()` | Controller |
+| `HttpRequestContext` | Interpret HTTP input | `Param()`, `Query()`, `Header()`, `Headers()`, `Bind()`, `MultipartForm()` | HTTP ArgumentResolver |
 | `ConsumerRequestContext` | Interpret Event input | `EventName()`, `Payload()` | Consumer ArgumentResolver |
+| `WebSocketContext` | Interpret WebSocket input | `ConnID()`, `MessageType()`, `Payload()` | WebSocket ArgumentResolver |
 
-**Core Principle**: With Context hierarchy separation, HTTP and Event Consumers share the same pipeline model. Controllers are completely unaware of the execution model and focus solely on business logic.
+**Core Principle**: With Context hierarchy separation, HTTP, Event Consumers, and WebSockets share the same pipeline model. Controllers are completely unaware of the execution model and focus solely on business logic.

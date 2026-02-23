@@ -96,24 +96,24 @@ func NewValues(values map[string][]string) Values {
 
 ## Methods
 
-### String(key string) string
+### Get(key string) string
 
 Returns the first value of the specified key as a string. Returns empty string if the key does not exist.
 
 ```go
 // GET /users?name=john&status=active
 
-q.String("name")    // "john"
-q.String("status")  // "active"
-q.String("missing") // ""
+q.Get("name")    // "john"
+q.Get("status")  // "active"
+q.Get("missing") // ""
 ```
 
-### Get(key string) string
+### String(key string) string
 
-Same as `String()`. Provided as an alias.
+Same as `Get()`. Provided as an alias.
 
 ```go
-q.Get("name")  // "john"
+q.String("name")  // "john"
 ```
 
 ### Int(key string, def int64) int64
@@ -131,7 +131,7 @@ q.Int("page", 1)    // 1 (if page=abc → default)
 
 ### GetBoolByKey(key string, def bool) bool
 
-Parses the value of the specified key as a boolean.
+Parses the value of the specified key as a boolean. It transforms the value to lowercase before evaluation.
 
 **Recognized as true**: `"true"`, `"1"`, `"yes"`, `"y"`, `"on"` (case insensitive)
 
@@ -172,8 +172,12 @@ func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
     return pm.Type == reflect.TypeFor[query.Values]()
 }
 
-func (r *QueryValuesResolver) Resolve(ctx core.RequestContext, parameterMeta ParameterMeta) (any, error) {
-    return query.NewValues(ctx.Queries()), nil
+func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
+    httpCtx, ok := ctx.(core.HttpRequestContext)
+    if !ok {
+        return nil, fmt.Errorf("Not an HTTP request context")
+    }
+    return query.NewValues(httpCtx.Queries()), nil
 }
 ```
 
@@ -183,8 +187,11 @@ func (r *QueryValuesResolver) Resolve(ctx core.RequestContext, parameterMeta Par
 2. Finds `query.Values` type parameter
 3. `QueryValuesResolver.Supports()` → `true`
 4. `QueryValuesResolver.Resolve()` called
-5. Get full query map via `ctx.Queries()`
-6. Wrap with `query.NewValues()` and return
+5. Type assert `ExecutionContext` to `HttpRequestContext`
+6. Get full query map via `httpCtx.Queries()`
+7. Wrap with `query.NewValues()` and return
+
+> **Note**: The Resolver receives `core.ExecutionContext` and asserts it to `core.HttpRequestContext`. It returns an error in non-HTTP contexts (e.g., Consumer, WebSocket).
 
 
 ## Usage Examples
@@ -383,8 +390,8 @@ type Params struct {
 
 | Method | Return Type | Usage |
 |--------|----------|------|
-| `String(key)` | `string` | String value (returns `""` if missing) |
-| `Get(key)` | `string` | Alias for `String()` |
+| `Get(key)` | `string` | String value (returns `""` if missing) |
+| `String(key)` | `string` | Alias for `Get()` |
 | `Int(key, def)` | `int64` | Integer value (default if failed) |
 | `GetBoolByKey(key, def)` | `bool` | Boolean value (default if failed) |
 | `Has(key)` | `bool` | Key existence |

@@ -96,24 +96,24 @@ func NewValues(values map[string][]string) Values {
 
 ## 메서드
 
-### String(key string) string
+### Get(key string) string
 
 지정한 키의 첫 번째 값을 문자열로 반환합니다. 키가 없으면 빈 문자열을 반환합니다.
 
 ```go
 // GET /users?name=john&status=active
 
-q.String("name")    // "john"
-q.String("status")  // "active"
-q.String("missing") // ""
+q.Get("name")    // "john"
+q.Get("status")  // "active"
+q.Get("missing") // ""
 ```
 
-### Get(key string) string
+### String(key string) string
 
-`String()`과 동일합니다. 별칭으로 제공됩니다.
+`Get()`과 동일합니다. 별칭으로 제공됩니다.
 
 ```go
-q.Get("name")  // "john"
+q.String("name")  // "john"
 ```
 
 ### Int(key string, def int64) int64
@@ -131,7 +131,7 @@ q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
 
 ### GetBoolByKey(key string, def bool) bool
 
-지정한 키의 값을 불리언으로 파싱합니다.
+지정한 키의 값을 불리언으로 파싱합니다. 값을 소문자로 변환한 후 판별합니다.
 
 **true로 인식**: `"true"`, `"1"`, `"yes"`, `"y"`, `"on"` (대소문자 무시)
 
@@ -172,8 +172,12 @@ func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
     return pm.Type == reflect.TypeFor[query.Values]()
 }
 
-func (r *QueryValuesResolver) Resolve(ctx core.RequestContext, parameterMeta ParameterMeta) (any, error) {
-    return query.NewValues(ctx.Queries()), nil
+func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
+    httpCtx, ok := ctx.(core.HttpRequestContext)
+    if !ok {
+        return nil, fmt.Errorf("HTTP 요청 컨텍스트가 아닙니다")
+    }
+    return query.NewValues(httpCtx.Queries()), nil
 }
 ```
 
@@ -183,8 +187,11 @@ func (r *QueryValuesResolver) Resolve(ctx core.RequestContext, parameterMeta Par
 2. `query.Values` 타입 파라미터 발견
 3. `QueryValuesResolver.Supports()` → `true`
 4. `QueryValuesResolver.Resolve()` 호출
-5. `ctx.Queries()`로 전체 쿼리 맵 획득
-6. `query.NewValues()`로 래핑하여 반환
+5. `ExecutionContext`를 `HttpRequestContext`로 타입 단언
+6. `httpCtx.Queries()`로 전체 쿼리 맵 획득
+7. `query.NewValues()`로 래핑하여 반환
+
+> **참고**: Resolver는 `core.ExecutionContext`를 받은 뒤 `core.HttpRequestContext`로 타입 단언합니다. HTTP 요청이 아닌 컨텍스트(Consumer, WebSocket)에서는 에러를 반환합니다.
 
 
 ## 사용 예시
@@ -383,8 +390,8 @@ type Params struct {
 
 | 메서드 | 반환 타입 | 용도 |
 |--------|----------|------|
-| `String(key)` | `string` | 문자열 값 (없으면 `""`) |
-| `Get(key)` | `string` | `String()`의 별칭 |
+| `Get(key)` | `string` | 문자열 값 (없으면 `""`) |
+| `String(key)` | `string` | `Get()`의 별칭 |
 | `Int(key, def)` | `int64` | 정수 값 (실패 시 기본값) |
 | `GetBoolByKey(key, def)` | `bool` | 불리언 값 (실패 시 기본값) |
 | `Has(key)` | `bool` | 키 존재 여부 |

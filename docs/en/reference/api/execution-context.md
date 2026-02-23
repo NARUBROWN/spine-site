@@ -53,6 +53,20 @@ type RequestContext interface {
 }
 ```
 
+### WebSocketContext
+
+Extended interface dedicated to WebSocket. Embeds `ExecutionContext`.
+
+```go
+type WebSocketContext interface {
+    ExecutionContext
+
+    ConnID() string
+    MessageType() int
+    Payload() []byte
+}
+```
+
 ### ExecutionContext
 
 ```go
@@ -130,13 +144,13 @@ func (i *TimeoutInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 ### EventBus
 
 ```go
-EventBus() publish.EventBus
+EventBus() core.EventBus
 ```
 
 Returns the request-scoped EventBus. Used for publishing domain events.
 
 **Returns**
-- `publish.EventBus` - Event bus instance
+- `core.EventBus` - Event bus instance
 
 **Example**
 ```go
@@ -166,6 +180,7 @@ Returns the request method.
 **Returns**
 - HTTP: `"GET"`, `"POST"`, `"PUT"`, `"DELETE"`, etc.
 - Consumer: `"EVENT"`
+- WebSocket: `"WS"`
 
 **Example**
 ```go
@@ -189,12 +204,14 @@ Returns the request path.
 **Returns**
 - HTTP: Request path (e.g. `"/users/123"`)
 - Consumer: Event name (e.g. `"order.created"`)
+- WebSocket: WebSocket path (e.g. `"/ws/chat"`)
 
 **Example**
 ```go
 log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
-// HTTP: [REQ] GET /users/123
-// Consumer: [REQ] EVENT order.created
+// HTTP:      [REQ] GET /users/123
+// Consumer:  [REQ] EVENT order.created
+// WebSocket: [REQ] WS /ws/chat
 ```
 
 
@@ -211,7 +228,7 @@ Returns the HTTP header value for the specified name.
 
 **Returns**
 - `string` - Header value. Empty string if not found.
-- Always empty string in Consumer.
+- Always empty string in Consumer/WebSocket.
 
 **Example**
 ```go
@@ -230,7 +247,7 @@ Returns all path parameters as a map.
 
 **Returns**
 - `map[string]string` - Path parameter map
-- Empty map in Consumer
+- Empty map in Consumer/WebSocket
 
 **Example**
 ```go
@@ -251,7 +268,7 @@ Returns path parameter keys in declaration order.
 
 **Returns**
 - `[]string` - Key slice
-- Empty slice in Consumer
+- Empty slice in Consumer/WebSocket
 
 **Example**
 ```go
@@ -271,7 +288,7 @@ Returns all query parameters as a map.
 
 **Returns**
 - `map[string][]string` - Query parameter map
-- Empty map in Consumer
+- Empty map in Consumer/WebSocket
 
 **Example**
 ```go
@@ -324,6 +341,47 @@ if rw, ok := ctx.Get("spine.response_writer"); ok {
 ```
 
 
+## ControllerContext
+
+Controller-specific view used to read values injected by Interceptors.
+
+### Get
+
+```go
+Get(key string) (any, bool)
+```
+
+Delegates to `ExecutionContext.Get()`. Does not provide `Set()` method.
+
+**Implementation**
+```go
+// internal/runtime/controller_ctx.go
+type controllerCtxView struct {
+    ec core.ExecutionContext
+}
+
+func NewControllerContext(ec core.ExecutionContext) core.ControllerContext {
+    return controllerCtxView{ec: ec}
+}
+
+func (v controllerCtxView) Get(key string) (any, bool) {
+    return v.ec.Get(key)
+}
+```
+
+**Example**
+```go
+func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (User, error) {
+    // Read value injected by Interceptor with Set("auth.user", ...)
+    if authUser, ok := ctx.Get("auth.user"); ok {
+        user := authUser.(*AuthUser)
+        // ...
+    }
+    return c.repo.FindByID(userId.Value)
+}
+```
+
+
 ## HttpRequestContext Methods
 
 Additional methods used in HTTP ArgumentResolver.
@@ -352,6 +410,20 @@ Returns the first value of a specific query parameter.
 **Example**
 ```go
 page := ctx.Query("page")  // "1"
+```
+
+### Headers
+
+```go
+Headers() map[string][]string
+```
+
+Returns all HTTP headers as a map.
+
+**Example**
+```go
+headers := ctx.Headers()
+// {"Content-Type": ["application/json"], "Accept": ["text/html", "application/json"]}
 ```
 
 ### Bind
@@ -423,6 +495,58 @@ json.Unmarshal(payload, &event)
 ```
 
 
+## WebSocketContext Methods
+
+Methods used in WebSocket ArgumentResolver.
+
+### ConnID
+
+```go
+ConnID() string
+```
+
+Returns the unique identifier of the WebSocket connection.
+
+**Example**
+```go
+connID := ctx.ConnID()  // "a1b2c3d4-..."
+```
+
+### MessageType
+
+```go
+MessageType() int
+```
+
+Returns the WebSocket message type.
+
+**Returns**
+- `1` - TextMessage
+- `2` - BinaryMessage
+
+**Example**
+```go
+if ctx.MessageType() == ws.TextMessage {
+    // Handle text message
+}
+```
+
+### Payload
+
+```go
+Payload() []byte
+```
+
+Returns the raw payload of the WebSocket message.
+
+**Example**
+```go
+payload := ctx.Payload()  // []byte
+var msg ChatMessage
+json.Unmarshal(payload, &msg)
+```
+
+
 ## Reserved Keys
 
 | Key | Type | Description |
@@ -487,6 +611,7 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     origin := ctx.Header("Origin")
     if origin != "" && i.isAllowedOrigin(origin) {
         rw.SetHeader("Access-Control-Allow-Origin", origin)
+        rw.SetHeader("Vary", "Origin")
     }
     
     if ctx.Method() == "OPTIONS" {
@@ -501,7 +626,7 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 ## Usage in ArgumentResolver
 
-ArgumentResolver receives `ExecutionContext` and type assertions it to a protocol-specific Context as needed.
+ArgumentResolver receives `core.ExecutionContext` and type assertions it to a protocol-specific Context as needed.
 
 ### HTTP Resolver Example
 
@@ -541,9 +666,23 @@ func (r *EventNameResolver) Resolve(ctx core.ExecutionContext, meta ParameterMet
 }
 ```
 
+### WebSocket Resolver Example
+
+```go
+func (r *ConnectionIDResolver) Resolve(ctx core.ExecutionContext, meta ParameterMeta) (any, error) {
+    // Type assert to WebSocketContext
+    wsCtx, ok := ctx.(core.WebSocketContext)
+    if !ok {
+        return nil, fmt.Errorf("Not a WebSocketContext")
+    }
+
+    return ws.ConnectionID{Value: wsCtx.ConnID()}, nil
+}
+```
+
 ### Common Resolver Example
 
-Resolver that works for both HTTP and Consumer.
+Resolver that works for HTTP, Consumer, and WebSocket.
 
 ```go
 func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
@@ -557,19 +696,37 @@ func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta Pa
 }
 ```
 
+### ControllerContext Resolver Example
 
-## HTTP vs Consumer Behavior Difference
+```go
+func (r *ControllerContextResolver) Resolve(ctx core.ExecutionContext, _ ParameterMeta) (any, error) {
+    return runtime.NewControllerContext(ctx), nil
+}
+```
 
-| Method | HTTP | Consumer |
-|--------|------|----------|
-| `Method()` | `"GET"`, `"POST"`, etc. | `"EVENT"` |
-| `Path()` | `/users/123` | `order.created` |
-| `Header()` | Header value | Empty string |
-| `Params()` | path params | Empty map |
-| `PathKeys()` | key order | Empty slice |
-| `Queries()` | query params | Empty map |
-| `EventBus()` | EventBus | EventBus |
-| `Context()` | Request context | Request context |
+
+## Protocol-Specific Behavior Difference
+
+| Method | HTTP | Consumer | WebSocket |
+|--------|------|----------|-----------|
+| `Method()` | `"GET"`, `"POST"`, etc. | `"EVENT"` | `"WS"` |
+| `Path()` | `/users/123` | `order.created` | `/ws/chat` |
+| `Header()` | Header value | Empty string | Empty string |
+| `Params()` | path params | Empty map | Empty map |
+| `PathKeys()` | key order | Empty slice | Empty slice |
+| `Queries()` | query params | Empty map | Empty map |
+| `EventBus()` | EventBus | EventBus | EventBus |
+| `Context()` | Request context | Request context | Request context |
+
+
+## Implementations
+
+| Implementation | Interface | Location |
+|----------------|-----------|----------|
+| `echoContext` | `ExecutionContext` + `HttpRequestContext` | `internal/adapter/echo/context_impl.go` |
+| `ConsumerRequestContextImpl` | `ExecutionContext` + `ConsumerRequestContext` | `internal/event/consumer/request_context_impl.go` |
+| `WSExecutionContext` | `WebSocketContext` (⊃ `ExecutionContext`) | `internal/ws/context_impl.go` |
+| `controllerCtxView` | `ControllerContext` | `internal/runtime/controller_ctx.go` |
 
 
 ## See Also

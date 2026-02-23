@@ -71,7 +71,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx, ok := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
     if !ok {
         return
     }

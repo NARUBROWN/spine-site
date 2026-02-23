@@ -42,7 +42,7 @@ Creates a new `Values` instance. Generally not called directly, used internally 
 func (q Values) Get(key string) string
 ```
 
-Returns the first value for the specified key. Alias for `String()`.
+Returns the first value for the specified key.
 
 **Parameters**
 - `key` - Query parameter key
@@ -63,7 +63,7 @@ q.Get("missing")  // ""
 func (q Values) String(key string) string
 ```
 
-Returns the first value for the specified key as a string.
+Returns the first value for the specified key as a string. Has the same implementation as `Get()`.
 
 **Parameters**
 - `key` - Query parameter key
@@ -85,7 +85,7 @@ q.String("missing") // ""
 func (q Values) Int(key string, def int64) int64
 ```
 
-Parses the value of the specified key as an integer.
+Parses the value of the specified key as an integer. Internally, it calls `Get()` to retrieve the value and then converts it using `strconv.ParseInt()`.
 
 **Parameters**
 - `key` - Query parameter key
@@ -111,13 +111,15 @@ q.Int("page", 1)    // 1 (parse failed)
 func (q Values) GetBoolByKey(key string, def bool) bool
 ```
 
-Parses the value of the specified key as a boolean.
+Parses the value of the specified key as a boolean. Internally, it calls `Get()` and then converts the string to lowercase before evaluating.
 
 **Values recognized as true** (Case-insensitive)
 - `"true"`, `"1"`, `"yes"`, `"y"`, `"on"`
 
 **Values recognized as false** (Case-insensitive)
 - `"false"`, `"0"`, `"no"`, `"n"`, `"off"`
+
+Values not matching any of the above will return the default value.
 
 **Parameters**
 - `key` - Query parameter key
@@ -159,6 +161,30 @@ q.Has("status")  // true
 q.Has("empty")   // true (key exists even if value is empty)
 q.Has("missing") // false
 ```
+
+## QueryValuesResolver
+
+If the `query.Values` type is declared as a Controller parameter, `QueryValuesResolver` automatically injects the value.
+
+```go
+// internal/resolver/query_values_resolver.go
+type QueryValuesResolver struct{}
+
+func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
+    return pm.Type == reflect.TypeFor[query.Values]()
+}
+
+func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
+    httpCtx, ok := ctx.(core.HttpRequestContext)
+    if !ok {
+        return nil, fmt.Errorf("Not an HTTP request context")
+    }
+    return query.NewValues(httpCtx.Queries()), nil
+}
+```
+
+The Resolver type asserts `core.ExecutionContext` to `core.HttpRequestContext` and fetches the full query map via `Queries()`. It returns an error in non-HTTP contexts (e.g., Consumer, WebSocket).
+
 
 ## Usage in Controller
 

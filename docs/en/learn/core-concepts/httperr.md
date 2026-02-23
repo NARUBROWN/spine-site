@@ -364,68 +364,153 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 
 ## Error Flow in Pipeline
 
+### Two Stages of Error Handling
+
+Spine Pipeline handles errors in **two stages**:
+
+1. **`handleReturn()`**: Treats `error`s returned by the Controller using `ErrorReturnHandler`.
+2. **`handleExecutionError()`**: Acts as a final safety net for any errors that occur during pipeline execution.
+
 ```
 Controller
      │
      │  return (User{}, httperr.NotFound("..."))
      ▼
 ┌─────────────────────────────────────┐
-│            Pipeline                 │
+│         handleReturn()              │
 │                                     │
 │  results = [User{}, *HTTPError]     │
-└─────────────────────────────────────┘
-     │
-     ▼  handleReturn()
-┌─────────────────────────────────────┐
-│  process error type first           │
 │                                     │
-│  for _, result := range results {   │
-│      if _, isErr := result.(error)  │
-│          → ErrorReturnHandler       │
-│  }                                  │
-└─────────────────────────────────────┘
-     │
-     ▼  ErrorReturnHandler.Handle()
-┌─────────────────────────────────────┐
-│  errors.As(err, &httpErr)           │
-│      → status = 404                 │
-│      → message = "..."              │
-│                                     │
-│  rw.WriteJSON(404, {...})           │
+│  1. Check isNilResult()             │
+│  2. Search for error type first     │
+│  3. ErrorReturnHandler.Handle()     │
+│     → rw.WriteJSON(404, {...})      │
 └─────────────────────────────────────┘
 ```
 
-### Error Priority Processing
+### handleReturn - process error type first
 
-`Pipeline.handleReturn()` processes the error type first:
+`Pipeline.handleReturn()` processes the error type first. It uses `isNilResult()` for a comprehensive nil check.
 
 ```go
 // internal/pipeline/pipeline.go
 func (p *Pipeline) handleReturn(ctx core.ExecutionContext, results []any) error {
     // If error exists, process only error and exit
     for _, result := range results {
-        if result == nil {
+        if isNilResult(result) {
             continue
         }
         if _, isErr := result.(error); isErr {
             resultType := reflect.TypeOf(result)
             for _, h := range p.returnHandlers {
                 if h.Supports(resultType) {
-                    return h.Handle(result, ctx)
+                    if err := h.Handle(result, ctx); err != nil {
+                        return err
+                    }
+                    // Error return values are consumed here and we exit
+                    return nil
                 }
             }
+            return fmt.Errorf(
+                "No ReturnValueHandler for error return value. (%s)",
+                resultType.String(),
+            )
         }
     }
     
     // If no error, process first non-nil value
-    // ...
+    for _, result := range results {
+        if isNilResult(result) {
+            continue
+        }
+        resultType := reflect.TypeOf(result)
+        // ...Process with ReturnValueHandler
+    }
+    return nil
 }
 ```
+
+> **`isNilResult`**: Comprehensively handles not only `nil` literals but also cases where type information exists but the value is nil (e.g., `nil` stored in an `interface`).
 
 Therefore, when returning `(User, error)`:
 - `error` is non-nil → process only error, ignore User
 - `error` is nil → process User
 
+### handleExecutionError - Final Safety Net
+
+If an error occurs during pipeline execution, `handleExecutionError` acts as the final safety net. It prevents double responses if a response has already been committed.
+
+```go
+// internal/pipeline/pipeline.go
+func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
+    rwAny, ok := ctx.Get("spine.response_writer")
+    if !ok {
+        return
+    }
+    
+    rw, ok := rwAny.(core.ResponseWriter)
+    if !ok {
+        return
+    }
+    
+    // Prevent double response if already committed
+    if rw.IsCommitted() {
+        return
+    }
+    
+    var httpErr *httperr.HTTPError
+    if errors.As(err, &httpErr) {
+        rw.WriteJSON(httpErr.Status, map[string]any{
+            "message": httpErr.Message,
+        })
+        return
+    }
+    
+    rw.WriteJSON(500, map[string]any{
+        "message": "Internal server error",
+    })
+}
+```
+
+### Complete Error Handling Flow
+
+```
+Pipeline.Execute()
+     │
+     ├── Success handling error in handleReturn()
+     │   └── ErrorReturnHandler writes response → exit
+     │
+     ├── handleReturn() itself returns an error
+     │   └── handleExecutionError() → fallback response
+     │
+     ├── Error occurs in Router/Resolver/Invoker
+     │   └── handleExecutionError() → fallback response
+     │
+     └── handleExecutionError() branching
+         ├── rw.IsCommitted() → skip (Prevent double response)
+         ├── HTTPError → response with specified status code
+         └── Normal error → 500 "Internal server error"
+```
+
+## Framework Internal Usage
+
+`httperr` is used not only by Controllers but also internally by the framework.
+
+### Usage in Router
+
+Returns `httperr.NotFound` when no matching handler is found.
+
+```go
+// internal/router/router.go
+func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
+    for _, route := range r.routes {
+        // ...Attempt matching
+    }
+    return core.HandlerMeta{}, httperr.NotFound("Handler not found.")
+}
+```
+
+This error is converted into a 404 response by `handleExecutionError`.
 
 ## Design Principles
 
@@ -443,9 +528,10 @@ return ctx.JSON(404, ...)
 
 ```go
 // ✓ Function names express meaning
-httperr.NotFound(...)
 httperr.BadRequest(...)
 httperr.Unauthorized(...)
+httperr.NotFound(...)
+httperr.InternalServerError(...)
 
 // ❌ Direct number codes
 return &HTTPError{Status: 404, ...}  // Possible but not recommended
@@ -473,18 +559,24 @@ func GetUser(id path.Int) User {
 }
 ```
 
+### 4. Prevention of Double Responses
+
+The Pipeline's `handleExecutionError` checks `rw.IsCommitted()` to prevent additional responses if a response has already been written. This safely coexists with the pattern where an Interceptor directly writes a response and then returns `ErrAbortPipeline`.
+
 ## Summary
 
 | Function | Status Code | Usage |
 |------|----------|------|
-| `NotFound(msg)` | 404 | Resource not found |
 | `BadRequest(msg)` | 400 | Invalid request |
 | `Unauthorized(msg)` | 401 | Auth required/failed |
+| `NotFound(msg)` | 404 | Resource not found |
+| `InternalServerError(msg)` | 500 | Internal server error |
 
 | Component | Role |
 |----------|------|
 | `HTTPError` | Error type containing status code and message |
-| `ErrorReturnHandler` | HTTPError → HTTP Response Conversion |
-| `Pipeline` | Preferential processing of error type |
+| `ErrorReturnHandler` | Controller returned error → HTTP Response Conversion |
+| `handleExecutionError` | Pipeline error final safety net (prevents double response) |
+| `isNilResult` | Comprehensive nil check (including interface nil) |
 
 **Core Philosophy**: Controller expresses "not found", not "return 404". Conversion to HTTP status codes is the pipeline's responsibility. This is Spine's separation of concerns principle.

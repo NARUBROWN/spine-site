@@ -80,7 +80,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: 'CRUD', link: '/en/reference/examples/crud' },
                                 { text: 'JWT Login', link: '/en/reference/examples/login' },
-                                { text: 'Kafka MSA', link: '/en/reference/examples/msa' }
+                                { text: 'Kafka MSA', link: '/en/reference/examples/msa' },
+                                { text: 'WebSocket Chat', link: '/en/reference/examples/websocket' }
                             ]
                         }
                     ],
@@ -161,7 +162,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: 'CRUD 기본', link: '/ko/reference/examples/crud' },
                                 { text: 'JWT 로그인', link: '/ko/reference/examples/login' },
-                                { text: 'Kafka MSA', link: '/ko/reference/examples/msa' }
+                                { text: 'Kafka MSA', link: '/ko/reference/examples/msa' },
+                                { text: '웹소켓 채팅', link: '/ko/reference/examples/websocket' }
                             ]
                         }
                     ],

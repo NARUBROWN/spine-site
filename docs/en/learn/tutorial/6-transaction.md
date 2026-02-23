@@ -71,7 +71,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx, ok := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
     if !ok {
         return
     }
@@ -360,7 +360,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return  // Skip if no transaction
     }
     
-    tx := v.(*bun.Tx)
+    tx := v.(bun.Tx)
     if err != nil {
         tx.Rollback()
     } else {
@@ -399,7 +399,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx := v.(*bun.Tx)
+    tx := v.(bun.Tx)
     
     if err != nil {
         log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
@@ -473,7 +473,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
     
-    tx := v.(*bun.Tx)
+    tx := v.(bun.Tx)
     if err != nil {
         tx.Rollback()
     } else {

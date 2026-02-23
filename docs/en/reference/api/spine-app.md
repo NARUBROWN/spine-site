@@ -330,8 +330,24 @@ Affects only the HTTP request execution flow.
 type HTTPOptions struct {
     // HTTP API Global Prefix (e.g., "/api/v1")
     // If empty, no prefix is applied.
+    // Must start with '/' and cannot contain path parameters or wildcards.
     GlobalPrefix string
+
+    // Disable Echo's default panic recover middleware.
+    // If true, panics will not be recovered and might crash the server.
+    DisableRecover bool
 }
+```
+
+```go
+// ✓ Valid
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/v1"}
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/v2"}
+
+// ✗ Panic occurs
+HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // Doesn't start with '/'
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // Contains path parameter
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // Contains wildcard
 ```
 
 ### Basic Usage
@@ -359,7 +375,20 @@ app.Run(boot.Options{
 When Graceful Shutdown is enabled:
 - Receives `SIGINT`, `SIGTERM` signals
 - Waits until ongoing requests are completed
-- Forcefully terminates after `ShutdownTimeout`
+- Sends Close message to WebSocket connections
+- Calls `Stop()` on Custom Transports
+- Forcefully terminates after `ShutdownTimeout` (Default: 10s)
+
+### Recover Middleware
+
+By default, Echo's panic recover middleware is enabled. It converts panics into 500 responses.
+
+```go
+// Disable Recover
+HTTP: &boot.HTTPOptions{
+    DisableRecover: true,
+}
+```
 
 ## Kafka Configuration
 
@@ -403,8 +432,8 @@ app.Run(boot.Options{
         Write: &boot.KafkaWriteOptions{
             TopicPrefix: "myapp.",
         },
-        HTTP: &boot.HTTPOptions{},
     },
+    HTTP: &boot.HTTPOptions{},
 })
 ```
 
@@ -428,19 +457,13 @@ type RabbitMqOptions struct {
 }
 
 type RabbitMqReadOptions struct {
-    // Queue name to consume messages from
-    Queue string
     // Exchange name to bind the queue to
     Exchange string
-    // Routing key condition
-    RoutingKey string
 }
 
 type RabbitMqWriteOptions struct {
     // Exchange name to publish events to
     Exchange string
-    // Routing key to use when publishing
-    RoutingKey string
 }
 ```
 
@@ -452,16 +475,13 @@ app.Run(boot.Options{
     RabbitMQ: &boot.RabbitMqOptions{
         URL: "amqp://guest:guest@localhost:5672/",
         Read: &boot.RabbitMqReadOptions{
-            Queue:      "order.events",
-            Exchange:   "events-exchange",
-            RoutingKey: "order.*",
+            Exchange: "stock-exchange",
         },
         Write: &boot.RabbitMqWriteOptions{
-            Exchange:   "events-exchange",
-            RoutingKey: "order.created",
+            Exchange: "stock-exchange",
         },
-        HTTP: &boot.HTTPOptions{},
     },
+    HTTP: &boot.HTTPOptions{},
 })
 ```
 
@@ -515,6 +535,8 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) O
 }
 ```
 
+Events are published in a batch from `PostExecutionHook` after Controller execution completes. `publish.Event()` collects events into the `EventBus` injected into `context.Context`, and if the execution completes without error, they are sent via the registered Publisher (Kafka/RabbitMQ).
+
 ## Full Example
 
 ```go
@@ -531,6 +553,7 @@ import (
     "github.com/NARUBROWN/spine/pkg/event/publish"
     "github.com/NARUBROWN/spine/pkg/path"
     "github.com/NARUBROWN/spine/pkg/route"
+    "github.com/NARUBROWN/spine/pkg/ws"
 )
 
 func main() {
@@ -540,17 +563,15 @@ func main() {
     app.Constructor(
         NewUserController,
         NewOrderConsumer,
+        NewChatController,
     )
 
-    // Register Routes
-    app.Route("GET", "/users", (*UserController).List)
-    app.Route("GET", "/users/:id", (*UserController).GetUser)
-    app.Route(
-        "POST",
-        "/orders/:orderId",
-        (*UserController).CreateOrder,
+    // Register HTTP Routes
+    app.Route("GET", "/users", (*UserController).GetUserQuery)
+    app.Route("GET", "/users/:id", (*UserController).GetUser,
         route.WithInterceptors(&LoggingInterceptor{}),
     )
+    app.Route("POST", "/orders/:orderId", (*UserController).CreateOrder)
 
     // Register Global Interceptors
     app.Interceptor(
@@ -562,23 +583,23 @@ func main() {
     )
 
     // Register Event Consumers
-    app.Consumers().Register(
-        "order.created",
-        (*OrderConsumer).OnCreated,
-    )
+    app.Consumers().Register("order.created", (*OrderConsumer).OnCreated)
+
+    // Register WebSockets
+    app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage)
 
     // Run Server
     app.Run(boot.Options{
         Address:                ":8080",
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
-        Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
-            Read: &boot.KafkaReadOptions{
-                GroupID: "spine-demo-consumer",
+        RabbitMQ: &boot.RabbitMqOptions{
+            URL: "amqp://guest:guest@localhost:5672/",
+            Read: &boot.RabbitMqReadOptions{
+                Exchange: "stock-exchange",
             },
-            Write: &boot.KafkaWriteOptions{
-                TopicPrefix: "",
+            Write: &boot.RabbitMqWriteOptions{
+                Exchange: "stock-exchange",
             },
         },
         HTTP: &boot.HTTPOptions{},
@@ -593,7 +614,6 @@ func NewUserController() *UserController {
 }
 
 func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) string {
-    // Publish Event
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),
@@ -607,13 +627,8 @@ type OrderCreated struct {
     At      time.Time `json:"at"`
 }
 
-func (e OrderCreated) Name() string {
-    return "order.created"
-}
-
-func (e OrderCreated) OccurredAt() time.Time {
-    return e.At
-}
+func (e OrderCreated) Name() string        { return "order.created" }
+func (e OrderCreated) OccurredAt() time.Time { return e.At }
 
 // Consumer
 type OrderConsumer struct{}
@@ -631,6 +646,21 @@ func (c *OrderConsumer) OnCreated(
     log.Println("Order ID:", event.OrderID)
     return nil
 }
+
+// WebSocket
+type ChatController struct{}
+
+func NewChatController() *ChatController {
+    return &ChatController{}
+}
+
+func (c *ChatController) OnMessage(
+    connID ws.ConnectionID,
+    msg ws.TextPayload,
+    sender ws.Sender,
+) {
+    sender.Send(ws.TextMessage, []byte("echo: "+msg.Value))
+}
 ```
 
 ## Bootstrap Order
@@ -639,27 +669,34 @@ Initialization proceeds in the following order when `Run()` is called:
 
 1. Create IoC Container
 2. Register Constructors
-3. Configure Router and create HandlerMeta
-4. Controller Warm-up (Pre-resolve dependencies)
-5. Configure HTTP Pipeline
-   - Register ArgumentResolvers
-   - Register ReturnValueHandlers
-6. Configure Event Infrastructure (if configured)
+3. Configure Event Infrastructure (if configured)
    - Kafka Publisher / Consumer
    - RabbitMQ Publisher / Consumer
-7. Register Interceptors
-   - Global Interceptors
-   - Resolve Route Interceptors
-8. Mount HTTP Server
-9. Start Event Consumer Runtime (if configured)
+4. Initialize Custom Transport (`Init()` execution)
+5. Start Custom Transport (`Start()` in separate goroutine)
+6. Configure HTTP Runtime (if configured)
+   - Configure Router and create HandlerMeta
+   - Resolve Route Interceptors (nil pointer → Container)
+   - Assert No Ambiguous Routes
+   - Controller Warm-up (Pre-resolve dependencies)
+   - Configure HTTP Pipeline (Register ArgumentResolvers, ReturnValueHandlers)
+   - Register Global Interceptors (Remove duplicates, resolve nil pointers)
+7. Configure WebSocket Runtime (if registered)
+   - Create WS-specific Pipeline
+   - Auto mount via Echo Transport Hook
+8. Mount Echo Adapter (Includes Recover middleware)
+9. Start Consumer Runtime (if configured)
 10. Start HTTP Server
 
 ### On Graceful Shutdown
 
 1. Receive `SIGINT` / `SIGTERM` signals
-2. Stop Event Consumer Runtime
-3. Shutdown HTTP Server (Wait for timeout)
-4. Exit
+2. Send Close message to WebSocket connections
+3. Stop Event Consumer Runtime
+4. Call `Stop()` on Custom Transports
+5. Shutdown HTTP Server (Wait for timeout)
+6. Clean up Event Publisher resources
+7. Exit
 
 ## See Also
 

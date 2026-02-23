@@ -81,7 +81,7 @@ func (e *HTTPError) Error() string {
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| `Status` | `int` | HTTP 상태 코드 (400, 401, 404 등) |
+| `Status` | `int` | HTTP 상태 코드 (400, 401, 404, 500 등) |
 | `Message` | `string` | 클라이언트에게 전달할 에러 메시지 |
 | `Cause` | `error` | 원인이 되는 하위 에러 (디버깅/로깅용) |
 
@@ -100,23 +100,6 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 ## 헬퍼 함수
 
 자주 사용하는 HTTP 상태 코드에 대한 헬퍼 함수를 제공합니다.
-
-### NotFound
-
-```go
-func NotFound(msg string) error {
-    return &HTTPError{Status: 404, Message: msg}
-}
-```
-
-리소스를 찾을 수 없을 때 사용합니다.
-
-```go
-user, err := c.repo.FindByID(id)
-if err != nil {
-    return User{}, httperr.NotFound("사용자를 찾을 수 없습니다")
-}
-```
 
 ### BadRequest
 
@@ -150,6 +133,40 @@ if !c.auth.IsValid(token) {
 }
 ```
 
+### NotFound
+
+```go
+func NotFound(msg string) error {
+    return &HTTPError{Status: 404, Message: msg}
+}
+```
+
+리소스를 찾을 수 없을 때 사용합니다.
+
+```go
+user, err := c.repo.FindByID(id)
+if err != nil {
+    return User{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+}
+```
+
+### InternalServerError
+
+```go
+func InternalServerError(msg string) error {
+    return &HTTPError{Status: 500, Message: msg}
+}
+```
+
+서버 내부 오류를 명시적으로 표현할 때 사용합니다.
+
+```go
+result, err := c.externalService.Call()
+if err != nil {
+    return Result{}, httperr.InternalServerError("외부 서비스 호출에 실패했습니다")
+}
+```
+
 
 ## ErrorReturnHandler
 
@@ -170,8 +187,15 @@ func (h *ErrorReturnHandler) Handle(value any, ctx core.ExecutionContext) error 
         return fmt.Errorf("ExecutionContext 안에서 ResponseWriter를 찾을 수 없습니다.")
     }
     
-    rw := rwAny.(core.ResponseWriter)
-    err := value.(error)
+    rw, ok := rwAny.(core.ResponseWriter)
+    if !ok {
+        return fmt.Errorf("ResponseWriter 타입이 올바르지 않습니다.")
+    }
+    
+    err, ok := value.(error)
+    if !ok {
+        return fmt.Errorf("ErrorReturnHandler는 error 타입만 처리할 수 있습니다: %T", value)
+    }
     
     status := 500
     message := err.Error()
@@ -307,7 +331,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
 
 ### 새로운 상태 코드 추가
 
-현재 제공되는 헬퍼는 400, 401, 404입니다. 필요에 따라 확장할 수 있습니다.
+현재 제공되는 헬퍼는 400, 401, 404, 500입니다. 필요에 따라 확장할 수 있습니다.
 
 ```go
 // 직접 HTTPError 생성
@@ -365,67 +389,154 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 
 ## Pipeline에서의 에러 흐름
 
+### 두 단계의 에러 처리
+
+Spine Pipeline은 에러를 **두 단계**에서 처리합니다:
+
+1. **`handleReturn()`**: Controller 반환값 중 error를 `ErrorReturnHandler`로 처리
+2. **`handleExecutionError()`**: Pipeline 실행 중 발생한 에러를 최종 안전망으로 처리
+
 ```
 Controller
      │
      │  return (User{}, httperr.NotFound("..."))
      ▼
 ┌─────────────────────────────────────┐
-│            Pipeline                 │
+│         handleReturn()              │
 │                                     │
 │  results = [User{}, *HTTPError]     │
-└─────────────────────────────────────┘
-     │
-     ▼  handleReturn()
-┌─────────────────────────────────────┐
-│  error 타입 우선 처리                 │
 │                                     │
-│  for _, result := range results {   │
-│      if _, isErr := result.(error)  │
-│          → ErrorReturnHandler       │
-│  }                                  │
-└─────────────────────────────────────┘
-     │
-     ▼  ErrorReturnHandler.Handle()
-┌─────────────────────────────────────┐
-│  errors.As(err, &httpErr)           │
-│      → status = 404                 │
-│      → message = "..."              │
-│                                     │
-│  rw.WriteJSON(404, {...})           │
+│  1. isNilResult() 체크              │
+│  2. error 타입 우선 탐색             │
+│  3. ErrorReturnHandler.Handle()     │
+│     → rw.WriteJSON(404, {...})      │
 └─────────────────────────────────────┘
 ```
 
-### 에러 우선 처리
+### handleReturn - error 우선 처리
 
-`Pipeline.handleReturn()`은 error 타입을 우선 처리합니다:
+`Pipeline.handleReturn()`은 error 타입을 우선 처리합니다. `isNilResult()`로 nil 여부를 포괄적으로 체크합니다.
 
 ```go
 // internal/pipeline/pipeline.go
 func (p *Pipeline) handleReturn(ctx core.ExecutionContext, results []any) error {
     // error가 있으면 error만 처리하고 종료
     for _, result := range results {
-        if result == nil {
+        if isNilResult(result) {
             continue
         }
         if _, isErr := result.(error); isErr {
             resultType := reflect.TypeOf(result)
             for _, h := range p.returnHandlers {
                 if h.Supports(resultType) {
-                    return h.Handle(result, ctx)
+                    if err := h.Handle(result, ctx); err != nil {
+                        return err
+                    }
+                    // error 반환값은 여기서 소비하고 종료한다.
+                    return nil
                 }
             }
+            return fmt.Errorf(
+                "error 반환값을 처리할 ReturnValueHandler가 없습니다. (%s)",
+                resultType.String(),
+            )
         }
     }
     
     // error가 없으면 첫 번째 non-nil 값 처리
-    // ...
+    for _, result := range results {
+        if isNilResult(result) {
+            continue
+        }
+        resultType := reflect.TypeOf(result)
+        // ...ReturnValueHandler로 처리
+    }
+    return nil
 }
 ```
+
+> **`isNilResult`**: `nil` 리터럴뿐만 아니라, 타입 정보는 있으나 값이 nil인 경우(`interface`에 nil이 담긴 경우 등)까지 포괄적으로 처리합니다.
 
 따라서 `(User, error)`를 반환할 때:
 - `error`가 non-nil → error만 처리, User 무시
 - `error`가 nil → User 처리
+
+### handleExecutionError - 최종 안전망
+
+Pipeline 실행 중 에러가 발생하면 `handleExecutionError`가 최종 안전망으로 동작합니다. 이미 응답이 커밋된 경우 이중 응답을 방지합니다.
+
+```go
+// internal/pipeline/pipeline.go
+func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
+    rwAny, ok := ctx.Get("spine.response_writer")
+    if !ok {
+        return
+    }
+    
+    rw, ok := rwAny.(core.ResponseWriter)
+    if !ok {
+        return
+    }
+    
+    // 이미 응답이 커밋된 경우 이중 응답 방지
+    if rw.IsCommitted() {
+        return
+    }
+    
+    var httpErr *httperr.HTTPError
+    if errors.As(err, &httpErr) {
+        rw.WriteJSON(httpErr.Status, map[string]any{
+            "message": httpErr.Message,
+        })
+        return
+    }
+    
+    rw.WriteJSON(500, map[string]any{
+        "message": "Internal server error",
+    })
+}
+```
+
+### 에러 처리 전체 흐름
+
+```
+Pipeline.Execute()
+     │
+     ├── handleReturn() 에서 error 처리 성공
+     │   └── ErrorReturnHandler가 응답 작성 → 종료
+     │
+     ├── handleReturn() 자체가 error 반환
+     │   └── handleExecutionError() → 안전망 응답
+     │
+     ├── Router/Resolver/Invoker 에서 error 발생
+     │   └── handleExecutionError() → 안전망 응답
+     │
+     └── handleExecutionError() 조건 분기
+         ├── rw.IsCommitted() → 스킵 (이중 응답 방지)
+         ├── HTTPError → 지정된 상태 코드로 응답
+         └── 일반 error → 500 "Internal server error"
+```
+
+
+## 프레임워크 내부 사용
+
+`httperr`는 Controller뿐 아니라 프레임워크 내부에서도 사용됩니다.
+
+### Router에서의 사용
+
+매칭되는 핸들러가 없을 때 `httperr.NotFound`를 반환합니다.
+
+```go
+// internal/router/router.go
+func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
+    for _, route := range r.routes {
+        // ...매칭 시도
+    }
+    return core.HandlerMeta{}, httperr.NotFound("핸들러가 없습니다.")
+}
+```
+
+이 에러는 `handleExecutionError`에 의해 404 응답으로 변환됩니다.
 
 
 ## 설계 원칙
@@ -444,9 +555,10 @@ return ctx.JSON(404, ...)
 
 ```go
 // ✓ 함수 이름이 의미를 표현
-httperr.NotFound(...)
 httperr.BadRequest(...)
 httperr.Unauthorized(...)
+httperr.NotFound(...)
+httperr.InternalServerError(...)
 
 // ❌ 숫자 코드 직접 사용
 return &HTTPError{Status: 404, ...}  // 가능하지만 권장하지 않음
@@ -474,18 +586,25 @@ func GetUser(id path.Int) User {
 }
 ```
 
+### 4. 이중 응답 방지
+
+Pipeline의 `handleExecutionError`는 `rw.IsCommitted()`를 확인하여, 이미 응답이 작성된 경우 추가 응답을 방지합니다. 이는 Interceptor가 직접 응답을 작성한 후 `ErrAbortPipeline`을 반환하는 패턴과도 안전하게 공존합니다.
+
+
 ## 요약
 
 | 함수 | 상태 코드 | 용도 |
 |------|----------|------|
-| `NotFound(msg)` | 404 | 리소스를 찾을 수 없음 |
 | `BadRequest(msg)` | 400 | 잘못된 요청 |
 | `Unauthorized(msg)` | 401 | 인증 필요/실패 |
+| `NotFound(msg)` | 404 | 리소스를 찾을 수 없음 |
+| `InternalServerError(msg)` | 500 | 서버 내부 오류 |
 
 | 구성 요소 | 역할 |
 |----------|------|
 | `HTTPError` | 상태 코드와 메시지를 담는 에러 타입 |
-| `ErrorReturnHandler` | HTTPError → HTTP 응답 변환 |
-| `Pipeline` | error 타입 우선 처리 |
+| `ErrorReturnHandler` | Controller 반환 error → HTTP 응답 변환 |
+| `handleExecutionError` | Pipeline 에러 최종 안전망 (이중 응답 방지) |
+| `isNilResult` | 포괄적 nil 체크 (인터페이스 nil 포함) |
 
 **핵심 철학**: Controller는 "404를 반환한다"가 아니라 "찾을 수 없다"를 표현합니다. HTTP 상태 코드로의 변환은 파이프라인이 담당합니다. 이것이 Spine의 관심사 분리 원칙입니다.
