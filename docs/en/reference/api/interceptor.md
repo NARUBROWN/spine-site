@@ -367,4 +367,4 @@ app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
 
 - [ExecutionContext](/en/reference/api/execution-context) - Request Context Interface
 - [HandlerMeta](/en/learn/core-concepts/handler-meta) - Handler Metadata
-- [ResponseWriter](/en/reference/api/response-writer) - Response Writer Interface
+- ResponseWriter - Response Writer Interface
