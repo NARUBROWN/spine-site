@@ -19,12 +19,14 @@ func main() {
     // 라우트 — 어떤 메서드가 어떤 경로인지 명확
     app.Route("GET", "/users", (*UserController).GetUser)
     
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -118,16 +120,24 @@ func RegisterUserRoutes(app spine.App) {
 func (c *UserController) GetUser(
     ctx context.Context,      // 컨텍스트
     q query.Values,           // 쿼리 파라미터
-) (UserResponse, error) {     // 응답 타입
-    return c.svc.Get(ctx, q.Int("id", 0))
+) (httpx.Response[UserResponse], error) {     // 응답 타입
+    user, err := c.svc.Get(ctx, q.Int("id", 0))
+    if err != nil {
+        return httpx.Response[UserResponse]{}, err
+    }
+    return httpx.Response[UserResponse]{Body: user}, nil
 }
 
 // DTO는 자동으로 바인딩
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req CreateUserRequest,    // JSON body → 구조체
-) (UserResponse, error) {
-    return c.svc.Create(ctx, req)
+    req *CreateUserRequest,    // JSON body → 구조체 (포인터)
+) (httpx.Response[UserResponse], error) {
+    user, err := c.svc.Create(ctx, req)
+    if err != nil {
+        return httpx.Response[UserResponse]{}, err
+    }
+    return httpx.Response[UserResponse]{Body: user}, nil
 }
 ```
 

@@ -22,10 +22,14 @@ type App interface {
     Interceptor(interceptors ...core.Interceptor)
     // HTTP Transport Extension (Echo, etc.)
     Transport(fn func(any))
+    // Register standalone Custom Transport
+    RegisterTransport(t core.CustomTransport)
     // Run
     Run(opts boot.Options) error
     // Return Event Consumer Registry
     Consumers() *consumer.Registry
+    // Return WebSocket Registry
+    WebSocket() *ws.Registry
 }
 ```
 
@@ -45,10 +49,12 @@ Creates a new Spine application instance.
 **Example**
 ```go
 app := spine.New()
-app.Run(boot.Options{
+if err := app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
-})
+}); err != nil {
+    log.Fatal(err)
+}
 ```
 
 ## Methods
@@ -211,6 +217,63 @@ app.Transport(func(e any) {
 })
 ```
 
+### RegisterTransport
+
+```go
+RegisterTransport(t core.CustomTransport)
+```
+
+Registers a standalone `CustomTransport` that runs independently outside the Spine HTTP pipeline. Used to integrate separate protocols like gRPC or GraphQL into the Spine application.
+
+**Parameters**
+- `t` - Implementation of the `core.CustomTransport` interface
+
+**CustomTransport Interface**
+```go
+// core/transport.go
+type CustomTransport interface {
+    // Init is called after the DI Container is prepared.
+    Init(container Container) error
+    // Start is called in a separate goroutine after Init.
+    Start() error
+    // Stop is called during Graceful Shutdown.
+    Stop(ctx context.Context) error
+}
+
+type Container interface {
+    Resolve(t reflect.Type) (any, error)
+}
+```
+
+**Example**
+```go
+type GRPCTransport struct {
+    server *grpc.Server
+}
+
+func (t *GRPCTransport) Init(container core.Container) error {
+    svc, err := container.Resolve(reflect.TypeOf((*MyService)(nil)))
+    if err != nil {
+        return err
+    }
+    t.server = grpc.NewServer()
+    RegisterMyServiceServer(t.server, svc.(*MyService))
+    return nil
+}
+
+func (t *GRPCTransport) Start() error {
+    lis, _ := net.Listen("tcp", ":9090")
+    return t.server.Serve(lis)
+}
+
+func (t *GRPCTransport) Stop(ctx context.Context) error {
+    t.server.GracefulStop()
+    return nil
+}
+
+app.RegisterTransport(&GRPCTransport{})
+```
+
 ### Consumers
 
 ```go
@@ -225,15 +288,12 @@ Returns the event consumer registry. Registers handlers to receive events from m
 **Example**
 ```go
 // Register Event Consumer
-app.Consumers().Register(
+if err := app.Consumers().Register(
     "order.created",           // Topic/Event Name
     (*OrderConsumer).OnCreated, // Handler Method
-)
-
-app.Consumers().Register(
-    "stock.created",
-    (*StockConsumer).OnCreated,
-)
+); err != nil {
+    log.Fatal(err)
+}
 ```
 
 #### Consumer Handler
@@ -264,6 +324,101 @@ type OrderCreated struct {
     At      time.Time `json:"at"`
 }
 ```
+
+### WebSocket
+
+```go
+WebSocket() *ws.Registry
+```
+
+Returns the WebSocket registry. Registers WebSocket paths and handlers.
+
+**Returns**
+- `*ws.Registry` - WebSocket registry
+
+**Example**
+```go
+if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
+    log.Fatal(err)
+}
+```
+
+#### WebSocket Handler
+
+WebSocket handlers have a signature similar to HTTP controllers. They use semantic types from the `ws` package.
+
+```go
+import "github.com/NARUBROWN/spine/pkg/ws"
+
+type ChatController struct {
+    mu      sync.RWMutex
+    clients map[string]ws.Sender
+}
+
+func NewChatController() *ChatController {
+    return &ChatController{clients: make(map[string]ws.Sender)}
+}
+
+type ChatMessage struct {
+    Message string `json:"message"`
+}
+
+type ChatEvent struct {
+    Type    string `json:"type"`
+    From    string `json:"from"`
+    Message string `json:"message"`
+    At      string `json:"at"`
+}
+
+func (c *ChatController) OnMessage(
+    ctx context.Context,
+    connID ws.ConnectionID,
+    msg ChatMessage,
+) error {
+    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
+    if ok && sender != nil {
+        c.mu.Lock()
+        c.clients[connID.Value] = sender
+        c.mu.Unlock()
+    }
+
+    message := strings.TrimSpace(msg.Message)
+    if message == "" {
+        return nil
+    }
+
+    payload, err := json.Marshal(ChatEvent{
+        Type:    "message",
+        From:    connID.Value,
+        Message: message,
+        At:      time.Now().UTC().Format(time.RFC3339),
+    })
+    if err != nil {
+        return err
+    }
+
+    c.mu.RLock()
+    clients := make(map[string]ws.Sender, len(c.clients))
+    for id, client := range c.clients {
+        clients[id] = client
+    }
+    c.mu.RUnlock()
+
+    var firstErr error
+    for id, client := range clients {
+        if err := client.Send(ws.TextMessage, payload); err != nil {
+            if firstErr == nil {
+                firstErr = err
+            }
+            c.mu.Lock()
+            delete(c.clients, id)
+            c.mu.Unlock()
+        }
+    }
+    return firstErr
+}
+```
+
 
 ### Run
 
@@ -544,13 +699,17 @@ package main
 
 import (
     "context"
+    "encoding/json"
     "log"
+    "strings"
+    "sync"
     "time"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
     "github.com/NARUBROWN/spine/pkg/event/publish"
+    "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
     "github.com/NARUBROWN/spine/pkg/route"
     "github.com/NARUBROWN/spine/pkg/ws"
@@ -583,13 +742,17 @@ func main() {
     )
 
     // Register Event Consumers
-    app.Consumers().Register("order.created", (*OrderConsumer).OnCreated)
+    if err := app.Consumers().Register("order.created", (*OrderConsumer).OnCreated); err != nil {
+        log.Fatal(err)
+    }
 
     // Register WebSockets
-    app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage)
+    if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
+        log.Fatal(err)
+    }
 
     // Run Server
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
         Address:                ":8080",
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
@@ -603,7 +766,9 @@ func main() {
             },
         },
         HTTP: &boot.HTTPOptions{},
-    })
+    }); err != nil {
+        log.Fatal(err)
+    }
 }
 
 // Controller
@@ -613,12 +778,12 @@ func NewUserController() *UserController {
     return &UserController{}
 }
 
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) string {
+func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),
     })
-    return "OK"
+    return httpx.Response[string]{Body: "OK"}
 }
 
 // Event
@@ -648,18 +813,72 @@ func (c *OrderConsumer) OnCreated(
 }
 
 // WebSocket
-type ChatController struct{}
+type ChatController struct {
+    mu      sync.RWMutex
+    clients map[string]ws.Sender
+}
 
 func NewChatController() *ChatController {
-    return &ChatController{}
+    return &ChatController{clients: make(map[string]ws.Sender)}
+}
+
+type ChatMessage struct {
+    Message string `json:"message"`
+}
+
+type ChatEvent struct {
+    Type    string `json:"type"`
+    From    string `json:"from"`
+    Message string `json:"message"`
+    At      string `json:"at"`
 }
 
 func (c *ChatController) OnMessage(
+    ctx context.Context,
     connID ws.ConnectionID,
-    msg ws.TextPayload,
-    sender ws.Sender,
-) {
-    sender.Send(ws.TextMessage, []byte("echo: "+msg.Value))
+    msg ChatMessage,
+) error {
+    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
+    if ok && sender != nil {
+        c.mu.Lock()
+        c.clients[connID.Value] = sender
+        c.mu.Unlock()
+    }
+
+    message := strings.TrimSpace(msg.Message)
+    if message == "" {
+        return nil
+    }
+
+    payload, err := json.Marshal(ChatEvent{
+        Type:    "message",
+        From:    connID.Value,
+        Message: message,
+        At:      time.Now().UTC().Format(time.RFC3339),
+    })
+    if err != nil {
+        return err
+    }
+
+    c.mu.RLock()
+    clients := make(map[string]ws.Sender, len(c.clients))
+    for id, client := range c.clients {
+        clients[id] = client
+    }
+    c.mu.RUnlock()
+
+    var firstErr error
+    for id, client := range clients {
+        if err := client.Send(ws.TextMessage, payload); err != nil {
+            if firstErr == nil {
+                firstErr = err
+            }
+            c.mu.Lock()
+            delete(c.clients, id)
+            c.mu.Unlock()
+        }
+    }
+    return firstErr
 }
 ```
 

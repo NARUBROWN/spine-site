@@ -49,6 +49,14 @@ my-app/
 ```go
 package main
 
+import (
+    "log"
+    "time"
+
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+)
+
 func main() {
     app := spine.New()
 
@@ -71,12 +79,14 @@ func main() {
     routes.RegisterUserRoutes(app)
 
     // 4. 서버 시작
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -87,6 +97,16 @@ HTTP 요청을 받아 서비스에 위임합니다. 비즈니스 로직을 포�
 ```go
 // controller/user_controller.go
 package controller
+
+import (
+    "context"
+
+    "dto"
+    "service"
+
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
 
 type UserController struct {
     svc *service.UserService  // 서비스 의존성
@@ -100,16 +120,24 @@ func NewUserController(svc *service.UserService) *UserController {
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
-) (dto.UserResponse, error) {
+) (httpx.Response[dto.UserResponse], error) {
     id := int(q.Int("id", 0))
-    return c.svc.Get(ctx, id)
+    user, err := c.svc.Get(ctx, id)
+    if err != nil {
+        return httpx.Response[dto.UserResponse]{}, err
+    }
+    return httpx.Response[dto.UserResponse]{Body: user}, nil
 }
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req dto.CreateUserRequest,
-) (dto.UserResponse, error) {
-    return c.svc.Create(ctx, req.Name, req.Email)
+    req *dto.CreateUserRequest,
+) (httpx.Response[dto.UserResponse], error) {
+    user, err := c.svc.Create(ctx, req.Name, req.Email)
+    if err != nil {
+        return httpx.Response[dto.UserResponse]{}, err
+    }
+    return httpx.Response[dto.UserResponse]{Body: user}, nil
 }
 ```
 

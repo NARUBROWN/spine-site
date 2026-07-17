@@ -307,6 +307,7 @@ import (
     "errors"
 
     "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
 
     "spine-user-demo/dto"
@@ -323,59 +324,59 @@ func NewUserController(service *service.UserService) *UserController {
 }
 
 // GET /users
-func (c *UserController) List() dto.UserListResponse {
-    return c.service.GetAllUsers()
+func (c *UserController) List() httpx.Response[dto.UserListResponse] {
+    return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
 }
 
 // GET /users/:id
-func (c *UserController) GetByID(id path.Int) (dto.UserResponse, error) {
+func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-        return dto.UserResponse{}, httperr.BadRequest("Invalid user ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
     }
 
     user, err := c.service.GetUserByID(id.Value)
     if err != nil {
-        return dto.UserResponse{}, toHTTPError(err)
+        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
     }
 
-    return *user, nil
+    return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // POST /users
-func (c *UserController) Create(req *dto.CreateUserRequest) (dto.UserResponse, error) {
+func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if req.Name == "" {
-        return dto.UserResponse{}, httperr.BadRequest("Name is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Name is required")
     }
     if req.Email == "" {
-        return dto.UserResponse{}, httperr.BadRequest("Email is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Email is required")
     }
 
     user, err := c.service.CreateUser(req)
     if err != nil {
-        return dto.UserResponse{}, toHTTPError(err)
+        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
     }
 
-    return *user, nil
+    return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // PUT /users/:id
-func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (dto.UserResponse, error) {
+func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-        return dto.UserResponse{}, httperr.BadRequest("Invalid user ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
     }
     if req.Name == "" {
-        return dto.UserResponse{}, httperr.BadRequest("Name is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Name is required")
     }
     if req.Email == "" {
-        return dto.UserResponse{}, httperr.BadRequest("Email is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Email is required")
     }
 
     user, err := c.service.UpdateUser(id.Value, req)
     if err != nil {
-        return dto.UserResponse{}, toHTTPError(err)
+        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
     }
 
-    return *user, nil
+    return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // DELETE /users/:id
@@ -413,6 +414,7 @@ package main
 
 import (
     "log"
+    "time"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
@@ -450,12 +452,14 @@ func main() {
     )
 
     // Start Server
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	});
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 

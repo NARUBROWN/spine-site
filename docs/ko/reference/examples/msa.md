@@ -64,11 +64,11 @@ type OrderCreated struct {
     At      time.Time `json:"at"`
 }
 
-func (o *OrderCreated) Name() string {
+func (o OrderCreated) Name() string {
     return "order.created"
 }
 
-func (o *OrderCreated) OccurredAt() time.Time {
+func (o OrderCreated) OccurredAt() time.Time {
     return o.At
 }
 ```
@@ -90,6 +90,7 @@ import (
 
     "github.com/your-org/spine-simple-msa/shared/events"
     "github.com/NARUBROWN/spine/pkg/event/publish"
+    "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
 )
 
@@ -99,14 +100,17 @@ func NewOrderController() *OrderController {
     return &OrderController{}
 }
 
-func (c *OrderController) Create(ctx context.Context, orderId path.Int) string {
+func (c *OrderController) Create(ctx context.Context, orderId path.Int) httpx.Response[string] {
     // Kafka로 이벤트 발행
-    publish.Event(ctx, &events.OrderCreated{
+    publish.Event(ctx, events.OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),
     })
 
-    return "OK"
+    return httpx.Response[string]{
+        Body:    "accepted",
+        Options: httpx.ResponseOptions{Status: 202},
+    }
 }
 ```
 
@@ -119,6 +123,7 @@ func (c *OrderController) Create(ctx context.Context, orderId path.Int) string {
 package main
 
 import (
+    "log"
     "time"
 
     "github.com/NARUBROWN/spine"
@@ -139,7 +144,7 @@ func main() {
         (*controller.OrderController).Create,
     )
 
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
         Address:                ":8080",
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
@@ -150,7 +155,9 @@ func main() {
             },
         },
         HTTP: &boot.HTTPOptions{},
-    })
+    }); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
@@ -198,6 +205,7 @@ func (c *OrderConsumer) OnCreated(ctx context.Context, eventName string, event e
 package main
 
 import (
+    "log"
     "time"
 
     "github.com/NARUBROWN/spine"
@@ -213,12 +221,14 @@ func main() {
     )
 
     // 컨슈머 등록
-    app.Consumers().Register(
+    if err := app.Consumers().Register(
         "order.created",
         (*consumer.OrderConsumer).OnCreated,
-    )
+    ); err != nil {
+        log.Fatal(err)
+    }
 
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
         Address:                ":8081",
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
@@ -229,7 +239,9 @@ func main() {
             },
         },
         HTTP: &boot.HTTPOptions{},
-    })
+    }); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 

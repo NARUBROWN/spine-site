@@ -40,6 +40,7 @@ Create a `main.go` file and write the following code.
 package main
 
 import (
+    "log"
     "time"
 
     "github.com/NARUBROWN/spine"
@@ -48,12 +49,14 @@ import (
 
 func main() {
     app := spine.New()
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 

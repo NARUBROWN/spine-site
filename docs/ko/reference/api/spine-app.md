@@ -350,7 +350,9 @@ WebSocket 레지스트리를 반환합니다. WebSocket 경로와 핸들러를 �
 
 **예시**
 ```go
-app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage)
+if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
+    log.Fatal(err)
+}
 ```
 
 #### WebSocket 핸들러
@@ -360,21 +362,72 @@ WebSocket 핸들러는 HTTP 컨트롤러와 유사한 시그니처를 가집니�
 ```go
 import "github.com/NARUBROWN/spine/pkg/ws"
 
-type ChatController struct{}
+type ChatController struct {
+    mu      sync.RWMutex
+    clients map[string]ws.Sender
+}
 
 func NewChatController() *ChatController {
-    return &ChatController{}
+    return &ChatController{clients: make(map[string]ws.Sender)}
+}
+
+type ChatMessage struct {
+    Message string `json:"message"`
+}
+
+type ChatEvent struct {
+    Type    string `json:"type"`
+    From    string `json:"from"`
+    Message string `json:"message"`
+    At      string `json:"at"`
 }
 
 func (c *ChatController) OnMessage(
+    ctx context.Context,
     connID ws.ConnectionID,
-    msg ws.TextPayload,
-    sender ws.Sender,
-) {
-    // connID.Value - 연결 ID
-    // msg.Value    - 텍스트 메시지
-    // sender.Send() - 응답 전송
-    sender.Send(ws.TextMessage, []byte("echo: "+msg.Value))
+    msg ChatMessage,
+) error {
+    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
+    if ok && sender != nil {
+        c.mu.Lock()
+        c.clients[connID.Value] = sender
+        c.mu.Unlock()
+    }
+
+    message := strings.TrimSpace(msg.Message)
+    if message == "" {
+        return nil
+    }
+
+    payload, err := json.Marshal(ChatEvent{
+        Type:    "message",
+        From:    connID.Value,
+        Message: message,
+        At:      time.Now().UTC().Format(time.RFC3339),
+    })
+    if err != nil {
+        return err
+    }
+
+    c.mu.RLock()
+    clients := make(map[string]ws.Sender, len(c.clients))
+    for id, client := range c.clients {
+        clients[id] = client
+    }
+    c.mu.RUnlock()
+
+    var firstErr error
+    for id, client := range clients {
+        if err := client.Send(ws.TextMessage, payload); err != nil {
+            if firstErr == nil {
+                firstErr = err
+            }
+            c.mu.Lock()
+            delete(c.clients, id)
+            c.mu.Unlock()
+        }
+    }
+    return firstErr
 }
 ```
 
@@ -666,13 +719,17 @@ package main
 
 import (
     "context"
+    "encoding/json"
     "log"
+    "strings"
+    "sync"
     "time"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
     "github.com/NARUBROWN/spine/pkg/event/publish"
+    "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
     "github.com/NARUBROWN/spine/pkg/route"
     "github.com/NARUBROWN/spine/pkg/ws"
@@ -705,13 +762,17 @@ func main() {
     )
 
     // 이벤트 컨슈머 등록
-    app.Consumers().Register("order.created", (*OrderConsumer).OnCreated)
+    if err := app.Consumers().Register("order.created", (*OrderConsumer).OnCreated); err != nil {
+        log.Fatal(err)
+    }
 
     // WebSocket 등록
-    app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage)
+    if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
+        log.Fatal(err)
+    }
 
     // 서버 실행
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
         Address:                ":8080",
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
@@ -725,7 +786,9 @@ func main() {
             },
         },
         HTTP: &boot.HTTPOptions{},
-    })
+    }); err != nil {
+        log.Fatal(err)
+    }
 }
 
 // Controller
@@ -735,12 +798,12 @@ func NewUserController() *UserController {
     return &UserController{}
 }
 
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) string {
+func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),
     })
-    return "OK"
+    return httpx.Response[string]{Body: "OK"}
 }
 
 // Event
@@ -770,18 +833,72 @@ func (c *OrderConsumer) OnCreated(
 }
 
 // WebSocket
-type ChatController struct{}
+type ChatController struct {
+    mu      sync.RWMutex
+    clients map[string]ws.Sender
+}
 
 func NewChatController() *ChatController {
-    return &ChatController{}
+    return &ChatController{clients: make(map[string]ws.Sender)}
+}
+
+type ChatMessage struct {
+    Message string `json:"message"`
+}
+
+type ChatEvent struct {
+    Type    string `json:"type"`
+    From    string `json:"from"`
+    Message string `json:"message"`
+    At      string `json:"at"`
 }
 
 func (c *ChatController) OnMessage(
+    ctx context.Context,
     connID ws.ConnectionID,
-    msg ws.TextPayload,
-    sender ws.Sender,
-) {
-    sender.Send(ws.TextMessage, []byte("echo: "+msg.Value))
+    msg ChatMessage,
+) error {
+    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
+    if ok && sender != nil {
+        c.mu.Lock()
+        c.clients[connID.Value] = sender
+        c.mu.Unlock()
+    }
+
+    message := strings.TrimSpace(msg.Message)
+    if message == "" {
+        return nil
+    }
+
+    payload, err := json.Marshal(ChatEvent{
+        Type:    "message",
+        From:    connID.Value,
+        Message: message,
+        At:      time.Now().UTC().Format(time.RFC3339),
+    })
+    if err != nil {
+        return err
+    }
+
+    c.mu.RLock()
+    clients := make(map[string]ws.Sender, len(c.clients))
+    for id, client := range c.clients {
+        clients[id] = client
+    }
+    c.mu.RUnlock()
+
+    var firstErr error
+    for id, client := range clients {
+        if err := client.Send(ws.TextMessage, payload); err != nil {
+            if firstErr == nil {
+                firstErr = err
+            }
+            c.mu.Lock()
+            delete(c.clients, id)
+            c.mu.Unlock()
+        }
+    }
+    return firstErr
 }
 ```
 

@@ -47,6 +47,9 @@ hello-spine/
 package main
 
 import (
+    "log"
+    "time"
+
     "hello-spine/controller"
     "hello-spine/routes"
     "hello-spine/service"
@@ -68,12 +71,14 @@ func main() {
     routes.RegisterRoutes(app)
 
     // 서버 시작
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -124,6 +129,7 @@ import (
 
     "hello-spine/service"
 
+    "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/query"
 )
 
@@ -141,9 +147,13 @@ func NewUserController(svc *service.UserService) *UserController {
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
-) (service.UserResponse, error) {
+) (httpx.Response[service.UserResponse], error) {
     id := int(q.Int("id", 0))
-    return c.svc.Get(id)
+    user, err := c.svc.Get(id)
+    if err != nil {
+        return httpx.Response[service.UserResponse]{}, err
+    }
+    return httpx.Response[service.UserResponse]{Body: user}, nil
 }
 ```
 

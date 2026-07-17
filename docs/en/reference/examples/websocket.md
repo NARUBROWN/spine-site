@@ -14,7 +14,6 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -44,49 +43,43 @@ type ChatEvent struct {
 	At      string `json:"at"`
 }
 
-func (c *ChatController) OnMessage(ctx context.Context, connID ws.ConnectionID, msg ChatMessage) error {
-	c.trackConnection(ctx, connID)
+func (c *ChatController) OnMessage(
+	ctx context.Context,
+	connID ws.ConnectionID,
+	msg ChatMessage,
+) error {
+	sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
+	if ok && sender != nil {
+		c.mu.Lock()
+		c.clients[connID.Value] = sender
+		c.mu.Unlock()
+	}
 
-	trimmed := strings.TrimSpace(msg.Message)
-	if trimmed == "" {
+	message := strings.TrimSpace(msg.Message)
+	if message == "" {
 		return nil
 	}
 
-	event := ChatEvent{
+	payload, err := json.Marshal(ChatEvent{
 		Type:    "message",
 		From:    connID.Value,
-		Message: trimmed,
+		Message: message,
 		At:      time.Now().UTC().Format(time.RFC3339),
-	}
-
-	data, err := json.Marshal(event)
+	})
 	if err != nil {
 		return err
 	}
 
-	return c.broadcast(ws.TextMessage, data)
-}
-
-func (c *ChatController) trackConnection(ctx context.Context, connID ws.ConnectionID) {
-	sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-	if !ok || sender == nil {
-		return
-	}
-
-	c.mu.Lock()
-	c.clients[connID.Value] = sender
-	c.mu.Unlock()
-}
-
-func (c *ChatController) broadcast(messageType int, data []byte) error {
 	c.mu.RLock()
-	snapshot := make(map[string]ws.Sender, len(c.clients))
-	maps.Copy(snapshot, c.clients)
+	clients := make(map[string]ws.Sender, len(c.clients))
+	for id, client := range c.clients {
+		clients[id] = client
+	}
 	c.mu.RUnlock()
 
 	var firstErr error
-	for id, client := range snapshot {
-		if err := client.Send(messageType, data); err != nil {
+	for id, client := range clients {
+		if err := client.Send(ws.TextMessage, payload); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -109,8 +102,8 @@ import (
 	"github.com/NARUBROWN/spine-simple-chat-demo/controller"
 )
 
-func RegisterChatRoutes(app spine.App) {
-	app.WebSocket().Register("/ws/chat", (*controller.ChatController).OnMessage)
+func RegisterChatRoutes(app spine.App) error {
+	return app.WebSocket().Register("/ws/chat", (*controller.ChatController).OnMessage)
 }
 ```
 
@@ -120,6 +113,7 @@ func RegisterChatRoutes(app spine.App) {
 package main
 
 import (
+	"log"
 	"time"
 
 	"github.com/NARUBROWN/spine"
@@ -135,13 +129,17 @@ func main() {
 		controller.NewChatController,
 	)
 
-	routes.RegisterChatRoutes(app)
+	if err := routes.RegisterChatRoutes(app); err != nil {
+		log.Fatal(err)
+	}
 
-	app.Run(boot.Options{
+	if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP:                   &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```

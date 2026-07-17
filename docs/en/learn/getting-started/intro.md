@@ -19,12 +19,14 @@ func main() {
     // Routes — clear which method maps to which path
     app.Route("GET", "/users", (*UserController).GetUser)
     
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -114,16 +116,24 @@ func RegisterUserRoutes(app spine.App) {
 func (c *UserController) GetUser(
     ctx context.Context,      // Context
     q query.Values,           // Query parameters
-) (UserResponse, error) {     // Response type
-    return c.svc.Get(ctx, q.Int("id", 0))
+) (httpx.Response[UserResponse], error) {     // Response type
+    user, err := c.svc.Get(ctx, q.Int("id", 0))
+    if err != nil {
+        return httpx.Response[UserResponse]{}, err
+    }
+    return httpx.Response[UserResponse]{Body: user}, nil
 }
 
 // DTO is automatically bound
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req CreateUserRequest,    // JSON body → Struct
-) (UserResponse, error) {
-    return c.svc.Create(ctx, req)
+    req *CreateUserRequest,    // JSON body → Struct (Pointer)
+) (httpx.Response[UserResponse], error) {
+    user, err := c.svc.Create(ctx, req)
+    if err != nil {
+        return httpx.Response[UserResponse]{}, err
+    }
+    return httpx.Response[UserResponse]{Body: user}, nil
 }
 ```
 

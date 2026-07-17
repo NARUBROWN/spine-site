@@ -225,6 +225,7 @@ import (
 
     "github.com/NARUBROWN/spine/core"
     "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/golang-jwt/jwt/v5"
 )
 
@@ -239,33 +240,33 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
 }
 
 // Signup — Authentication not required
-func (c *AuthController) Signup(req model.SignupRequest) (model.User, error) {
+func (c *AuthController) Signup(req model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
-        return model.User{}, httperr.BadRequest("All fields are required.")
+        return httpx.Response[model.User]{}, httperr.BadRequest("All fields are required.")
     }
 
     user, err := c.userStore.Create(req.Email, req.Password, req.Name)
     if err != nil {
-        return model.User{}, httperr.BadRequest(err.Error())
+        return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
     }
 
-    return *user, nil
+    return httpx.Response[model.User]{Body: *user}, nil
 }
 
 // Login — Authentication not required
-func (c *AuthController) Login(req model.LoginRequest) (model.LoginResponse, error) {
+func (c *AuthController) Login(req model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
-        return model.LoginResponse{}, httperr.BadRequest("Email and password are required.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("Email and password are required.")
     }
 
     user, err := c.userStore.FindByEmail(req.Email)
     if err != nil {
-        return model.LoginResponse{}, httperr.Unauthorized("Invalid email or password.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Invalid email or password.")
     }
 
     // Check password (In reality, compare hashes using bcrypt, etc.)
     if user.Password != req.Password {
-        return model.LoginResponse{}, httperr.Unauthorized("Invalid email or password.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Invalid email or password.")
     }
 
     // Generate JWT Token
@@ -277,30 +278,32 @@ func (c *AuthController) Login(req model.LoginRequest) (model.LoginResponse, err
 
     tokenString, err := token.SignedString(interceptor.JWTSecret)
     if err != nil {
-        return model.LoginResponse{}, httperr.BadRequest("Failed to generate token.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("Failed to generate token.")
     }
 
-    return model.LoginResponse{
-        Token: tokenString,
-        User:  *user,
+    return httpx.Response[model.LoginResponse]{
+        Body: model.LoginResponse{
+            Token: tokenString,
+            User:  *user,
+        },
     }, nil
 }
 
 // Get Me — Authentication required
-func (c *AuthController) GetMe(ctx core.ExecutionContext) (model.User, error) {
+func (c *AuthController) GetMe(ctx core.ExecutionContext) (httpx.Response[model.User], error) {
     // Get userID saved by AuthInterceptor
     userIDValue, ok := ctx.Get("userID")
     if !ok {
-        return model.User{}, httperr.Unauthorized("Authentication info not found.")
+        return httpx.Response[model.User]{}, httperr.Unauthorized("Authentication info not found.")
     }
 
     userID := userIDValue.(int64)
     user, err := c.userStore.FindByID(userID)
     if err != nil {
-        return model.User{}, httperr.NotFound("User not found.")
+        return httpx.Response[model.User]{}, httperr.NotFound("User not found.")
     }
 
-    return *user, nil
+    return httpx.Response[model.User]{Body: *user}, nil
 }
 ```
 
@@ -315,6 +318,7 @@ package main
 
 import (
     "log"
+    "time"
 
     "login-example/controller"
     "login-example/interceptor"
@@ -357,12 +361,14 @@ func main() {
     )
 
     log.Println("Server started: http://localhost:8080")
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 

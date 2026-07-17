@@ -225,6 +225,7 @@ import (
 
     "github.com/NARUBROWN/spine/core"
     "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/golang-jwt/jwt/v5"
 )
 
@@ -239,33 +240,33 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
 }
 
 // 회원가입 — 인증 불필요
-func (c *AuthController) Signup(req model.SignupRequest) (model.User, error) {
+func (c *AuthController) Signup(req model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
-        return model.User{}, httperr.BadRequest("모든 필드를 입력해주세요.")
+        return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
     }
 
     user, err := c.userStore.Create(req.Email, req.Password, req.Name)
     if err != nil {
-        return model.User{}, httperr.BadRequest(err.Error())
+        return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
     }
 
-    return *user, nil
+    return httpx.Response[model.User]{Body: *user}, nil
 }
 
 // 로그인 — 인증 불필요
-func (c *AuthController) Login(req model.LoginRequest) (model.LoginResponse, error) {
+func (c *AuthController) Login(req model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
-        return model.LoginResponse{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
     }
 
     user, err := c.userStore.FindByEmail(req.Email)
     if err != nil {
-        return model.LoginResponse{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
     // 비밀번호 확인 (실제로는 bcrypt 등으로 해시 비교)
     if user.Password != req.Password {
-        return model.LoginResponse{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
     // JWT 토큰 생성
@@ -277,30 +278,32 @@ func (c *AuthController) Login(req model.LoginRequest) (model.LoginResponse, err
 
     tokenString, err := token.SignedString(interceptor.JWTSecret)
     if err != nil {
-        return model.LoginResponse{}, httperr.BadRequest("토큰 생성에 실패했습니다.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("토큰 생성에 실패했습니다.")
     }
 
-    return model.LoginResponse{
-        Token: tokenString,
-        User:  *user,
+    return httpx.Response[model.LoginResponse]{
+        Body: model.LoginResponse{
+            Token: tokenString,
+            User:  *user,
+        },
     }, nil
 }
 
 // 내 정보 조회 — 인증 필요
-func (c *AuthController) GetMe(ctx core.ExecutionContext) (model.User, error) {
+func (c *AuthController) GetMe(ctx core.ExecutionContext) (httpx.Response[model.User], error) {
     // AuthInterceptor가 저장한 userID 조회
     userIDValue, ok := ctx.Get("userID")
     if !ok {
-        return model.User{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
+        return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
     }
 
     userID := userIDValue.(int64)
     user, err := c.userStore.FindByID(userID)
     if err != nil {
-        return model.User{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
+        return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
     }
 
-    return *user, nil
+    return httpx.Response[model.User]{Body: *user}, nil
 }
 ```
 
@@ -315,6 +318,7 @@ package main
 
 import (
     "log"
+    "time"
 
     "login-example/controller"
     "login-example/interceptor"
@@ -357,12 +361,14 @@ func main() {
     )
 
     log.Println("서버 시작: http://localhost:8080")
-    app.Run(boot.Options{
+    if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
 		HTTP: &boot.HTTPOptions{},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
