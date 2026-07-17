@@ -78,6 +78,43 @@ const logs = {
     '2026/01/20 19:20:05 [Bootstrap] Interceptor *interceptor.LoggingInterceptor used from instance.',
     '2026/01/20 19:20:05 [Bootstrap] HTTP adapter mounted',
     '2026/01/20 19:20:05 [Bootstrap] Server started listening: :8080'
+  ],
+  ja: [
+    '________       _____             ',
+    '__  ___/__________(_)___________ ',
+    '_____ \\___  __ \\_  /__  __ \\  _ \\',
+    '____/ /__  /_/ /  / _  / / /  __/',
+    '/____/ _  .___//_/  /_/ /_/\\___/ ',
+    '       /_/        ',
+    '2026/01/20 19:20:05 [Bootstrap] Spine version: v0.2.1',
+    '2026/01/20 19:20:05 [Bootstrap] コンテナの初期化開始',
+    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録開始 (5個)',
+    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func() *bun.DB',
+    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(bun.IDB) *repository.UserRepository',
+    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(*repository.UserRepository) *service.UserService',
+    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(*service.UserService) *controller.UserController',
+    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(*bun.DB) *interceptor.TxInterceptor',
+    '2026/01/20 19:20:05 [Bootstrap] ルーター構成開始 (4個のルート)',
+    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (GET) /users',
+    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (POST) /users',
+    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (PUT) /users',
+    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (DELETE) /users',
+    '2026/01/20 19:20:05 [Bootstrap] コントローラー依存関係ウォームアップ開始',
+    '2026/01/20 19:20:05 [Container] Resolve要求 : *controller.UserController',
+    '2026/01/20 19:20:05 [Container] Resolve要求 : *service.UserService',
+    '2026/01/20 19:20:05 [Container] Resolve要求 : *repository.UserRepository',
+    '2026/01/20 19:20:05 [Container] Resolve要求 : bun.IDB',
+    '2026/01/20 19:20:05 [Bootstrap] 実行パイプラインの構成',
+    '2026/01/20 19:20:05 [Bootstrap] ArgumentResolverの登録',
+    '2026/01/20 19:20:05 [Bootstrap] ReturnValueHandler의 등록',
+    '2026/01/20 19:20:05 [Bootstrap] インターセプターの登録開始',
+    '2026/01/20 19:20:05 [Bootstrap] インターセプター TxInterceptor がコンテナから生成されました。',
+    '2026/01/20 19:20:05 [Container] Resolve要求 : *interceptor.TxInterceptor',
+    '2026/01/20 19:20:05 [Container] Resolve要求 : *bun.DB',
+    '2026/01/20 19:20:05 [Bootstrap] インターセプター *cors.CORSInterceptor がインスタンスから使用されます。',
+    '2026/01/20 19:20:05 [Bootstrap] インターセプター *interceptor.LoggingInterceptor がインスタンスから使用されます。',
+    '2026/01/20 19:20:05 [Bootstrap] HTTPアダプタのマウント',
+    '2026/01/20 19:20:05 [Bootstrap] サーバーのリスニング開始: :8080'
   ]
 }
 
@@ -89,6 +126,18 @@ const uiText = {
   en: {
     prompt: 'Boot finished in the blink of an eye.<br>Want to see it again?',
     button: 'Replay'
+  },
+  ja: {
+    prompt: '瞬く間に起動が完了しました。<br>もう一度見てみますか？',
+    button: 'もう一度見る'
+  },
+  zhHans: {
+    prompt: '启动在眨眼之间完成。<br>要再看一次吗？',
+    button: '再次播放'
+  },
+  zhHant: {
+    prompt: '啟動在眨眼之間完成。<br>要再看一次嗎？',
+    button: '再次播放'
   }
 }
 
@@ -100,12 +149,17 @@ const currentLines = computed(() => {
   // Simplified check: if lang starts with 'en', use 'en', else 'ko'
   // Adjust based on strict locale codes if needed (e.g. en-US)
   if (currentLang.startsWith('en')) return logs.en
+  if (currentLang.startsWith('ja')) return logs.ja
+  if (currentLang.startsWith('zh')) return logs.en
   return logs.ko
 })
 
 const currentUi = computed(() => {
   const currentLang = lang.value || 'ko'
   if (currentLang.startsWith('en')) return uiText.en
+  if (currentLang.startsWith('ja')) return uiText.ja
+  if (currentLang === 'zh-CN') return uiText.zhHans
+  if (currentLang === 'zh-TW') return uiText.zhHant
   return uiText.ko
 })
 

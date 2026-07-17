@@ -299,5 +299,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     <a href="/en/learn/getting-started/intro" class="VPButton medium brand">Get Started</a>
     <a href="https://github.com/NARUBROWN/spine" class="VPButton medium alt">GitHub</a>
     <a href="/en/reference/examples/crud" class="VPButton medium alt">Example Project</a>
+    <a href="/llms.txt" class="VPButton medium alt">llms.txt</a>
   </div>
 </div>

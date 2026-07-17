@@ -20,3 +20,8 @@
 .VPHero .tagline {
     word-break: keep-all;
 }
+
+/* Invert main site logo in dark mode */
+.dark .VPNavBar .logo {
+  filter: invert(1);
+}
