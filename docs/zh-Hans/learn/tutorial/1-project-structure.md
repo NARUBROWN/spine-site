@@ -88,7 +88,7 @@ func main() {
 }
 ```
 
-＃＃＃控制器/
+### 控制器/
 
 接收 HTTP 请求并将其委托给服务。不包含任何业务逻辑。
 
@@ -139,7 +139,7 @@ func (c *UserController) CreateUser(
 }
 ```
 
-＃＃＃服务/
+### 服务/
 
 负责业务逻辑。通过存储库访问数据。
 
@@ -160,7 +160,7 @@ func (s *UserService) Get(ctx context.Context, id int) (dto.UserResponse, error)
     if err != nil {
         return dto.UserResponse{}, err
     }
-    
+
     return dto.UserResponse{
         ID:    int(user.ID),
         Name:  user.Name,
@@ -170,11 +170,11 @@ func (s *UserService) Get(ctx context.Context, id int) (dto.UserResponse, error)
 
 func (s *UserService) Create(ctx context.Context, name, email string) (dto.UserResponse, error) {
     user := &entity.User{Name: name, Email: email}
-    
+
     if err := s.repo.Save(ctx, user); err != nil {
         return dto.UserResponse{}, err
     }
-    
+
     return dto.UserResponse{
         ID:    int(user.ID),
         Name:  user.Name,
@@ -216,7 +216,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
 }
 ```
 
-＃＃＃实体/
+### 实体/
 
 这是映射到数据库表的结构。
 

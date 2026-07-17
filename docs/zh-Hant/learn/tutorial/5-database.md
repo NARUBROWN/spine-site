@@ -12,7 +12,7 @@
 
 Spine 不會強制執行特定的 ORM，但建議與 Bun 結合使用。
 
-＃＃ 安裝
+## 安裝
 
 ```bash
 # 包子芯
@@ -45,21 +45,21 @@ import (
 
 func NewDB() *bun.DB {
     // MySQL連接
-    sqldb, err := sql.Open("mysql", 
+    sqldb, err := sql.Open("mysql",
         "user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local",
     )
     if err != nil {
         panic(err)
     }
-    
+
     // 檢查連接
     if err := sqldb.Ping(); err != nil {
         panic(err)
     }
-    
+
     // Bun DB 創建
     db := bun.NewDB(sqldb, mysqldialect.New())
-    
+
     return db
 }
 ```
@@ -70,12 +70,12 @@ func NewDB() *bun.DB {
 // 主機程式
 func main() {
     app := spine.New()
-    
+
     app.Constructor(
         NewDB,  // *bun.DB 创建
         // ...
     )
-    
+
     app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
@@ -100,15 +100,15 @@ import (
 )
 
 func NewDB() *bun.DB {
-    sqldb, err := sql.Open("pgx", 
+    sqldb, err := sql.Open("pgx",
         "postgres://user:password@localhost:5432/mydb?sslmode=disable",
     )
     if err != nil {
         panic(err)
     }
-    
+
     db := bun.NewDB(sqldb, pgdialect.New())
-    
+
     return db
 }
 ```
@@ -126,12 +126,12 @@ func NewDB() *bun.DB {
     if dsn == "" {
         dsn = "user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
     }
-    
+
     sqldb, err := sql.Open("mysql", dsn)
     if err != nil {
         panic(err)
     }
-    
+
     return bun.NewDB(sqldb, mysqldialect.New())
 }
 ```
@@ -199,54 +199,54 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 }
 ```
 
-＃＃＃ 查看
+### 查看
 
 ```go
 func (r *UserRepository) FindByID(ctx context.Context, id int) (*entity.User, error) {
     user := new(entity.User)
-    
+
     err := r.db.NewSelect().
         Model(user).
         Where("id = ?", id).
         Scan(ctx)
-    
+
     if err != nil {
         return nil, err
     }
-    
+
     return user, nil
 }
 
 func (r *UserRepository) FindAll(ctx context.Context) ([]entity.User, error) {
     var users []entity.User
-    
+
     err := r.db.NewSelect().
         Model(&users).
         Scan(ctx)
-    
+
     return users, err
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
     user := new(entity.User)
-    
+
     err := r.db.NewSelect().
         Model(user).
         Where("email = ?", email).
         Scan(ctx)
-    
+
     return user, err
 }
 ```
 
-＃＃＃ 創造
+### 創造
 
 ```go
 func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
     _, err := r.db.NewInsert().
         Model(user).
         Exec(ctx)
-    
+
     return err
 }
 ```
@@ -259,12 +259,12 @@ func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
         Model(user).
         WherePK().
         Exec(ctx)
-    
+
     return err
 }
 ```
 
-＃＃＃ 刪除
+### 刪除
 
 ```go
 func (r *UserRepository) Delete(ctx context.Context, id int) error {
@@ -272,7 +272,7 @@ func (r *UserRepository) Delete(ctx context.Context, id int) error {
         Model((*entity.User)(nil)).
         Where("id = ?", id).
         Exec(ctx)
-    
+
     return err
 }
 ```
@@ -347,7 +347,7 @@ func main() {
 
 func runMigrations(ctx context.Context, db *bun.DB) error {
     migrations := migrate.NewMigrations()
-    
+
     if err := migrations.Discover(sqlMigrations); err != nil {
         return err
     }
@@ -363,12 +363,12 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
     if _, err := migrator.Migrate(ctx); err != nil {
         return err
     }
-    
+
     return nil
 }
 ```
 
-＃＃＃ 執行
+### 執行
 
 ```bash
 # 運行遷移
@@ -405,16 +405,16 @@ myapp/
 // 主機程式
 func main() {
     app := spine.New()
-    
+
     app.Constructor(
         NewDB,                          // *bun.DB
         repository.NewUserRepository,   // bun.IDB → *UserRepository
         service.NewUserService,
         controller.NewUserController,
     )
-    
+
     routes.RegisterUserRoutes(app)
-    
+
     app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
@@ -478,7 +478,7 @@ count, err := r.db.NewSelect().
     Count(ctx)
 ```
 
-＃＃＃ 加入
+### 加入
 
 ```go
 // SELECT * FROM users JOIN 訂單 ON users.id =orders.user_id

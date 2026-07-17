@@ -50,8 +50,8 @@ func NewUserController(svc *UserService) *UserController {
 签名本身揭示了结构和合同。
 
 ### 4.拦截器管道
-可以在请求之前/之后/完成时插入逻辑。  
-横切关注点，例如身份验证、事务和日志记录  
+可以在请求之前/之后/完成时插入逻辑。
+横切关注点，例如身份验证、事务和日志记录
 将其与业务代码分离，放入执行流程中。
 
 执行顺序由 Sp​​ine 的管道显式控制。
@@ -70,7 +70,7 @@ goapp.Interceptor(
 
 在Spine中，请求无一例外地通过一个执行管道。
 
-路由器只是选择运行什么，  
+路由器只是选择运行什么，
 只有Pipeline知道执行顺序和流程。
 
 ## 你所看到的就是一切
@@ -85,11 +85,11 @@ goapp.Interceptor(
 // main.go
 func main() {
     app := spine.New()
-    
+
     // ✅ 只需注册构造函数即可自动解决依赖关系
     // ✅ 可以任意顺序注册
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
-    
+
     routes.RegisterUserRoutes(app)
     app.Run(boot.Options{
 		Address:                ":8080",
@@ -251,8 +251,8 @@ public class Application {
 @RestController  // ⚠️ 没有注解就无法运行
 @RequestMapping("/users")  // ⚠️ 路由信息分散
 public class UserController {
-    
-    @Autowired 
+
+    @Autowired
     private UserService svc;
 
     @GetMapping  // ⚠️ 每个方法都需要注解
@@ -267,8 +267,8 @@ public class UserController {
 // 服务。爪哇
 @Service  // ⚠️ 没有注解就不会注册 Bean
 public class UserService {
-    
-    @Autowired 
+
+    @Autowired
     private UserRepository repo;
 }
 ```

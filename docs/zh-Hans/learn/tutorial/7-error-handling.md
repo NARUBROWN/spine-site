@@ -23,7 +23,7 @@ func Unauthorized(msg string) error {
 
 如何优雅地处理错误。
 
-＃＃ 大纲
+## 大纲
 
 Spine 使用 `httperr` 包表示 HTTP 错误。 Controller不直接处理HTTP，仅用`httperr`表达错误的**含义**。实际的 HTTP 响应转换由 `ErrorReturnHandler` 处理。
 
@@ -34,12 +34,12 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
     if userId.Value <= 0 {
         return User{}, httperr.BadRequest("用户 ID 无效")
     }
-    
+
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
         return User{}, httperr.NotFound("找不到用户")
     }
-    
+
     return user, nil
 }
 ```
@@ -97,7 +97,7 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
     if req.Email == "" {
         return User{}, httperr.BadRequest("电子邮件为必填项")
     }
-    
+
     return c.service.Create(req)
 }
 ```
@@ -107,15 +107,15 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    
+
     if token == "" {
         return httperr.Unauthorized("需要认证")
     }
-    
+
     if !isValidToken(token) {
         return httperr.Unauthorized("令牌无效")
     }
-    
+
     return nil
 }
 ```
@@ -166,7 +166,7 @@ func (r *UserRepository) FindByID(id int64) (*User, error) {
 var ErrUserNotFound = errors.New("user not found")
 ```
 
-＃＃＃ 服务
+### 服务
 
 处理业务逻辑并传递存储库错误。
 
@@ -180,7 +180,7 @@ func (s *UserService) GetUser(id int64) (*User, error) {
 }
 ```
 
-＃＃＃控制器
+### 控制器
 
 将业务错误转换为 HTTP 错误。
 
@@ -236,7 +236,7 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
     if err := req.Validate(); err != nil {
         return User{}, httperr.BadRequest(err.Error())
     }
-    
+
     return c.service.Create(req)
 }
 ```
@@ -248,16 +248,16 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    
+
     if token == "" {
         return httperr.Unauthorized("需要认证令牌")
     }
-    
+
     user, err := i.auth.Validate(token)
     if err != nil {
         return httperr.Unauthorized("令牌无效")
     }
-    
+
     ctx.Set("auth.user", user)
     return nil
 }

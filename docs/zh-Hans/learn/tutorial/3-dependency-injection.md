@@ -59,14 +59,14 @@ func NewUserController(svc *UserService) *UserController {
 ```go
 func main() {
     app := spine.New()
-    
+
     app.Constructor(
         NewDB,              // 返回 *bun.DB
         NewUserRepository,  // 需要 *bun.DB → 返回 *UserRepository
         NewUserService,     // 需要 *UserRepository → 返回 *UserService
         NewUserController,  // 需要 *UserService → 返回 *UserController
     )
-    
+
     if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
@@ -136,7 +136,7 @@ graph TD
 
 ## 构造函数规则
 
-＃＃＃ 参数
+### 参数
 
 构造函数参数必须是**已注册的类型**。
 
@@ -208,7 +208,7 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
     if err != nil {
         return err
     }
-    
+
     ctx.Set("tx", tx)  // 保存事务
     return nil
 }
@@ -218,7 +218,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
     if !ok {
         return
     }
-    
+
     if err != nil {
         tx.(*bun.Tx).Rollback()
     } else {
@@ -234,28 +234,28 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 ```go
 func main() {
     app := spine.New()
-    
+
     // 基础设施
     app.Constructor(
         NewDB,
         NewRedisClient,
         NewLogger,
     )
-    
+
     // 用户域
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
         controller.NewUserController,
     )
-    
+
     // 订购域名
     app.Constructor(
         repository.NewOrderRepository,
         service.NewOrderService,
         controller.NewOrderController,
     )
-    
+
     if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,

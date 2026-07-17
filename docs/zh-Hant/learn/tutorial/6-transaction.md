@@ -2,7 +2,7 @@
 
 在 Spine 中處理事務。
 
-＃＃ 大綱
+## 大綱
 
 Spine 在基於攔截器的基礎上管理事務。
 
@@ -14,7 +14,7 @@ Request
    ├─→ Controller → Service → Repository
    │
    └─→ TxInterceptor.AfterCompletion // 提交或回滚
-   
+
 Response
 ```
 
@@ -85,7 +85,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-＃＃ 登記
+## 登記
 
 ```go
 // 主機程式
@@ -120,7 +120,7 @@ func main() {
 
 `bun.IDB` 介面是在儲存庫中使用交易的關鍵。
 
-＃＃＃ 問題
+### 問題
 
 ```go
 // ❌ 如果只收到*bun.DB，則無法使用交易。
@@ -129,7 +129,7 @@ type UserRepository struct {
 }
 ```
 
-＃＃＃ 解決
+### 解決
 
 ```go
 // ✅ Bun.IDB 實作了 *bun.DB 和 *bun.Tx
@@ -219,7 +219,7 @@ package db
 
 import (
     "context"
-    
+
     "github.com/uptrace/bun"
 )
 
@@ -296,7 +296,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 ```go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     reqCtx := ctx.Context()
-    
+
     // 只讀事務
     tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
         ReadOnly: true,
@@ -304,7 +304,7 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
     if err != nil {
         return err
     }
-    
+
     ctx.Set("tx", tx)
     return nil
 }
@@ -336,18 +336,18 @@ tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
 ```go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     methodName := meta.Method.Name
-    
+
     // 以 Get 開頭的方法會跳過交易。
     if strings.HasPrefix(methodName, "Get") || strings.HasPrefix(methodName, "List") {
         return nil
     }
-    
+
     // 開始交易
     tx, err := i.db.BeginTx(ctx.Context(), nil)
     if err != nil {
         return err
     }
-    
+
     ctx.Set("tx", tx)
     return nil
 }
@@ -357,7 +357,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
     if !ok {
         return  // 没有事务时跳过
     }
-    
+
     tx := v.(*bun.Tx)
     if err != nil {
         tx.Rollback()
@@ -375,12 +375,12 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
     if ctx.Method() == "GET" {
         return nil
     }
-    
+
     tx, err := i.db.BeginTx(ctx.Context(), nil)
     if err != nil {
         return err
     }
-    
+
     ctx.Set("tx", tx)
     return nil
 }
@@ -398,7 +398,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
     }
 
     tx := v.(*bun.Tx)
-    
+
     if err != nil {
         log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
         _ = tx.Rollback()
@@ -434,7 +434,7 @@ func main() {
 
     routes.RegisterUserRoutes(app)
     routes.RegisterOrderRoutes(app)
-    
+
     app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
@@ -470,7 +470,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
     if !ok {
         return
     }
-    
+
     tx := v.(*bun.Tx)
     if err != nil {
         tx.Rollback()

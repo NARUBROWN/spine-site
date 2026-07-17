@@ -4,18 +4,24 @@ import { useData } from 'vitepress'
 
 const { lang, page } = useData()
 
-const isHome = computed(() => /^(?:[a-z-]+\/)?index\.md$/.test(page.value.relativePath))
+const isHome = computed(() => page.value.relativePath.split('/').pop() === 'index.md')
 
 const currentLang = computed(() => {
   if (lang.value === 'ko') return 'ko'
   if (lang.value === 'ja') return 'ja'
-  if (lang.value === 'zh-CN') return 'zhHans'
-  if (lang.value === 'zh-TW') return 'zhHant'
+  if (lang.value === 'zh-CN' || lang.value === 'zh-Hans') return 'zhHans'
+  if (lang.value === 'zh-TW' || lang.value === 'zh-Hant') return 'zhHant'
   return 'en'
 })
 
 const content = computed(() => {
   return locales[currentLang.value]
+})
+
+const localePath = computed(() => {
+  if (currentLang.value === 'zhHans') return 'zh-Hans'
+  if (currentLang.value === 'zhHant') return 'zh-Hant'
+  return currentLang.value
 })
 
 const locales = {
@@ -147,7 +153,7 @@ const locales = {
       <div class="footer-top">
         <div class="footer-brand">
           <div class="logo">
-            <a :href="`/${currentLang}/`" class="logo-link">
+            <a :href="`/${localePath}/`" class="logo-link">
               <img src="/header_logo.png" alt="Spine" class="footer-logo" />
             </a>
           </div>

@@ -19,15 +19,15 @@
 graph TD
     Request
     Request --> Pre["PreHandle<br/>- 请求前执行<br/>- 返回错误时中止请求"]
-    
+
     Pre --> Controller["Controller.Method()<br/>- 执行业务逻辑"]
-    
+
     Controller -- 成功 --> Post["PostHandle<br/>- 請求成功時執行<br/>- 發生錯誤時跳過"]
-    
+
     Post --> After["AfterCompletion<br/>- 始终执行（与成功或失败无关）<br/>- 清理资源、提交或回滚事务"]
-    
+
     Controller -- 錯誤 --> After
-    
+
     After --> Response
 ```
 
@@ -108,12 +108,12 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 ```go
 func main() {
     app := spine.New()
-    
+
     // 全域攔截器－適用於所有請求
     app.Interceptor(
         &interceptor.LoggingInterceptor{},
     )
-    
+
     app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
@@ -142,16 +142,16 @@ type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    
+
     if token == "" {
         return httperr.Unauthorized("需要认证.")
     }
-    
+
     user, err := validateToken(token)
     if err != nil {
         return httperr.Unauthorized("令牌无效.")
     }
-    
+
     ctx.Set("currentUser", user)
     return nil
 }
@@ -178,18 +178,18 @@ import (
 
 func main() {
     app := spine.New()
-    
+
     app.Constructor(
         NewUserController,
     )
-    
+
     // 不需要認證的路由
     app.Route(
         "POST",
         "/login",
         (*UserController).Login,
     )
-    
+
     // 需要身份驗證的路由
     app.Route(
         "GET",
@@ -197,7 +197,7 @@ func main() {
         (*UserController).GetUser,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
-    
+
     // 需要身份驗證的路由
     app.Route(
         "PUT",
@@ -205,7 +205,7 @@ func main() {
         (*UserController).UpdateUser,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
-    
+
     app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
@@ -222,11 +222,11 @@ func main() {
 ```go
 func main() {
     app := spine.New()
-    
+
     app.Constructor(
         NewUserController,
     )
-    
+
     // 全域攔截器－適用於所有請求
     app.Interceptor(
         &interceptor.LoggingInterceptor{},
@@ -235,11 +235,11 @@ func main() {
             AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
         }),
     )
-    
+
     // 公共路線－僅適用全球攔截器
     app.Route("POST", "/login", (*UserController).Login)
     app.Route("POST", "/signup", (*UserController).Signup)
-    
+
     // 身份驗證所需的路由 - 全域 + 身份驗證攔截器
     app.Route(
         "GET",
@@ -247,14 +247,14 @@ func main() {
         (*UserController).GetUser,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
-    
+
     app.Route(
         "GET",
         "/me",
         (*UserController).GetMe,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
-    
+
     app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
@@ -304,7 +304,7 @@ Request (GET /users/1)
    ├─→ Auth.AfterCompletion       (路由 1)
    ├─→ CORS.AfterCompletion       (全局 2)
    └─→ Logging.AfterCompletion    (全局 1)
-   
+
 Response
 ```
 
@@ -338,7 +338,7 @@ Request (GET /users/1, 没有令牌)
    ├─→ Auth.AfterCompletion
    ├─→ CORS.AfterCompletion
    └─→ Logging.AfterCompletion
-   
+
 Response (401 Unauthorized)
 ```
 
@@ -346,7 +346,7 @@ Response (401 Unauthorized)
 
 在請求上下文中儲存和檢索值。
 
-＃＃＃ 方法
+### 方法
 
 |方法|描述 |
 |--------|------|
@@ -438,7 +438,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
     if !ok {
         return
     }
-    
+
     tx := v.(*bun.Tx)
     if err != nil {
         tx.Rollback()

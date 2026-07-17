@@ -1,4 +1,4 @@
-＃ 介绍
+# 介绍
 
 ## 什么是脊柱？
 
@@ -9,16 +9,16 @@ Spine 是一个不隐藏请求过程的 Go Web 框架。
 ```go
 func main() {
     app := spine.New()
-    
+
     // 依赖注册 - 只需注册构造函数即可自动解决，无论顺序如何
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
-    
+
     // 拦截器——执行顺序在代码中可见
     app.Interceptor(&TxInterceptor{}, &LoggingInterceptor{})
-    
+
     // 路线 — 哪个方法是哪条路线一目了然。
     app.Route("GET", "/users", (*UserController).GetUser)
-    
+
     if err := app.Run(boot.Options{
 		Address:                ":8080",
 		EnableGracefulShutdown: true,

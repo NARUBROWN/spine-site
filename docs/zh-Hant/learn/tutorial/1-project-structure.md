@@ -88,7 +88,7 @@ func main() {
 }
 ```
 
-＃＃＃控制器/
+### 控制器/
 
 接收 HTTP 請求並將其委託給服務。不包含任何業務邏輯。
 
@@ -139,7 +139,7 @@ func (c *UserController) CreateUser(
 }
 ```
 
-＃＃＃服務/
+### 服務/
 
 負責業務邏輯。透過儲存庫存取資料。
 
@@ -160,7 +160,7 @@ func (s *UserService) Get(ctx context.Context, id int) (dto.UserResponse, error)
     if err != nil {
         return dto.UserResponse{}, err
     }
-    
+
     return dto.UserResponse{
         ID:    int(user.ID),
         Name:  user.Name,
@@ -170,11 +170,11 @@ func (s *UserService) Get(ctx context.Context, id int) (dto.UserResponse, error)
 
 func (s *UserService) Create(ctx context.Context, name, email string) (dto.UserResponse, error) {
     user := &entity.User{Name: name, Email: email}
-    
+
     if err := s.repo.Save(ctx, user); err != nil {
         return dto.UserResponse{}, err
     }
-    
+
     return dto.UserResponse{
         ID:    int(user.ID),
         Name:  user.Name,
@@ -216,7 +216,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
 }
 ```
 
-＃＃＃實體/
+### 實體/
 
 這是映射到資料庫表的結構。
 

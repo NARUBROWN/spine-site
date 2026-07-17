@@ -1,4 +1,4 @@
-＃ 控制器
+# 控制器
 
 在 Spine 中編寫控制器。
 
@@ -102,7 +102,7 @@ func (c *UserController) GetUser(
     id := q.Int("id", 0)                      // int64, 默认值 0
     name := q.String("name")                  // string
     active := q.GetBoolByKey("active", false) // bool, 默认值 false
-    
+
     user, _ := c.svc.Get(ctx, int(id))
     return httpx.Response[dto.UserResponse]{Body: user}
 }
@@ -243,7 +243,7 @@ func (c *UserController) GetUser(
         role := v.(string)
         // ...
     }
-    
+
     user, _ := c.svc.Get(ctx, int(userId.Value))
     return httpx.Response[dto.UserResponse]{Body: user}
 }
@@ -269,7 +269,7 @@ func (c *UserController) GetUser(
     userId path.Int,
 ) httpx.Response[dto.UserResponse] {
     user, _ := c.svc.Get(ctx, int(userId.Value))
-    
+
     return httpx.Response[dto.UserResponse]{
         Body: user,  // 200 OK (默认值)
     }
@@ -294,7 +294,7 @@ func (c *UserController) CreateUser(
     req *dto.CreateUserRequest,
 ) httpx.Response[dto.UserResponse] {
     user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    
+
     return httpx.Response[dto.UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
@@ -312,7 +312,7 @@ func (c *UserController) GetUser(
     userId path.Int,
 ) httpx.Response[dto.UserResponse] {
     user, _ := c.svc.Get(ctx, int(userId.Value))
-    
+
     return httpx.Response[dto.UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
@@ -333,7 +333,7 @@ func (c *AuthController) Login(
     req *dto.LoginRequest,
 ) httpx.Response[dto.LoginResponse] {
     token, refreshToken, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
+
     return httpx.Response[dto.LoginResponse]{
         Body: dto.LoginResponse{Success: true},
         Options: httpx.ResponseOptions{
@@ -386,7 +386,7 @@ func (c *AuthController) OAuthCallback(
 ) httpx.Redirect {
     code := q.String("code")
     c.svc.ProcessOAuthCode(ctx, code)
-    
+
     return httpx.Redirect{
         Location: "/dashboard",  // 302 Found (默认值)
     }
@@ -416,7 +416,7 @@ func (c *AuthController) Login(
     req *dto.LoginRequest,
 ) httpx.Redirect {
     token, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
+
     return httpx.Redirect{
         Location: "/dashboard",
         Options: httpx.ResponseOptions{
@@ -494,7 +494,7 @@ func (c *UserController) GetUser(
             },
         }
     }
-    
+
     return httpx.Response[dto.UserResponse]{Body: user}
 }
 ```
@@ -532,7 +532,7 @@ type CreatePostForm struct {
 }
 ```
 
-＃＃＃＃ 控制器
+#### 控制器
 
 ```go
 func (c *PostController) Create(
@@ -565,7 +565,7 @@ curl -X POST http://localhost:8080/posts \
 import "github.com/NARUBROWN/spine/pkg/multipart"
 ```
 
-＃＃＃＃ 控制器
+#### 控制器
 
 ```go
 func (c *FileController) Upload(
@@ -607,7 +607,7 @@ curl -X POST http://localhost:8080/upload \
 
 ### 3. 結合使用Form DTO + Multipart + Query
 
-＃＃＃＃ 控制器
+#### 控制器
 
 ```go
 func (c *PostController) Upload(
@@ -684,10 +684,10 @@ import (
     "context"
     "net/http"
     "time"
-    
+
     "my-app/dto"
     "my-app/service"
-    
+
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
@@ -708,7 +708,7 @@ func (c *UserController) ListUsers(
     page query.Pagination,
 ) httpx.Response[[]dto.UserResponse] {
     users, _ := c.svc.List(ctx, page.Page, page.Size)
-    
+
     return httpx.Response[[]dto.UserResponse]{
         Body: users,
         Options: httpx.ResponseOptions{
@@ -730,7 +730,7 @@ func (c *UserController) GetUser(
             Options: httpx.ResponseOptions{Status: 404},
         }
     }
-    
+
     return httpx.Response[dto.UserResponse]{Body: user}
 }
 
@@ -740,7 +740,7 @@ func (c *UserController) CreateUser(
     req *dto.CreateUserRequest,
 ) httpx.Response[dto.UserResponse] {
     user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    
+
     return httpx.Response[dto.UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
@@ -761,7 +761,7 @@ func (c *UserController) UpdateUser(
             Options: httpx.ResponseOptions{Status: 404},
         }
     }
-    
+
     return httpx.Response[dto.UserResponse]{Body: user}
 }
 
@@ -781,10 +781,10 @@ package controller
 import (
     "context"
     "time"
-    
+
     "my-app/dto"
     "my-app/service"
-    
+
     "github.com/NARUBROWN/spine/pkg/httpx"
 )
 
@@ -802,7 +802,7 @@ func (c *AuthController) Login(
     req *dto.LoginRequest,
 ) httpx.Redirect {
     token, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
+
     return httpx.Redirect{
         Location: "/dashboard",
         Options: httpx.ResponseOptions{
