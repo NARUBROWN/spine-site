@@ -23,7 +23,7 @@ type UserController struct {
 package controller
 
 type UserController struct {
-    svc *service.UserService  // 依赖
+    svc *service.UserService  // 相依
 }
 ```
 
@@ -60,7 +60,7 @@ func (c *UserController) GetUser(
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 ```
 
-## 處理程序簽名
+## 處理程式簽名
 
 Spine 會分析處理器的函式簽章並自動繫結輸入。
 
@@ -82,9 +82,9 @@ Spine 會分析處理器的函式簽章並自動繫結輸入。
 
 |類型 |描述 |
 |------|------|
-| `httpx.Response[T]` | `httpx.Response[T]` JSON 或字符串响应（包括状态代码、标头、cookie）|
-| `httpx.Redirect` | `httpx.Redirect`重定向响应 |
-| `error` | `error`错误响应 |
+| `httpx.Response[T]` | `httpx.Response[T]` JSON 或字符串回應（包括狀態代码、标头、cookie）|
+| `httpx.Redirect` | `httpx.Redirect`重定向回應 |
+| `error` | `error`錯誤回應 |
 
 ## 取得輸入
 
@@ -99,9 +99,9 @@ func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
 ) httpx.Response[dto.UserResponse] {
-    id := q.Int("id", 0)                      // int64, 默认值 0
+    id := q.Int("id", 0)                      // int64, 預設值 0
     name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool, 默认值 false
+    active := q.GetBoolByKey("active", false) // bool, 預設值 false
 
     user, _ := c.svc.Get(ctx, int(id))
     return httpx.Response[dto.UserResponse]{Body: user}
@@ -206,7 +206,7 @@ type Boolean struct {
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *dto.CreateUserRequest,  // ← 声明为指针
+    req *dto.CreateUserRequest,  // ← 宣告為指针
 ) httpx.Response[dto.UserResponse] {
     user, _ := c.svc.Create(ctx, req.Name, req.Email)
     return httpx.Response[dto.UserResponse]{
@@ -271,7 +271,7 @@ func (c *UserController) GetUser(
     user, _ := c.svc.Get(ctx, int(userId.Value))
 
     return httpx.Response[dto.UserResponse]{
-        Body: user,  // 200 OK (默认值)
+        Body: user,  // 200 OK (預設值)
     }
 }
 ```
@@ -388,7 +388,7 @@ func (c *AuthController) OAuthCallback(
     c.svc.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
-        Location: "/dashboard",  // 302 Found (默认值)
+        Location: "/dashboard",  // 302 Found (預設值)
     }
 }
 ```
@@ -457,7 +457,7 @@ func (c *UserController) GetUser(
 ) error {
     _, err := c.svc.Get(ctx, int(userId.Value))
     if err != nil {
-        return httperr.NotFound("找不到用户。")
+        return httperr.NotFound("找不到使用者。")
     }
     return nil
 }
@@ -471,7 +471,9 @@ func (c *UserController) GetUser(
 | `httperr.Unauthorized(msg)` | `httperr.Unauthorized(msg)` 401 | 401
 | `httperr.NotFound(msg)` | `httperr.NotFound(msg)` 404 | 404
 
-錯誤回應格式：```json
+錯誤回應格式：
+
+```json
 {
   "message": "找不到使用者。"
 }
@@ -479,7 +481,7 @@ func (c *UserController) GetUser(
 
 #### 與 httpx.Response[T] 和錯誤一起使用
 
-如果需要錯誤處理，您可以將其作為 `httpx.Response[T]` 中的狀態代碼進行處理，或建立單獨的錯誤處理程序方法。
+如果需要錯誤處理，您可以將其作為 `httpx.Response[T]` 中的狀態代碼進行處理，或建立單獨的錯誤處理程式方法。
 
 ```go
 func (c *UserController) GetUser(
@@ -553,7 +555,7 @@ curl -X POST http://localhost:8080/posts \
   -F "content=spine"
 ```
 
-### 2. Multipart 文件上传示例
+### 2. Multipart 文件上傳範例
 
 文件上傳是作為語義類型處理，而不是 **DTO**。
 

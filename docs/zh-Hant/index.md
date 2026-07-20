@@ -104,7 +104,7 @@ func main() {
 ```go
 // 路線.go
 func RegisterUserRoutes(app spine.App) {
-    // ✅ 路由和處理程序的連接是明確的
+    // ✅ 路由和處理程式的連接是明確的
     // ✅ 一目了然知道哪個方法是哪個路徑
     app.Route("GET", "/users", (*UserController).GetUser)
     app.Route("POST", "/users", (*UserController).CreateUser)
@@ -237,7 +237,7 @@ export class UserRepository {
 ### Application.java
 ```java
 // 應用程式.java
-@SpringBootApplication  // ⚠️ 很难看出内部发生了什么
+@SpringBootApplication  // ⚠️ 很難看出內部發生了什么
 public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
@@ -289,7 +289,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 </div>
 
 <div style="text-align: center; margin-top: 6rem; padding-top: 4rem; border-top: 1px solid var(--vp-c-divider);">
-  <h2 style="border: none; margin-bottom: 2rem;">「不隱藏請求程序的框架」</h2>
+  <h2 style="border: none; margin-bottom: 2rem;">「不隱藏請求程式的框架」</h2>
   <div style="display: flex; gap: 1rem; justify-content: center;">
     <a href="/zh-Hant/learn/tutorial/2-controller" class="VPButton medium brand">開始</a>
     <a href="https://github.com/NARUBROWN/spine" class="VPButton medium alt">GitHub</a>

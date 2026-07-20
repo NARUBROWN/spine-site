@@ -80,7 +80,9 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 }
 ```
 
-回复：```json
+回复：
+
+```json
 {"message": "找不到用户"}
 ```
 ```

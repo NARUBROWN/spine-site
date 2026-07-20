@@ -61,10 +61,10 @@ func main() {
     app := spine.New()
 
     app.Constructor(
-        NewDB,              // 返回 *bun.DB
-        NewUserRepository,  // 需要 *bun.DB → 返回 *UserRepository
-        NewUserService,     // 需要 *UserRepository → 返回 *UserService
-        NewUserController,  // 需要 *UserService → 返回 *UserController
+        NewDB,              // 回傳 *bun.DB
+        NewUserRepository,  // 需要 *bun.DB → 回傳 *UserRepository
+        NewUserService,     // 需要 *UserRepository → 回傳 *UserService
+        NewUserController,  // 需要 *UserService → 回傳 *UserController
     )
 
     if err := app.Run(boot.Options{
@@ -84,7 +84,7 @@ Spine 分析依賴圖並以正確的順序建立實例。
 
 ```
 注册顺序：任意
-执行顺序：DB → Repository → Service → Controller
+執行顺序：DB → Repository → Service → Controller
 ```
 
 ## 任一訂單
@@ -180,11 +180,11 @@ func NewDB() (*bun.DB, error) {
 ```go
 // ❌這將禁用交易
 type UserRepository struct {
-    db *bun.DB  // 无法接收 *bun.Tx
+    db *bun.DB  // 無法接收 *bun.Tx
 }
 ```
 
-### 已解決：使用接口
+### 已解決：使用介面
 
 `bun.IDB` 介面可讓您同時容納兩者。
 
@@ -283,7 +283,7 @@ app.Constructor(NewUserController)
 
 ```go
 // ❌ 難以區分
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 无法区分各自用途
+func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 無法区分各自用途
 
 // ✅ 依包裝類型分類
 type PrimaryDB struct{ *bun.DB }

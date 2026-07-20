@@ -303,7 +303,9 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
         reader: replica.DB,
     }
 }
-```## 错误处理
+```
+
+## 错误处理
 
 ### 循环依赖
 

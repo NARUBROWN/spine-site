@@ -13,16 +13,16 @@ my-app/
 ├── controller/              # 控制器層
 │   └── user_controller.go
 │
-├── service/                 # 服务层（业务逻辑）
+├── service/                 # 服務层（业务逻辑）
 │   └── user_service.go
 │
 ├── repository/              # 儲存庫層（資料存取）
 │   └── user_repository.go
 │
-├── entity/                  # 数据库实体
+├── entity/                  # 資料库实体
 │   └── user.go
 │
-├── dto/                     # 请求/响应对象
+├── dto/                     # 請求/回應對象
 │   ├── user_request.go
 │   └── user_response.go
 │
@@ -33,7 +33,7 @@ my-app/
 │   ├── tx_interceptor.go
 │   └── logging_interceptor.go
 │
-└── migrations/              # 数据库迁移
+└── migrations/              # 資料库遷移
     ├── 001_create_users.up.sql
     └── 001_create_users.down.sql
 ```
@@ -265,7 +265,7 @@ type UserResponse struct {
 
 ### 路線/
 
-在一處管理您的路線。您一眼就能看出哪條路徑連接到哪條處理程序。
+在一處管理您的路線。您一眼就能看出哪條路徑連接到哪條處理程式。
 
 ```go
 // 路線/user_routes.go

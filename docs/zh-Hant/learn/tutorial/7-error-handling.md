@@ -32,12 +32,12 @@ import "github.com/NARUBROWN/spine/pkg/httperr"
 
 func (c *UserController) GetUser(userId path.Int) (User, error) {
     if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("用户 ID 无效")
+        return User{}, httperr.BadRequest("使用者 ID 無效")
     }
 
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("找不到用户")
+        return User{}, httperr.NotFound("找不到使用者")
     }
 
     return user, nil
@@ -56,9 +56,9 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 
 ```go
 type HTTPError struct {
-    Status  int    // HTTP 状态码
-    Message string // 错误消息
-    Cause   error  // 原因错误（可选）
+    Status  int    // HTTP 狀態码
+    Message string // 錯誤消息
+    Cause   error  // 原因錯誤（可选）
 }
 
 func (e *HTTPError) Error() string {
@@ -74,16 +74,18 @@ func (e *HTTPError) Error() string {
 func (c *UserController) GetUser(userId path.Int) (User, error) {
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("找不到用户")
+        return User{}, httperr.NotFound("找不到使用者")
     }
     return user, nil
 }
 ```
 
-回覆:```json
+回覆：
+
+```json
 {"message": "找不到使用者"}
 ```
-```
+```http
 HTTP/1.1 404 Not Found
 ```
 
@@ -152,7 +154,7 @@ flowchart LR
 
 ### 儲存庫
 
-原始錯誤按原樣返回。
+原始錯誤原樣回傳。
 
 ```go
 func (r *UserRepository) FindByID(id int64) (*User, error) {

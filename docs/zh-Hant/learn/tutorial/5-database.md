@@ -72,7 +72,7 @@ func main() {
     app := spine.New()
 
     app.Constructor(
-        NewDB,  // *bun.DB 创建
+        NewDB,  // *bun.DB 建立
         // ...
     )
 
@@ -175,7 +175,7 @@ type User struct {
 
 ## 建立儲存庫
 
-### 使用bun.IDB接口
+### 使用bun.IDB介面
 
 使用 `bun.IDB` 將接受 `*bun.DB` 和 `*bun.Tx`。
 
@@ -383,11 +383,11 @@ go run .
 ```
 myapp/
 ├── main.go
-├── db.go                    # DB 连接
+├── db.go                    # DB 連線
 ├── entity/
 │   └── user.go              # 表映射
 ├── repository/
-│   └── user_repository.go   # 数据访问
+│   └── user_repository.go   # 資料访问
 ├── service/
 │   └── user_service.go
 ├── controller/
@@ -495,7 +495,7 @@ err := r.db.NewSelect().
 | **bun.IDB** |接受 DB 和 Tx 的介面 |
 | **實體** |對應到表格的 Go 結構 |
 | **儲存庫** |資料存取層|
-| **迁移** |使用 SQL 文件进行架构管理 |
+| **遷移** |使用 SQL 文件進行架构管理 |
 
 ## 後續步驟
 

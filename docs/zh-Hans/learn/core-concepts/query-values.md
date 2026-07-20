@@ -2,7 +2,7 @@
 
 显式处理查询参数。
 
-＃＃ 大纲
+## 大纲
 
 `query.Values` 提供所有 HTTP 查询参数的只读视图。 Spine 不会自动将查询参数映射到 DTO。相反，它的设计是让Controller直接通过`query.Values`显式地取出并写入必要的值。
 
@@ -43,10 +43,10 @@ Spine没有采用这种方式。
 ```go
 // Spine 方法：显式提取
 func Search(q query.Values) []User {
-    status := q.String("status")      // 명확한 출처
-    page := q.Int("page", 1)          // 기본값 명시
+    status := q.String("status")      // 来源清晰
+    page := q.Int("page", 1)          // 默认值明确
     
-    if q.Has("premium") {             // 조건부 처리
+    if q.Has("premium") {             // 条件处理
         // ...
     }
 }
@@ -91,7 +91,7 @@ func NewValues(values map[string][]string) Values {
 
 `Values` 是 `map[string][]string` 的包装。每个键可以有多个值（例如`?tag=go&tag=web`）。
 
-＃＃ 方法
+## 方法
 
 ### 获取（键字符串）字符串
 
@@ -122,8 +122,8 @@ q.String("name")  // "john"
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (키 없음 → 기본값)
-q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
+q.Int("offset", 0)  // 0（键不存在 → 默认值）
+q.Int("page", 1)    // 1（如果 page=abc → 默认值）
 ```
 
 ### GetBoolByKey(key string, def bool) bool
@@ -140,8 +140,8 @@ q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (키 없음 → 기본값)
-q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
+q.GetBoolByKey("deleted", false)   // false（键不存在 → 默认值）
+q.GetBoolByKey("active", false)    // false（如果 active=maybe → 默认值）
 ```
 
 ### Has(key string) bool
@@ -152,7 +152,7 @@ q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
 // GET /users?status=active&empty=
 
 q.Has("status")  // true
-q.Has("empty")   // true (값은 비었지만 키는 존재)
+q.Has("empty")   // true（值为空，但键存在）
 q.Has("missing") // false
 ```
 
@@ -171,7 +171,7 @@ func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
 func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
     httpCtx, ok := ctx.(core.HttpRequestContext)
     if !ok {
-        return nil, fmt.Errorf("HTTP 요청 컨텍스트가 아닙니다")
+        return nil, fmt.Errorf("不是 HTTP 请求上下文")
     }
     return query.NewValues(httpCtx.Queries()), nil
 }
@@ -349,7 +349,7 @@ status := q.String("status")
 page := q.Int("page", 1)
 
 // ❌ 自动绑定：来源未知
-func Search(params SearchParams) // status가 query? body? path?
+func Search(params SearchParams) // status 来自 query、body 还是 path？
 ```
 
 ### 2.指定默认值
@@ -361,7 +361,7 @@ size := q.Int("size", 20)
 
 // ❌ struct 标签的默认值被隐藏
 type Params struct {
-    Page int `query:"page" default:"1"`  // 어디서 설정됐는지 추적 어려움
+    Page int `query:"page" default:"1"`  // 难以追踪设置来源
 }
 ```
 
@@ -375,11 +375,11 @@ if q.Has("premium") {
 
 // ❌ 自动绑定无法区分零值和“无值”
 type Params struct {
-    Premium bool `query:"premium"`  // false가 기본값인지 명시적 false인지?
+    Premium bool `query:"premium"`  // false 是默认值还是显式传入的 false？
 }
 ```
 
-＃＃ 概括
+## 概括
 
 |方法|返回类型 |使用|
 |--------|----------|------|

@@ -18,13 +18,13 @@
 ```mermaid
 graph TD
     Request
-    Request --> Pre["PreHandle<br/>- 请求前执行<br/>- 返回错误时中止请求"]
+    Request --> Pre["PreHandle<br/>- 請求前執行<br/>- 回傳錯誤時中止請求"]
 
-    Pre --> Controller["Controller.Method()<br/>- 执行业务逻辑"]
+    Pre --> Controller["Controller.Method()<br/>- 執行业务逻辑"]
 
     Controller -- 成功 --> Post["PostHandle<br/>- 請求成功時執行<br/>- 發生錯誤時跳過"]
 
-    Post --> After["AfterCompletion<br/>- 始终执行（与成功或失败无关）<br/>- 清理资源、提交或回滚事务"]
+    Post --> After["AfterCompletion<br/>- 始终執行（與成功或失败無关）<br/>- 清理资源、提交或回滚事务"]
 
     Controller -- 錯誤 --> After
 
@@ -41,7 +41,7 @@ type Interceptor interface {
 }
 ```
 
-|方法|何時跑步 |返回 |使用 |
+|方法|何時執行 |回傳 |使用 |
 |--------|----------|------|-----|
 | `PreHandle` | `PreHandle`運行控制器之前 | `error` | `error`認證、驗證、交易啟動 |
 | `PostHandle` | `PostHandle`控制器成功後 |無 |回應處理 |
@@ -144,12 +144,12 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     token := ctx.Header("Authorization")
 
     if token == "" {
-        return httperr.Unauthorized("需要认证.")
+        return httperr.Unauthorized("需要認證.")
     }
 
     user, err := validateToken(token)
     if err != nil {
-        return httperr.Unauthorized("令牌无效.")
+        return httperr.Unauthorized("令牌無效.")
     }
 
     ctx.Set("currentUser", user)
@@ -273,8 +273,8 @@ func main() {
 ```go
 // 全域攔截器
 app.Interceptor(
-    &interceptor.LoggingInterceptor{},   // 全局 1
-    &interceptor.CORSInterceptor{},      // 全局 2
+    &interceptor.LoggingInterceptor{},   // 全域 1
+    &interceptor.CORSInterceptor{},      // 全域 2
 )
 
 // 路由攔截器
@@ -291,19 +291,19 @@ app.Route(
 ```
 Request (GET /users/1)
    │
-   ├─→ Logging.PreHandle     (全局 1)
-   ├─→ CORS.PreHandle        (全局 2)
+   ├─→ Logging.PreHandle     (全域 1)
+   ├─→ CORS.PreHandle        (全域 2)
    ├─→ Auth.PreHandle        (路由 1)
    │
    ├─→ UserController.GetUser
    │
    ├─→ Auth.PostHandle       (路由 1)
-   ├─→ CORS.PostHandle       (全局 2)
-   ├─→ Logging.PostHandle    (全局 1)
+   ├─→ CORS.PostHandle       (全域 2)
+   ├─→ Logging.PostHandle    (全域 1)
    │
    ├─→ Auth.AfterCompletion       (路由 1)
-   ├─→ CORS.AfterCompletion       (全局 2)
-   └─→ Logging.AfterCompletion    (全局 1)
+   ├─→ CORS.AfterCompletion       (全域 2)
+   └─→ Logging.AfterCompletion    (全域 1)
 
 Response
 ```
@@ -322,18 +322,18 @@ Response
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     if token == "" {
-        return httperr.Unauthorized("需要认证.")
+        return httperr.Unauthorized("需要認證.")
     }
     return nil
 }
 ```
 
 ```
-Request (GET /users/1, 没有令牌)
+Request (GET /users/1, 沒有令牌)
    │
    ├─→ Logging.PreHandle     ✓
    ├─→ CORS.PreHandle        ✓
-   ├─→ Auth.PreHandle        ✗ (返回错误)
+   ├─→ Auth.PreHandle        ✗ (回傳錯誤)
    │
    ├─→ Auth.AfterCompletion
    ├─→ CORS.AfterCompletion
@@ -381,12 +381,12 @@ func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handle
 
 ## 處理程式元數據
 
-有關要執行的處理程序的元資訊。
+有關要執行的處理程式的元資訊。
 
 |領域 |類型 |描述 |
 |------|------|------|
 | `ControllerType` | `ControllerType` `reflect.Type` | `reflect.Type`控制器類型 |
-| `Method` | `Method` `reflect.Method` | `reflect.Method`處理程序方法 |
+| `Method` | `Method` `reflect.Method` | `reflect.Method`處理程式方法 |
 | `Interceptors` | `Interceptors` `[]Interceptor` | `[]Interceptor`攔截器綁定到路由 |
 
 ### 用法範例
@@ -457,7 +457,7 @@ app.Constructor(
 )
 
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),  // 按类型引用
+    (*interceptor.TxInterceptor)(nil),  // 按型別引用
 )
 ```
 
@@ -473,7 +473,7 @@ app.Route(
     "POST",
     "/orders",
     (*OrderController).CreateOrder,
-    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 按类型引用
+    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 按型別引用
 )
 ```
 
@@ -489,7 +489,7 @@ app.Route(
 ```go
 app.Interceptor(
     &interceptor.LoggingInterceptor{},      // 实例
-    (*interceptor.TxInterceptor)(nil),      // 类型引用
+    (*interceptor.TxInterceptor)(nil),      // 型別引用
 )
 ```
 
@@ -507,7 +507,7 @@ app.Route(
     (*UserController).GetUser,
     route.WithInterceptors(
         &interceptor.AuthInterceptor{},         // 实例
-        (*interceptor.TxInterceptor)(nil),      // 类型引用
+        (*interceptor.TxInterceptor)(nil),      // 型別引用
     ),
 )
 ```

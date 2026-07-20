@@ -471,7 +471,9 @@ func (c *UserController) GetUser(
 | `httperr.Unauthorized(msg)` | `httperr.Unauthorized(msg)` 401 | 401
 | `httperr.NotFound(msg)` | `httperr.NotFound(msg)` 404 | 404
 
-错误响应格式：```json
+错误响应格式：
+
+```json
 {
   "message": "找不到用户。"
 }

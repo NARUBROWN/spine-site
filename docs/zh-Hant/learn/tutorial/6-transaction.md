@@ -9,7 +9,7 @@ Spine 在基於攔截器的基礎上管理事務。
 ```
 Request
    │
-   ├─→ TxInterceptor.PreHandle      // 开始事务
+   ├─→ TxInterceptor.PreHandle      // 開始事务
    │
    ├─→ Controller → Service → Repository
    │
@@ -355,7 +355,7 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     v, ok := ctx.Get("tx")
     if !ok {
-        return  // 没有事务时跳过
+        return  // 沒有事务時跳过
     }
 
     tx := v.(*bun.Tx)

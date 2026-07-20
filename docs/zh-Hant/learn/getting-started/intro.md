@@ -43,7 +43,7 @@ Spring Boot 中為 `@Autowired`，NestJS 中為 `@Injectable`。
 - **沒有模組定義** - DI 只需透過註冊建構函式即可解決
 - **無代理** — 堆疊追蹤非常直觀
 
-阅读代码即可看到执行流程。
+阅读代码即可看到執行流程。
 
 ### 熟悉的結構
 
@@ -54,7 +54,7 @@ Controller → Service → Repository
 ```
 
 建構函式注入、攔截器鏈和分層架構。
-将熟悉的模式带入 Go。
+將熟悉的模式带入 Go。
 
 ### Go 中的效能
 
@@ -82,8 +82,8 @@ app.Constructor(NewUserRepository, NewUserService, NewUserController)
 
 ```go
 app.Interceptor(
-    &TxInterceptor{},      // 1. 开始事务
-    &AuthInterceptor{},    // 2. 检查认证
+    &TxInterceptor{},      // 1. 開始事务
+    &AuthInterceptor{},    // 2. 检查認證
     &LoggingInterceptor{}, // 3. 日志记录
 )
 
@@ -109,13 +109,13 @@ func RegisterUserRoutes(app spine.App) {
 }
 ```
 
-### 4. 類型安全處理程序
+### 4. 類型安全處理程式
 
 ```go
 // 函數簽名是API規範
 func (c *UserController) GetUser(
     ctx context.Context,      // 上下文
-    q query.Values,           // 查询参数
+    q query.Values,           // 查詢參數
 ) (httpx.Response[UserResponse], error) {     // 回應型別
     user, err := c.svc.Get(ctx, q.Int("id", 0))
     if err != nil {

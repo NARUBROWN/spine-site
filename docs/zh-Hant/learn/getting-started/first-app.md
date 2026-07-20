@@ -140,7 +140,7 @@ func NewUserController(svc *service.UserService) *UserController {
     return &UserController{svc: svc}
 }
 
-// GetUser 使用者尋找處理程序
+// GetUser 使用者尋找處理程式
 // 函數簽名是API規範
 func (c *UserController) GetUser(
     ctx context.Context,
