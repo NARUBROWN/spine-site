@@ -9,10 +9,10 @@ Spineに貢献したい機能や改善点がある場合は、次の手順に従
 
 ```mermaid
 flowchart TD
-    A[1. Issue 生成<br/>機能提案またはバグ報告] --> B[2. Maintainer 검토<br/>フィードバックと議論]
-    B --> C{3. Issue 승인}
-    C -->|승인| D[4. 機能実装<br/>Fork → Branch → Commit]
-    C -->|반려| A
+    A[1. Issue作成<br/>機能提案またはバグ報告] --> B[2. Maintainerレビュー<br/>フィードバックと議論]
+    B --> C{3. Issue承認}
+    C -->|承認| D[4. 機能実装<br/>Fork → Branch → Commit]
+    C -->|却下| A
     D --> E[5. Pull Request<br/>コードレビューとマージ]
     E --> F[マージ完了]
 ```

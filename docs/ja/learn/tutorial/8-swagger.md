@@ -16,7 +16,7 @@ Spineは[Swaggo]（https://github.com/swaggo/swag）を使用してSwagger文書
 
 
 ```bash
-# Swag CLI 설치
+# Swag CLIをインストール
 go install github.com/swaggo/swag/cmd/swag@latest
 
 # 必要なパッケージをインストール
@@ -52,7 +52,7 @@ import (
 
 // @title My App API
 // @version 1.0.0
-// @description Spine 기반 REST API
+// @description SpineベースのREST API
 
 // @host localhost:8080
 // @BasePath /
@@ -88,7 +88,7 @@ func main() {
 |------|------|------|
 | `@title` | APIタイトル| `My App API` |
 | `@version` | APIバージョン| `1.0.0` |
-| `@description` | APIの説明| `Spine 기반 REST API` |
+| `@description` | APIの説明 | `SpineベースのREST API` |
 | `@host` |ホストアドレス| `localhost:8080` |
 | `@BasePath` |基本パス| `/` |
 
@@ -121,7 +121,7 @@ func NewUserController(svc *service.UserService) *UserController {
 
 // GetUser godoc
 // @Summary ユーザー 参照
-// @Description ID로 ユーザー 情報를 参照합니다
+// @Description IDでユーザー情報を参照します
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200 {object} dto.UserResponse
@@ -135,7 +135,7 @@ func (c *UserController) GetUser(
 
     user, err := c.svc.Get(ctx, id)
     if err != nil {
-        return httpx.Response[dto.UserResponse]{}, httperr.NotFound("ユーザー를 見つかりません.")
+        return httpx.Response[dto.UserResponse]{}, httperr.NotFound("ユーザーが見つかりません")
     }
 
     return httpx.Response[dto.UserResponse]{Body: user}, nil
@@ -149,7 +149,7 @@ func (c *UserController) GetUser(
 ```go
 // GetUser godoc
 // @Summary ユーザー 参照
-// @Description ID로 ユーザー 情報를 参照합니다
+// @Description IDでユーザー情報を参照します
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200 {object} dto.UserResponse
@@ -164,7 +164,7 @@ func (c *UserController) GetUser(
 
 // CreateUser godoc
 // @Summary ユーザー 生成
-// @Description 새로운 ユーザー를 生成합니다
+// @Description 新しいユーザーを作成します
 // @Tags users
 // @Accept json
 // @Produce json
@@ -180,13 +180,13 @@ func (c *UserController) CreateUser(
 }
 
 // UpdateUser godoc
-// @Summary ユーザー 수정
-// @Description ユーザー 情報를 수정합니다
+// @Summary ユーザー更新
+// @Description ユーザー情報を更新します
 // @Tags users
 // @Accept json
 // @Produce json
 // @Param id query int true "User ID"
-// @Param body body dto.UpdateUserRequest true "ユーザー 수정 リクエスト"
+// @Param body body dto.UpdateUserRequest true "ユーザー更新リクエスト"
 // @Success 200 {object} dto.UserResponse
 // @Failure 404 {object} ErrorResponse
 // @Router /users [put]
@@ -199,8 +199,8 @@ func (c *UserController) UpdateUser(
 }
 
 // DeleteUser godoc
-// @Summary ユーザー 삭제
-// @Description ユーザー를 삭제합니다
+// @Summary ユーザー削除
+// @Description ユーザーを削除します
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200
@@ -242,7 +242,7 @@ func (c *UserController) DeleteUser(
 
 ## @Param形式
 ```
-@Param [名前] [位置] [型] [必須 여부] "[説明]"
+@Param [名前] [位置] [型] [必須] "[説明]"
 ```
 
 ### 位置(in)
@@ -279,7 +279,7 @@ func (c *UserController) DeleteUser(
 // @Param body body dto.CreateUserRequest true "ユーザー 生成 リクエスト"
 
 // ヘッダー
-// @Param Authorization header string true "Bearer 토큰"
+// @Param Authorization header string true "Bearerトークン"
 ```
 
 
@@ -298,7 +298,7 @@ type CreateUserRequest struct {
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// UpdateUserRequest ユーザー 수정 リクエスト
+// UpdateUserRequest ユーザー更新リクエスト
 type UpdateUserRequest struct {
     Name  string `json:"name" example:"Alice Updated"`
     Email string `json:"email" example:"alice.new@example.com"`
@@ -321,7 +321,7 @@ type UserResponse struct {
 
 // ErrorResponse エラー レスポンス
 type ErrorResponse struct {
-    Error string `json:"error" example:"ユーザー를 見つかりません."`
+    Error string `json:"error" example:"ユーザーが見つかりません"`
 }
 ```
 
@@ -342,10 +342,10 @@ type ErrorResponse struct {
 
 
 ```bash
-# 프로젝트 루트에서 実行
+# プロジェクトルートで実行
 swag init
 
-# 또는 main.go 경로 지정
+# またはmain.goのパスを指定
 swag init -g main.go
 ```
 
@@ -354,9 +354,9 @@ swag init -g main.go
 ```
 myapp/
 ├── docs/
-│   ├── docs.go       # Go 코드
-│   ├── swagger.json  # JSON 스펙
-│   └── swagger.yaml  # YAML 스펙
+│   ├── docs.go       # Goコード
+│   ├── swagger.json  # JSON仕様
+│   └── swagger.yaml  # YAML仕様
 ├── main.go
 └── ...
 ```
@@ -382,7 +382,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
     Version:     "1.0.0",
     Title:       "My App API",
-    Description: "Spine 기반 REST API",
+    Description: "SpineベースのREST API",
     // ...
 }
 
@@ -494,7 +494,7 @@ import (
 
 // @title My App API
 // @version 1.0.0
-// @description Spine 기반 REST API
+// @description SpineベースのREST API
 
 // @host localhost:8080
 // @BasePath /
@@ -552,7 +552,7 @@ func NewUserController(svc *service.UserService) *UserController {
 
 // GetUser godoc
 // @Summary ユーザー 参照
-// @Description ID로 ユーザー 情報를 参照합니다
+// @Description IDでユーザー情報を参照します
 // @Tags users
 // @Param id query int true "User ID"
 // @Success 200 {object} dto.UserResponse
@@ -566,7 +566,7 @@ func (c *UserController) GetUser(
 
     user, err := c.svc.Get(ctx, id)
     if err != nil {
-        return dto.UserResponse{}, httperr.NotFound("ユーザー를 見つかりません.")
+        return dto.UserResponse{}, httperr.NotFound("ユーザーが見つかりません")
     }
 
     return user, nil
@@ -574,7 +574,7 @@ func (c *UserController) GetUser(
 
 // CreateUser godoc
 // @Summary ユーザー 生成
-// @Description 새로운 ユーザー를 生成합니다
+// @Description 新しいユーザーを作成します
 // @Tags users
 // @Accept json
 // @Produce json

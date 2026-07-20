@@ -45,7 +45,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     
     user, err := i.auth.Validate(token)
     if err != nil {
-        return httperr.Unauthorized("無効な 토큰입니다")
+        return httperr.Unauthorized("無効なトークンです")
     }
     
     ctx.Set("auth.user", user)
@@ -158,13 +158,13 @@ Route.PreHandle()
     ↓
   [PostExecutionHook]
     ↓
-Route.PostHandle()        ← 역순
+Route.PostHandle()        ← 逆順
     ↓
-Global.PostHandle()       ← 역순
+Global.PostHandle()       ← 逆順
     ↓
-Route.AfterCompletion()   ← 역순, 항상 実行
+Route.AfterCompletion()   ← 逆順、常に実行
     ↓
-Global.AfterCompletion()  ← 역순, 항상 実行
+Global.AfterCompletion()  ← 逆順、常に実行
 ```
 ### ルートインターセプタで中断
 ```
@@ -286,7 +286,7 @@ func (i *TimingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core
 ### 認証インターセプタ(ルートレベル)
 ```go
 type AuthInterceptor struct {
-    auth *AuthService  // Container에서 주입
+    auth *AuthService  // Container から注入
 }
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
@@ -297,7 +297,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     
     user, err := i.auth.Validate(token)
     if err != nil {
-        return httperr.Unauthorized("無効な 토큰입니다")
+        return httperr.Unauthorized("無効なトークンです")
     }
     
     ctx.Set("auth.user", user)

@@ -41,10 +41,11 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 ```
 
 ## httperr関数
-|機能|ステータスコード|用途||------|----------|------|
-| `httperr.BadRequest(msg)` | 400 |無効な要求、入力検証に失敗しました。
-| `httperr.Unauthorized(msg)` | 401 |認証が必要、トークン無効
-| `httperr.NotFound(msg)` | 404 |リソースなし
+| 機能 | ステータスコード | 用途 |
+|------|------------------|------|
+| `httperr.BadRequest(msg)` | 400 | 無効なリクエスト、入力検証失敗 |
+| `httperr.Unauthorized(msg)` | 401 | 認証が必要、またはトークンが無効 |
+| `httperr.NotFound(msg)` | 404 | リソースが存在しない |
 ## HTTPError構造体
 
 ```go
@@ -76,7 +77,8 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 ```json
 {"message": "ユーザーが見つかりません"}
 ```
-```
+
+```http
 HTTP/1.1 404 Not Found
 ```
 
@@ -85,9 +87,11 @@ HTTP/1.1 404 Not Found
 ```go
 func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
     if req.Name == "" {
-return User{}, httperr.BadRequest("名前は必須")    }
+        return User{}, httperr.BadRequest("名前は必須")
+    }
     if req.Email == "" {
-return User{}, httperr.BadRequest("メールは必須")    }
+        return User{}, httperr.BadRequest("メールは必須")
+    }
     
     return c.service.Create(req)
 }
@@ -100,10 +104,12 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     token := ctx.Header("Authorization")
     
     if token == "" {
-return httperr.Unauthorized("認証が必要です")    }
+        return httperr.Unauthorized("認証が必要です")
+    }
     
     if !isValidToken(token) {
-return httperr.Unauthorized("無効なトークンです")    }
+        return httperr.Unauthorized("無効なトークンです")
+    }
     
     return nil
 }
@@ -145,7 +151,8 @@ A[Repository<br/>原本エラー] --> B[Service<br/>ビジネスエラー]
 func (r *UserRepository) FindByID(id int64) (*User, error) {
     user, ok := r.users[id]
     if !ok {
-return nil, ErrUserNotFound // 元のエラー    }
+        return nil, ErrUserNotFound // 元のエラー
+    }
     return user, nil
 }
 
@@ -160,7 +167,8 @@ var ErrUserNotFound = errors.New("user not found")
 func (s *UserService) GetUser(id int64) (*User, error) {
     user, err := s.repo.FindByID(id)
     if err != nil {
-return nil, err // エラー転送    }
+        return nil, err // エラーをそのまま転送
+    }
     return user, nil
 }
 ```
@@ -181,8 +189,10 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
-return httperr.NotFound("ユーザーが見つかりません")    case errors.Is(err, repository.ErrEmailAlreadyExists):
-return httperr.BadRequest("既に使用中のメールです")    default:
+        return httperr.NotFound("ユーザーが見つかりません")
+    case errors.Is(err, repository.ErrEmailAlreadyExists):
+        return httperr.BadRequest("既に使用中のメールです")
+    default:
         return httperr.BadRequest(err.Error())
     }
 }
@@ -199,11 +209,14 @@ type CreateUserRequest struct {
 
 func (r *CreateUserRequest) Validate() error {
     if r.Name == "" {
-return errors.New("名前は必須")    }
+        return errors.New("名前は必須")
+    }
     if len(r.Name) > 100 {
-return errors.New("名前は 100 文字以下でなければなりません")    }
+        return errors.New("名前は100文字以下でなければなりません")
+    }
     if r.Email == "" {
-return errors.New("メールは必須")    }
+        return errors.New("メールは必須")
+    }
     return nil
 }
 ```
@@ -228,11 +241,13 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     token := ctx.Header("Authorization")
     
     if token == "" {
-return httperr.Unauthorized("認証トークンが必要です")    }
+        return httperr.Unauthorized("認証トークンが必要です")
+    }
     
     user, err := i.auth.Validate(token)
     if err != nil {
-return httperr.Unauthorized("無効なトークンです")    }
+        return httperr.Unauthorized("無効なトークンです")
+    }
     
     ctx.Set("auth.user", user)
     return nil
@@ -243,8 +258,9 @@ return httperr.Unauthorized("無効なトークンです")    }
 ```mermaid
 flowchart TD
     A[Request] --> B[AuthInterceptor.PreHandle]
-B -->|tokenなし| C[401 Unauthorized]
-    B -->|token有効| D[Controller実行]    D --> E[Response]
+    B -->|トークンなし| C[401 Unauthorized]
+    B -->|トークン有効| D[Controller実行]
+    D --> E[Response]
 ```
 
 ## エラーロギング
@@ -262,18 +278,23 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 非`httperr.HTTPError`ではない通常の`error`は、500ステータスコードとして扱われます。
 
 ```go
-// httperr.HTTPError → 指定されたステータスコードreturn httperr.NotFound("...")  // → 404
+// httperr.HTTPError → 指定されたステータスコード
+return httperr.NotFound("...")  // → 404
 
-//一般エラー→500return errors.New("something went wrong")  // → 500
+// 一般エラー → 500
+return errors.New("something went wrong")  // → 500
 ```
 
 ## コアクリーンアップ
-|階層役割||------|------|
-|リポジトリ|元のエラーを返す
-|サービス|ビジネスロジック処理、エラー転送
-| Controller | HTTPエラーに変換|
-|インターセプター共通エラー処理（認証、ロギング）|
-| httperr関数|ステータスコード||--------------|----------|
+| 階層・役割 | 説明 |
+|------------|------|
+| リポジトリ | 元のエラーを返す |
+| サービス | ビジネスロジックを処理し、エラーを転送 |
+| コントローラ | HTTPエラーに変換 |
+| インターセプタ | 共通エラー処理（認証、ロギング） |
+
+| httperr関数 | ステータスコード |
+|--------------|------------------|
 | `BadRequest` | 400 |
 | `Unauthorized` | 401 |
 | `NotFound` | 404 |

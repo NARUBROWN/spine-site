@@ -17,7 +17,7 @@ graph TD
     
     HTTPError -- ErrorReturnHandler --> Response
     
-    Response["HTTP Response<br/>Status: 404 Not Found<br/>Body: {'message': 'ユーザー를 ...'}"]
+    Response["HTTP Response<br/>Status: 404 Not Found<br/>Body: {'message': 'ユーザーを ...'}"]
 ```
 
 
@@ -75,7 +75,7 @@ type HTTPError struct {
     Cause   error  // 原因エラー（任意）
 }
 
-// error 인터페이스 구현
+// error インターフェース 実装
 func (e *HTTPError) Error() string {
     return e.Message
 }
@@ -96,7 +96,7 @@ func (e *HTTPError) Error() string {
 
 ```go
 func (c *UserController) GetUser(userId path.Int) (User, error) {
-    // httperr.NotFound()는 error 型을 반환
+    // httperr.NotFound()は error 型を 返却
     return User{}, httperr.NotFound("ユーザーが見つかりません")
 }
 ```
@@ -176,7 +176,7 @@ func InternalServerError(msg string) error {
 ```go
 result, err := c.externalService.Call()
 if err != nil {
-    return Result{}, httperr.InternalServerError("외부 서비스 呼び出し에 失敗했습니다")
+    return Result{}, httperr.InternalServerError("外部サービス 呼び出しに 失敗しました")
 }
 ```
 
@@ -198,23 +198,23 @@ func (h *ErrorReturnHandler) Supports(returnType reflect.Type) bool {
 func (h *ErrorReturnHandler) Handle(value any, ctx core.ExecutionContext) error {
     rwAny, ok := ctx.Get("spine.response_writer")
     if !ok {
-        return fmt.Errorf("ExecutionContext 内で ResponseWriter를 見つかりません.")
+        return fmt.Errorf("ExecutionContext 内で ResponseWriterを 見つかりません.")
     }
     
     rw, ok := rwAny.(core.ResponseWriter)
     if !ok {
-        return fmt.Errorf("ResponseWriter 型이 올바르지 しません.")
+        return fmt.Errorf("ResponseWriter 型が正しくありません.")
     }
     
     err, ok := value.(error)
     if !ok {
-        return fmt.Errorf("ErrorReturnHandler는 error 型만 処理할 수 있습니다: %T", value)
+        return fmt.Errorf("ErrorReturnHandlerは error 型のみ処理できます: %T", value)
     }
     
     status := 500
     message := err.Error()
     
-    // HTTPError면 ステータスコードを抽出
+    // HTTPErrorなら ステータスコードを抽出
     var httpErr *httperr.HTTPError
     if errors.As(err, &httpErr) {
         status = httpErr.Status
@@ -239,7 +239,7 @@ func (h *ErrorReturnHandler) Handle(value any, ctx core.ExecutionContext) error 
 
 
 ```go
-// HTTPError → 지정된 상태 코드
+// HTTPError → 指定された ステータスコード
 return httperr.NotFound("...")  // → 404
 
 // 通常のerror → 500 Internal Server Error
@@ -273,11 +273,11 @@ func (c *UserController) GetUser(userId path.Int) (User, error) {
 GET /users/-1
 → 400 {"message": "無効なユーザーIDです"}
 
-# 존재하지 않는 ユーザー
+# 存在しないは ユーザー
 GET /users/999
 → 404 {"message": "ユーザーが見つかりません"}
 
-# 정상
+# 正常
 GET /users/123
 → 200 {"id": 123, "name": "john"}
 ```
@@ -289,11 +289,11 @@ GET /users/123
 func (c *OrderController) GetOrder(orderId path.Int) (Order, error) {
     order, err := c.repo.FindByID(orderId.Value)
     if err != nil {
-        return Order{}, httperr.NotFound("주문을 見つかりません")
+        return Order{}, httperr.NotFound("注文を 見つかりません")
     }
     
     if !c.auth.CanAccess(order.UserID) {
-        return Order{}, httperr.Unauthorized("접근 권한이 ありません")
+        return Order{}, httperr.Unauthorized("アクセス 権限が ありません")
     }
     
     return order, nil
@@ -306,20 +306,20 @@ func (c *OrderController) GetOrder(orderId path.Int) (Order, error) {
 ```go
 func (c *PaymentController) Process(req PaymentRequest) (Receipt, error) {
     if req.Amount <= 0 {
-        return Receipt{}, httperr.BadRequest("결제 금액은 0보다 커야 합니다")
+        return Receipt{}, httperr.BadRequest("決済金額は0より大きくする必要があります")
     }
     
     if req.Amount > 10000000 {
-        return Receipt{}, httperr.BadRequest("1회 결제 한도를 초과했습니다")
+        return Receipt{}, httperr.BadRequest("1回の決済上限を超えました")
     }
     
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return Receipt{}, httperr.NotFound("지갑을 見つかりません")
+        return Receipt{}, httperr.NotFound("ウォレットを 見つかりません")
     }
     
     if balance < req.Amount {
-        return Receipt{}, httperr.BadRequest("잔액이 부족합니다")
+        return Receipt{}, httperr.BadRequest("残高が不足しています")
     }
     
     return c.processPayment(req)
@@ -339,10 +339,10 @@ func (c *UserController) DeleteUser(userId path.Int) error {
     }
     
     if err := c.repo.Delete(userId.Value); err != nil {
-        return httperr.BadRequest("삭제할 수 ありません")
+        return httperr.BadRequest("削除でき ありません")
     }
     
-    return nil  // 성공 시 nil 반환
+    return nil  // 成功 時 nil 返却
 }
 ```
 
@@ -355,7 +355,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
 
 
 ```go
-// 직접 HTTPError 生成
+// 直接 HTTPError 生成
 func Forbidden(msg string) error {
     return &httperr.HTTPError{Status: 403, Message: msg}
 }
@@ -387,7 +387,7 @@ func WithCause(status int, msg string, cause error) error {
     }
 }
 
-// 사용
+// 使用
 user, err := c.repo.FindByID(id)
 if err != nil {
     return User{}, WithCause(404, "ユーザーが見つかりません", err)
@@ -429,8 +429,8 @@ Controller
 │                                     │
 │  results = [User{}, *HTTPError]     │
 │                                     │
-│  1. isNilResult() 체크              │
-│  2. error 型 우선 탐색             │
+│  1. isNilResult() チェック              │
+│  2. error 型 優先 検索             │
 │  3. ErrorReturnHandler.Handle()     │
 │     → rw.WriteJSON(404, {...})      │
 └─────────────────────────────────────┘
@@ -444,7 +444,7 @@ Controller
 ```go
 // internal/pipeline/pipeline.go
 func (p *Pipeline) handleReturn(ctx core.ExecutionContext, results []any) error {
-    // error가 있으면 error만 処理하고 종료
+    // errorがあればerrorだけ処理して終了
     for _, result := range results {
         if isNilResult(result) {
             continue
@@ -456,24 +456,24 @@ func (p *Pipeline) handleReturn(ctx core.ExecutionContext, results []any) error 
                     if err := h.Handle(result, ctx); err != nil {
                         return err
                     }
-                    // error 반환값은 여기서 소비하고 종료한다.
+                    // error 返却値は ここで 消費して終了する.
                     return nil
                 }
             }
             return fmt.Errorf(
-                "error 반환값을 処理할 ReturnValueHandler가 ありません. (%s)",
+                "error 返却値を 処理する ReturnValueHandlerが ありません. (%s)",
                 resultType.String(),
             )
         }
     }
     
-    // error가 없으면 最初の non-nil 값 処理
+    // errorが なければ 最初の non-nil 値 処理
     for _, result := range results {
         if isNilResult(result) {
             continue
         }
         resultType := reflect.TypeOf(result)
-        // ...ReturnValueHandler로 処理
+        // ...ReturnValueHandlerに 処理
     }
     return nil
 }
@@ -503,7 +503,7 @@ func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
         return
     }
     
-    // 이미 レスポンス이 커밋된 경우 이중 レスポンス 방지
+    // すでに レスポンスがコミットされた 場合 二重 レスポンス 防止
     if rw.IsCommitted() {
         return
     }
@@ -527,18 +527,18 @@ func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
 ```
 Pipeline.Execute()
      │
-     ├── handleReturn() 에서 error 処理 성공
-     │   └── ErrorReturnHandler가 レスポンス 작성 → 종료
+     ├── handleReturn() で error 処理 成功
+     │   └── ErrorReturnHandlerが レスポンス 作成 → 終了
      │
-     ├── handleReturn() 자체가 error 반환
-     │   └── handleExecutionError() → 안전망 レスポンス
+     ├── handleReturn() 自体が error 返却
+     │   └── handleExecutionError() → セーフティネット レスポンス
      │
-     ├── Router/Resolver/Invoker 에서 error 발생
-     │   └── handleExecutionError() → 안전망 レスポンス
+     ├── Router/Resolver/Invoker で error 発生
+     │   └── handleExecutionError() → セーフティネット レスポンス
      │
-     └── handleExecutionError() 조건 분기
-         ├── rw.IsCommitted() → 스킵 (이중 レスポンス 방지)
-         ├── HTTPError → 지정된 상태 코드로 レスポンス
+     └── handleExecutionError() 条件分岐
+         ├── rw.IsCommitted() → スキップ (二重 レスポンス 防止)
+         ├── HTTPError → 指定された ステータスコードに レスポンス
          └── 通常のerror → 500 "Internal server error"
 ```
 
@@ -556,9 +556,9 @@ Pipeline.Execute()
 // internal/router/router.go
 func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
     for _, route := range r.routes {
-        // ...매칭 시도
+        // ...マッチングを試行
     }
-    return core.HandlerMeta{}, httperr.NotFound("핸들러가 ありません.")
+    return core.HandlerMeta{}, httperr.NotFound("ハンドラーが ありません.")
 }
 ```
 
@@ -571,10 +571,10 @@ func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, erro
 
 
 ```go
-// ✓ 意味만 표현
+// ✓ 意味だけ 表現
 return httperr.NotFound("ユーザーが見つかりません")
 
-// ❌ HTTP 직접 조작
+// ❌ HTTP 直接 操作
 return ctx.JSON(404, ...)
 ```
 
@@ -582,14 +582,14 @@ return ctx.JSON(404, ...)
 
 
 ```go
-// ✓ 함수 名前이 意味를 표현
+// ✓ 関数名は 意味を 表現
 httperr.BadRequest(...)
 httperr.Unauthorized(...)
 httperr.NotFound(...)
 httperr.InternalServerError(...)
 
-// ❌ 숫자 코드 직접 사용
-return &HTTPError{Status: 404, ...}  // 가능하지만 권장하지 않음
+// ❌ 数値 コード 直接 使用
+return &HTTPError{Status: 404, ...}  // 可能ですがだけ 推奨し しない
 ```
 
 ### 3. エラーも戻り値
@@ -598,7 +598,7 @@ Goの慣例通り、エラーを戻り値として処理します。例外を投
 
 
 ```go
-// ✓ 明示적 반환
+// ✓ 明示的 返却
 func GetUser(id path.Int) (User, error) {
     if ... {
         return User{}, httperr.NotFound(...)
@@ -606,7 +606,7 @@ func GetUser(id path.Int) (User, error) {
     return user, nil
 }
 
-// ❌ panic (Spine은 이 方式을 사용하지 않음)
+// ❌ panic (Spineは は 方式を 使用し しない)
 func GetUser(id path.Int) User {
     if ... {
         panic(httperr.NotFound(...))

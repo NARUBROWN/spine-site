@@ -51,12 +51,12 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
         return err
     }
 
-    // ExecutionContext에 保存
+    // ExecutionContextに保存
     ctx.Set("tx", tx)
     return nil
 }
 
-// PostHandle — 아무것도 안 함
+// PostHandle — 何もしない
 func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
 // AfterCompletion — コミットまたはロールバック
@@ -71,7 +71,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    // エラー 여부에 따라 롤백/커밋
+    // エラーに応じてロールバックまたはコミット
     if err != nil {
         _ = tx.Rollback()
     } else {
@@ -96,7 +96,7 @@ func main() {
         controller.NewUserController,
     )
 
-    // 2. 인터셉터 登録 (型 참조)
+    // 2. インターセプタを登録（型参照）
     app.Interceptor(
         (*interceptor.TxInterceptor)(nil),
     )
@@ -116,7 +116,7 @@ func main() {
 ### 問題
 
 ```go
-// ❌ *bun.DB만 받으면 トランザクション 사용 불가
+// ❌ *bun.DBだけを受け取るとトランザクションを使用できない
 type UserRepository struct {
     db *bun.DB
 }
@@ -125,7 +125,7 @@ type UserRepository struct {
 ### 解決
 
 ```go
-// ✅ bun.IDB는 *bun.DB와 *bun.Tx 모두 구현
+// ✅ bun.IDBは*bun.DBと*bun.Txの両方が実装
 type UserRepository struct {
     db bun.IDB
 }
@@ -136,7 +136,8 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 ```
 
 ### bun.IDBとは？
-|タイプ| bun.IDB実装||------|-------------|
+| タイプ | bun.IDBの実装 |
+|--------|----------------|
 | `*bun.DB` | ✅ |
 | `*bun.Tx` | ✅ |
 
@@ -151,7 +152,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 
 2. Controller.CreateUser
    └─→ Service.Create
-       └─→ Repository.Save  // tx 사용
+       └─→ Repository.Save  // txを使用
    └─→ return user, nil  ✓
 
 3. TxInterceptor.AfterCompletion
@@ -167,7 +168,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 
 2. Controller.CreateUser
    └─→ Service.Create
-       └─→ Repository.Save  // tx 사용
+       └─→ Repository.Save  // txを使用
    └─→ return error  ✗
 
 3. TxInterceptor.AfterCompletion
@@ -213,7 +214,7 @@ type ctxKey string
 
 const txKey ctxKey = "tx"
 
-// 컨텍스트에서 トランザクション 가져오기
+// コンテキストからトランザクションを取得
 func GetTx(ctx context.Context) bun.IDB {
     if tx, ok := ctx.Value(txKey).(bun.IDB); ok {
         return tx
@@ -221,7 +222,7 @@ func GetTx(ctx context.Context) bun.IDB {
     return nil
 }
 
-// 컨텍스트에 トランザクション 保存하기
+// コンテキストにトランザクションを保存
 func WithTx(ctx context.Context, tx bun.IDB) context.Context {
     return context.WithValue(ctx, txKey, tx)
 }
@@ -255,13 +256,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
         return err  // ロールバック
     }
 
-    // 2. 주문 生成
+    // 2. 注文を作成
     order := &entity.Order{UserID: user.ID, Items: items}
     if err := s.orderRepo.Save(ctx, order); err != nil {
         return err  // ロールバック
     }
 
-    // 3. ユーザー 포인트 차감
+    // 3. ユーザーのポイントを減算
     user.Points -= calculateTotal(items)
     if err := s.userRepo.Update(ctx, user); err != nil {
         return err  // ロールバック
@@ -279,7 +280,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     reqCtx := ctx.Context()
     
-    // 読み取り 전용 トランザクション
+    // 読み取り専用トランザクション
     tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
         ReadOnly: true,
     })
@@ -298,11 +299,12 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 import "database/sql"
 
 tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
-    Isolation: sql.LevelSerializable,  // 직렬화 가능
+    Isolation: sql.LevelSerializable,  // シリアライズ可能
 })
 ```
 
-|分離レベル|定数|----------|------|
+| 分離レベル | 定数 |
+|------------|------|
 | Read Uncommitted | `sql.LevelReadUncommitted` |
 | Read Committed | `sql.LevelReadCommitted` |
 | Repeatable Read | `sql.LevelRepeatableRead` |
@@ -317,7 +319,7 @@ tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     methodName := meta.Method.Name
     
-    // Get으로 시작하는 メソッド는 トランザクション 스킵
+    // Getで始まるメソッドはトランザクションをスキップ
     if strings.HasPrefix(methodName, "Get") || strings.HasPrefix(methodName, "List") {
         return nil
     }
@@ -335,7 +337,7 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     v, ok := ctx.Get("tx")
     if !ok {
-        return  // トランザクション 없으면 스킵
+        return  // トランザクションがなければスキップ
     }
     
     tx := v.(*bun.Tx)
@@ -351,7 +353,7 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 
 ```go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // GET リクエスト은 トランザクション 스킵
+    // GETリクエストはトランザクションをスキップ
     if ctx.Method() == "GET" {
         return nil
     }
@@ -461,7 +463,8 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 ```
 
 ## コアクリーンアップ
-|コンセプト|説明|------|------|
+| コンセプト | 説明 |
+|------------|------|
 | **インターセプターベース** | PreHandleで開始、AfterCompletionで終了|
 | **自動コミット/ロールバック** |エラーかどうかに応じて自動処理
 | **bun.IDB** | DBとTxの両方に対応するインターフェース|

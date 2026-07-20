@@ -120,7 +120,7 @@ q.GetBoolByKey("premium", false)   // true
 q.GetBoolByKey("deleted", false)   // false (キーなし)
 
 // GET /users?active=maybe
-q.GetBoolByKey("active", false)    // false (인식 불가)
+q.GetBoolByKey("active", false)    // false（認識できない値）
 ```
 
 ### Has

@@ -281,7 +281,7 @@ Stock Service (Consumer)
 Kafka: &boot.KafkaOptions{
     Brokers: []string{"localhost:9092"},
     Write: &boot.KafkaWriteOptions{
-        TopicPrefix: "prod.",  // トピックプレフィックス (예: prod.order.created)
+        TopicPrefix: "prod.",  // トピックプレフィックス（例: prod.order.created）
     },
 },
 ```

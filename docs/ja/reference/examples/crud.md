@@ -531,14 +531,14 @@ curl http://localhost:8080/users/1
 ```bash
 curl -X PUT http://localhost:8080/users/1 \
   -H "Content-Type: application/json" \
-  -d '{"name": "홍길동(수정)", "email": "hong2@example.com"}'
+  -d '{"name": "ホン・ギルドン（更新）", "email": "hong2@example.com"}'
 ```
 
 
 ```json
 {
   "id": 1,
-  "name": "홍길동(수정)",
+  "name": "ホン・ギルドン（更新）",
   "email": "hong2@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:05:00Z"
@@ -554,7 +554,7 @@ curl -X DELETE http://localhost:8080/users/1
 
 
 ```bash
-# 존재하지 않는 ユーザー
+# 存在しないユーザー
 curl http://localhost:8080/users/999
 ```
 
@@ -567,21 +567,23 @@ curl http://localhost:8080/users/999
 
 
 ```bash
-# 중복 이메일
+# メールアドレスの重複
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "김철수", "email": "hong@example.com"}'
+  -d '{"name": "キム・チョルス", "email": "hong@example.com"}'
 ```
 
 
 ```json
 {
-  "message": "이미 사용 중인 이메일입니다"
+  "message": "メールアドレスは既に使用されています"
 }
 ```
 ## コアポイント
 
-### ControllerはHTTPを知らない ``go
+### ControllerはHTTPを知らない
+
+```go
 // ✓ 意味タイプで入力を受け取る
 func (c *UserController) GetByID(id path.Int) (dto.UserResponse, error)
 
@@ -599,8 +601,8 @@ controller.NewUserController, // Service 依存
 ```
 ### レイヤーの分離
 
-|レイヤー責任依存|
-|-------|------|------|
-| Controller |入力検証、エラー変換|サービス|
-|サービス|ビジネスロジックリポジトリ|
-|リポジトリ|データアクセスなし
+| レイヤー | 責任 | 依存 |
+| --- | --- | --- |
+| Controller | 入力検証、エラー変換 | Service |
+| Service | ビジネスロジック | Repository |
+| Repository | データアクセス | なし |

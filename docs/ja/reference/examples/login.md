@@ -35,7 +35,7 @@ package model
 type User struct {
     ID       int64  `json:"id"`
     Email    string `json:"email"`
-    Password string `json:"-"` // JSON レスポンス에서 제외
+    Password string `json:"-"` // JSONレスポンスから除外
     Name     string `json:"name"`
 }
 
@@ -142,18 +142,18 @@ import (
     "github.com/golang-jwt/jwt/v5"
 )
 
-var JWTSecret = []byte("your-secret-key") // 実際の 환경에서는 환경변수 사용
+var JWTSecret = []byte("your-secret-key") // 実際の環境では環境変数を使用
 
 type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // Authorization ヘッダー에서 トークン抽出
+    // Authorizationヘッダーからトークンを抽出
     authHeader := ctx.Header("Authorization")
     if authHeader == "" {
         return httperr.Unauthorized("トークンが必要です。")
     }
 
-    // "Bearer {token}" 형식 파싱
+    // 「Bearer {token}」形式を解析
     parts := strings.Split(authHeader, " ")
     if len(parts) != 2 || parts[0] != "Bearer" {
         return httperr.Unauthorized("不正なトークン形式です。")
@@ -164,7 +164,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     // JWT トークン検証
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("不正な 서명 方式입니다.")
+            return nil, httperr.Unauthorized("署名方式が不正です。")
         }
         return JWTSecret, nil
     })
@@ -173,15 +173,15 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("無効なトークンです。")
     }
 
-    // 토큰에서 ユーザー ID 抽出
+    // トークンからユーザーIDを抽出
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return httperr.Unauthorized("토큰 클레임을 읽을 수 ありません.")
+        return httperr.Unauthorized("トークンクレームを読み取れません。")
     }
 
     userID := int64(claims["user_id"].(float64))
     
-    // ExecutionContext에 ユーザー ID 保存
+    // ExecutionContextにユーザーIDを保存
     ctx.Set("userID", userID)
 
     return nil
@@ -331,7 +331,7 @@ func main() {
     app.Route("POST", "/signup", (*controller.AuthController).Signup)
     app.Route("POST", "/login", (*controller.AuthController).Login)
 
-    // 保護された ルート — 認証が必要 (ルートインターセプタ 사용)
+    // 保護されたルート — 認証が必要（ルートインターセプタを使用）
     app.Route(
         "GET",
         "/me",
@@ -416,31 +416,31 @@ curl http://localhost:8080/me \
 ```
 POST /signup (公開)
    │
-   ├─→ CORS.PreHandle (전역)
+   ├─→ CORS.PreHandle（グローバル）
    ├─→ AuthController.Signup
    └─→ Response 200
 
 POST /login (公開)
    │
-   ├─→ CORS.PreHandle (전역)
+   ├─→ CORS.PreHandle（グローバル）
    ├─→ AuthController.Login
-   └─→ Response 200 + JWT 토큰
+   └─→ Response 200 + JWTトークン
 
-GET /me (보호됨)
+GET /me（保護対象）
    │
-   ├─→ CORS.PreHandle (전역)
+   ├─→ CORS.PreHandle（グローバル）
    ├─→ Auth.PreHandle (ルート) ← トークン検証
    │       │
-   │       ├─ 토큰 없음 → 401 Unauthorized
-   │       └─ 토큰 유효 → ctx.Set("userID", ...)
+   │       ├─ トークンなし → 401 Unauthorized
+   │       └─ トークン有効 → ctx.Set("userID", ...)
    │
    ├─→ AuthController.GetMe
    └─→ Response 200 + ユーザー 情報
 ```
 ## コアクリーンアップ
 
-|ルート|メソッドインターセプター説明
-|--------|--------|----------|------|
-| `/signup` | POST |グローバルのみ|会員登録（公開）|
-| `/login` | POST |グローバルのみ|ログイン後JWT発行（公開）|
-| `/me` | GET |グローバル+ Auth |私の情報を見る（認証が必要）|
+| ルート | メソッド | インターセプター | 説明 |
+| --- | --- | --- | --- |
+| `/signup` | POST | グローバルのみ | 会員登録（公開） |
+| `/login` | POST | グローバルのみ | ログイン後JWTを発行（公開） |
+| `/me` | GET | グローバル + Auth | 自分の情報を取得（認証が必要） |

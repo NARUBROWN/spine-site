@@ -85,9 +85,9 @@ app.Route(
 メソッド式`(*UserController).GetUser`は一般関数として扱われます。
 
 ```go
-// メソッド式의 実際の 型
+// メソッド式の 実際の 型
 func(*UserController, path.Int) (User, error)
-//   ↑ receiver가 最初の 인자로 변환됨
+//   ↑ レシーバが最初の引数に変換されます
 ```
 
 ### RouteOptionでルートインターセプタを適用する
@@ -123,28 +123,28 @@ func NewHandlerMeta(handler any) (core.HandlerMeta, error) {
     
     // 1. 関数かどうか 検証
     if t.Kind() != reflect.Func {
-        return core.HandlerMeta{}, fmt.Errorf("handler는 함수여야 합니다")
+        return core.HandlerMeta{}, fmt.Errorf("handlerは 関数である必要があります")
     }
     
-    // 2. メソッド式인지 検証 (最初の 인자가 receiver)
+    // 2. メソッド式かどうか 検証 (最初の 引数が レシーバ)
     if t.NumIn() < 1 {
-        return core.HandlerMeta{}, fmt.Errorf("handler는 メソッド式이어야 합니다")
+        return core.HandlerMeta{}, fmt.Errorf("handlerは メソッド式である必要があります")
     }
     
-    // 3. receiver가 ポインタ 型인지 検証
-    receiverType := t.In(0)
-    if receiverType.Kind() != reflect.Ptr {
-        return core.HandlerMeta{}, fmt.Errorf("handler의 리시버는 ポインタ 型이어야 합니다")
+    // 3. レシーバが ポインタ 型かどうか 検証
+    レシーバType := t.In(0)
+    if レシーバType.Kind() != reflect.Ptr {
+        return core.HandlerMeta{}, fmt.Errorf("handlerの レシーバは ポインタ 型である必要があります")
     }
     
     // 4. メソッド 名前 抽出
     fn := runtime.FuncForPC(v.Pointer())
     if fn == nil {
-        return core.HandlerMeta{}, fmt.Errorf("メソッド 情報를 抽出할 수 ありません")
+        return core.HandlerMeta{}, fmt.Errorf("メソッド 情報を抽出できません")
     }
     
     fullName := fn.Name()
-    // 예: github.com/NARUBROWN/spine-demo.(*UserController).GetUser
+    // 例: github.com/NARUBROWN/spine-demo.(*UserController).GetUser
     lastDot := strings.LastIndex(fullName, ".")
     if lastDot == -1 {
         return core.HandlerMeta{}, fmt.Errorf("メソッド 名前 解析失敗: %s", fullName)
@@ -153,13 +153,13 @@ func NewHandlerMeta(handler any) (core.HandlerMeta, error) {
     methodName := fullName[lastDot+1:]
     
     // 5. リフレクションでメソッド情報を取得
-    method, ok := receiverType.MethodByName(methodName)
+    method, ok := レシーバType.MethodByName(methodName)
     if !ok {
-        return core.HandlerMeta{}, fmt.Errorf("メソッド를 見つかりません: %s", methodName)
+        return core.HandlerMeta{}, fmt.Errorf("メソッドを 見つかりません: %s", methodName)
     }
     
     return core.HandlerMeta{
-        ControllerType: receiverType,
+        ControllerType: レシーバType,
         Method:         method,
     }, nil
 }
@@ -176,8 +176,8 @@ t.Kind()  // reflect.Func ✓
 #### Step 2: メソッド式の検証
 
 ```go
-t.NumIn()  // 2 (receiver + path.Int)
-t.In(0)    // *UserController (receiver)
+t.NumIn()  // 2 (レシーバ + path.Int)
+t.In(0)    // *UserController (レシーバ)
 t.In(1)    // path.Int
 ```
 
@@ -206,8 +206,8 @@ method, _ := reflect.TypeOf(&UserController{}).MethodByName("GetUser")
 // internal/router/router.go
 type Route struct {
     Method string           // HTTP メソッド
-    Path   string           // URL 패턴
-    Meta   core.HandlerMeta // 핸들러 메타데이터 (Interceptors 포함)
+    Path   string           // URL パターン
+    Meta   core.HandlerMeta // ハンドラー メタデータ (Interceptors 含む)
 }
 
 func (r *DefaultRouter) Register(method string, path string, meta core.HandlerMeta) {
@@ -236,9 +236,9 @@ func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, erro
         ctx.Set("spine.params", params)
         ctx.Set("spine.pathKeys", keys)
         
-        return route.Meta, nil  // HandlerMeta 반환 (Interceptors 포함)
+        return route.Meta, nil  // HandlerMeta 返却 (Interceptors 含む)
     }
-    return core.HandlerMeta{}, httperr.NotFound("핸들러가 ありません.")
+    return core.HandlerMeta{}, httperr.NotFound("ハンドラーが ありません.")
 }
 ```
 
@@ -252,14 +252,14 @@ Pipelineは、グローバルインターセプタとルートインターセプ
 func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
     globalMeta := core.HandlerMeta{}
     
-    // AfterCompletion은 성공/失敗와 관계없이 보장
+    // AfterCompletionは 成功/失敗と に関係なく 保証
     defer func() {
         for i := len(p.interceptors) - 1; i >= 0; i-- {
             p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
         }
     }()
 
-    // 1. グローバル Interceptor PreHandle (라우팅 전)
+    // 1. グローバル Interceptor PreHandle (ルーティング前)
     for _, it := range p.interceptors {
         if err := it.PreHandle(ctx, globalMeta); err != nil {
             if errors.Is(err, core.ErrAbortPipeline) {
@@ -269,7 +269,7 @@ func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
         }
     }
 
-    // 2. Router가 実行 対象을 결정
+    // 2. Routerが 実行 対象を 決定
     meta, err := p.router.Route(ctx)
     if err != nil {
         return err
@@ -277,14 +277,14 @@ func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
 
     routeInterceptors := meta.Interceptors
 
-    // ルート Interceptor AfterCompletion은 무조건 보장
+    // ルート Interceptor AfterCompletionは 必ず 保証
     defer func() {
         for i := len(routeInterceptors) - 1; i >= 0; i-- {
             routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
         }
     }()
 
-    // 3. ArgumentResolver 체인 実行
+    // 3. ArgumentResolver チェーン 実行
     paramMetas := buildParameterMeta(meta.Method, ctx)
     args, err := p.resolveArguments(ctx, paramMetas)
     if err != nil {
@@ -310,7 +310,7 @@ func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
     // 6. ReturnValueHandler 処理
     returnError := p.handleReturn(ctx, results)
 
-    // 7. PostExecutionHook (イベント 発行 등)
+    // 7. PostExecutionHook (イベント 発行 など)
     for _, hook := range p.postHooks {
         hook.AfterExecution(ctx, results, returnError)
     }
@@ -319,12 +319,12 @@ func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
         return returnError
     }
 
-    // 8. ルート Interceptor PostHandle (역순)
+    // 8. ルート Interceptor PostHandle (逆順)
     for i := len(routeInterceptors) - 1; i >= 0; i-- {
         routeInterceptors[i].PostHandle(ctx, meta)
     }
 
-    // 9. グローバル Interceptor PostHandle (역순)
+    // 9. グローバル Interceptor PostHandle (逆順)
     for i := len(p.interceptors) - 1; i >= 0; i-- {
         p.interceptors[i].PostHandle(ctx, meta)
     }
@@ -343,8 +343,8 @@ func buildParameterMeta(method reflect.Method, ctx core.ExecutionContext) []reso
     pathIdx := 0
     var metas []resolver.ParameterMeta
     
-    // method.Type.NumIn()은 receiver 포함
-    // i=0은 receiver이므로 i=1부터 시작
+    // method.Type.NumIn()は レシーバ 含む
+    // i=0は レシーバために i=1から 時作
     for i := 1; i < method.Type.NumIn(); i++ {
         pt := method.Type.In(i)
         
@@ -379,23 +379,23 @@ func isPathType(pt reflect.Type) bool {
 ```go
 // internal/invoker/invoker.go
 func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, args []any) ([]any, error) {
-    // 1. Container에서 Controller 인스턴스 Resolve
+    // 1. Containerで Controller インスタンス Resolve
     controller, err := i.container.Resolve(controllerType)
     if err != nil {
         return nil, err
     }
     
-    // 2. 呼び出し 인자 구성 (receiver + args)
+    // 2. 呼び出し 引数 構成 (レシーバ + args)
     values := make([]reflect.Value, len(args)+1)
-    values[0] = reflect.ValueOf(controller)  // receiver
+    values[0] = reflect.ValueOf(controller)  // レシーバ
     for idx, arg := range args {
         values[idx+1] = reflect.ValueOf(arg)
     }
     
-    // 3. 리플렉션으로 メソッド 呼び出し
+    // 3. リフレクションにに メソッド 呼び出し
     results := method.Func.Call(values)
     
-    // 4. 결과 변환
+    // 4. 結と 変換
     out := make([]any, len(results))
     for i, result := range results {
         out[i] = result.Interface()
@@ -430,9 +430,9 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 // cmd/demo/main.go
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
-// ルートインターセプタ와 함께
+// ルートインターセプタと とともに
 app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil ポインタ → Container에서 Resolve
+    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil ポインタ → Containerで Resolve
 )
 ```
 
@@ -441,7 +441,7 @@ app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
 ```go
 // app.go
 func (a *app) Route(method string, path string, handler any, opts ...router.RouteOption) {
-    // HTTP メソッド를 대문자로 변환해 대소문자 불일치 방지
+    // HTTP メソッドを 大文字に 変換し 大文字小文字の不一致 防止
     method = strings.ToUpper(strings.TrimSpace(method))
 
     spec := router.RouteSpec{
@@ -466,7 +466,7 @@ func (a *app) Route(method string, path string, handler any, opts ...router.Rout
 router := spineRouter.NewRouter()
 
 for _, route := range config.Routes {
-    // メソッド式 → HandlerMeta 변환
+    // メソッド式 → HandlerMeta 変換
     meta, err := spineRouter.NewHandlerMeta(route.Handler)
     if err != nil {
         return err
@@ -479,14 +479,14 @@ for _, route := range config.Routes {
         value := reflect.ValueOf(interceptor)
 
         if interceptorType.Kind() == reflect.Pointer && value.IsNil() {
-            // nil ポインタ → Container에서 Resolve
+            // nil ポインタ → Containerで Resolve
             inst, err := container.Resolve(interceptorType)
             if err != nil {
                 panic(err)
             }
             resolved[i] = inst.(core.Interceptor)
         } else {
-            // 인스턴스 직접 사용
+            // インスタンス 直接 使用
             resolved[i] = interceptor
         }
     }
@@ -535,7 +535,7 @@ if err := container.WarmUp(router.ControllerTypes()); err != nil {
 
 ```mermaid
 graph TD
-    subgraph Bootstrap [ブートストラップ 시점]
+    subgraph Bootstrap [ブートストラップ 時点]
         RouteDef["app.Route('GET', '/users/:id',<br>(*UserController).GetUser,<br>route.WithInterceptors(...))"]
         NewHandlerMeta["NewHandlerMeta()"]
         ResolveInterceptors["ルート Interceptor Resolve"]
@@ -548,15 +548,15 @@ graph TD
         HandlerMeta --> Register
     end
 
-    subgraph Runtime [ランタイム 시점]
+    subgraph Runtime [ランタイム 時点]
         Request["GET /users/123"]
         
         GlobalPre["グローバル Interceptor PreHandle"]
         RouteCall["Router.Route(ctx)"]
-        MetaReturn["HandlerMeta 반환"]
+        MetaReturn["HandlerMeta 返却"]
         
         BuildMeta["buildParameterMeta(meta.Method)"]
-        ResolveArgs["ArgumentResolver 체인"]
+        ResolveArgs["ArgumentResolver チェーン"]
         RoutePre["ルート Interceptor PreHandle"]
         Invoke["Invoker.Invoke(meta.ControllerType, meta.Method)"]
         ReturnHandle["ReturnValueHandler"]
@@ -587,10 +587,10 @@ graph TD
 // ✓ メソッド式
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
-// ❌ 일반 함수 (지원 안 함)
+// ❌ 通常の関数 (サポートしない)
 app.Route("GET", "/users/:id", func(id path.Int) User { ... })
 
-// ❌ 인스턴스 メソッド (지원 안 함)
+// ❌ インスタンス メソッド (サポートしない)
 ctrl := &UserController{}
 app.Route("GET", "/users/:id", ctrl.GetUser)
 ```
@@ -599,10 +599,10 @@ app.Route("GET", "/users/:id", ctrl.GetUser)
 値レシーバーはサポートされていません。
 
 ```go
-// ✓ ポインタ 리시버
+// ✓ ポインタ レシーバ
 func (c *UserController) GetUser(id path.Int) User
 
-// ❌ 값 리시버 (지원 안 함)
+// ❌ 値 レシーバ (サポートしない)
 func (c UserController) GetUser(id path.Int) User
 ```
 
@@ -610,10 +610,10 @@ func (c UserController) GetUser(id path.Int) User
 `NewHandlerMeta`はブートストラップの時点で呼び出されるため、無効なハンドラ登録はサーバーの起動前に失敗します。
 
 ```go
-// 不正な 핸들러 登録 시 ブートストラップ 失敗
+// 不正な ハンドラー 登録 時 ブートストラップ 失敗
 meta, err := spineRouter.NewHandlerMeta(invalidHandler)
 if err != nil {
-    return err  // サーバー起動 전 エラー
+    return err  // サーバー起動 前 エラー
 }
 ```
 
@@ -621,10 +621,10 @@ if err != nil {
 グローバルインターセプタは`app.Interceptor()`として登録し、ルートインターセプタは`route.WithInterceptors()`として登録します。 Pipelineでは実行順序が異なります。
 
 ```go
-// グローバル: すべて リクエスト에 적용 (라우팅 전 実行)
+// グローバル: すべて リクエストに 適用 (ルーティング前 実行)
 app.Interceptor(&CORSInterceptor{})
 
-// ルート: 특정 핸들러에만 적용 (라우팅 후, Controller 呼び出し 전 実行)
+// ルート: 特定の ハンドラーにだけ 適用 (ルーティング 後, Controller 呼び出し 前 実行)
 app.Route("GET", "/admin/:id", (*AdminController).Get,
     route.WithInterceptors(&AuthInterceptor{}),
 )
