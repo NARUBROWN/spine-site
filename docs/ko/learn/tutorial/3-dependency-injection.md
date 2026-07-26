@@ -179,12 +179,12 @@ func NewDB() (*bun.DB, error) {
 
 ### 문제 상황
 
-트랜잭션을 사용할 때, Repository는 `*bun.DB`와 `*bun.Tx` 모두 처리해야 합니다.
+트랜잭션을 사용할 때, Repository는 `*bun.DB`와 `bun.Tx` 모두 처리해야 합니다.
 
 ```go
 // ❌ 이렇게 하면 트랜잭션 사용 불가
 type UserRepository struct {
-    db *bun.DB  // *bun.Tx를 받을 수 없음
+    db *bun.DB  // bun.Tx를 받을 수 없음
 }
 ```
 
@@ -193,7 +193,7 @@ type UserRepository struct {
 `bun.IDB` 인터페이스를 사용하면 둘 다 수용할 수 있습니다.
 
 ```go
-// ✅ bun.IDB는 *bun.DB와 *bun.Tx 모두 구현
+// ✅ *bun.DB와 bun.Tx는 모두 bun.IDB를 구현
 type UserRepository struct {
     db bun.IDB
 }
@@ -218,15 +218,20 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 }
 
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    tx, ok := ctx.Get("tx")
+    v, ok := ctx.Get("tx")
+    if !ok {
+        return
+    }
+
+    tx, ok := v.(bun.Tx)
     if !ok {
         return
     }
     
     if err != nil {
-        tx.(*bun.Tx).Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.(*bun.Tx).Commit()
+        _ = tx.Commit()
     }
 }
 ```

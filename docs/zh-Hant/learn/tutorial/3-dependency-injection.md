@@ -175,12 +175,12 @@ func NewDB() (*bun.DB, error) {
 
 ### 問題狀況
 
-使用交易時，儲存庫必須同時處理 `*bun.DB` 和 `*bun.Tx`。
+使用交易時，儲存庫必須同時處理 `*bun.DB` 和 `bun.Tx`。
 
 ```go
 // ❌這將禁用交易
 type UserRepository struct {
-    db *bun.DB  // 無法接收 *bun.Tx
+    db *bun.DB  // 無法接收 bun.Tx
 }
 ```
 
@@ -189,7 +189,7 @@ type UserRepository struct {
 `bun.IDB` 介面可讓您同時容納兩者。
 
 ```go
-// ✅ Bun.IDB 實作了 *bun.DB 和 *bun.Tx
+// ✅ *bun.DB 和 bun.Tx 都實作了 bun.IDB
 type UserRepository struct {
     db bun.IDB
 }
@@ -214,15 +214,20 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 }
 
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    tx, ok := ctx.Get("tx")
+    v, ok := ctx.Get("tx")
+    if !ok {
+        return
+    }
+
+    tx, ok := v.(bun.Tx)
     if !ok {
         return
     }
 
     if err != nil {
-        tx.(*bun.Tx).Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.(*bun.Tx).Commit()
+        _ = tx.Commit()
     }
 }
 ```

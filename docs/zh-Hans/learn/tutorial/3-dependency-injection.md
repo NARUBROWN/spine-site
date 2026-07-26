@@ -175,12 +175,12 @@ func NewDB() (*bun.DB, error) {
 
 ### 问题情况
 
-使用事务时，存储库必须同时处理 `*bun.DB` 和 `*bun.Tx`。
+使用事务时，存储库必须同时处理 `*bun.DB` 和 `bun.Tx`。
 
 ```go
 // ❌这将禁用交易
 type UserRepository struct {
-    db *bun.DB  // 无法接收 *bun.Tx
+    db *bun.DB  // 无法接收 bun.Tx
 }
 ```
 
@@ -189,7 +189,7 @@ type UserRepository struct {
 `bun.IDB` 接口允许您同时容纳两者。
 
 ```go
-// ✅ Bun.IDB 实现了 *bun.DB 和 *bun.Tx
+// ✅ *bun.DB 和 bun.Tx 都实现了 bun.IDB
 type UserRepository struct {
     db bun.IDB
 }
@@ -214,15 +214,20 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 }
 
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    tx, ok := ctx.Get("tx")
+    v, ok := ctx.Get("tx")
+    if !ok {
+        return
+    }
+
+    tx, ok := v.(bun.Tx)
     if !ok {
         return
     }
 
     if err != nil {
-        tx.(*bun.Tx).Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.(*bun.Tx).Commit()
+        _ = tx.Commit()
     }
 }
 ```

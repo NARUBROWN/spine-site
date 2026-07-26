@@ -186,13 +186,13 @@ func NewDB() (*bun.DB, error) {
 
 ### 問題状況
 
-トランザクションを使用する場合、Repositoryは `*bun.DB` と `*bun.Tx` の両方を処理する必要があります。
+トランザクションを使用する場合、Repositoryは `*bun.DB` と `bun.Tx` の両方を処理する必要があります。
 
 
 ```go
 // ❌ これだとトランザクションを使用できません
 type UserRepository struct {
-    db *bun.DB  // *bun.Tx を受け取れない
+    db *bun.DB  // bun.Tx を受け取れない
 }
 ```
 
@@ -202,7 +202,7 @@ type UserRepository struct {
 
 
 ```go
-// ✅ bun.IDBは *bun.DB と *bun.Tx の両方を実装しています
+// ✅ *bun.DB と bun.Tx はどちらも bun.IDB を実装しています
 type UserRepository struct {
     db bun.IDB
 }
@@ -228,15 +228,20 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 }
 
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    tx, ok := ctx.Get("tx")
+    v, ok := ctx.Get("tx")
+    if !ok {
+        return
+    }
+
+    tx, ok := v.(bun.Tx)
     if !ok {
         return
     }
     
     if err != nil {
-        tx.(*bun.Tx).Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.(*bun.Tx).Commit()
+        _ = tx.Commit()
     }
 }
 ```

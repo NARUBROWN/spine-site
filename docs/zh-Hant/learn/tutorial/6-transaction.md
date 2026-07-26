@@ -132,7 +132,7 @@ type UserRepository struct {
 ### 解決
 
 ```go
-// ✅ Bun.IDB 實作了 *bun.DB 和 *bun.Tx
+// ✅ bun.IDB 由 *bun.DB 和 bun.Tx 實作
 type UserRepository struct {
     db bun.IDB
 }
@@ -147,7 +147,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 |類型 |實作|bun.IDB
 |------|-------------|
 | `*bun.DB` | `*bun.DB` ✅ |
-| `*bun.Tx` | `*bun.Tx` ✅ |
+| `bun.Tx` | ✅ |
 
 您可以使用相同的方法（`NewSelect`、`NewInsert` 等）。
 
@@ -161,8 +161,9 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // 使用 tx
+   └─→ spine.Ctx.Get("tx")
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // 使用 tx
    └─→ return user, nil  ✓
 
 3. TxInterceptor.AfterCompletion
@@ -178,8 +179,9 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // 使用 tx
+   └─→ spine.Ctx.Get("tx")
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // 使用 tx
    └─→ return error  ✗
 
 3. TxInterceptor.AfterCompletion
@@ -189,7 +191,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 
 ## 使用儲存庫中的事務
 
-在目前結構中，儲存庫在建立時注入 `bun.IDB` 。
+查詢可以使用建立儲存庫時注入的 DB。更新操作則透過 `bun.IDB` 參數明確接收當前請求的交易。
 
 ```go
 // 儲存庫/user_repository.go
@@ -201,43 +203,42 @@ func NewUserRepository(db bun.IDB) *UserRepository {
     return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewInsert().
+func (r *UserRepository) Save(ctx context.Context, tx bun.IDB, user *entity.User) error {
+    _, err := tx.NewInsert().
         Model(user).
         Exec(ctx)
     return err
 }
 ```
 
-### 在交易上下文中使用
+### 從 `spine.Ctx` 取得交易
 
-您可以建立一個輔助函數來檢索並使用攔截器儲存的交易。
+將 `spine.Ctx` 注入控制器，讀取攔截器儲存的交易，再將 `bun.IDB` 明確傳遞給服務與儲存庫。
 
 ```go
-// db/context.go
-package db
-
-import (
-    "context"
-
-    "github.com/uptrace/bun"
-)
-
-type ctxKey string
-
-const txKey ctxKey = "tx"
-
-// 從上下文中取得交易
-func GetTx(ctx context.Context) bun.IDB {
-    if tx, ok := ctx.Value(txKey).(bun.IDB); ok {
-        return tx
+// controller/user_controller.go
+func (c *UserController) CreateUser(
+    ctx context.Context,
+    req *dto.CreateUserRequest,
+    spineCtx spine.Ctx,
+) (httpx.Response[dto.CreateUserResponse], error) {
+    v, exists := spineCtx.Get("tx")
+    if !exists {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("交易不存在。")
     }
-    return nil
-}
 
-// 在上下文中保存事務
-func WithTx(ctx context.Context, tx bun.IDB) context.Context {
-    return context.WithValue(ctx, txKey, tx)
+    tx, ok := v.(bun.IDB)
+    if !ok {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("交易類型不正確。")
+    }
+
+    user, err := c.userService.Create(ctx, tx, req.Name, req.Email)
+    if err != nil {
+        return httpx.Response[dto.CreateUserResponse]{}, err
+    }
+    return httpx.Response[dto.CreateUserResponse]{Body: user}, nil
 }
 ```
 
@@ -264,7 +265,7 @@ func NewOrderService(
     }
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item) error {
+func (s *OrderService) CreateOrder(ctx context.Context, tx bun.IDB, userID int, items []Item) error {
     // 1、用戶查詢
     user, err := s.userRepo.FindByID(ctx, userID)
     if err != nil {
@@ -273,13 +274,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 
     // 2. 建立訂單
     order := &entity.Order{UserID: user.ID, Items: items}
-    if err := s.orderRepo.Save(ctx, order); err != nil {
+    if err := s.orderRepo.Save(ctx, tx, order); err != nil {
         return err  // 已回滚
     }
 
     // 3.用戶積分扣除
     user.Points -= calculateTotal(items)
-    if err := s.userRepo.Update(ctx, user); err != nil {
+    if err := s.userRepo.Update(ctx, tx, user); err != nil {
         return err  // 已回滚
     }
 
@@ -287,7 +288,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 }
 ```
 
-所有操作都在同一筆交易中運作。
+同一個 `tx` 會傳給每個更新方法，因此所有更新都在同一筆交易中運作。
 
 ## 交易選項
 
@@ -358,11 +359,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return  // 沒有事务時跳过
     }
 
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -397,7 +401,10 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
 
     if err != nil {
         log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
@@ -471,11 +478,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -487,7 +497,8 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 | **基於攔截器** |在 PreHandle 中開始，在 AfterCompletion 中結束 |
 | **自動提交/回滾** |根據是否有錯誤自動處理|
 | **bun.IDB** |接受 DB 和 Tx 的介面 |
-| **上下文共享** |傳遞到 `ctx.Set("tx", tx)` |
+| **上下文共享** | 以 `ctx.Set("tx", tx)` 儲存，以 `spine.Ctx.Get("tx")` 取得 |
+| **明確傳遞** | 將 `bun.IDB` 從控制器傳給服務與儲存庫 |
 
 ## 後續步驟
 

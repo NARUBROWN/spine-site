@@ -178,12 +178,12 @@ func NewDB() (*bun.DB, error) {
 
 ### Problem Scenario
 
-When using transactions, Repository needs to handle both `*bun.DB` and `*bun.Tx`.
+When using transactions, Repository needs to handle both `*bun.DB` and `bun.Tx`.
 
 ```go
 // ❌ Cannot use transaction with this
 type UserRepository struct {
-    db *bun.DB  // Cannot accept *bun.Tx
+    db *bun.DB  // Cannot accept bun.Tx
 }
 ```
 
@@ -192,7 +192,7 @@ type UserRepository struct {
 Using the `bun.IDB` interface accepts both.
 
 ```go
-// ✅ bun.IDB implements both *bun.DB and *bun.Tx
+// ✅ bun.IDB is implemented by both *bun.DB and bun.Tx
 type UserRepository struct {
     db bun.IDB
 }
@@ -217,15 +217,20 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 }
 
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    tx, ok := ctx.Get("tx")
+    v, ok := ctx.Get("tx")
+    if !ok {
+        return
+    }
+
+    tx, ok := v.(bun.Tx)
     if !ok {
         return
     }
     
     if err != nil {
-        tx.(*bun.Tx).Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.(*bun.Tx).Commit()
+        _ = tx.Commit()
     }
 }
 ```

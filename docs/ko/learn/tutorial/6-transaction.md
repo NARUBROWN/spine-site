@@ -132,7 +132,7 @@ type UserRepository struct {
 ### 해결
 
 ```go
-// ✅ bun.IDB는 *bun.DB와 *bun.Tx 모두 구현
+// ✅ *bun.DB와 bun.Tx는 모두 bun.IDB를 구현
 type UserRepository struct {
     db bun.IDB
 }
@@ -147,7 +147,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 | 타입 | bun.IDB 구현 |
 |------|-------------|
 | `*bun.DB` | ✅ |
-| `*bun.Tx` | ✅ |
+| `bun.Tx` | ✅ |
 
 동일한 메서드(`NewSelect`, `NewInsert` 등)를 사용할 수 있습니다.
 
@@ -162,8 +162,9 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // tx 사용
+   └─→ spineCtx.Get("tx") → bun.IDB
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // tx 사용
    └─→ return user, nil  ✓
 
 3. TxInterceptor.AfterCompletion
@@ -179,8 +180,9 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // tx 사용
+   └─→ spineCtx.Get("tx") → bun.IDB
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // tx 사용
    └─→ return error  ✗
 
 3. TxInterceptor.AfterCompletion
@@ -188,9 +190,68 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ tx.Rollback()  ✓
 ```
 
-## Repository에서 트랜잭션 사용
+## 핸들러로 트랜잭션 전달
 
-현재 구조에서는 Repository가 생성 시점에 `bun.IDB`를 주입받습니다.
+`ExecutionContext`와 핸들러의 표준 `context.Context`는 역할이 다릅니다. 인터셉터는 요청 범위 실행 컨텍스트에 트랜잭션을 저장합니다. 쓰기 핸들러는 `spine.Ctx`를 주입받아 트랜잭션을 꺼내고 서비스에 명시적으로 전달합니다.
+
+```go
+// controller/user_controller.go
+import (
+    "context"
+
+    "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/spine"
+    "github.com/uptrace/bun"
+)
+
+func (c *UserController) CreateUser(
+    ctx context.Context,
+    req *dto.CreateUserRequest,
+    spineCtx spine.Ctx,
+) (httpx.Response[dto.CreateUserResponse], error) {
+    v, exists := spineCtx.Get("tx")
+    if !exists {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("트랜잭션이 존재하지 않습니다.")
+    }
+
+    tx, ok := v.(bun.IDB)
+    if !ok {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("트랜잭션 타입이 올바르지 않습니다.")
+    }
+
+    user, err := c.userService.Create(ctx, tx, req.Name, req.Email)
+    if err != nil {
+        return httpx.Response[dto.CreateUserResponse]{}, err
+    }
+    return httpx.Response[dto.CreateUserResponse]{Body: user}, nil
+}
+```
+
+트랜잭션을 별도의 `context.WithValue`에 다시 넣지 않습니다. `spine.Ctx`는 인터셉터가 `ExecutionContext.Set`으로 기록한 동일한 요청 범위 값을 제공합니다.
+
+## Service와 Repository에서 트랜잭션 사용
+
+두 값을 명시적으로 전달합니다. `context.Context`는 취소와 기한을 전달하고, `bun.IDB`는 쿼리가 사용할 트랜잭션을 결정합니다.
+
+```go
+// service/user_service.go
+func (s *UserService) Create(
+    ctx context.Context,
+    tx bun.IDB,
+    name string,
+    email string,
+) (dto.CreateUserResponse, error) {
+    user := &entity.User{Name: name, Email: email}
+    if err := s.repo.Save(ctx, tx, user); err != nil {
+        return dto.CreateUserResponse{}, err
+    }
+    return dto.CreateUserResponse{
+        ID: int(user.ID), Name: user.Name, Email: user.Email,
+    }, nil
+}
+```
 
 ```go
 // repository/user_repository.go
@@ -202,45 +263,17 @@ func NewUserRepository(db bun.IDB) *UserRepository {
     return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewInsert().
-        Model(user).
-        Exec(ctx)
+func (r *UserRepository) Save(
+    ctx context.Context,
+    tx bun.IDB,
+    user *entity.User,
+) error {
+    _, err := tx.NewInsert().Model(user).Exec(ctx)
     return err
 }
 ```
 
-### 트랜잭션 컨텍스트에서 사용하기
-
-인터셉터에서 저장한 트랜잭션을 가져와 사용하는 헬퍼 함수를 만들 수 있습니다.
-
-```go
-// db/context.go
-package db
-
-import (
-    "context"
-    
-    "github.com/uptrace/bun"
-)
-
-type ctxKey string
-
-const txKey ctxKey = "tx"
-
-// 컨텍스트에서 트랜잭션 가져오기
-func GetTx(ctx context.Context) bun.IDB {
-    if tx, ok := ctx.Value(txKey).(bun.IDB); ok {
-        return tx
-    }
-    return nil
-}
-
-// 컨텍스트에 트랜잭션 저장하기
-func WithTx(ctx context.Context, tx bun.IDB) context.Context {
-    return context.WithValue(ctx, txKey, tx)
-}
-```
+주입된 `r.db`는 트랜잭션이 필요 없는 조회에 계속 사용할 수 있습니다. 요청 트랜잭션에 참여해야 하는 쓰기 메서드는 명시적으로 전달받은 `tx`를 사용합니다.
 
 ## 여러 Repository 사용
 
@@ -265,7 +298,7 @@ func NewOrderService(
     }
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item) error {
+func (s *OrderService) CreateOrder(ctx context.Context, tx bun.IDB, userID int, items []Item) error {
     // 1. 사용자 조회
     user, err := s.userRepo.FindByID(ctx, userID)
     if err != nil {
@@ -274,13 +307,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 
     // 2. 주문 생성
     order := &entity.Order{UserID: user.ID, Items: items}
-    if err := s.orderRepo.Save(ctx, order); err != nil {
+    if err := s.orderRepo.Save(ctx, tx, order); err != nil {
         return err  // 롤백됨
     }
 
     // 3. 사용자 포인트 차감
     user.Points -= calculateTotal(items)
-    if err := s.userRepo.Update(ctx, user); err != nil {
+    if err := s.userRepo.Update(ctx, tx, user); err != nil {
         return err  // 롤백됨
     }
 
@@ -288,7 +321,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 }
 ```
 
-모든 작업이 같은 트랜잭션 안에서 실행됩니다.
+이 `tx`를 전달받아 실행한 모든 작업은 같은 트랜잭션에 참여합니다. Repository가 기본 `db`를 사용한 호출은 해당 트랜잭션 밖에서 실행됩니다.
 
 ## 트랜잭션 옵션
 
@@ -360,11 +393,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return  // 트랜잭션 없으면 스킵
     }
     
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -399,7 +435,10 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     
     if err != nil {
         log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
@@ -473,11 +512,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
     
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -488,8 +530,9 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 |------|------|
 | **인터셉터 기반** | PreHandle에서 시작, AfterCompletion에서 종료 |
 | **자동 커밋/롤백** | 에러 여부에 따라 자동 처리 |
-| **bun.IDB** | DB와 Tx 모두 수용하는 인터페이스 |
-| **컨텍스트 공유** | `ctx.Set("tx", tx)`로 전달 |
+| **bun.IDB** | `*bun.DB`와 `bun.Tx`가 구현하는 공통 인터페이스 |
+| **요청 범위 공유** | `ExecutionContext.Set`으로 저장하고 핸들러에 주입된 `spine.Ctx.Get`으로 조회 |
+| **명시적 전달** | Service와 Repository 호출에 `context.Context`와 `bun.IDB`를 함께 전달 |
 
 
 ## 다음 단계

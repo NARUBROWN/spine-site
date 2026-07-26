@@ -448,11 +448,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
     
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```

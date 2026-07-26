@@ -132,7 +132,7 @@ type UserRepository struct {
 ### Solution
 
 ```go
-// ✅ bun.IDB implements both *bun.DB and *bun.Tx
+// ✅ bun.IDB is implemented by both *bun.DB and bun.Tx
 type UserRepository struct {
     db bun.IDB
 }
@@ -147,7 +147,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 | Type | bun.IDB Implementation |
 |------|-------------|
 | `*bun.DB` | ✅ |
-| `*bun.Tx` | ✅ |
+| `bun.Tx` | ✅ |
 
 You can use the same methods (`NewSelect`, `NewInsert`, etc.).
 
@@ -162,8 +162,9 @@ You can use the same methods (`NewSelect`, `NewInsert`, etc.).
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // Uses tx
+   └─→ spineCtx.Get("tx") → bun.IDB
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // Uses tx
    └─→ return user, nil  ✓
 
 3. TxInterceptor.AfterCompletion
@@ -179,8 +180,9 @@ You can use the same methods (`NewSelect`, `NewInsert`, etc.).
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // Uses tx
+   └─→ spineCtx.Get("tx") → bun.IDB
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // Uses tx
    └─→ return error  ✗
 
 3. TxInterceptor.AfterCompletion
@@ -188,9 +190,68 @@ You can use the same methods (`NewSelect`, `NewInsert`, etc.).
    └─→ tx.Rollback()  ✓
 ```
 
-## Using Transactions in Repository
+## Passing the Transaction to the Handler
 
-In the current structure, Repository receives `bun.IDB` at creation time.
+`ExecutionContext` and the handler's standard `context.Context` have different roles. The interceptor stores the transaction in the request-scoped execution context. A write handler receives `spine.Ctx`, retrieves the transaction, and explicitly passes it to the service.
+
+```go
+// controller/user_controller.go
+import (
+    "context"
+
+    "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/spine"
+    "github.com/uptrace/bun"
+)
+
+func (c *UserController) CreateUser(
+    ctx context.Context,
+    req *dto.CreateUserRequest,
+    spineCtx spine.Ctx,
+) (httpx.Response[dto.CreateUserResponse], error) {
+    v, exists := spineCtx.Get("tx")
+    if !exists {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("transaction does not exist")
+    }
+
+    tx, ok := v.(bun.IDB)
+    if !ok {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("invalid transaction type")
+    }
+
+    user, err := c.userService.Create(ctx, tx, req.Name, req.Email)
+    if err != nil {
+        return httpx.Response[dto.CreateUserResponse]{}, err
+    }
+    return httpx.Response[dto.CreateUserResponse]{Body: user}, nil
+}
+```
+
+Do not put the transaction into a separate `context.WithValue`. `spine.Ctx` exposes the same request-scoped values that the interceptor writes through `ExecutionContext.Set`.
+
+## Using Transactions in Service and Repository
+
+Pass both values explicitly: `context.Context` carries cancellation and deadlines, while `bun.IDB` selects the transaction used for the query.
+
+```go
+// service/user_service.go
+func (s *UserService) Create(
+    ctx context.Context,
+    tx bun.IDB,
+    name string,
+    email string,
+) (dto.CreateUserResponse, error) {
+    user := &entity.User{Name: name, Email: email}
+    if err := s.repo.Save(ctx, tx, user); err != nil {
+        return dto.CreateUserResponse{}, err
+    }
+    return dto.CreateUserResponse{
+        ID: int(user.ID), Name: user.Name, Email: user.Email,
+    }, nil
+}
+```
 
 ```go
 // repository/user_repository.go
@@ -202,45 +263,17 @@ func NewUserRepository(db bun.IDB) *UserRepository {
     return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewInsert().
-        Model(user).
-        Exec(ctx)
+func (r *UserRepository) Save(
+    ctx context.Context,
+    tx bun.IDB,
+    user *entity.User,
+) error {
+    _, err := tx.NewInsert().Model(user).Exec(ctx)
     return err
 }
 ```
 
-### Using in Transaction Context
-
-You can create helper functions to retrieve the transaction stored by the interceptor.
-
-```go
-// db/context.go
-package db
-
-import (
-    "context"
-    
-    "github.com/uptrace/bun"
-)
-
-type ctxKey string
-
-const txKey ctxKey = "tx"
-
-// Get transaction from context
-func GetTx(ctx context.Context) bun.IDB {
-    if tx, ok := ctx.Value(txKey).(bun.IDB); ok {
-        return tx
-    }
-    return nil
-}
-
-// Store transaction in context
-func WithTx(ctx context.Context, tx bun.IDB) context.Context {
-    return context.WithValue(ctx, txKey, tx)
-}
-```
+The injected `r.db` remains useful for non-transactional reads. Write methods that must participate in the request transaction use the explicitly supplied `tx`.
 
 ## Using Multiple Repositories
 
@@ -265,7 +298,7 @@ func NewOrderService(
     }
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item) error {
+func (s *OrderService) CreateOrder(ctx context.Context, tx bun.IDB, userID int, items []Item) error {
     // 1. Find User
     user, err := s.userRepo.FindByID(ctx, userID)
     if err != nil {
@@ -274,13 +307,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 
     // 2. Create Order
     order := &entity.Order{UserID: user.ID, Items: items}
-    if err := s.orderRepo.Save(ctx, order); err != nil {
+    if err := s.orderRepo.Save(ctx, tx, order); err != nil {
         return err  // Rolled back
     }
 
     // 3. Deduct User Points
     user.Points -= calculateTotal(items)
-    if err := s.userRepo.Update(ctx, user); err != nil {
+    if err := s.userRepo.Update(ctx, tx, user); err != nil {
         return err  // Rolled back
     }
 
@@ -288,7 +321,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 }
 ```
 
-All operations execute within the same transaction.
+Every operation that receives this `tx` executes within the same transaction. A repository call that uses its base `db` instead is outside that transaction.
 
 ## Transaction Options
 
@@ -360,11 +393,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return  // Skip if no transaction
     }
     
-    tx := v.(bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -399,7 +435,10 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx := v.(bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     
     if err != nil {
         log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
@@ -473,11 +512,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
     
-    tx := v.(bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -488,8 +530,9 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 |------|------|
 | **Interceptor-Based** | Start in PreHandle, End in AfterCompletion |
 | **Auto Commit/Rollback** | Processed automatically based on error |
-| **bun.IDB** | Interface accepting both DB and Tx |
-| **Context Sharing** | Pass via `ctx.Set("tx", tx)` |
+| **bun.IDB** | Common interface implemented by `*bun.DB` and `bun.Tx` |
+| **Request Sharing** | Store with `ExecutionContext.Set`, retrieve with handler-injected `spine.Ctx.Get` |
+| **Explicit Propagation** | Pass `context.Context` and `bun.IDB` through service/repository calls |
 
 
 ## Next Steps

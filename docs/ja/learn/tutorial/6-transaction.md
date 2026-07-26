@@ -125,7 +125,7 @@ type UserRepository struct {
 ### 解決
 
 ```go
-// ✅ bun.IDBは*bun.DBと*bun.Txの両方が実装
+// ✅ bun.IDBは*bun.DBとbun.Txの両方が実装
 type UserRepository struct {
     db bun.IDB
 }
@@ -139,7 +139,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 | タイプ | bun.IDBの実装 |
 |--------|----------------|
 | `*bun.DB` | ✅ |
-| `*bun.Tx` | ✅ |
+| `bun.Tx` | ✅ |
 
 同じメソッド（`NewSelect`、`NewInsert`など）を使用できます。
 
@@ -151,8 +151,9 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // txを使用
+   └─→ spine.Ctx.Get("tx")
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // txを使用
    └─→ return user, nil  ✓
 
 3. TxInterceptor.AfterCompletion
@@ -167,8 +168,9 @@ func NewUserRepository(db bun.IDB) *UserRepository {
    └─→ ctx.Set("tx", tx)
 
 2. Controller.CreateUser
-   └─→ Service.Create
-       └─→ Repository.Save  // txを使用
+   └─→ spine.Ctx.Get("tx")
+   └─→ Service.Create(ctx, tx, ...)
+       └─→ Repository.Save(ctx, tx, ...)  // txを使用
    └─→ return error  ✗
 
 3. TxInterceptor.AfterCompletion
@@ -177,7 +179,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 ```
 
 ## Repositoryでトランザクションを使用する
-現在の構造では、リポジトリは生成時に`bun.IDB`を注入されます。
+読み取りには生成時に注入されたDBを使用できます。更新操作では、リクエストのトランザクションを`bun.IDB`引数として明示的に受け取ります。
 
 ```go
 // repository/user_repository.go
@@ -189,42 +191,41 @@ func NewUserRepository(db bun.IDB) *UserRepository {
     return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewInsert().
+func (r *UserRepository) Save(ctx context.Context, tx bun.IDB, user *entity.User) error {
+    _, err := tx.NewInsert().
         Model(user).
         Exec(ctx)
     return err
 }
 ```
 
-### トランザクションコンテキストでの使用
-インターセプタによって保存されたトランザクションを取得して使用するヘルパー関数を作成できます。
+### `spine.Ctx`からトランザクションを取得
+コントローラに`spine.Ctx`を注入し、インターセプタが保存したトランザクションを取得します。取得した`bun.IDB`はServiceとRepositoryに明示的に渡します。
 
 ```go
-// db/context.go
-package db
-
-import (
-    "context"
-    
-    "github.com/uptrace/bun"
-)
-
-type ctxKey string
-
-const txKey ctxKey = "tx"
-
-// コンテキストからトランザクションを取得
-func GetTx(ctx context.Context) bun.IDB {
-    if tx, ok := ctx.Value(txKey).(bun.IDB); ok {
-        return tx
+// controller/user_controller.go
+func (c *UserController) CreateUser(
+    ctx context.Context,
+    req *dto.CreateUserRequest,
+    spineCtx spine.Ctx,
+) (httpx.Response[dto.CreateUserResponse], error) {
+    v, exists := spineCtx.Get("tx")
+    if !exists {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("トランザクションがありません。")
     }
-    return nil
-}
 
-// コンテキストにトランザクションを保存
-func WithTx(ctx context.Context, tx bun.IDB) context.Context {
-    return context.WithValue(ctx, txKey, tx)
+    tx, ok := v.(bun.IDB)
+    if !ok {
+        return httpx.Response[dto.CreateUserResponse]{},
+            httperr.InternalServerError("トランザクションの型が正しくありません。")
+    }
+
+    user, err := c.userService.Create(ctx, tx, req.Name, req.Email)
+    if err != nil {
+        return httpx.Response[dto.CreateUserResponse]{}, err
+    }
+    return httpx.Response[dto.CreateUserResponse]{Body: user}, nil
 }
 ```
 
@@ -249,7 +250,7 @@ func NewOrderService(
     }
 }
 
-func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item) error {
+func (s *OrderService) CreateOrder(ctx context.Context, tx bun.IDB, userID int, items []Item) error {
     // 1. ユーザー 参照
     user, err := s.userRepo.FindByID(ctx, userID)
     if err != nil {
@@ -258,13 +259,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 
     // 2. 注文を作成
     order := &entity.Order{UserID: user.ID, Items: items}
-    if err := s.orderRepo.Save(ctx, order); err != nil {
+    if err := s.orderRepo.Save(ctx, tx, order); err != nil {
         return err  // ロールバック
     }
 
     // 3. ユーザーのポイントを減算
     user.Points -= calculateTotal(items)
-    if err := s.userRepo.Update(ctx, user); err != nil {
+    if err := s.userRepo.Update(ctx, tx, user); err != nil {
         return err  // ロールバック
     }
 
@@ -272,7 +273,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID int, items []Item
 }
 ```
 
-すべてのジョブが同じトランザクション内で実行されます。
+同じ`tx`を各更新メソッドに渡すため、すべての更新が同じトランザクション内で実行されます。
 ## トランザクションオプション
 ### 読み取り専用トランザクション
 
@@ -340,11 +341,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return  // トランザクションがなければスキップ
     }
     
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -378,7 +382,10 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
 
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     
     if err != nil {
         log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
@@ -453,11 +460,14 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
         return
     }
     
-    tx := v.(*bun.Tx)
+    tx, ok := v.(bun.Tx)
+    if !ok {
+        return
+    }
     if err != nil {
-        tx.Rollback()
+        _ = tx.Rollback()
     } else {
-        tx.Commit()
+        _ = tx.Commit()
     }
 }
 ```
@@ -468,7 +478,8 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 | **インターセプターベース** | PreHandleで開始、AfterCompletionで終了|
 | **自動コミット/ロールバック** |エラーかどうかに応じて自動処理
 | **bun.IDB** | DBとTxの両方に対応するインターフェース|
-| **コンテキスト共有** | `ctx.Set("tx", tx)`に転送|
+| **コンテキスト共有** | `ctx.Set("tx", tx)`で保存し、`spine.Ctx.Get("tx")`で取得 |
+| **明示的な伝達** | `bun.IDB`をControllerからService、Repositoryへ渡す |
 
 ## 次のステップ
 - [チュートリアル: エラー処理](/ja/learn/tutorial/7-error-handling) — httperr の使い方
