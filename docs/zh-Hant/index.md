@@ -49,15 +49,15 @@ func NewUserController(svc *UserService) *UserController {
 代替註釋或約定，
 簽名本身揭示了結構和合約。
 
-### 4.攔截器管道
-可以在請求之前/之後/完成時插入邏輯。
+### 4. 攔截器管線
+可以在請求前、回應準備後、寫出回應前和執行完成時插入邏輯。
 橫切關注點，例如身分驗證、交易和日誌記錄
 將其與業務程式碼分離，放入執行流程中。
 
 執行順序由 Sp​​ine 的管道明確控制。
 
 ```go
-goapp.Interceptor(
+app.Interceptor(
     &TxInterceptor{},
     &AuthInterceptor{},
     &LoggingInterceptor{},
@@ -65,6 +65,8 @@ goapp.Interceptor(
 ```
 
 </div>
+
+> 本網站僅說明目前支援的 Spine v0.5.1。正式環境部署請參閱[安全設定](/zh-Hant/reference/security-configuration)。
 
 ## 執行僅透過一個管道
 

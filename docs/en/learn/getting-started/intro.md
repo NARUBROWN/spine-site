@@ -14,7 +14,7 @@ func main() {
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
     
     // Interceptors — execution order is visible in code
-    app.Interceptor(&TxInterceptor{}, &LoggingInterceptor{})
+    app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
     
     // Routes — clear which method maps to which path
     app.Route("GET", "/users", (*UserController).GetUser)
@@ -94,7 +94,7 @@ app.Interceptor(
 ```mermaid
 graph LR
     Request --> Tx.Pre --> Auth.Pre --> Log.Pre --> Controller
-    Controller --> Log.After --> Auth.After --> Tx.After --> Response
+    Controller --> Prepared["Prepare response"] --> Log.Before --> Auth.Before --> Tx.Before --> Response
 ```
 
 ### 3. Explicit Routing
@@ -156,3 +156,5 @@ go get github.com/NARUBROWN/spine
 ```
 
 [5 Minute Quickstart →](/en/learn/getting-started/first-app)
+
+For production defaults, continue with [Security Configuration](/en/reference/security-configuration).

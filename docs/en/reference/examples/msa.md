@@ -149,7 +149,8 @@ func main() {
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
         Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
+            Brokers:                []string{"localhost:9092"},
+            AllowInsecureTransport: true, // Isolated local development only
             Write: &boot.KafkaWriteOptions{
                 TopicPrefix: "",
             },
@@ -233,7 +234,8 @@ func main() {
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
         Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
+            Brokers:                []string{"localhost:9092"},
+            AllowInsecureTransport: true, // Isolated local development only
             Read: &boot.KafkaReadOptions{
                 GroupID: "stock-service",
             },
@@ -317,7 +319,8 @@ Stock Service (Consumer)
 
 ```go
 Kafka: &boot.KafkaOptions{
-    Brokers: []string{"localhost:9092"},
+    Brokers:                []string{"localhost:9092"},
+    AllowInsecureTransport: true, // Isolated local development only
     Write: &boot.KafkaWriteOptions{
         TopicPrefix: "prod.",  // Topic prefix (e.g., prod.order.created)
     },
@@ -328,12 +331,15 @@ Kafka: &boot.KafkaOptions{
 
 ```go
 Kafka: &boot.KafkaOptions{
-    Brokers: []string{"localhost:9092"},
+    Brokers:                []string{"localhost:9092"},
+    AllowInsecureTransport: true, // Isolated local development only
     Read: &boot.KafkaReadOptions{
         GroupID: "stock-service",  // Consumer Group ID
     },
 },
 ```
+
+Kafka uses implicit TLS 1.2+ by default. The explicit insecure option above is only for the local plaintext broker in this tutorial. Production should use the default TLS or a custom `TLS`, `Dialer`, or `Transport`. Consumer handlers must be idempotent because reconnects and ACK/commit failures can cause redelivery; a permanently failing Kafka record can block its partition.
 
 
 ## Key Takeaways

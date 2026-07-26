@@ -53,7 +53,7 @@ Instead of annotations or conventions,
 the signature itself reveals the structure and contract.
 
 ### 4. Interceptor Pipeline
-You can inject logic at pre-request / post-request / completion points.
+You can inject logic at pre-request, post-processing, pre-response, and completion points.
 Place cross-cutting concerns like authentication, transactions, and logging
 separated from business code into the execution flow.
 
@@ -61,12 +61,18 @@ It provides a user experience **similar to Spring's HandlerInterceptor**,
 but the execution order is explicitly controlled by Spine's pipeline.
 
 ```go
-goapp.Interceptor(
+app.Interceptor(
     &TxInterceptor{},
     &AuthInterceptor{},
     &LoggingInterceptor{},
 )
 ```
+
+### 5. Secure, Bounded Defaults
+
+Kafka uses TLS 1.2+, RabbitMQ requires `amqps://`, WebSocket connections are origin-checked and capacity-bounded, and invalid credentialed CORS or cookie configuration fails explicitly. `App.Validate` reports configuration issues before any network connection opens.
+
+[Security configuration →](/en/reference/security-configuration)
 
 </div>
 

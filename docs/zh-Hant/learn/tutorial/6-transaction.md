@@ -1,506 +1,113 @@
 # 交易管理
 
-在 Spine 中處理事務。
+在 Spine v0.5.1 中，交易應在 `PreHandle` 開始，在 `BeforeResponse` 提交或回滾。不要在 `AfterCompletion` 提交：該階段發生在回應處理之後，只適合清理和觀察。
 
-## 大綱
+## 生命週期
 
-Spine 在基於攔截器的基礎上管理事務。
-
-```
-Request
-   │
-   ├─→ TxInterceptor.PreHandle      // 開始事务
-   │
-   ├─→ Controller → Service → Repository
-   │
-   └─→ TxInterceptor.AfterCompletion // 提交或回滚
-
-Response
+```text
+PreHandle          開始交易
+Controller         執行業務邏輯
+Prepare response   序列化並驗證 Cookie/狀態
+PostHandle         成功後處理
+BeforeResponse     依 executionErr 提交或回滾
+Flush response     寫入真實 HTTP writer
+AfterCompletion    日誌與清理
 ```
 
-- 成功後→自動提交
-- 如果發生錯誤→自動回滾
+v0.5.1 會在 `BeforeResponse` 前完成回應準備，因此 JSON 序列化、非法 Cookie 或狀態碼錯誤都能使交易回滾。
 
-## TxInterceptor 實現
+## 實作 `TxInterceptor`
 
 ```go
-// 攔截器/tx_interceptor.go
-package interceptor
+type TxInterceptor struct {
+	db *bun.DB
+}
 
-import (
-    "errors"
+func NewTxInterceptor(db *bun.DB) *TxInterceptor {
+	return &TxInterceptor{db: db}
+}
 
-    "github.com/NARUBROWN/spine/core"
-    "github.com/uptrace/bun"
+func (i *TxInterceptor) PreHandle(
+	ctx core.ExecutionContext,
+	meta core.HandlerMeta,
+) error {
+	tx, err := i.db.BeginTx(ctx.Context(), nil)
+	if err != nil {
+		return err
+	}
+	ctx.Set("tx", tx)
+	return nil
+}
+
+func (i *TxInterceptor) PostHandle(
+	ctx core.ExecutionContext,
+	meta core.HandlerMeta,
+) {}
+
+func (i *TxInterceptor) BeforeResponse(
+	ctx core.ExecutionContext,
+	meta core.HandlerMeta,
+	executionErr error,
+) error {
+	value, ok := ctx.Get("tx")
+	if !ok {
+		return nil
+	}
+	tx, ok := value.(bun.Tx)
+	if !ok {
+		return errors.New("transaction type is invalid")
+	}
+	if executionErr != nil {
+		return tx.Rollback()
+	}
+	return tx.Commit()
+}
+
+func (i *TxInterceptor) AfterCompletion(
+	ctx core.ExecutionContext,
+	meta core.HandlerMeta,
+	err error,
+) {}
+```
+
+## 相依性注入與註冊
+
+```go
+app.Constructor(NewDB, interceptor.NewTxInterceptor)
+app.InterceptorFor(
+	boot.InterceptorHTTP,
+	(*interceptor.TxInterceptor)(nil),
 )
-
-type TxInterceptor struct {
-    db *bun.DB
-}
-
-// 建構函式——DB依賴注入
-func NewTxInterceptor(db *bun.DB) *TxInterceptor {
-    return &TxInterceptor{db: db}
-}
-
-// PreHandle — 開始交易
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    reqCtx := ctx.Context()
-    if reqCtx == nil {
-        return errors.New("execution context has no request context")
-    }
-
-    // 開始交易
-    tx, err := i.db.BeginTx(reqCtx, nil)
-    if err != nil {
-        return err
-    }
-
-    // 儲存到執行上下文
-    ctx.Set("tx", tx)
-    return nil
-}
-
-// PostHandle — 不執行任何操作
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-// AfterCompletion — 提交或回滾
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return
-    }
-
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return
-    }
-
-    // 根據錯誤回滾/提交
-    if err != nil {
-        _ = tx.Rollback()
-    } else {
-        _ = tx.Commit()
-    }
-}
 ```
 
-## 登記
+交易攔截器通常只應作用於 HTTP。`app.Interceptor` 同時涵蓋 WebSocket 訊息，可能錯誤地為每則訊息開啟資料庫交易，因此這裡明確使用 `InterceptorHTTP`。
+
+## 在控制器中讀取交易
 
 ```go
-// 主機程式
-func main() {
-    app := spine.New()
+func (c *UserController) Create(
+	ctx context.Context,
+	controllerCtx core.ControllerContext,
+	req *CreateUserRequest,
+) (httpx.Response[User], error) {
+	value, ok := controllerCtx.Get("tx")
+	if !ok {
+		return httpx.Response[User]{}, errors.New("transaction is missing")
+	}
+	tx, ok := value.(bun.IDB)
+	if !ok {
+		return httpx.Response[User]{}, errors.New("transaction type is invalid")
+	}
 
-    // 1. 註冊一個建構函數
-    app.Constructor(
-        NewDB,
-        interceptor.NewTxInterceptor,
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    // 2.註冊攔截器（見類型）
-    app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),
-    )
-
-    routes.RegisterUserRoutes(app)
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+	user, err := c.service.Create(ctx, tx, req)
+	return httpx.Response[User]{Body: user}, err
 }
 ```
 
-## bun.IDB 介面
+儲存庫參數使用 `bun.IDB`，即可接受 `*bun.DB` 或 `bun.Tx`。查詢和更新應明確使用同一個請求交易。
 
-`bun.IDB` 介面是在儲存庫中使用交易的關鍵。
+## 外部事件
 
-### 問題
+Spine 會在回應可序列化且 Cookie/狀態有效後執行領域事件後處理，但訊息發布、資料庫提交和最終 socket 寫入仍不能原子完成。必須可靠地綁定資料庫變更與外部事件時，請採用 transactional outbox；消費者還應使用冪等鍵。
 
-```go
-// ❌ 如果只收到*bun.DB，則無法使用交易。
-type UserRepository struct {
-    db *bun.DB
-}
-```
-
-### 解決
-
-```go
-// ✅ bun.IDB 由 *bun.DB 和 bun.Tx 實作
-type UserRepository struct {
-    db bun.IDB
-}
-
-func NewUserRepository(db bun.IDB) *UserRepository {
-    return &UserRepository{db: db}
-}
-```
-
-### 包子.IDB 是什麼？
-
-|類型 |實作|bun.IDB
-|------|-------------|
-| `*bun.DB` | `*bun.DB` ✅ |
-| `bun.Tx` | ✅ |
-
-您可以使用相同的方法（`NewSelect`、`NewInsert` 等）。
-
-## 交易流程
-
-### 關於成功
-
-```
-1. TxInterceptor.PreHandle
-   └─→ tx := db.BeginTx()
-   └─→ ctx.Set("tx", tx)
-
-2. Controller.CreateUser
-   └─→ spine.Ctx.Get("tx")
-   └─→ Service.Create(ctx, tx, ...)
-       └─→ Repository.Save(ctx, tx, ...)  // 使用 tx
-   └─→ return user, nil  ✓
-
-3. TxInterceptor.AfterCompletion
-   └─→ err == nil
-   └─→ tx.Commit()  ✓
-```
-
-### 失敗時
-
-```
-1. TxInterceptor.PreHandle
-   └─→ tx := db.BeginTx()
-   └─→ ctx.Set("tx", tx)
-
-2. Controller.CreateUser
-   └─→ spine.Ctx.Get("tx")
-   └─→ Service.Create(ctx, tx, ...)
-       └─→ Repository.Save(ctx, tx, ...)  // 使用 tx
-   └─→ return error  ✗
-
-3. TxInterceptor.AfterCompletion
-   └─→ err != nil
-   └─→ tx.Rollback()  ✓
-```
-
-## 使用儲存庫中的事務
-
-查詢可以使用建立儲存庫時注入的 DB。更新操作則透過 `bun.IDB` 參數明確接收當前請求的交易。
-
-```go
-// 儲存庫/user_repository.go
-type UserRepository struct {
-    db bun.IDB
-}
-
-func NewUserRepository(db bun.IDB) *UserRepository {
-    return &UserRepository{db: db}
-}
-
-func (r *UserRepository) Save(ctx context.Context, tx bun.IDB, user *entity.User) error {
-    _, err := tx.NewInsert().
-        Model(user).
-        Exec(ctx)
-    return err
-}
-```
-
-### 從 `spine.Ctx` 取得交易
-
-將 `spine.Ctx` 注入控制器，讀取攔截器儲存的交易，再將 `bun.IDB` 明確傳遞給服務與儲存庫。
-
-```go
-// controller/user_controller.go
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-    spineCtx spine.Ctx,
-) (httpx.Response[dto.CreateUserResponse], error) {
-    v, exists := spineCtx.Get("tx")
-    if !exists {
-        return httpx.Response[dto.CreateUserResponse]{},
-            httperr.InternalServerError("交易不存在。")
-    }
-
-    tx, ok := v.(bun.IDB)
-    if !ok {
-        return httpx.Response[dto.CreateUserResponse]{},
-            httperr.InternalServerError("交易類型不正確。")
-    }
-
-    user, err := c.userService.Create(ctx, tx, req.Name, req.Email)
-    if err != nil {
-        return httpx.Response[dto.CreateUserResponse]{}, err
-    }
-    return httpx.Response[dto.CreateUserResponse]{Body: user}, nil
-}
-```
-
-## 使用多個儲存庫
-
-在一個事務中使用多個儲存庫時就是這種情況。
-
-### 服務範例
-
-```go
-// 服務/order_service.go
-type OrderService struct {
-    orderRepo *repository.OrderRepository
-    userRepo  *repository.UserRepository
-}
-
-func NewOrderService(
-    orderRepo *repository.OrderRepository,
-    userRepo *repository.UserRepository,
-) *OrderService {
-    return &OrderService{
-        orderRepo: orderRepo,
-        userRepo:  userRepo,
-    }
-}
-
-func (s *OrderService) CreateOrder(ctx context.Context, tx bun.IDB, userID int, items []Item) error {
-    // 1、用戶查詢
-    user, err := s.userRepo.FindByID(ctx, userID)
-    if err != nil {
-        return err  // 已回滚
-    }
-
-    // 2. 建立訂單
-    order := &entity.Order{UserID: user.ID, Items: items}
-    if err := s.orderRepo.Save(ctx, tx, order); err != nil {
-        return err  // 已回滚
-    }
-
-    // 3.用戶積分扣除
-    user.Points -= calculateTotal(items)
-    if err := s.userRepo.Update(ctx, tx, user); err != nil {
-        return err  // 已回滚
-    }
-
-    return nil  // 全部成功 → 提交
-}
-```
-
-同一個 `tx` 會傳給每個更新方法，因此所有更新都在同一筆交易中運作。
-
-## 交易選項
-
-### 只讀事務
-
-```go
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    reqCtx := ctx.Context()
-
-    // 只讀事務
-    tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
-        ReadOnly: true,
-    })
-    if err != nil {
-        return err
-    }
-
-    ctx.Set("tx", tx)
-    return nil
-}
-```
-
-### 設定隔離級別
-
-```go
-import "database/sql"
-
-tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
-    Isolation: sql.LevelSerializable,  // 可串行化
-})
-```
-
-|隔離等級|常數|
-|----------|------|
-|已閱讀未提交 | `sql.LevelReadUncommitted` | `sql.LevelReadUncommitted`
-|閱讀提交 | `sql.LevelReadCommitted` | `sql.LevelReadCommitted`
-|可重複讀取| `sql.LevelRepeatableRead` | `sql.LevelRepeatableRead`
-|可串列化| `sql.LevelSerializable` | `sql.LevelSerializable`
-
-## 可選交易
-
-並非所有請求都需要事務。
-
-### 方法一：以方法名稱分隔
-
-```go
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    methodName := meta.Method.Name
-
-    // 以 Get 開頭的方法會跳過交易。
-    if strings.HasPrefix(methodName, "Get") || strings.HasPrefix(methodName, "List") {
-        return nil
-    }
-
-    // 開始交易
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-
-    ctx.Set("tx", tx)
-    return nil
-}
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return  // 沒有事务時跳过
-    }
-
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return
-    }
-    if err != nil {
-        _ = tx.Rollback()
-    } else {
-        _ = tx.Commit()
-    }
-}
-```
-
-### 方法二：透過HTTP方式分隔
-
-```go
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // GET 請求跳過事務
-    if ctx.Method() == "GET" {
-        return nil
-    }
-
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-
-    ctx.Set("tx", tx)
-    return nil
-}
-```
-
-## 錯誤記錄
-
-您可以在回滾交易時新增日誌記錄。
-
-```go
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return
-    }
-
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return
-    }
-
-    if err != nil {
-        log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
-        _ = tx.Rollback()
-    } else {
-        log.Printf("[TX] Commit: %s %s", ctx.Method(), ctx.Path())
-        _ = tx.Commit()
-    }
-}
-```
-
-## 完整範例
-
-```go
-// 主機程式
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        NewDB,
-        interceptor.NewTxInterceptor,
-        repository.NewUserRepository,
-        repository.NewOrderRepository,
-        service.NewUserService,
-        service.NewOrderService,
-        controller.NewUserController,
-        controller.NewOrderController,
-    )
-
-    app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),
-        &interceptor.LoggingInterceptor{},
-    )
-
-    routes.RegisterUserRoutes(app)
-    routes.RegisterOrderRoutes(app)
-
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
-}
-```
-
-```go
-// 攔截器/tx_interceptor.go
-type TxInterceptor struct {
-    db *bun.DB
-}
-
-func NewTxInterceptor(db *bun.DB) *TxInterceptor {
-    return &TxInterceptor{db: db}
-}
-
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-    ctx.Set("tx", tx)
-    return nil
-}
-
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return
-    }
-
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return
-    }
-    if err != nil {
-        _ = tx.Rollback()
-    } else {
-        _ = tx.Commit()
-    }
-}
-```
-
-## 主要摘要
-
-|概念|描述 |
-|------|------|
-| **基於攔截器** |在 PreHandle 中開始，在 AfterCompletion 中結束 |
-| **自動提交/回滾** |根據是否有錯誤自動處理|
-| **bun.IDB** |接受 DB 和 Tx 的介面 |
-| **上下文共享** | 以 `ctx.Set("tx", tx)` 儲存，以 `spine.Ctx.Get("tx")` 取得 |
-| **明確傳遞** | 將 `bun.IDB` 從控制器傳給服務與儲存庫 |
-
-## 後續步驟
-
-- [教學：錯誤處理](/zh-Hant/learn/tutorial/7-error-handling) — 如何使用 httperr
-- [參考：API](/zh-Hant/reference/api/spine-app) — Spine API 文檔
+`AfterCompletion` 僅用於清理和觀察；交易提交或回滾必須在 `BeforeResponse` 中完成。

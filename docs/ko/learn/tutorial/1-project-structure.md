@@ -306,6 +306,10 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
     log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
 }
 
+func (i *LoggingInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
+    return nil
+}
+
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     if err != nil {
         log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)

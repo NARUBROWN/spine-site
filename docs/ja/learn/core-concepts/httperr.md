@@ -23,7 +23,7 @@ graph TD
 
 ## なぜhttperrなのか？
 
-＃＃＃問題：コントローラはHTTPを知る必要がありますか？
+### 問題：ControllerはHTTPを知る必要がありますか？
 
 一般的な方法では、ControllerはHTTP応答を直接作成します。
 
@@ -394,7 +394,7 @@ if err != nil {
 }
 ```
 
-Interceptorの`AfterCompletion`から`Cause`をログに記録できます。
+Interceptorの`AfterCompletion`から`Cause`をログに記録できます。次のコードはこのメソッドだけの抜粋であり、実際の実装には`PreHandle`、`PostHandle`、`BeforeResponse`も必要です。
 
 
 ```go

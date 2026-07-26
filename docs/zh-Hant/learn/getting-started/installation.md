@@ -1,10 +1,10 @@
 # 安裝
 
-如何安裝脊柱。
+如何安裝 Spine。
 
 ## 要求
 
-- **前往 1.21 或更高版本**
+- **Go 1.25.5 或更新版本**（與目前 `go.mod` 一致）
 
 ```bash
 # 檢查你的 Go 版本
@@ -23,13 +23,13 @@ mkdir my-app && cd my-app
 go mod init my-app
 
 # 3.安裝脊柱
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 ### 新增到現有項目
 
 ```bash
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 ## 驗證安裝
@@ -75,7 +75,7 @@ _____ \___  __ \_  /__  __ \  _ \
 ____/ /__  /_/ /  / _  / / /  __/
 /____/ _  .___//_/  /_/ /_/\___/
        /_/
-2026/01/19 14:37:59 [Bootstrap] Spine version: v0.2.1
+2026/07/26 14:37:59 [Bootstrap] Spine version: v0.5.1
 ```
 
 ## 後續步驟

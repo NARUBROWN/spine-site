@@ -1,25 +1,20 @@
-# トランザクション管理
-Spineでトランザクションを処理します。
-## 概要
-Spineは**インターセプタベース**でトランザクションを管理します。
-```
-Request
-   │
-   ├─→ TxInterceptor.PreHandle      // トランザクション開始
-   │
-   ├─→ Controller → Service → Repository
-   │
-   └─→ TxInterceptor.AfterCompletion // コミットまたはロールバック
-   
-Response
+# Transaction管理
+
+Spine v0.5.1では、interceptorの`PreHandle`でtransactionを開始し、`BeforeResponse`でcommitまたはrollbackします。`AfterCompletion`は応答後のcleanupにのみ使用します。
+
+```text
+PreHandle: transaction開始
+→ Controller → 戻り値の直列化・Cookie・status検証 → PostHandle
+→ BeforeResponse: エラーならrollback、成功ならcommit
+→ 実際のHTTP応答をflush
+→ AfterCompletion: logging・cleanup
 ```
 
-- 成功時→自動コミット
-- エラー時→自動ロールバック
+この順序により、Controllerが成功してもJSON直列化やCookie検証が失敗した場合はcommitされません。
+
 ## TxInterceptorの実装
 
 ```go
-// interceptor/tx_interceptor.go
 package interceptor
 
 import (
@@ -33,156 +28,82 @@ type TxInterceptor struct {
     db *bun.DB
 }
 
-// コンストラクタ — DB 依存性注入
 func NewTxInterceptor(db *bun.DB) *TxInterceptor {
     return &TxInterceptor{db: db}
 }
 
-// PreHandle — トランザクション開始
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+func (i *TxInterceptor) PreHandle(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+) error {
     reqCtx := ctx.Context()
     if reqCtx == nil {
         return errors.New("execution context has no request context")
     }
-
-    // トランザクション開始
     tx, err := i.db.BeginTx(reqCtx, nil)
     if err != nil {
         return err
     }
-
-    // ExecutionContextに保存
     ctx.Set("tx", tx)
     return nil
 }
 
-// PostHandle — 何もしない
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+func (i *TxInterceptor) PostHandle(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+) {}
 
-// AfterCompletion — コミットまたはロールバック
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
+func (i *TxInterceptor) BeforeResponse(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+    executionErr error,
+) error {
+    value, ok := ctx.Get("tx")
     if !ok {
-        return
+        return nil
     }
-
-    tx, ok := v.(bun.Tx)
+    tx, ok := value.(bun.Tx)
     if !ok {
-        return
+        return errors.New("transaction has unexpected type")
     }
+    if executionErr != nil {
+        return tx.Rollback()
+    }
+    return tx.Commit()
+}
 
-    // エラーに応じてロールバックまたはコミット
+func (i *TxInterceptor) AfterCompletion(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+    err error,
+) {
     if err != nil {
-        _ = tx.Rollback()
-    } else {
-        _ = tx.Commit()
+        log.Printf("[TX] %s %s: %v", ctx.Method(), ctx.Path(), err)
     }
 }
 ```
 
-## 登録
+commitまたはrollbackのエラーは必ず返してください。無視すると応答が成功として扱われる可能性があります。
+
+## 登録scope
+
+HTTP request transactionの場合はHTTP scopeを明示してください。`app.Interceptor(...)`はHTTPだけでなくWebSocket messageにも適用されます。
 
 ```go
-// main.go
-func main() {
-    app := spine.New()
-
-    // 1. コンストラクタ登録
-    app.Constructor(
-        NewDB,
-        interceptor.NewTxInterceptor,
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    // 2. インターセプタを登録（型参照）
-    app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),
-    )
-
-    routes.RegisterUserRoutes(app)
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
-}
+app.Constructor(NewDB, NewTxInterceptor)
+app.InterceptorFor(
+    boot.InterceptorHTTP,
+    (*TxInterceptor)(nil),
+)
 ```
 
-## bun.IDBインタフェース
-トランザクションをリポジトリで使用するには、`bun.IDB`インターフェースが重要です。
-### 問題
+route単位のtransactionには`route.WithInterceptors((*TxInterceptor)(nil))`を使用します。typed-nilはcontainer singletonとしてresolveされます。
+
+## Repositoryへのtransactionの受け渡し
+
+`*bun.DB`と`bun.Tx`が共通に実装する`bun.IDB`を使用します。
 
 ```go
-// ❌ *bun.DBだけを受け取るとトランザクションを使用できない
-type UserRepository struct {
-    db *bun.DB
-}
-```
-
-### 解決
-
-```go
-// ✅ bun.IDBは*bun.DBとbun.Txの両方が実装
-type UserRepository struct {
-    db bun.IDB
-}
-
-func NewUserRepository(db bun.IDB) *UserRepository {
-    return &UserRepository{db: db}
-}
-```
-
-### bun.IDBとは？
-| タイプ | bun.IDBの実装 |
-|--------|----------------|
-| `*bun.DB` | ✅ |
-| `bun.Tx` | ✅ |
-
-同じメソッド（`NewSelect`、`NewInsert`など）を使用できます。
-
-## トランザクションフロー
-### 成功時
-```
-1. TxInterceptor.PreHandle
-   └─→ tx := db.BeginTx()
-   └─→ ctx.Set("tx", tx)
-
-2. Controller.CreateUser
-   └─→ spine.Ctx.Get("tx")
-   └─→ Service.Create(ctx, tx, ...)
-       └─→ Repository.Save(ctx, tx, ...)  // txを使用
-   └─→ return user, nil  ✓
-
-3. TxInterceptor.AfterCompletion
-   └─→ err == nil
-   └─→ tx.Commit()  ✓
-```
-
-### 失敗時
-```
-1. TxInterceptor.PreHandle
-   └─→ tx := db.BeginTx()
-   └─→ ctx.Set("tx", tx)
-
-2. Controller.CreateUser
-   └─→ spine.Ctx.Get("tx")
-   └─→ Service.Create(ctx, tx, ...)
-       └─→ Repository.Save(ctx, tx, ...)  // txを使用
-   └─→ return error  ✗
-
-3. TxInterceptor.AfterCompletion
-   └─→ err != nil
-   └─→ tx.Rollback()  ✓
-```
-
-## Repositoryでトランザクションを使用する
-読み取りには生成時に注入されたDBを使用できます。更新操作では、リクエストのトランザクションを`bun.IDB`引数として明示的に受け取ります。
-
-```go
-// repository/user_repository.go
 type UserRepository struct {
     db bun.IDB
 }
@@ -191,296 +112,62 @@ func NewUserRepository(db bun.IDB) *UserRepository {
     return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Save(ctx context.Context, tx bun.IDB, user *entity.User) error {
-    _, err := tx.NewInsert().
-        Model(user).
-        Exec(ctx)
+func (r *UserRepository) Save(
+    ctx context.Context,
+    db bun.IDB,
+    user *User,
+) error {
+    _, err := db.NewInsert().Model(user).Exec(ctx)
     return err
 }
 ```
 
-### `spine.Ctx`からトランザクションを取得
-コントローラに`spine.Ctx`を注入し、インターセプタが保存したトランザクションを取得します。取得した`bun.IDB`はServiceとRepositoryに明示的に渡します。
+Controllerは`ControllerContext`からtransactionを取得し、serviceとrepositoryへ明示的に渡します。
 
 ```go
-// controller/user_controller.go
-func (c *UserController) CreateUser(
+func (c *UserController) Create(
     ctx context.Context,
-    req *dto.CreateUserRequest,
     spineCtx spine.Ctx,
-) (httpx.Response[dto.CreateUserResponse], error) {
-    v, exists := spineCtx.Get("tx")
-    if !exists {
-        return httpx.Response[dto.CreateUserResponse]{},
-            httperr.InternalServerError("トランザクションがありません。")
-    }
-
-    tx, ok := v.(bun.IDB)
+    req CreateUserRequest,
+) (*User, error) {
+    value, ok := spineCtx.Get("tx")
     if !ok {
-        return httpx.Response[dto.CreateUserResponse]{},
-            httperr.InternalServerError("トランザクションの型が正しくありません。")
+        return nil, errors.New("transaction is missing")
     }
-
-    user, err := c.userService.Create(ctx, tx, req.Name, req.Email)
-    if err != nil {
-        return httpx.Response[dto.CreateUserResponse]{}, err
+    tx, ok := value.(bun.Tx)
+    if !ok {
+        return nil, errors.New("transaction has unexpected type")
     }
-    return httpx.Response[dto.CreateUserResponse]{Body: user}, nil
+    return c.service.Create(ctx, tx, req)
 }
 ```
 
-## 複数のリポジトリを使用
-1つのトランザクションで複数のリポジトリを使用する場合。
-### Serviceの例
+## 任意のtransaction
 
-```go
-// service/order_service.go
-type OrderService struct {
-    orderRepo *repository.OrderRepository
-    userRepo  *repository.UserRepository
-}
-
-func NewOrderService(
-    orderRepo *repository.OrderRepository,
-    userRepo *repository.UserRepository,
-) *OrderService {
-    return &OrderService{
-        orderRepo: orderRepo,
-        userRepo:  userRepo,
-    }
-}
-
-func (s *OrderService) CreateOrder(ctx context.Context, tx bun.IDB, userID int, items []Item) error {
-    // 1. ユーザー 参照
-    user, err := s.userRepo.FindByID(ctx, userID)
-    if err != nil {
-        return err  // ロールバック
-    }
-
-    // 2. 注文を作成
-    order := &entity.Order{UserID: user.ID, Items: items}
-    if err := s.orderRepo.Save(ctx, tx, order); err != nil {
-        return err  // ロールバック
-    }
-
-    // 3. ユーザーのポイントを減算
-    user.Points -= calculateTotal(items)
-    if err := s.userRepo.Update(ctx, tx, user); err != nil {
-        return err  // ロールバック
-    }
-
-    return nil  // すべて成功 → コミット
-}
-```
-
-同じ`tx`を各更新メソッドに渡すため、すべての更新が同じトランザクション内で実行されます。
-## トランザクションオプション
-### 読み取り専用トランザクション
+読み取りrequestを除外する場合は、`PreHandle`と`BeforeResponse`の両方でtransactionの有無を処理します。
 
 ```go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    reqCtx := ctx.Context()
-    
-    // 読み取り専用トランザクション
-    tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
-        ReadOnly: true,
-    })
-    if err != nil {
-        return err
-    }
-    
-    ctx.Set("tx", tx)
-    return nil
-}
-```
-
-### 分離レベルの設定
-
-```go
-import "database/sql"
-
-tx, err := i.db.BeginTx(reqCtx, &sql.TxOptions{
-    Isolation: sql.LevelSerializable,  // シリアライズ可能
-})
-```
-
-| 分離レベル | 定数 |
-|------------|------|
-| Read Uncommitted | `sql.LevelReadUncommitted` |
-| Read Committed | `sql.LevelReadCommitted` |
-| Repeatable Read | `sql.LevelRepeatableRead` |
-| Serializable | `sql.LevelSerializable` |
-
-
-## オプションのトランザクション
-すべての要求にトランザクションが必要ない場合があります。
-### 方法 1: メソッド名で区切る
-
-```go
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    methodName := meta.Method.Name
-    
-    // Getで始まるメソッドはトランザクションをスキップ
-    if strings.HasPrefix(methodName, "Get") || strings.HasPrefix(methodName, "List") {
-        return nil
-    }
-    
-    // トランザクション開始
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-    
-    ctx.Set("tx", tx)
-    return nil
-}
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return  // トランザクションがなければスキップ
-    }
-    
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return
-    }
-    if err != nil {
-        _ = tx.Rollback()
-    } else {
-        _ = tx.Commit()
-    }
-}
-```
-
-### 方法 2: HTTP メソッドで区切る
-
-```go
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // GETリクエストはトランザクションをスキップ
     if ctx.Method() == "GET" {
         return nil
     }
-    
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-    
-    ctx.Set("tx", tx)
+    // transactionを開始してctx.Set("tx", tx)
     return nil
 }
 ```
 
-## エラーロギング
-トランザクションのロールバック時にロギングを追加できます。
+## 原子性の境界
 
-```go
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return
-    }
+`BeforeResponse`でのDB commitは、実際のsocket writeやbroker publishと単一の原子的transactionにはなりません。event publish後のcommit失敗まで一貫した結果として保証する必要がある場合は、transactional outboxと冪等性キーを使用してください。
 
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return
-    }
-    
-    if err != nil {
-        log.Printf("[TX] Rollback: %s %s - %v", ctx.Method(), ctx.Path(), err)
-        _ = tx.Rollback()
-    } else {
-        log.Printf("[TX] Commit: %s %s", ctx.Method(), ctx.Path())
-        _ = tx.Commit()
-    }
-}
-```
+## まとめ
 
-## 完全な例
+|段階|役割|
+|---|---|
+| `PreHandle` | transaction開始とcontextへの保存 |
+| `BeforeResponse` |準備段階のエラーを含めてrollback/commitし、エラーを返す|
+| `AfterCompletion` |応答後のloggingとcleanup|
+| `bun.IDB` |DBとtransactionを同じ契約でrepositoryへ渡す|
 
-```go
-// main.go
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        NewDB,
-        interceptor.NewTxInterceptor,
-        repository.NewUserRepository,
-        repository.NewOrderRepository,
-        service.NewUserService,
-        service.NewOrderService,
-        controller.NewUserController,
-        controller.NewOrderController,
-    )
-
-    app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),
-        &interceptor.LoggingInterceptor{},
-    )
-
-    routes.RegisterUserRoutes(app)
-    routes.RegisterOrderRoutes(app)
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
-}
-```
-
-
-```go
-// interceptor/tx_interceptor.go
-type TxInterceptor struct {
-    db *bun.DB
-}
-
-func NewTxInterceptor(db *bun.DB) *TxInterceptor {
-    return &TxInterceptor{db: db}
-}
-
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-    ctx.Set("tx", tx)
-    return nil
-}
-
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return
-    }
-    
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return
-    }
-    if err != nil {
-        _ = tx.Rollback()
-    } else {
-        _ = tx.Commit()
-    }
-}
-```
-
-## コアクリーンアップ
-| コンセプト | 説明 |
-|------------|------|
-| **インターセプターベース** | PreHandleで開始、AfterCompletionで終了|
-| **自動コミット/ロールバック** |エラーかどうかに応じて自動処理
-| **bun.IDB** | DBとTxの両方に対応するインターフェース|
-| **コンテキスト共有** | `ctx.Set("tx", tx)`で保存し、`spine.Ctx.Get("tx")`で取得 |
-| **明示的な伝達** | `bun.IDB`をControllerからService、Repositoryへ渡す |
-
-## 次のステップ
-- [チュートリアル: エラー処理](/ja/learn/tutorial/7-error-handling) — httperr の使い方
-- [リファレンス: API](/ja/reference/api/spine-app) — Spine API ドキュメント
+- [Interceptor API](/ja/reference/api/interceptor)
+- [現在のリリース](/ja/community/changelog)

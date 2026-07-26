@@ -145,6 +145,35 @@ type WebSocketContext interface {
 }
 ```
 
+### WebSocket handshake・messageのrequest情報
+
+v0.5.1ではHTTP upgrade要求の不変snapshotを別の契約として提供します。
+
+```go
+type WebSocketRequestContext interface {
+    ContextCarrier
+    Path() string
+    Header(name string) string
+    Headers() map[string][]string
+    Query(name string) string
+    Queries() map[string][]string
+    Cookie(name string) (string, bool)
+    Cookies() map[string]string
+    RemoteAddr() string
+    Host() string
+    RequestURI() string
+}
+
+type WebSocketHandshakeContext interface { WebSocketRequestContext }
+
+type WebSocketMessageContext interface {
+    WebSocketContext
+    WebSocketRequestContext
+}
+```
+
+`WebSocketHandshakeContext`は`PreHandshake`で、`WebSocketMessageContext`はmessage処理中に元のhandshake要求を参照するときに使用します。
+
 
 ## ExecutionContextメソッド
 
@@ -638,6 +667,7 @@ json.Unmarshal(payload, &msg)
 type Interceptor interface {
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
+    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
@@ -660,6 +690,10 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 
 func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
     log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
+}
+
+func (i *LoggingInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
+    return nil
 }
 
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {

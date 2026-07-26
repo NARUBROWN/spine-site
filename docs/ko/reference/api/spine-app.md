@@ -20,10 +20,14 @@ type App interface {
     Route(method string, path string, handler any, opts ...router.RouteOption)
     // 인터셉터 선언
     Interceptor(interceptors ...core.Interceptor)
+    // HTTP/WebSocket 범위를 지정한 전역 인터셉터 선언
+    InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
     // HTTP Transport 확장 (Echo 등)
     Transport(fn func(any))
     // 독립 실행되는 Custom Transport 등록
     RegisterTransport(t core.CustomTransport)
+    // 네트워크 연결 없이 설정 검증
+    Validate(opts boot.Options) error
     // 실행
     Run(opts boot.Options) error
     // 이벤트 소비자 레지스트리 반환
@@ -171,9 +175,9 @@ app.Route(
 Interceptor(interceptors ...core.Interceptor)
 ```
 
-전역 Interceptor를 등록합니다. 전역 Interceptor는 **라우팅 전**에 실행됩니다. 등록 순서대로 `PreHandle`이 실행되고, 역순으로 `PostHandle`과 `AfterCompletion`이 실행됩니다.
+전역 Interceptor를 HTTP와 WebSocket에 등록합니다. `app.Interceptor(...)`는 `app.InterceptorFor(boot.InterceptorAll, ...)`과 같습니다. 등록 순서대로 `PreHandle`이 실행되고, 역순으로 `PostHandle`, `BeforeResponse`, `AfterCompletion`이 실행됩니다.
 
-같은 타입이 여러 번 등록되면 최초 등록만 유지됩니다. nil 포인터로 등록하면 Container에서 Resolve됩니다.
+같은 포인터 인스턴스는 scope가 병합되어 한 번 실행되며, 같은 타입의 서로 다른 인스턴스는 각각 실행됩니다. typed-nil 포인터는 Container의 singleton으로 Resolve됩니다.
 
 **매개변수**
 - `interceptors` - Interceptor 인스턴스들 (가변 인자)
@@ -196,6 +200,20 @@ app.Interceptor(
     }),
     &LoggingInterceptor{},
 )
+```
+
+### InterceptorFor
+
+```go
+InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
+```
+
+전역 인터셉터의 기본 전송 범위를 선택합니다.
+
+```go
+app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
+app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ```
 
 ### Transport
@@ -439,6 +457,24 @@ WebSocket은 HTTP 서버와 같은 Echo 인스턴스를 공유하며, 부트스�
 Run(opts boot.Options) error
 ```
 
+### Validate
+
+```go
+Validate(opts boot.Options) error
+```
+
+listener, broker, Custom Transport를 시작하지 않고 전체 설정을 검사합니다. `Run`도 같은 검증을 네트워크 연결 전에 수행합니다. 실패는 `*boot.ConfigError`이며 `Issues`에 `Path`, `Code`, `Message`, `Hint`가 담깁니다.
+
+```go
+options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
+if err := app.Validate(options); err != nil {
+    log.Fatal(err)
+}
+if err := app.Run(options); err != nil {
+    log.Fatal(err)
+}
+```
+
 애플리케이션을 시작합니다. HTTP 서버, WebSocket 런타임, 이벤트 컨슈머 런타임, Custom Transport를 함께 구동합니다.
 
 **매개변수**
@@ -571,6 +607,17 @@ type KafkaOptions struct {
     // Kafka 브로커 주소 목록
     Brokers []string
 
+    // 사용자 정의 TLS, reader Dialer, writer Transport
+    TLS *tls.Config
+    Dialer *kafka.Dialer
+    Transport *kafka.Transport
+
+    // 격리된 로컬 환경의 평문 연결 명시적 허용
+    AllowInsecureTransport bool
+
+    // reader 오류와 ACK/NACK 실패 뒤 재연결 정책
+    ConsumerRetry ConsumerRetryOptions
+
     // 이벤트 소비(Consumer) 설정
     // nil이면 Kafka Consumer는 활성화되지 않음
     Read *KafkaReadOptions
@@ -598,6 +645,7 @@ app.Run(boot.Options{
     Address: ":8080",
     Kafka: &boot.KafkaOptions{
         Brokers: []string{"localhost:9092"},
+        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
         Read: &boot.KafkaReadOptions{
             GroupID: "my-consumer-group",
         },
@@ -620,6 +668,12 @@ type RabbitMqOptions struct {
     // 예: amqp://guest:guest@localhost:5672/
     URL string
 
+    // 로컬 amqp:// 연결 명시적 허용
+    AllowInsecureTransport bool
+
+    ConsumerRetry  ConsumerRetryOptions
+    PublisherRetry PublisherRetryOptions
+
     // 이벤트 소비(Consumer) 설정
     // nil이면 RabbitMQ Consumer는 활성화되지 않음
     Read *RabbitMqReadOptions
@@ -632,6 +686,12 @@ type RabbitMqOptions struct {
 type RabbitMqReadOptions struct {
     // 큐가 바인딩될 Exchange 이름
     Exchange string
+    PrefetchCount int
+    FailurePolicy RabbitMqFailurePolicy
+    DeadLetter *RabbitMqDeadLetterOptions
+
+    // Deprecated: FailurePolicy 사용 권장
+    RequeueOnError bool
 }
 
 type RabbitMqWriteOptions struct {
@@ -646,7 +706,8 @@ type RabbitMqWriteOptions struct {
 app.Run(boot.Options{
     Address: ":8080",
     RabbitMQ: &boot.RabbitMqOptions{
-        URL: "amqp://guest:guest@localhost:5672/",
+        URL:                    "amqp://guest:guest@localhost:5672/",
+        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
         Read: &boot.RabbitMqReadOptions{
             Exchange: "stock-exchange",
         },
@@ -777,7 +838,8 @@ func main() {
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
         RabbitMQ: &boot.RabbitMqOptions{
-            URL: "amqp://guest:guest@localhost:5672/",
+            URL:                    "amqp://guest:guest@localhost:5672/",
+            AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
             Read: &boot.RabbitMqReadOptions{
                 Exchange: "stock-exchange",
             },

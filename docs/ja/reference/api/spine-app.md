@@ -18,10 +18,14 @@ type App interface {
     Route(method string, path string, handler any, opts ...router.RouteOption)
     // インターセプタの宣言
     Interceptor(interceptors ...core.Interceptor)
+    // HTTP/WebSocket scopeを指定したグローバルinterceptorの宣言
+    InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
     // HTTP Transport の拡張（Echo など）
     Transport(fn func(any))
     // 独立して実行される Custom Transport の登録
     RegisterTransport(t core.CustomTransport)
+    // ネットワーク接続なしで設定を検証
+    Validate(opts boot.Options) error
     // 実行
     Run(opts boot.Options) error
     // イベントコンシューマのレジストリを返す
@@ -162,8 +166,8 @@ app.Route(
 Interceptor(interceptors ...core.Interceptor)
 ```
 
-グローバルインターセプターを登録します。グローバルインターセプタは**ルーティング前**で実行されます。登録順に`PreHandle`を実行し、逆順に`PostHandle`と`AfterCompletion`を実行します。
-同じタイプが複数回登録されると、最初の登録のみが維持されます。 nilポインタとして登録すると、ContainerでResolveされます。
+グローバルinterceptorをHTTPとWebSocketへ登録します。`app.Interceptor(...)`は`app.InterceptorFor(boot.InterceptorAll, ...)`と同じです。登録順に`PreHandle`を実行し、逆順に`PostHandle`、`BeforeResponse`、`AfterCompletion`を実行します。
+同じpointer instanceはscopeが統合されて1回実行され、同じ型の異なるinstanceはそれぞれ実行されます。typed-nil pointerはContainer singletonとしてResolveされます。
 **パラメータ**
 - `interceptors` - Interceptor インスタンス(可変引数)
 **実行順序**
@@ -182,6 +186,20 @@ app.Interceptor(
     }),
     &LoggingInterceptor{},
 )
+```
+
+### InterceptorFor
+
+```go
+InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
+```
+
+グローバルinterceptorを適用する基本transportを選択します。
+
+```go
+app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
+app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ```
 
 ### Transport
@@ -419,6 +437,24 @@ WebSocketはHTTPサーバーなどのEchoインスタンスを共有し、ブー
 Run(opts boot.Options) error
 ```
 
+### Validate
+
+```go
+Validate(opts boot.Options) error
+```
+
+listener、broker、Custom Transportを開始せずに全設定を検査します。`Run`もネットワーク接続前に同じ検証を実行します。失敗は`*boot.ConfigError`で、`Issues`に`Path`、`Code`、`Message`、`Hint`が入ります。
+
+```go
+options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
+if err := app.Validate(options); err != nil {
+    log.Fatal(err)
+}
+if err := app.Run(options); err != nil {
+    log.Fatal(err)
+}
+```
+
 アプリケーションを起動します。 HTTPサーバー、WebSocketランタイム、イベントコンシューマーランタイム、カスタムトランスポートを一緒に駆動します。
 **パラメータ**
 - `opts` - ブートオプション(`boot.Options`)
@@ -546,6 +582,17 @@ type KafkaOptions struct {
     // Kafka ブローカーのアドレス一覧
     Brokers []string
 
+    // カスタムTLS、reader Dialer、writer Transport
+    TLS *tls.Config
+    Dialer *kafka.Dialer
+    Transport *kafka.Transport
+
+    // 隔離されたローカル環境で平文通信を明示的に許可
+    AllowInsecureTransport bool
+
+    // readerエラーとACK/NACK失敗後の再接続ポリシー
+    ConsumerRetry ConsumerRetryOptions
+
     // イベント消費（Consumer）の設定
     // nil の場合、Kafka Consumer は有効になりません
     Read *KafkaReadOptions
@@ -573,6 +620,7 @@ app.Run(boot.Options{
     Address: ":8080",
     Kafka: &boot.KafkaOptions{
         Brokers: []string{"localhost:9092"},
+        AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
         Read: &boot.KafkaReadOptions{
             GroupID: "my-consumer-group",
         },
@@ -595,6 +643,12 @@ type RabbitMqOptions struct {
     // 例: amqp://guest:guest@localhost:5672/
     URL string
 
+    // ローカルamqp://通信を明示的に許可
+    AllowInsecureTransport bool
+
+    ConsumerRetry  ConsumerRetryOptions
+    PublisherRetry PublisherRetryOptions
+
     // イベント消費（Consumer）の設定
     // nil の場合、RabbitMQ Consumer は有効になりません
     Read *RabbitMqReadOptions
@@ -607,6 +661,12 @@ type RabbitMqOptions struct {
 type RabbitMqReadOptions struct {
     // キューがバインドされる Exchange 名
     Exchange string
+    PrefetchCount int
+    FailurePolicy RabbitMqFailurePolicy
+    DeadLetter *RabbitMqDeadLetterOptions
+
+    // Deprecated: FailurePolicyを使用
+    RequeueOnError bool
 }
 
 type RabbitMqWriteOptions struct {
@@ -621,7 +681,8 @@ type RabbitMqWriteOptions struct {
 app.Run(boot.Options{
     Address: ":8080",
     RabbitMQ: &boot.RabbitMqOptions{
-        URL: "amqp://guest:guest@localhost:5672/",
+        URL:                    "amqp://guest:guest@localhost:5672/",
+        AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
         Read: &boot.RabbitMqReadOptions{
             Exchange: "stock-exchange",
         },
@@ -749,7 +810,8 @@ func main() {
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
         RabbitMQ: &boot.RabbitMqOptions{
-            URL: "amqp://guest:guest@localhost:5672/",
+            URL:                    "amqp://guest:guest@localhost:5672/",
+            AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
             Read: &boot.RabbitMqReadOptions{
                 Exchange: "stock-exchange",
             },

@@ -1,23 +1,54 @@
 # spine.App
 
-`spine.App` 是 Spine 應用程式的入口，用來註冊建構函式、路由、攔截器與傳輸協定，最後以 `Run` 啟動。
+## 概覽
+
+`spine.App` 是應用程式入口，負責註冊相依性、HTTP 路由、攔截器、訊息消費者、WebSocket 和自訂傳輸，並在啟動前驗證完整設定。
 
 ```go
 app := spine.New()
 app.Constructor(NewUserService, NewUserController)
 app.Interceptor(&LoggingInterceptor{})
 app.Route("GET", "/users", (*UserController).List)
-app.Run(boot.Options{Address: ":8080"})
+
+opts := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
+if err := app.Validate(opts); err != nil {
+	log.Fatal(err)
+}
+if err := app.Run(opts); err != nil {
+	log.Fatal(err)
+}
 ```
+
+## 方法
 
 | 方法 | 用途 |
 |---|---|
-| `New()` | 建立應用程式執行個體 |
-| `Constructor(...)` | 註冊容器建構函式 |
-| `Route(...)` | 註冊 HTTP 路由 |
-| `Interceptor(...)` | 註冊全域攔截器 |
-| `Consumers(...)` | 註冊訊息消費者 |
-| `WebSocket(...)` | 註冊 WebSocket 處理器 |
-| `Run(options)` | 啟動已設定的元件 |
+| `New()` | 建立應用程式實例 |
+| `Constructor(constructors...)` | 註冊容器建構函式 |
+| `Route(method, path, handler, options...)` | 註冊 HTTP 路由 |
+| `Interceptor(interceptors...)` | 為 HTTP 與 WebSocket 註冊全域攔截器 |
+| `InterceptorFor(scope, interceptors...)` | 僅為選定傳輸範圍註冊全域攔截器 |
+| `Transport(fn)` | 擴充內建 HTTP 傳輸 |
+| `RegisterTransport(transport)` | 註冊獨立自訂傳輸 |
+| `Validate(options)` | 不開啟網路連線，彙總設定問題 |
+| `Run(options)` | 完成預檢、預熱和傳輸就緒檢查後執行應用程式 |
+| `Consumers()` | 回傳訊息消費者註冊表 |
+| `WebSocket()` | 回傳 WebSocket 註冊表 |
 
-`boot.Options` 可設定監聽位址、優雅關閉、HTTP 選項與復原中介軟體。Spine 啟動時會驗證處理器、解析相依性並預熱控制器，讓設定錯誤在接收請求前暴露。
+## 攔截器範圍
+
+```go
+app.Interceptor(&MetricsInterceptor{}) // HTTP + WebSocket
+app.InterceptorFor(boot.InterceptorHTTP, &CORSInterceptor{})
+app.InterceptorFor(boot.InterceptorWebSocket, &WSAuthInterceptor{})
+```
+
+可用範圍是 `boot.InterceptorHTTP`、`boot.InterceptorWebSocket` 和 `boot.InterceptorAll`。同一指標實例在多個範圍註冊時會合併並只執行一次；不同指標實例即使型別相同也會獨立執行。
+
+## 設定驗證與啟動
+
+`Validate` 回傳的設定錯誤可用 `errors.As(err, *boot.ConfigError)` 檢查，並逐一讀取 `Issues` 的 `Path`、`Code`、`Message` 與 `Hint`。`Code` 適合部署自動化；不要剖析面向人的訊息。
+
+`Run` 會執行同一無網路預檢，接著預熱控制器和消費者、執行 Kafka 協定握手、驗證 RabbitMQ 拓撲連線並初始化自訂傳輸。HTTP listener 只在這些步驟全部成功後啟動。負數 `ShutdownTimeout` 無效；優雅關閉會等待消費者和傳輸完成。
+
+完整選項與安全預設值請參閱[安全設定參考](/zh-Hant/reference/security-configuration)。

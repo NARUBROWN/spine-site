@@ -4,7 +4,7 @@ How to install Spine.
 
 ## Requirements
 
-- **Go 1.21 or higher**
+- **Go 1.25.5 or higher** (the version declared by Spine's current `go.mod`)
 
 ```bash
 # Check Go version
@@ -23,13 +23,13 @@ mkdir my-app && cd my-app
 go mod init my-app
 
 # 3. Install Spine
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 ### Add to Existing Project
 
 ```bash
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 ## Verify Installation
@@ -66,17 +66,13 @@ Run the server.
 go run main.go
 ```
 
-Success if you see the following output in the terminal.
+The process should stay running and listen on `:8080`. Stop it with `Ctrl+C`; graceful shutdown waits up to 10 seconds.
 
-```
-________       _____             
-__  ___/__________(_)___________ 
-_____ \___  __ \_  /__  __ \  _ \
-____/ /__  /_/ /  / _  / / /  __/
-/____/ _  .___//_/  /_/ /_/\___/ 
-       /_/        
-2026/01/19 14:37:59 [Bootstrap] Spine version: v0.2.1
-```
+For deployment checks, call `app.Validate(opts)` before `Run`. Validation is network-free and reports all configuration issues in one `*boot.ConfigError`; `Run` performs the same preflight automatically.
+
+::: tip Current version
+This site and its examples target Spine v0.5.1.
+:::
 
 ## Next Steps
 

@@ -89,6 +89,12 @@ export default withMermaid(defineConfig({
                                 { text: 'Kafka MSA', link: '/en/reference/examples/msa' },
                                 { text: 'WebSocket Chat', link: '/en/reference/examples/websocket' }
                             ]
+                        },
+                        {
+                            text: 'Operations',
+                            items: [
+                                { text: 'Security Configuration', link: '/en/reference/security-configuration' }
+                            ]
                         }
                     ],
                     '/en/community/': [
@@ -97,7 +103,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: 'Overview', link: '/en/community/' },
                                 { text: 'Contributing', link: '/en/community/contributing' },
-                                { text: 'Changelog', link: '/en/community/changelog' }
+                                { text: 'Current Release', link: '/en/community/changelog' }
                             ]
                         }
                     ]
@@ -177,6 +183,12 @@ export default withMermaid(defineConfig({
                                 { text: 'Kafka MSA', link: '/ko/reference/examples/msa' },
                                 { text: '웹소켓 채팅', link: '/ko/reference/examples/websocket' }
                             ]
+                        },
+                        {
+                            text: '운영',
+                            items: [
+                                { text: '보안 설정', link: '/ko/reference/security-configuration' }
+                            ]
                         }
                     ],
                     '/ko/community/': [
@@ -185,7 +197,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '개요', link: '/ko/community/' },
                                 { text: '기여하기', link: '/ko/community/contributing' },
-                                { text: '변경 기록', link: '/ko/community/changelog' }
+                                { text: '현재 릴리스', link: '/ko/community/changelog' }
                             ]
                         }
                     ]
@@ -264,6 +276,12 @@ export default withMermaid(defineConfig({
                                 { text: 'Kafka MSA', link: '/ja/reference/examples/msa' },
                                 { text: 'WebSocketチャット', link: '/ja/reference/examples/websocket' }
                             ]
+                        },
+                        {
+                            text: '運用',
+                            items: [
+                                { text: 'セキュリティ設定', link: '/ja/reference/security-configuration' }
+                            ]
                         }
                     ],
                     '/ja/community/': [
@@ -272,7 +290,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '概要', link: '/ja/community/' },
                                 { text: '貢献する', link: '/ja/community/contributing' },
-                                { text: '変更履歴', link: '/ja/community/changelog' }
+                                { text: '現在のリリース', link: '/ja/community/changelog' }
                             ]
                         }
                     ]
@@ -329,13 +347,16 @@ export default withMermaid(defineConfig({
                             { text: 'JWT 登录', link: '/zh-Hans/reference/examples/login' },
                             { text: 'Kafka MSA', link: '/zh-Hans/reference/examples/msa' },
                             { text: 'WebSocket 聊天', link: '/zh-Hans/reference/examples/websocket' }
+                        ] },
+                        { text: '运维', items: [
+                            { text: '安全配置', link: '/zh-Hans/reference/security-configuration' }
                         ] }
                     ],
                     '/zh-Hans/community/': [
                         { text: '社区', items: [
                             { text: '概览', link: '/zh-Hans/community/' },
                             { text: '贡献指南', link: '/zh-Hans/community/contributing' },
-                            { text: '更新日志', link: '/zh-Hans/community/changelog' }
+                            { text: '当前版本', link: '/zh-Hans/community/changelog' }
                         ] }
                     ]
                 }
@@ -391,13 +412,16 @@ export default withMermaid(defineConfig({
                             { text: 'JWT 登入', link: '/zh-Hant/reference/examples/login' },
                             { text: 'Kafka MSA', link: '/zh-Hant/reference/examples/msa' },
                             { text: 'WebSocket 聊天', link: '/zh-Hant/reference/examples/websocket' }
+                        ] },
+                        { text: '維運', items: [
+                            { text: '安全性設定', link: '/zh-Hant/reference/security-configuration' }
                         ] }
                     ],
                     '/zh-Hant/community/': [
                         { text: '社群', items: [
                             { text: '概覽', link: '/zh-Hant/community/' },
                             { text: '貢獻指南', link: '/zh-Hant/community/contributing' },
-                            { text: '更新日誌', link: '/zh-Hant/community/changelog' }
+                            { text: '目前版本', link: '/zh-Hant/community/changelog' }
                         ] }
                     ]
                 }

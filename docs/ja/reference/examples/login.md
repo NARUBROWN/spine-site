@@ -189,6 +189,10 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
+func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
+    return nil
+}
+
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 ## コントローラ

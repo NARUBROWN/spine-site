@@ -382,6 +382,13 @@ type Cookie struct {
 | `httpx.ClearAccessTokenCookie()` | Delete Access Token cookie |
 | `httpx.ClearRefreshTokenCookie()` | Delete Refresh Token cookie |
 
+Built-in response handlers validate all cookie fields before writing any response output. Invalid names, values, domains, paths, `SameSite`, priority, or related combinations return an error instead of being silently rewritten. For arbitrary Unicode, spaces, delimiters, or binary string data, encode explicitly:
+
+```go
+encoded := httpx.EncodeCookieValue(rawValue)
+decoded, err := httpx.DecodeCookieValue(encoded)
+```
+
 
 ### 2. httpx.Redirect — Redirect Response
 

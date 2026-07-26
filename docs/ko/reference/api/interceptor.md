@@ -1,59 +1,34 @@
 # core.Interceptor
 
-Interceptor 인터페이스에 대한 API 참조.
-
-## 개요
-
-`Interceptor`는 Controller 호출 전후에 횡단 관심사(cross-cutting concerns)를 처리하는 인터페이스입니다. 로깅, 인증, CORS, 트랜잭션 관리 등에 활용됩니다.
-
-Spine은 **글로벌 인터셉터**와 **라우트 인터셉터** 두 가지 레벨을 지원합니다.
+Controller 실행 전후의 로깅, 인증, CORS, transaction 같은 횡단 관심사를 처리하는 인터페이스입니다. Spine v0.5.1은 네 단계 수명주기를 사용합니다.
 
 ```go
 import "github.com/NARUBROWN/spine/core"
-```
 
-## 인터페이스 정의
-
-```go
 type Interceptor interface {
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
+    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
 
-## 메서드
+## 수명주기
 
 ### PreHandle
 
-```go
-PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-```
+Controller 호출 전에 등록 순서대로 실행됩니다. `nil`이면 계속하고, 일반 오류면 실패하며, `core.ErrAbortPipeline`이면 Controller를 호출하지 않고 정상 중단합니다. 전역 인터셉터는 routing 전에 실행되므로 빈 `HandlerMeta{}`를 받습니다.
 
-Controller 호출 **전**에 실행됩니다.
-
-**매개변수**
-- `ctx` - 요청 컨텍스트
-- `meta` - 실행할 Controller 메서드 정보. 글로벌 인터셉터는 라우팅 전에 실행되므로 빈 `HandlerMeta{}`가 전달됩니다.
-
-**반환값**
-- `nil` - 다음 단계로 진행
-- `error` - 에러 반환 시 파이프라인 중단
-- `core.ErrAbortPipeline` - 파이프라인 중단 (에러 아님, 응답 완료 상태)
-
-**예시**
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     if token == "" {
         return httperr.Unauthorized("인증이 필요합니다")
     }
-    
     user, err := i.auth.Validate(token)
     if err != nil {
         return httperr.Unauthorized("유효하지 않은 토큰입니다")
     }
-    
     ctx.Set("auth.user", user)
     return nil
 }
@@ -61,316 +36,111 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 ### PostHandle
 
-```go
-PostHandle(ctx ExecutionContext, meta HandlerMeta)
-```
+반환값 준비와 post-execution hook 뒤에 역순으로 실행됩니다. 이 메서드는 오류를 반환하지 않으므로 logging이나 성공 후 관찰 작업에 적합합니다.
 
-Controller 호출 및 ReturnValueHandler 처리 **후**에 실행됩니다. 역순으로 호출됩니다. 실패해도 전체 파이프라인 실패로 만들지 않습니다.
-
-**매개변수**
-- `ctx` - 요청 컨텍스트
-- `meta` - 실행된 Controller 메서드 정보
-
-**예시**
 ```go
 func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
+    log.Printf("[RES] %s %s prepared", ctx.Method(), ctx.Path())
+}
+```
+
+### BeforeResponse
+
+응답을 실제 HTTP writer로 flush하기 전에 역순으로 실행됩니다. `executionErr`에는 Controller, 반환값 준비, post-execution hook에서 발생한 최종 오류가 들어옵니다. 이 메서드가 반환한 오류도 최종 오류에 합쳐집니다.
+
+요청 transaction의 commit/rollback은 `AfterCompletion`이 아니라 이 단계에서 처리하십시오. v0.5.1은 직렬화·쿠키·status 검증이 끝난 뒤 `BeforeResponse`를 실행하므로, 준비 실패를 보고 rollback할 수 있습니다.
+
+```go
+func (i *TxInterceptor) BeforeResponse(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+    executionErr error,
+) error {
+    tx, ok := transactionFrom(ctx)
+    if !ok {
+        return nil
+    }
+    if executionErr != nil {
+        return tx.Rollback()
+    }
+    return tx.Commit()
 }
 ```
 
 ### AfterCompletion
 
+성공과 실패에 관계없이 응답 처리 뒤에 역순으로 호출됩니다. 최종 `err`를 받아 logging, metric, 리소스 정리에 사용합니다. 이미 응답이 기록된 뒤이므로 commit 여부를 결정하는 용도로 사용하지 마십시오.
+
 ```go
-AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
-```
-
-성공/실패와 관계없이 **항상** 마지막에 실행됩니다. `defer`로 보장됩니다. 역순으로 호출됩니다. 리소스 정리, 메트릭 수집 등에 활용합니다.
-
-**매개변수**
-- `ctx` - 요청 컨텍스트
-- `meta` - 실행된 Controller 메서드 정보
-- `err` - 파이프라인 실행 중 발생한 최종 에러 (없으면 `nil`)
-
-**예시**
-```go
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
+func (i *LoggingInterceptor) AfterCompletion(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+    err error,
+) {
     if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
+        log.Printf("[ERR] %s %s: %v", ctx.Method(), ctx.Path(), err)
     }
 }
 ```
 
+## 등록과 범위
 
-## 글로벌 vs 라우트 인터셉터
-
-### 글로벌 인터셉터
-
-모든 요청에 적용됩니다. **라우팅 전**에 `PreHandle`이 실행됩니다.
+`app.Interceptor`는 `boot.InterceptorAll`의 축약형으로 HTTP와 WebSocket message에 모두 적용됩니다. 전송 방식 가정이 있는 구현은 `InterceptorFor`로 범위를 명시하십시오.
 
 ```go
-app := spine.New()
+app.InterceptorFor(boot.InterceptorAll, auth)
+app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.InterceptorFor(boot.InterceptorWebSocket, wsRateLimiter)
 
-app.Interceptor(
-    cors.New(cors.Config{
-        AllowOrigins: []string{"*"},
-    }),
-    &LoggingInterceptor{},
-)
-```
-
-글로벌 인터셉터의 `PreHandle`에는 아직 라우팅이 완료되지 않았으므로 빈 `HandlerMeta{}`가 전달됩니다.
-
-### 라우트 인터셉터
-
-특정 라우트에만 적용됩니다. **라우팅 후, Controller 호출 전**에 `PreHandle`이 실행됩니다. 실제 `HandlerMeta`가 전달됩니다.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/route"
-
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors(&AuthInterceptor{}),
-)
-```
-
-### nil 포인터를 통한 Container Resolve
-
-라우트 인터셉터를 nil 포인터로 등록하면 부트스트랩 시점에 IoC Container에서 자동으로 Resolve됩니다. 이를 통해 의존성이 있는 인터셉터를 쉽게 사용할 수 있습니다.
-
-```go
-// nil 포인터 → Container에서 Resolve
 app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
     route.WithInterceptors((*AuthInterceptor)(nil)),
 )
-
-// 인스턴스 직접 전달
-app.Route("GET", "/public/users/:id", (*UserController).GetUser,
-    route.WithInterceptors(&RateLimitInterceptor{Limit: 100}),
-)
 ```
 
-| 등록 방식 | 동작 |
-|----------|------|
-| `(*AuthInterceptor)(nil)` | Container에서 Resolve (의존성 주입 가능) |
-| `&RateLimitInterceptor{Limit: 100}` | 인스턴스 직접 사용 |
+typed-nil 포인터를 등록하면 container에서 resolve합니다. 같은 포인터 인스턴스를 여러 scope에 등록하면 scope를 합쳐 한 번 실행합니다. 같은 타입의 서로 다른 포인터는 각각 독립 실행하고, 같은 타입의 typed-nil placeholder는 container singleton을 공유합니다. 값 타입도 등록별로 독립 실행합니다.
 
+## WebSocket handshake
+
+연결 인증이 필요한 인터셉터는 선택적 인터페이스도 구현하십시오.
+
+```go
+type WebSocketHandshakeInterceptor interface {
+    PreHandshake(ctx WebSocketHandshakeContext, meta HandlerMeta) error
+}
+```
+
+연결 slot은 `PreHandshake`보다 먼저 예약되고, `PreHandshake`는 HTTP upgrade 전에 실행됩니다. 따라서 인증되지 않은 대기 handshake도 `MaxConnections`에 포함됩니다. 기존 `PreHandle`은 연결마다가 아니라 WebSocket message마다 계속 실행됩니다.
+
+```go
+func (i *AuthInterceptor) PreHandshake(
+    ctx core.WebSocketHandshakeContext,
+    meta core.HandlerMeta,
+) error {
+    token := ctx.Header("Authorization")
+    if token == "" {
+        return httperr.Unauthorized("missing credentials")
+    }
+    return i.verify(token)
+}
+```
 
 ## 실행 순서
 
-테스트 코드로 검증된 실제 실행 순서입니다.
+정상 HTTP 흐름은 다음과 같습니다.
 
-### 정상 흐름
-
-```
-Global.PreHandle()
-    ↓
-  [Router]
-    ↓
-  [ArgumentResolver]
-    ↓
-Route.PreHandle()
-    ↓
-  [Controller 호출]
-    ↓
-  [ReturnValueHandler]
-    ↓
-  [PostExecutionHook]
-    ↓
-Route.PostHandle()        ← 역순
-    ↓
-Global.PostHandle()       ← 역순
-    ↓
-Route.AfterCompletion()   ← 역순, 항상 실행
-    ↓
-Global.AfterCompletion()  ← 역순, 항상 실행
+```text
+Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
+→ Controller → 응답 준비 → PostExecutionHook
+→ Route.PostHandle → Global.PostHandle
+→ Route.BeforeResponse → Global.BeforeResponse
+→ 실제 응답 flush
+→ Route.AfterCompletion → Global.AfterCompletion
 ```
 
-### 라우트 인터셉터에서 중단
-
-```
-Global.PreHandle()
-    ↓
-  [Router]
-    ↓
-  [ArgumentResolver]
-    ↓
-Route.PreHandle() → ErrAbortPipeline
-    ↓
-Route.AfterCompletion()   ← 항상 실행
-    ↓
-Global.AfterCompletion()  ← 항상 실행
-```
-
-Controller, PostHandle은 호출되지 않지만, `AfterCompletion`은 항상 보장됩니다.
-
-### 글로벌 인터셉터에서 중단
-
-```
-Global.PreHandle() → ErrAbortPipeline
-    ↓
-Global.AfterCompletion()  ← 항상 실행
-```
-
-Router도 호출되지 않으므로 라우트 인터셉터도 실행되지 않습니다.
-
-
-## 파이프라인 중단
-
-`PreHandle`에서 `core.ErrAbortPipeline`을 반환하면 Controller 호출 없이 파이프라인을 종료합니다. 이는 에러가 아닌 정상 종료로 처리됩니다.
-
-```go
-import "github.com/NARUBROWN/spine/core"
-
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return nil
-    }
-    rw := rwAny.(core.ResponseWriter)
-    
-    origin := ctx.Header("Origin")
-    if origin != "" && i.isAllowedOrigin(origin) {
-        rw.SetHeader("Access-Control-Allow-Origin", origin)
-        rw.SetHeader("Vary", "Origin")
-    }
-    
-    // Preflight 요청은 Controller 호출 없이 응답
-    if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
-        return core.ErrAbortPipeline  // 정상 종료
-    }
-    return nil
-}
-```
-
-
-## 부트스트랩에서의 인터셉터 처리
-
-### 글로벌 인터셉터 중복 제거
-
-같은 타입의 글로벌 인터셉터가 여러 번 등록되면, 최초 등록만 유지됩니다.
-
-```go
-// internal/bootstrap/bootstrap.go
-seen := make(map[reflect.Type]struct{})
-ordered := make([]core.Interceptor, 0, len(config.Interceptors))
-for _, interceptor := range config.Interceptors {
-    t := reflect.TypeOf(interceptor)
-    if _, ok := seen[t]; ok {
-        continue  // 중복 타입 무시
-    }
-    seen[t] = struct{}{}
-    ordered = append(ordered, interceptor)
-}
-```
-
-### 글로벌 인터셉터 nil 포인터 Resolve
-
-글로벌 인터셉터도 nil 포인터로 등록하면 Container에서 Resolve됩니다.
-
-```go
-app.Interceptor((*LoggingInterceptor)(nil))  // Container에서 Resolve
-```
-
-
-## 구현 예시
-
-### 로깅 Interceptor
-
-```go
-type LoggingInterceptor struct{}
-
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s -> %s.%s",
-        ctx.Method(),
-        ctx.Path(),
-        meta.ControllerType.Name(),
-        meta.Method.Name,
-    )
-    return nil
-}
-
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
-}
-
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
-    }
-}
-```
-
-### 요청 시간 측정
-
-```go
-type TimingInterceptor struct{}
-
-func (i *TimingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    ctx.Set("timing.start", time.Now())
-    return nil
-}
-
-func (i *TimingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-func (i *TimingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if start, ok := ctx.Get("timing.start"); ok {
-        elapsed := time.Since(start.(time.Time))
-        log.Printf("[TIMING] %s %s took %v", ctx.Method(), ctx.Path(), elapsed)
-    }
-}
-```
-
-### 인증 Interceptor (라우트 레벨)
-
-```go
-type AuthInterceptor struct {
-    auth *AuthService  // Container에서 주입
-}
-
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("인증이 필요합니다")
-    }
-    
-    user, err := i.auth.Validate(token)
-    if err != nil {
-        return httperr.Unauthorized("유효하지 않은 토큰입니다")
-    }
-    
-    ctx.Set("auth.user", user)
-    return nil
-}
-
-func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
-```
-
-라우트에 적용:
-
-```go
-// nil 포인터로 등록 → Container에서 AuthService 의존성과 함께 Resolve
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),
-)
-```
-
-
-## 요약
-
-| 구분 | 글로벌 인터셉터 | 라우트 인터셉터 |
-|------|---------------|---------------|
-| 등록 | `app.Interceptor()` | `route.WithInterceptors()` |
-| 적용 범위 | 모든 요청 | 특정 라우트만 |
-| PreHandle 시점 | 라우팅 **전** | 라우팅 **후** |
-| meta 내용 | 빈 `HandlerMeta{}` | 실제 `HandlerMeta` |
-| nil 포인터 | Container Resolve 지원 | Container Resolve 지원 |
-| 중복 제거 | 같은 타입 최초 등록만 유지 | 해당 없음 |
-
+각 역순 단계는 등록의 역순으로 호출합니다. `PreHandle`에 성공한 인터셉터만 `BeforeResponse` 대상이며, `AfterCompletion`은 해당 요청에 등록된 인터셉터의 정리를 항상 수행합니다.
 
 ## 참고
 
-- [ExecutionContext](/ko/reference/api/execution-context) - 요청 컨텍스트 인터페이스
-- [HandlerMeta](/ko/learn/core-concepts/handler-meta) - 핸들러 메타데이터
-- ResponseWriter - 응답 출력 인터페이스
+- [실행 파이프라인](/ko/learn/core-concepts/pipeline)
+- [transaction 관리](/ko/learn/tutorial/6-transaction)
+- [현재 릴리스](/ko/community/changelog)

@@ -257,66 +257,17 @@ func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, erro
 
 The Pipeline separates the execution of global interceptors and route interceptors.
 
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
-    globalMeta := core.HandlerMeta{}
-    
-    // AfterCompletion is guaranteed regardless of success/failure
-    defer func() {
-        for i := len(p.interceptors) - 1; i >= 0; i-- {
-            p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
-        }
-    }()
+```text
+global PreHandle with empty HandlerMeta
+→ router returns resolved HandlerMeta
+→ build ParameterMeta from HandlerMeta.Method and HandlerMeta.PathKeys
+→ resolve arguments
+→ route PreHandle with resolved HandlerMeta
+→ invoke HandlerMeta.ControllerType and HandlerMeta.Method
+→ prepare response and run finalizer lifecycle
+```
 
-    // 1. Global Interceptor PreHandle (Before routing)
-    for _, it := range p.interceptors {
-        if err := it.PreHandle(ctx, globalMeta); err != nil {
-            if errors.Is(err, core.ErrAbortPipeline) {
-                return nil
-            }
-            return err
-        }
-    }
-
-    // 2. Router determines the execution target
-    meta, err := p.router.Route(ctx)
-    if err != nil {
-        return err
-    }
-
-    routeInterceptors := meta.Interceptors
-
-    // Route Interceptor AfterCompletion is unconditionally guaranteed
-    defer func() {
-        for i := len(routeInterceptors) - 1; i >= 0; i-- {
-            routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
-        }
-    }()
-
-    // 3. ArgumentResolver chain execution
-    paramMetas := buildParameterMeta(meta.Method, ctx)
-    args, err := p.resolveArguments(ctx, paramMetas)
-    if err != nil {
-        return err
-    }
-
-    // 4. Route Interceptor PreHandle
-    for _, it := range routeInterceptors {
-        if err := it.PreHandle(ctx, meta); err != nil {
-            if errors.Is(err, core.ErrAbortPipeline) {
-                return nil
-            }
-            return err
-        }
-    }
-
-    // 5. Controller Method invocation
-    results, err := p.invoker.Invoke(meta.ControllerType, meta.Method, args)
-    if err != nil {
-        return err
-    }
-
+See the [Execution Pipeline](/en/learn/core-concepts/pipeline) for the complete v0.5.1 response-staging and `BeforeResponse` order.
 
 ### ParameterMeta Creation
 
@@ -400,7 +351,25 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
     )
     return nil
 }
+
+func (i *LoggingInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
+
+func (i *LoggingInterceptor) BeforeResponse(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) error {
+    return nil
+}
+
+func (i *LoggingInterceptor) AfterCompletion(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) {}
 ```
+
+This is a complete minimal interceptor implementation. Handler metadata is available to route interceptors. A global HTTP interceptor's `PreHandle` runs before routing and receives an empty `HandlerMeta`, so it must not dereference `ControllerType` or `Method` at that stage.
 
 
 ## Bootstrap Process

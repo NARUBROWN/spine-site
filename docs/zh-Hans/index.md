@@ -49,15 +49,15 @@ func NewUserController(svc *UserService) *UserController {
 代替注释或约定，
 签名本身揭示了结构和合同。
 
-### 4.拦截器管道
-可以在请求之前/之后/完成时插入逻辑。
+### 4. 拦截器管道
+可以在请求前、响应准备后、写出响应前和执行完成时插入逻辑。
 横切关注点，例如身份验证、事务和日志记录
 将其与业务代码分离，放入执行流程中。
 
 执行顺序由 Sp​​ine 的管道显式控制。
 
 ```go
-goapp.Interceptor(
+app.Interceptor(
     &TxInterceptor{},
     &AuthInterceptor{},
     &LoggingInterceptor{},
@@ -65,6 +65,8 @@ goapp.Interceptor(
 ```
 
 </div>
+
+> 本网站仅说明当前支持的 Spine v0.5.1。生产部署请参阅[安全配置](/zh-Hans/reference/security-configuration)。
 
 ## 执行仅通过一个管道
 

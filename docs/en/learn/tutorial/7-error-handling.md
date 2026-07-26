@@ -84,6 +84,8 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 
 ### Authorization Required (401)
 
+This example includes the complete interceptor lifecycle; only `PreHandle` performs work.
+
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
@@ -98,6 +100,22 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     
     return nil
 }
+
+func (i *AuthInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
+
+func (i *AuthInterceptor) BeforeResponse(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) error {
+    return nil
+}
+
+func (i *AuthInterceptor) AfterCompletion(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) {}
 ```
 
 ## Using Other Status Codes
@@ -223,7 +241,7 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 
 ## Error Handling in Interceptor
 
-If `PreHandle` returns an error, the Controller is not executed.
+If `PreHandle` returns an error, the Controller is not executed. The snippet below intentionally shows only the error-producing method; use the complete no-op lifecycle shown in the earlier authentication example for the remaining methods.
 
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
@@ -253,7 +271,7 @@ flowchart TD
 
 ## Error Logging
 
-You can log errors in `AfterCompletion`.
+You can log errors in `AfterCompletion`. This is intentionally a single-method excerpt; a concrete interceptor must also implement `PreHandle`, `PostHandle`, and `BeforeResponse` as shown above.
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {

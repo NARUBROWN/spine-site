@@ -13,7 +13,7 @@
 
 ## ライフサイクル
 
-インターセプターは3つの段階のライフサイクルを持ちます。
+Spine v0.5.1のinterceptorは4段階のlifecycleを持ちます。
 
 
 ```mermaid
@@ -25,9 +25,10 @@ graph TD
     
     Controller -- 成功 --> Post["PostHandle<br/>- リクエスト成功時に実行<br/>- エラー発生時はスキップ"]
     
-    Post --> After["AfterCompletion<br/>- 常に実行（成功/失敗に関わらず）<br/>- リソースの整理、トランザクションのコミット/ロールバック"]
+    Post --> Before["BeforeResponse<br/>- 応答flush前に逆順で実行<br/>- transactionのcommit/rollback"]
     
-    Controller -- エラー --> After
+    Controller -- エラー --> Before
+    Before --> After["AfterCompletion<br/>- 応答後に常に実行<br/>- logging、resource cleanup"]
     
     After --> Response
 ```
@@ -40,6 +41,7 @@ graph TD
 type Interceptor interface {
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
+    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
@@ -48,7 +50,10 @@ type Interceptor interface {
 |--------|----------|------|------|
 | `PreHandle` | コントローラー実行前 | `error` | 認証、検証、トランザクション開始 |
 | `PostHandle` | コントローラー成功後 | なし | 応答の加工 |
-| `AfterCompletion` | 常に（成功/失敗） | なし | リソースの整理、コミット/ロールバック |
+| `BeforeResponse` |実際の応答を書き込む前| `error` | transactionのcommit/rollback |
+| `AfterCompletion` |応答処理後に常に実行|なし|logging、resource cleanup|
+
+`BeforeResponse`は直列化、Cookie、status検証のエラーを`executionErr`で受け取ります。transaction処理のエラーは必ず返してください。`AfterCompletion`の時点では応答がすでに書き込まれている場合があります。
 
 
 ## グローバルインターセプター vs ルートインターセプター
@@ -96,6 +101,10 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
         ctx.Method(),
         ctx.Path(),
     )
+}
+
+func (i *LoggingInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
+    return nil
 }
 
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
@@ -166,6 +175,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 }
 
 func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+
+func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error { return nil }
 
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 
@@ -315,6 +326,10 @@ Request (GET /users/1)
    ├─→ CORS.PostHandle       (グローバル 2)
    ├─→ Logging.PostHandle    (グローバル 1)
    │
+   ├─→ Auth.BeforeResponse       (ルート 1)
+   ├─→ CORS.BeforeResponse       (グローバル 2)
+   ├─→ Logging.BeforeResponse    (グローバル 1)
+   │
    ├─→ Auth.AfterCompletion       (ルート 1)
    ├─→ CORS.AfterCompletion       (グローバル 2)
    └─→ Logging.AfterCompletion    (グローバル 1)
@@ -324,6 +339,7 @@ Response
 
 - `PreHandle`: グローバル → ルートの順序
 - `PostHandle`: ルート → グローバルの逆順
+- `BeforeResponse`: `PreHandle`に成功したinterceptorだけをルート → グローバルの逆順
 - `AfterCompletion`: ルート → グローバルの逆順
 
 
@@ -351,6 +367,9 @@ Request (GET /users/1, トークンなし)
    ├─→ CORS.PreHandle        ✓
    ├─→ Auth.PreHandle        ✗ (エラーを返す)
    │
+   ├─→ CORS.BeforeResponse
+   ├─→ Logging.BeforeResponse
+   │
    ├─→ Auth.AfterCompletion
    ├─→ CORS.AfterCompletion
    └─→ Logging.AfterCompletion
@@ -375,6 +394,8 @@ Response (401 Unauthorized)
 | `Get(key)` | 値の照会 |
 
 ### インターセプター間のデータ伝達
+
+次のコードは`PreHandle`でcontextを共有する部分だけを抜粋した例です。新しい型を実際に登録する場合は、4つのlifecycleメソッドをすべて実装してください。
 
 
 ```go
@@ -455,22 +476,24 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 
 func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
+func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
     v, ok := ctx.Get("tx")
     if !ok {
-        return
+        return nil
     }
     
     tx, ok := v.(bun.Tx)
     if !ok {
-        return
+        return nil
     }
-    if err != nil {
-        _ = tx.Rollback()
+    if executionErr != nil {
+        return tx.Rollback()
     } else {
-        _ = tx.Commit()
+        return tx.Commit()
     }
 }
+
+func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
 ### 登録 (グローバル)
@@ -549,8 +572,8 @@ app.Route(
 |------|------|
 | **グローバルインターセプター** | `app.Interceptor()` — すべてのリクエストに適用 |
 | **ルートインターセプター** | `route.WithInterceptors()` — 特定のルートのみ適用 |
-| **実行順序** | グローバル → ルート (Post/After は逆順) |
-| **3段階ライフサイクル** | PreHandle → PostHandle → AfterCompletion |
+| **実行順序** | global → route（`PostHandle`/`BeforeResponse`/`AfterCompletion`は逆順）|
+| **4段階lifecycle** | PreHandle → PostHandle → BeforeResponse → AfterCompletion |
 | **エラー時中断** | PreHandleでのエラー → コントローラースキップ |
 | **コンテキスト共有** | `ctx.Set()` / `ctx.Get()` でデータ伝達 |
 

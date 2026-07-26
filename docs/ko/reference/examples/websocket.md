@@ -137,9 +137,33 @@ func main() {
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
-		HTTP:                   &boot.HTTPOptions{},
+		HTTP: &boot.HTTPOptions{
+			WebSocket: boot.WebSocketOptions{
+				AllowedOrigins: []string{"https://app.example.com"},
+				MaxConnections: 1024,
+			},
+		},
 	}); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
+
+## Handshake 인증과 용량
+
+인증이 필요한 route의 인터셉터는 `core.WebSocketHandshakeInterceptor`도 구현합니다. 연결 slot은 `PreHandshake`보다 먼저 예약되고, `PreHandshake`는 HTTP upgrade 전에 실행됩니다. 인증되지 않은 대기 handshake도 `MaxConnections`에 포함됩니다. 메시지별 `PreHandle`은 별도로 계속 실행됩니다.
+
+```go
+func (i *AuthInterceptor) PreHandshake(
+	ctx core.WebSocketHandshakeContext,
+	meta core.HandlerMeta,
+) error {
+	token := ctx.Header("Authorization")
+	if token == "" {
+		return httperr.Unauthorized("missing credentials")
+	}
+	return i.verify(token)
+}
+```
+
+`AllowedOrigins`를 생략하면 scheme과 host가 모두 같은 요청만 허용됩니다. 연결 상한을 넘으면 upgrade 대신 HTTP 503, `Retry-After`, `WEBSOCKET_CAPACITY_EXCEEDED` JSON을 반환합니다. TLS 종료 proxy를 신뢰해야 한다면 정확한 `TrustedProxyCIDRs`를 설정하십시오.

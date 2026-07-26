@@ -217,23 +217,27 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
     return nil
 }
 
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
+func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+
+func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
     v, ok := ctx.Get("tx")
     if !ok {
-        return
+        return nil
     }
 
     tx, ok := v.(bun.Tx)
     if !ok {
-        return
+        return nil
     }
     
-    if err != nil {
-        _ = tx.Rollback()
+    if executionErr != nil {
+        return tx.Rollback()
     } else {
-        _ = tx.Commit()
+        return tx.Commit()
     }
 }
+
+func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
 

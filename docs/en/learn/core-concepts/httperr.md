@@ -173,7 +173,7 @@ func (h *ErrorReturnHandler) Handle(value any, ctx core.ExecutionContext) error 
     err := value.(error)
     
     status := 500
-    message := err.Error()
+    message := "Internal server error"
     
     // If HTTPError, extract status code
     var httpErr *httperr.HTTPError
@@ -195,6 +195,8 @@ func (h *ErrorReturnHandler) Handle(value any, ctx core.ExecutionContext) error 
 3. Executes `ErrorReturnHandler.Handle()`
 4. Checks for `HTTPError` using `errors.As()`
 5. Uses specified status code if `HTTPError`, otherwise 500
+
+Ordinary errors are intentionally not disclosed to clients. Log the original error on the server (for example in `AfterCompletion`) and expose a public message only through a deliberate `httperr.HTTPError`.
 
 ### HTTPError vs Normal error
 
@@ -347,9 +349,23 @@ if err != nil {
 }
 ```
 
-You can log the `Cause` in an Interceptor's `AfterCompletion`:
+You can log the `Cause` in an interceptor's `AfterCompletion`. The no-op methods below are included because `core.Interceptor` requires the complete four-method lifecycle:
 
 ```go
+func (i *LoggingInterceptor) PreHandle(core.ExecutionContext, core.HandlerMeta) error {
+    return nil
+}
+
+func (i *LoggingInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
+
+func (i *LoggingInterceptor) BeforeResponse(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) error {
+    return nil
+}
+
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     if err != nil {
         var httpErr *httperr.HTTPError

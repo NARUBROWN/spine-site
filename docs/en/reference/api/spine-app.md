@@ -1,924 +1,295 @@
 # spine.App
 
-API reference for the main application interface.
+API reference for configuring and running a Spine application.
 
-## Overview
-
-`App` is the entry point for Spine applications. It is responsible for registering constructors, defining routes, configuring interceptors, registering event consumers, and running the server.
-
-```go
-import "github.com/NARUBROWN/spine"
-```
-
-## Interface Definition
+## Interface
 
 ```go
 type App interface {
-    // Declare Constructors
     Constructor(constructors ...any)
-    // Declare Route
     Route(method string, path string, handler any, opts ...router.RouteOption)
-    // Declare Interceptors
     Interceptor(interceptors ...core.Interceptor)
-    // HTTP Transport Extension (Echo, etc.)
+    InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
     Transport(fn func(any))
-    // Register standalone Custom Transport
     RegisterTransport(t core.CustomTransport)
-    // Run
+    Validate(opts boot.Options) error
     Run(opts boot.Options) error
-    // Return Event Consumer Registry
     Consumers() *consumer.Registry
-    // Return WebSocket Registry
     WebSocket() *ws.Registry
 }
 ```
 
-## Constructors
+Create an application with `spine.New()`.
 
-### New
+## Constructor
 
 ```go
-func New() App
+app.Constructor(NewDB, NewRepository, NewService, NewController)
 ```
 
-Creates a new Spine application instance.
+Constructors are order-independent. Spine builds the dependency graph and warms required controllers, consumer handlers, interceptors, and transports before starting the HTTP listener.
 
-**Returns**
-- `App` - Application instance
+A constructor must be a non-nil function with injectable parameters. Nil constructors and invalid nil pointer/interface/function/channel provider results fail explicitly. Nil slice and map results remain valid empty collections. Resolving one provider through its concrete type or an implemented interface shares one singleton.
 
-**Example**
+## Route
+
 ```go
-app := spine.New()
-if err := app.Run(boot.Options{
-    Address: ":8080",
-    HTTP: &boot.HTTPOptions{},
-}); err != nil {
+app.Route(
+    "GET",
+    "/users/:id",
+    (*UserController).Get,
+    route.WithInterceptors((*AuthInterceptor)(nil)),
+)
+```
+
+The method is trimmed and normalized to uppercase. Handlers must be method expressions with pointer receivers. Path semantic values bind in declaration order.
+
+Static routes take precedence, but a static dead end backtracks to a matching parameter route.
+
+## Interceptor and InterceptorFor
+
+```go
+app.Interceptor(&LoggingInterceptor{}) // HTTP and WebSocket
+
+app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
+```
+
+Scopes are `boot.InterceptorHTTP`, `boot.InterceptorWebSocket`, and `boot.InterceptorAll`. See [core.Interceptor](/en/reference/api/interceptor) for lifecycle and registration-identity rules.
+
+## Transport extension
+
+`Transport(func(any))` customizes the built-in HTTP transport after it is created. The callback receives the adapter value and is intended for adapter-specific middleware or configuration.
+
+`RegisterTransport` adds an independently managed transport:
+
+```go
+type CustomTransport interface {
+    Init(container core.Container) error
+    Start() error
+    Stop(ctx context.Context) error
+}
+```
+
+Custom transports initialize after DI is ready, start with the application, and stop during graceful shutdown. If initialization fails part-way through, already initialized transports stop in reverse order.
+
+## Validate
+
+```go
+if err := app.Validate(opts); err != nil {
+    var configErr *boot.ConfigError
+    if errors.As(err, &configErr) {
+        for _, issue := range configErr.Issues {
+            log.Printf("%s [%s]: %s", issue.Path, issue.Code, issue.Hint)
+        }
+    }
+    return err
+}
+```
+
+`Validate` performs network-free configuration checks and returns all issues in one `*boot.ConfigError`. Each `ConfigIssue` contains `Path`, stable `Code`, human `Message`, and actionable `Hint`. `Run` performs the same preflight automatically.
+
+Use `Validate` in deployment checks. It does not prove broker reachability, credentials, TLS handshakes, queue topology, listener binding, or reverse-proxy behavior.
+
+## Run
+
+```go
+if err := app.Run(opts); err != nil {
     log.Fatal(err)
 }
 ```
 
-## Methods
+Startup order is intentionally fail-fast:
 
-### Constructor
+1. validate configuration without network access;
+2. build DI and compile routes/pipelines;
+3. warm controllers, interceptors, consumers, and custom transports;
+4. validate an actual Kafka protocol handshake and RabbitMQ topology connection when configured;
+5. start consumers and custom transports;
+6. start the HTTP listener last.
 
-```go
-Constructor(constructors ...any)
-```
+With graceful shutdown enabled, `Run` waits for consumer handlers, ACK/NACK work, reader close, and custom transports to finish stopping before it returns. A negative `ShutdownTimeout` is rejected with `SHUTDOWN_TIMEOUT_INVALID`.
 
-Registers constructor functions to the IoC Container. Registered constructors are used for dependency injection.
-
-**Parameters**
-- `constructors` - Constructor functions (variadic)
-
-**Constructor Rules**
-- Must be a function
-- Must return exactly one value
-- Parameters must be other registered types (dependencies)
-
-**Example**
-```go
-// Constructor without dependencies
-func NewUserRepository() *UserRepository {
-    return &UserRepository{}
-}
-
-// Constructor with dependencies
-func NewUserController(repo *UserRepository) *UserController {
-    return &UserController{repo: repo}
-}
-
-// Event Consumer Constructor
-func NewOrderConsumer() *OrderConsumer {
-    return &OrderConsumer{}
-}
-
-app.Constructor(
-    NewUserRepository,
-    NewUserController,
-    NewOrderConsumer,
-)
-```
-
-### Route
+## Consumers
 
 ```go
-Route(method string, path string, handler any, opts ...router.RouteOption)
-```
-
-Registers an HTTP route.
-
-**Parameters**
-- `method` - HTTP method (`"GET"`, `"POST"`, `"PUT"`, `"DELETE"`, etc.)
-- `path` - URL path pattern. Define path parameters with `:param` format
-- `handler` - Controller method expression
-- `opts` - Route options (optional)
-
-**Path Patterns**
-- `/users` - Static path
-- `/users/:id` - Single parameter
-- `/users/:userId/posts/:postId` - Multiple parameters
-
-**Example**
-```go
-// Basic Routes
-app.Route("GET", "/users", (*UserController).List)
-app.Route("GET", "/users/:id", (*UserController).GetUser)
-app.Route("POST", "/users", (*UserController).CreateUser)
-app.Route("PUT", "/users/:id", (*UserController).UpdateUser)
-app.Route("DELETE", "/users/:id", (*UserController).DeleteUser)
-
-// Nested Paths
-app.Route("GET", "/users/:userId/posts/:postId", (*PostController).GetPost)
-```
-
-#### Route Options
-
-Use `route.WithInterceptors` to apply Interceptors to specific routes only.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/route"
-
-// Apply Route-specific Interceptor
-app.Route(
-    "GET",
-    "/users/:id",
-    (*UserController).GetUser,
-    route.WithInterceptors(&LoggingInterceptor{}),
-)
-
-// Apply Multiple Interceptors
-app.Route(
-    "POST",
-    "/admin/users",
-    (*AdminController).CreateUser,
-    route.WithInterceptors(
-        &AuthInterceptor{},
-        &AdminRoleInterceptor{},
-    ),
-)
-```
-
-### Interceptor
-
-```go
-Interceptor(interceptors ...core.Interceptor)
-```
-
-Registers global Interceptors. `PreHandle` is executed in registration order, while `PostHandle` and `AfterCompletion` are executed in reverse order.
-
-**Parameters**
-- `interceptors` - Interceptor instances (variadic)
-
-**Execution Order**
-1. Global Interceptors (Registration order)
-2. Route Interceptors (Registration order)
-3. Controller Execution
-4. Route Interceptors PostHandle (Reverse order)
-5. Global Interceptors PostHandle (Reverse order)
-
-**Example**
-```go
-app.Interceptor(
-    cors.New(cors.Config{
-        AllowOrigins: []string{"*"},
-        AllowMethods: []string{"GET", "POST", "OPTIONS"},
-        AllowHeaders: []string{"Content-Type"},
-    }),
-    &LoggingInterceptor{},
-    &AuthInterceptor{},
-)
-```
-
-### Transport
-
-```go
-Transport(fn func(any))
-```
-
-Registers an HTTP Transport (Echo) extension hook. Allows direct access to the Echo instance to add middlewares or configurations.
-
-**Parameters**
-- `fn` - Callback function receiving the Echo instance
-
-**Example**
-```go
-import "github.com/labstack/echo/v4"
-import "github.com/labstack/echo/v4/middleware"
-
-app.Transport(func(e any) {
-    echo := e.(*echo.Echo)
-    
-    // Add Echo Middleware
-    echo.Use(middleware.Recover())
-    echo.Use(middleware.RequestID())
-    
-    // Serve Static Files
-    echo.Static("/static", "public")
-})
-```
-
-### RegisterTransport
-
-```go
-RegisterTransport(t core.CustomTransport)
-```
-
-Registers a standalone `CustomTransport` that runs independently outside the Spine HTTP pipeline. Used to integrate separate protocols like gRPC or GraphQL into the Spine application.
-
-**Parameters**
-- `t` - Implementation of the `core.CustomTransport` interface
-
-**CustomTransport Interface**
-```go
-// core/transport.go
-type CustomTransport interface {
-    // Init is called after the DI Container is prepared.
-    Init(container Container) error
-    // Start is called in a separate goroutine after Init.
-    Start() error
-    // Stop is called during Graceful Shutdown.
-    Stop(ctx context.Context) error
-}
-
-type Container interface {
-    Resolve(t reflect.Type) (any, error)
-}
-```
-
-**Example**
-```go
-type GRPCTransport struct {
-    server *grpc.Server
-}
-
-func (t *GRPCTransport) Init(container core.Container) error {
-    svc, err := container.Resolve(reflect.TypeOf((*MyService)(nil)))
-    if err != nil {
-        return err
-    }
-    t.server = grpc.NewServer()
-    RegisterMyServiceServer(t.server, svc.(*MyService))
-    return nil
-}
-
-func (t *GRPCTransport) Start() error {
-    lis, _ := net.Listen("tcp", ":9090")
-    return t.server.Serve(lis)
-}
-
-func (t *GRPCTransport) Stop(ctx context.Context) error {
-    t.server.GracefulStop()
-    return nil
-}
-
-app.RegisterTransport(&GRPCTransport{})
-```
-
-### Consumers
-
-```go
-Consumers() *consumer.Registry
-```
-
-Returns the event consumer registry. Registers handlers to receive events from message brokers like Kafka or RabbitMQ.
-
-**Returns**
-- `*consumer.Registry` - Consumer registry
-
-**Example**
-```go
-// Register Event Consumer
 if err := app.Consumers().Register(
-    "order.created",           // Topic/Event Name
-    (*OrderConsumer).OnCreated, // Handler Method
+    "order.created",
+    (*OrderConsumer).Handle,
 ); err != nil {
     log.Fatal(err)
 }
 ```
 
-#### Consumer Handler
+Consumer handlers use the same method-expression and DI model as HTTP handlers. Kafka and RabbitMQ runtime behavior is selected by `boot.Options`.
 
-Consumer handlers have a signature similar to HTTP controllers.
+Kafka can redeliver after handler, NACK, or commit failures. A failed ACK/NACK invalidates and rebuilds the reader before any later message is read. A permanently failing record can block its partition because Spine does not automatically skip or dead-letter Kafka records. Handlers must be idempotent.
 
-```go
-type OrderConsumer struct{}
+RabbitMQ handler failure defaults to reject without requeue. Configure a pre-provisioned DLX when failures must be retained.
 
-func NewOrderConsumer() *OrderConsumer {
-    return &OrderConsumer{}
-}
-
-// Event Handler
-func (c *OrderConsumer) OnCreated(
-    ctx context.Context,
-    eventName string,
-    event OrderCreated,
-) error {
-    log.Println("Event received:", eventName)
-    log.Println("Order ID:", event.OrderID)
-    return nil
-}
-
-// Event DTO
-type OrderCreated struct {
-    OrderID int64     `json:"order_id"`
-    At      time.Time `json:"at"`
-}
-```
-
-### WebSocket
+## WebSocket
 
 ```go
-WebSocket() *ws.Registry
-```
-
-Returns the WebSocket registry. Registers WebSocket paths and handlers.
-
-**Returns**
-- `*ws.Registry` - WebSocket registry
-
-**Example**
-```go
-if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
+if err := app.WebSocket().Register(
+    "/ws/chat",
+    (*ChatController).OnMessage,
+); err != nil {
     log.Fatal(err)
 }
 ```
 
-#### WebSocket Handler
+WebSocket handlers receive message semantic types and may assert `core.WebSocketMessageContext` for immutable handshake headers, queries, cookies, host, remote address, and request URI.
 
-WebSocket handlers have a signature similar to HTTP controllers. They use semantic types from the `ws` package.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/ws"
-
-type ChatController struct {
-    mu      sync.RWMutex
-    clients map[string]ws.Sender
-}
-
-func NewChatController() *ChatController {
-    return &ChatController{clients: make(map[string]ws.Sender)}
-}
-
-type ChatMessage struct {
-    Message string `json:"message"`
-}
-
-type ChatEvent struct {
-    Type    string `json:"type"`
-    From    string `json:"from"`
-    Message string `json:"message"`
-    At      string `json:"at"`
-}
-
-func (c *ChatController) OnMessage(
-    ctx context.Context,
-    connID ws.ConnectionID,
-    msg ChatMessage,
-) error {
-    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-    if ok && sender != nil {
-        c.mu.Lock()
-        c.clients[connID.Value] = sender
-        c.mu.Unlock()
-    }
-
-    message := strings.TrimSpace(msg.Message)
-    if message == "" {
-        return nil
-    }
-
-    payload, err := json.Marshal(ChatEvent{
-        Type:    "message",
-        From:    connID.Value,
-        Message: message,
-        At:      time.Now().UTC().Format(time.RFC3339),
-    })
-    if err != nil {
-        return err
-    }
-
-    c.mu.RLock()
-    clients := make(map[string]ws.Sender, len(c.clients))
-    for id, client := range c.clients {
-        clients[id] = client
-    }
-    c.mu.RUnlock()
-
-    var firstErr error
-    for id, client := range clients {
-        if err := client.Send(ws.TextMessage, payload); err != nil {
-            if firstErr == nil {
-                firstErr = err
-            }
-            c.mu.Lock()
-            delete(c.clients, id)
-            c.mu.Unlock()
-        }
-    }
-    return firstErr
-}
-```
-
-
-### Run
-
-```go
-Run(opts boot.Options) error
-```
-
-Starts the application. runs the HTTP server and event consumer runtime together.
-
-**Parameters**
-- `opts` - Boot options (`boot.Options`)
-
-**Returns**
-- `error` - Error if server failed to start
-
-**Example**
-```go
-if err := app.Run(boot.Options{
-    Address: ":8080",
-    HTTP: &boot.HTTPOptions{},
-}); err != nil {
-    log.Fatal(err)
-}
-```
+Use `core.WebSocketHandshakeInterceptor` to authenticate before upgrade. Spine reserves capacity before the hook, so pending unauthenticated handshakes count toward `MaxConnections`.
 
 ## boot.Options
 
-Application bootstrap options.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/boot"
-```
-
-### Struct Definition
-
 ```go
 type Options struct {
-    // Address to bind the server to (e.g., ":8080")
-    Address string
-
-    // Whether to enable Graceful Shutdown
+    Address                string
     EnableGracefulShutdown bool
-
-    // Maximum wait time during Graceful Shutdown
-    ShutdownTimeout time.Duration
-
-    // Kafka Event Infrastructure Configuration
-    // If nil, Kafka is not configured
-    Kafka *KafkaOptions
-
-    // RabbitMQ Event Infrastructure Configuration
-    // If nil, RabbitMQ is not configured
-    RabbitMQ *RabbitMqOptions
-
-    // HTTP Runtime Configuration
-    // If nil, HTTP server is not started
-    HTTP *HTTPOptions
+    ShutdownTimeout        time.Duration
+    Kafka                  *KafkaOptions
+    RabbitMQ               *RabbitMqOptions
+    HTTP                   *HTTPOptions
 }
+```
 
-/*
-HTTP Runtime Options.
-Affects only the HTTP request execution flow.
-*/
+`HTTP == nil` disables the HTTP server. Zero values select bounded framework defaults for timeouts and sizes. `HTTP.MaxBodyBytes < 0` is the explicit body-limit opt-out; other negative timeout/size values fail validation.
+
+### HTTPOptions
+
+```go
 type HTTPOptions struct {
-    // HTTP API Global Prefix (e.g., "/api/v1")
-    // If empty, no prefix is applied.
-    // Must start with '/' and cannot contain path parameters or wildcards.
-    GlobalPrefix string
-
-    // Disable Echo's default panic recover middleware.
-    // If true, panics will not be recovered and might crash the server.
-    DisableRecover bool
+    GlobalPrefix      string
+    DisableRecover    bool
+    ReadHeaderTimeout time.Duration
+    ReadTimeout       time.Duration
+    WriteTimeout      time.Duration
+    IdleTimeout       time.Duration
+    MaxHeaderBytes    int
+    MaxBodyBytes      int64
+    WebSocket         WebSocketOptions
 }
 ```
 
-```go
-// ✓ Valid
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/v1"}
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/v2"}
+The recover middleware is enabled unless `DisableRecover` is true. Ordinary internal errors and recovered panics produce a generic 500 body.
 
-// ✗ Panic occurs
-HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // Doesn't start with '/'
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // Contains path parameter
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // Contains wildcard
-```
-
-### Basic Usage
+### WebSocketOptions
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    HTTP: &boot.HTTPOptions{},
-})
-```
-
-### Graceful Shutdown
-
-```go
-app.Run(boot.Options{
-    Address:                ":8080",
-    EnableGracefulShutdown: true,
-    ShutdownTimeout:        10 * time.Second,
-    HTTP: &boot.HTTPOptions{
-        GlobalPrefix: "/api/v1/",
-    },
-})
-```
-
-When Graceful Shutdown is enabled:
-- Receives `SIGINT`, `SIGTERM` signals
-- Waits until ongoing requests are completed
-- Sends Close message to WebSocket connections
-- Calls `Stop()` on Custom Transports
-- Forcefully terminates after `ShutdownTimeout` (Default: 10s)
-
-### Recover Middleware
-
-By default, Echo's panic recover middleware is enabled. It converts panics into 500 responses.
-
-```go
-// Disable Recover
-HTTP: &boot.HTTPOptions{
-    DisableRecover: true,
+type WebSocketOptions struct {
+    MaxConnections    int
+    CapacityRetryAfter time.Duration
+    AllowedOrigins    []string
+    TrustedProxyCIDRs []string
+    MaxMessageBytes   int64
+    HandshakeTimeout  time.Duration
+    ReadTimeout       time.Duration
+    WriteTimeout      time.Duration
+    PingInterval      time.Duration
 }
 ```
 
-## Kafka Configuration
+The zero connection limit uses `boot.DefaultWebSocketMaxConnections` (1024). Use a positive value or `boot.UnlimitedWebSocketConnections`; other negatives are invalid. Capacity rejection happens before upgrade with HTTP 503, `Retry-After`, and `WEBSOCKET_CAPACITY_EXCEEDED` JSON.
 
-### KafkaOptions
+With no `AllowedOrigins`, browser requests require the same scheme and host. Prefer exact origins. `TrustedProxyCIDRs` permits forwarding headers to determine the public scheme only for direct peers in those networks; the trusted proxy must remove or overwrite client-supplied forwarding headers.
+
+## KafkaOptions
 
 ```go
 type KafkaOptions struct {
-    // List of Kafka broker addresses
-    Brokers []string
-
-    // Event Consumption (Consumer) Configuration
-    // If nil, Kafka Consumer is not enabled
-    Read *KafkaReadOptions
-
-    // Event Publishing (Producer) Configuration
-    // If nil, events are not published to Kafka
-    Write *KafkaWriteOptions
-}
-
-type KafkaReadOptions struct {
-    // Kafka Consumer Group ID
-    GroupID string
-}
-
-type KafkaWriteOptions struct {
-    // Topic Prefix to prepend to event names
-    TopicPrefix string
+    Brokers                []string
+    TLS                    *tls.Config
+    Dialer                 *kafka.Dialer
+    Transport              *kafka.Transport
+    AllowInsecureTransport bool
+    ConsumerRetry          ConsumerRetryOptions
+    Read                   *KafkaReadOptions
+    Write                  *KafkaWriteOptions
 }
 ```
 
-### Example
+Enabled readers and writers use implicit TLS 1.2+ by default. Supply `TLS`, `Dialer`, or `Transport` for custom CA, mTLS, SASL, or dialing. Plaintext local development requires `AllowInsecureTransport: true`.
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    Kafka: &boot.KafkaOptions{
-        Brokers: []string{"localhost:9092"},
-        Read: &boot.KafkaReadOptions{
-            GroupID: "my-consumer-group",
-        },
-        Write: &boot.KafkaWriteOptions{
-            TopicPrefix: "myapp.",
-        },
+Kafka: &boot.KafkaOptions{
+    Brokers: []string{"kafka.example:9093"},
+    TLS:     &tls.Config{MinVersion: tls.VersionTLS12},
+    Read:    &boot.KafkaReadOptions{GroupID: "orders"},
+    Write:   &boot.KafkaWriteOptions{TopicPrefix: "prod."},
+    ConsumerRetry: boot.ConsumerRetryOptions{
+        InitialDelay: 200 * time.Millisecond,
+        MaxDelay:     5 * time.Second,
+        Multiplier:   2,
+        Jitter:       0.2,
     },
-    HTTP: &boot.HTTPOptions{},
-})
+}
 ```
 
-## RabbitMQ Configuration
+`ConsumerRetry` covers initial readiness and reader reconstruction after transport or ACK/NACK failure. Zero values select 100 ms initial delay, 5 s maximum, multiplier 2, 20% jitter, and unlimited attempts.
 
-### RabbitMqOptions
+## RabbitMqOptions
 
 ```go
 type RabbitMqOptions struct {
-    // RabbitMQ AMQP Connection String
-    // e.g., amqp://guest:guest@localhost:5672/
-    URL string
-
-    // Event Consumption (Consumer) Configuration
-    // If nil, RabbitMQ Consumer is not enabled
-    Read *RabbitMqReadOptions
-
-    // Event Publishing (Publisher) Configuration
-    // If nil, events are not published to RabbitMQ
-    Write *RabbitMqWriteOptions
-}
-
-type RabbitMqReadOptions struct {
-    // Exchange name to bind the queue to
-    Exchange string
-}
-
-type RabbitMqWriteOptions struct {
-    // Exchange name to publish events to
-    Exchange string
+    URL                    string
+    AllowInsecureTransport bool
+    ConsumerRetry          ConsumerRetryOptions
+    PublisherRetry         PublisherRetryOptions
+    Read                   *RabbitMqReadOptions
+    Write                  *RabbitMqWriteOptions
 }
 ```
 
-### Example
+RabbitMQ requires `amqps://` by default. Plaintext `amqp://` requires explicit local-only opt-in.
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    RabbitMQ: &boot.RabbitMqOptions{
-        URL: "amqp://guest:guest@localhost:5672/",
-        Read: &boot.RabbitMqReadOptions{
-            Exchange: "stock-exchange",
-        },
-        Write: &boot.RabbitMqWriteOptions{
-            Exchange: "stock-exchange",
+RabbitMQ: &boot.RabbitMqOptions{
+    URL: "amqps://user:pass@rabbit.example/vhost",
+    PublisherRetry: boot.PublisherRetryOptions{
+        InitialDelay:   200 * time.Millisecond,
+        MaxDelay:       5 * time.Second,
+        MaxAttempts:    5,
+        ConfirmTimeout: 5 * time.Second,
+    },
+    Read: &boot.RabbitMqReadOptions{
+        Exchange:      "events",
+        PrefetchCount: 16,
+        FailurePolicy: boot.RabbitMqFailureReject,
+        DeadLetter: &boot.RabbitMqDeadLetterOptions{
+            Exchange:   "events.dlx",
+            RoutingKey: "events.failed",
         },
     },
-    HTTP: &boot.HTTPOptions{},
-})
-```
-
-## Event Publishing
-
-Domain events can be published from the Controller.
-
-### DomainEvent Interface
-
-```go
-import "github.com/NARUBROWN/spine/pkg/event/publish"
-
-type DomainEvent interface {
-    Name() string
-    OccurredAt() time.Time
+    Write: &boot.RabbitMqWriteOptions{Exchange: "events"},
 }
 ```
 
-### Event Definition
+The publisher uses persistent messages, mandatory routing, publisher confirms, and bounded retry. A zero prefetch uses the safe default of 1. `RequeueOnError` is deprecated; use `FailurePolicy` explicitly. Broker dispatch uses AMQP `RoutingKey`, not producer-controlled `Type`.
+
+## Minimal HTTP application
 
 ```go
-type OrderCreated struct {
-    OrderID int64     `json:"order_id"`
-    At      time.Time `json:"at"`
-}
-
-func (e OrderCreated) Name() string {
-    return "order.created"
-}
-
-func (e OrderCreated) OccurredAt() time.Time {
-    return e.At
-}
-```
-
-### Publishing from Controller
-
-```go
-import "github.com/NARUBROWN/spine/pkg/event/publish"
-
-func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) Order {
-    order := c.repo.Save(req)
-    
-    // Publish Event
-    publish.Event(ctx, OrderCreated{
-        OrderID: order.ID,
-        At:      time.Now(),
-    })
-    
-    return order
-}
-```
-
-Events are published in a batch from `PostExecutionHook` after Controller execution completes. `publish.Event()` collects events into the `EventBus` injected into `context.Context`, and if the execution completes without error, they are sent via the registered Publisher (Kafka/RabbitMQ).
-
-## Full Example
-
-```go
-package main
-
-import (
-    "context"
-    "encoding/json"
-    "log"
-    "strings"
-    "sync"
-    "time"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/interceptor/cors"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/event/publish"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-    "github.com/NARUBROWN/spine/pkg/route"
-    "github.com/NARUBROWN/spine/pkg/ws"
-)
-
 func main() {
     app := spine.New()
+    app.Constructor(NewUserService, NewUserController)
+    app.Route("GET", "/users/:id", (*UserController).Get)
 
-    // Register Constructors
-    app.Constructor(
-        NewUserController,
-        NewOrderConsumer,
-        NewChatController,
-    )
-
-    // Register HTTP Routes
-    app.Route("GET", "/users", (*UserController).GetUserQuery)
-    app.Route("GET", "/users/:id", (*UserController).GetUser,
-        route.WithInterceptors(&LoggingInterceptor{}),
-    )
-    app.Route("POST", "/orders/:orderId", (*UserController).CreateOrder)
-
-    // Register Global Interceptors
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type"},
-        }),
-    )
-
-    // Register Event Consumers
-    if err := app.Consumers().Register("order.created", (*OrderConsumer).OnCreated); err != nil {
-        log.Fatal(err)
-    }
-
-    // Register WebSockets
-    if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
-        log.Fatal(err)
-    }
-
-    // Run Server
-    if err := app.Run(boot.Options{
+    opts := boot.Options{
         Address:                ":8080",
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
-        RabbitMQ: &boot.RabbitMqOptions{
-            URL: "amqp://guest:guest@localhost:5672/",
-            Read: &boot.RabbitMqReadOptions{
-                Exchange: "stock-exchange",
-            },
-            Write: &boot.RabbitMqWriteOptions{
-                Exchange: "stock-exchange",
-            },
-        },
-        HTTP: &boot.HTTPOptions{},
-    }); err != nil {
+        HTTP:                   &boot.HTTPOptions{},
+    }
+    if err := app.Run(opts); err != nil {
         log.Fatal(err)
     }
 }
-
-// Controller
-type UserController struct{}
-
-func NewUserController() *UserController {
-    return &UserController{}
-}
-
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    publish.Event(ctx, OrderCreated{
-        OrderID: orderId.Value,
-        At:      time.Now(),
-    })
-    return httpx.Response[string]{Body: "OK"}
-}
-
-// Event
-type OrderCreated struct {
-    OrderID int64     `json:"order_id"`
-    At      time.Time `json:"at"`
-}
-
-func (e OrderCreated) Name() string        { return "order.created" }
-func (e OrderCreated) OccurredAt() time.Time { return e.At }
-
-// Consumer
-type OrderConsumer struct{}
-
-func NewOrderConsumer() *OrderConsumer {
-    return &OrderConsumer{}
-}
-
-func (c *OrderConsumer) OnCreated(
-    ctx context.Context,
-    eventName string,
-    event OrderCreated,
-) error {
-    log.Println("Event received:", eventName)
-    log.Println("Order ID:", event.OrderID)
-    return nil
-}
-
-// WebSocket
-type ChatController struct {
-    mu      sync.RWMutex
-    clients map[string]ws.Sender
-}
-
-func NewChatController() *ChatController {
-    return &ChatController{clients: make(map[string]ws.Sender)}
-}
-
-type ChatMessage struct {
-    Message string `json:"message"`
-}
-
-type ChatEvent struct {
-    Type    string `json:"type"`
-    From    string `json:"from"`
-    Message string `json:"message"`
-    At      string `json:"at"`
-}
-
-func (c *ChatController) OnMessage(
-    ctx context.Context,
-    connID ws.ConnectionID,
-    msg ChatMessage,
-) error {
-    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-    if ok && sender != nil {
-        c.mu.Lock()
-        c.clients[connID.Value] = sender
-        c.mu.Unlock()
-    }
-
-    message := strings.TrimSpace(msg.Message)
-    if message == "" {
-        return nil
-    }
-
-    payload, err := json.Marshal(ChatEvent{
-        Type:    "message",
-        From:    connID.Value,
-        Message: message,
-        At:      time.Now().UTC().Format(time.RFC3339),
-    })
-    if err != nil {
-        return err
-    }
-
-    c.mu.RLock()
-    clients := make(map[string]ws.Sender, len(c.clients))
-    for id, client := range c.clients {
-        clients[id] = client
-    }
-    c.mu.RUnlock()
-
-    var firstErr error
-    for id, client := range clients {
-        if err := client.Send(ws.TextMessage, payload); err != nil {
-            if firstErr == nil {
-                firstErr = err
-            }
-            c.mu.Lock()
-            delete(c.clients, id)
-            c.mu.Unlock()
-        }
-    }
-    return firstErr
-}
 ```
 
-## Bootstrap Order
+## See also
 
-Initialization proceeds in the following order when `Run()` is called:
-
-1. Create IoC Container
-2. Register Constructors
-3. Configure Event Infrastructure (if configured)
-   - Kafka Publisher / Consumer
-   - RabbitMQ Publisher / Consumer
-4. Initialize Custom Transport (`Init()` execution)
-5. Start Custom Transport (`Start()` in separate goroutine)
-6. Configure HTTP Runtime (if configured)
-   - Configure Router and create HandlerMeta
-   - Resolve Route Interceptors (nil pointer → Container)
-   - Assert No Ambiguous Routes
-   - Controller Warm-up (Pre-resolve dependencies)
-   - Configure HTTP Pipeline (Register ArgumentResolvers, ReturnValueHandlers)
-   - Register Global Interceptors (Remove duplicates, resolve nil pointers)
-7. Configure WebSocket Runtime (if registered)
-   - Create WS-specific Pipeline
-   - Auto mount via Echo Transport Hook
-8. Mount Echo Adapter (Includes Recover middleware)
-9. Start Consumer Runtime (if configured)
-10. Start HTTP Server
-
-### On Graceful Shutdown
-
-1. Receive `SIGINT` / `SIGTERM` signals
-2. Send Close message to WebSocket connections
-3. Stop Event Consumer Runtime
-4. Call `Stop()` on Custom Transports
-5. Shutdown HTTP Server (Wait for timeout)
-6. Clean up Event Publisher resources
-7. Exit
-
-## See Also
-
-- [Interceptor](/en/reference/api/interceptor) - Interceptor Interface
-- [Execution Pipeline](/en/learn/core-concepts/pipeline) - Request Processing Flow
-- [IoC Container](/en/learn/getting-started/intro) - Dependency Injection
+- [Security configuration](/en/reference/security-configuration)
+- [Current Release](/en/community/changelog)
+- [Interceptor API](/en/reference/api/interceptor)

@@ -1,4 +1,4 @@
-＃Webソケットチャットの例
+# WebSocketチャットの例
 
 Webソケットを活用した簡単なリアルタイムチャットの例です。
 
@@ -138,9 +138,33 @@ func main() {
 		Address:                ":8080",
 		EnableGracefulShutdown: true,
 		ShutdownTimeout:        10 * time.Second,
-		HTTP:                   &boot.HTTPOptions{},
+		HTTP: &boot.HTTPOptions{
+			WebSocket: boot.WebSocketOptions{
+				AllowedOrigins: []string{"https://app.example.com"},
+				MaxConnections: 1024,
+			},
+		},
 	}); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
+
+## Handshake認証と容量
+
+認証が必要なrouteのinterceptorは`core.WebSocketHandshakeInterceptor`も実装します。接続slotは`PreHandshake`より先に予約され、`PreHandshake`はHTTP upgradeより前に実行されます。未認証の待機中handshakeも`MaxConnections`に含まれます。メッセージごとの`PreHandle`は別に引き続き実行されます。
+
+```go
+func (i *AuthInterceptor) PreHandshake(
+	ctx core.WebSocketHandshakeContext,
+	meta core.HandlerMeta,
+) error {
+	token := ctx.Header("Authorization")
+	if token == "" {
+		return httperr.Unauthorized("missing credentials")
+	}
+	return i.verify(token)
+}
+```
+
+`AllowedOrigins`を省略するとschemeとhostの両方が一致する要求だけが許可されます。接続上限を超えるとupgradeせず、HTTP 503、`Retry-After`、`WEBSOCKET_CAPACITY_EXCEEDED` JSONを返します。TLS終端proxyを信頼する場合は、正確な`TrustedProxyCIDRs`を設定してください。

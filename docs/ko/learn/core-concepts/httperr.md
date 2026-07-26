@@ -372,7 +372,7 @@ if err != nil {
 }
 ```
 
-Interceptor의 `AfterCompletion`에서 `Cause`를 로깅할 수 있습니다:
+Interceptor의 `AfterCompletion`에서 `Cause`를 로깅할 수 있습니다. 아래 코드는 해당 메서드만 발췌한 것이며, 실제 구현체에는 `PreHandle`, `PostHandle`, `BeforeResponse`도 필요합니다.
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {

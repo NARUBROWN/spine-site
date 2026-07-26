@@ -422,6 +422,8 @@ func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, arg
 
 Interceptor의 모든 메서드는 `HandlerMeta`를 받아 실행 대상 정보에 접근할 수 있습니다.
 
+아래 코드는 `HandlerMeta` 접근만 강조한 `PreHandle` 발췌입니다. 등록 가능한 구현체에는 `PostHandle`, `BeforeResponse`, `AfterCompletion`도 필요합니다.
+
 ```go
 // cmd/demo/logging_interceptor.go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {

@@ -1,4 +1,4 @@
-＃実行パイプライン
+# 実行pipeline
 
 Spineの要求ライフサイクルを理解する。
 
@@ -25,6 +25,9 @@ graph TD
     PostHook["PostExecutionHook<br>(イベント 発行 など)"]
     RoutePost["Route Interceptor.PostHandle ↩<br>(ルート 後処理)"]
     GlobalPost["Global Interceptor.PostHandle ↩<br>(グローバル 後処理)"]
+    RouteBefore["Route Interceptor.BeforeResponse ↩<br>(応答前)"]
+    GlobalBefore["Global Interceptor.BeforeResponse ↩<br>(応答前)"]
+    Flush["Buffered Response Flush"]
     RouteAfter["Route Interceptor.AfterCompletion ↩<br>(常に 実行)"]
     GlobalAfter["Global Interceptor.AfterCompletion ↩<br>(常に 実行)"]
     ErrorHandler["handleExecutionError<br>(エラーセーフティネット)"]
@@ -41,10 +44,13 @@ graph TD
     ReturnHandler --> PostHook
     PostHook --> RoutePost
     RoutePost --> GlobalPost
-    GlobalPost --> RouteAfter
+    GlobalPost --> RouteBefore
+    RouteBefore --> GlobalBefore
+    GlobalBefore --> ErrorHandler
+    ErrorHandler --> Flush
+    Flush --> RouteAfter
     RouteAfter --> GlobalAfter
-    GlobalAfter --> ErrorHandler
-    ErrorHandler --> Response
+    GlobalAfter --> Response
 ```
 
 
@@ -304,8 +310,11 @@ type Interceptor interface {
     
     // ReturnValueHandler 処理 後 実行
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
+
+    // 応答を書き込む前に実行。transaction処理のエラーも返す
+    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
     
-    // 成功/失敗と に関係なく 最後にに 呼び出し
+    // 応答処理後、成功/失敗に関係なく最後に呼び出す
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
@@ -476,7 +485,7 @@ func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []
 ```
 
 
-## 10. Interceptor.PostHandle & AfterCompletion
+## 10. Interceptor.PostHandle、BeforeResponse、AfterCompletion
 
 ### PostHandle
 
@@ -493,6 +502,20 @@ for i := len(routeInterceptors) - 1; i >= 0; i-- {
 for i := len(p.interceptors) - 1; i >= 0; i-- {
     p.interceptors[i].PostHandle(ctx, meta)
 }
+```
+
+### BeforeResponse
+
+`PreHandle`に成功したinterceptorだけをroute、globalの順にそれぞれ逆順で実行します。この時点では戻り値の直列化、Cookie、status検証、post-execution hookが完了していますが、実際の応答はまだflushされていません。transactionのcommit/rollbackエラーを返すと最終エラーに結合されます。
+
+```go
+finalErr = runBeforeResponse(
+    ctx,
+    meta,
+    routeFinalizers,
+    globalFinalizers,
+    finalErr,
+)
 ```
 
 ### AfterCompletion
@@ -569,13 +592,13 @@ func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
 ### 通常フロー
 
 ```
-pre:global → pre:route → [Controller] → post:route → post:global → after:route → after:global
+pre:global → pre:route → [Controller] → post:route → post:global → before:route → before:global → flush → after:route → after:global
 ```
 
 ### ルートインターセプタで中断 (ErrAbortPipeline)
 
 ```
-pre:global → pre:route → after:route → after:global
+pre:global → pre:route(中断) → before:global → flush → after:route → after:global
 ```
 
 Controllerは呼び出されませんが、`AfterCompletion`は常に実行されます。
@@ -583,7 +606,7 @@ Controllerは呼び出されませんが、`AfterCompletion`は常に実行さ�
 ### グローバルインターセプタで中断 (ErrAbortPipeline)
 
 ```
-pre:global → after:global
+pre:global(中断) → flush → after:global
 ```
 
 Routerも呼び出されないため、ルートインターセプタも実行されません。
@@ -720,7 +743,9 @@ Pipelineは、単一のHTTPパイプラインだけでなく、Consumer Pipeline
 | 9 | PostExecutionHook |ドメインイベント発行などの後処理
 | 10 | Route Interceptor.PostHandle↩|ルート後処理（逆順）|
 | 11 | Global Interceptor.PostHandle↩|グローバル後処理（逆順）|
-| 12 | AfterCompletion ↩ |クリーンアップ（ルート→グローバル、常に実行）|
-| 13 | handleExecutionError |エラーセーフティネット（二重応答防止）|
+| 12 | BeforeResponse ↩ |応答前のtransaction完了とエラー結合|
+| 13 | handleExecutionError |エラー応答をstaged writerに準備|
+| 14 | buffered response flush |検証済みの応答だけを実際のwriterへ記録|
+| 15 | AfterCompletion ↩ |cleanup（route→global、常に実行）|
 
 この順序は**隠されておらず、暗黙的に変わりません**これはSpineの「No Magic」哲学です。

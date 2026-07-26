@@ -106,6 +106,8 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 
 ### 需要身份驗證 (401)
 
+> 以下程式碼只展示錯誤處理所需的 `PreHandle`。作為完整的 `core.Interceptor` 實作，此型別還必須提供 `PostHandle`、`BeforeResponse` 和 `AfterCompletion`；不需要額外行為的方法可以使用空實作，並讓 `BeforeResponse` 回傳 `nil`。
+
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
@@ -247,6 +249,8 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 
 如果 `PreHandle` 傳回錯誤，控制器將不會運作。
 
+> 以下只是聚焦 `PreHandle` 的片段，並非完整的攔截器實作。完整實作還必須提供 `PostHandle`、`BeforeResponse` 和 `AfterCompletion`。
+
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
@@ -276,6 +280,8 @@ flowchart TD
 ## 錯誤記錄
 
 您可以在 `AfterCompletion` 中記錄錯誤。
+
+> 以下只展示完整攔截器中的日誌方法；同一型別仍須實作其他三個生命週期方法。
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {

@@ -21,7 +21,7 @@ curl "http://localhost:8080/users?id=1"
 ```bash
 mkdir hello-spine && cd hello-spine
 go mod init hello-spine
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 ## 2. 專案結構
@@ -184,7 +184,7 @@ _____ \___  __ \_  /__  __ \  _ \
 ____/ /__  /_/ /  / _  / / /  __/
 /____/ _  .___//_/  /_/ /_/\___/
        /_/
-2026/01/19 14:37:59 [Bootstrap] Spine version: v0.2.1
+2026/07/26 14:37:59 [Bootstrap] Spine version: v0.5.1
 ```
 
 ## 5. 測試

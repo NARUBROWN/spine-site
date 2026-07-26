@@ -134,7 +134,8 @@ func main() {
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
         Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
+            Brokers:                []string{"localhost:9092"},
+            AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
             Write: &boot.KafkaWriteOptions{
                 TopicPrefix: "",
             },
@@ -213,7 +214,8 @@ func main() {
         EnableGracefulShutdown: true,
         ShutdownTimeout:        10 * time.Second,
         Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
+            Brokers:                []string{"localhost:9092"},
+            AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
             Read: &boot.KafkaReadOptions{
                 GroupID: "stock-service",
             },
@@ -279,7 +281,8 @@ Stock Service (Consumer)
 ### イベント発行(Write)
 ```go
 Kafka: &boot.KafkaOptions{
-    Brokers: []string{"localhost:9092"},
+    Brokers:                []string{"localhost:9092"},
+    AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
     Write: &boot.KafkaWriteOptions{
         TopicPrefix: "prod.",  // トピックプレフィックス（例: prod.order.created）
     },
@@ -288,13 +291,16 @@ Kafka: &boot.KafkaOptions{
 ### イベント消費(Read)
 ```go
 Kafka: &boot.KafkaOptions{
-    Brokers: []string{"localhost:9092"},
+    Brokers:                []string{"localhost:9092"},
+    AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
     Read: &boot.KafkaReadOptions{
         GroupID: "stock-service",  // Consumer Group ID
     },
 },
 ```
 ## コアクリーンアップ
+
+本番Brokerでは`AllowInsecureTransport`を削除してください。Spineは設定を省略するとTLS 1.2以上を適用します。handlerは再配信に備えて冪等に実装し、readerの再接続ポリシーは`ConsumerRetry`で調整します。恒久的に失敗するKafkaメッセージは自動的にskipまたはDLQへ移動されないため、別途運用手順が必要です。
 
 |サービス|役割|ポート| Kafka設定|
 |--------|------|------|-----------|

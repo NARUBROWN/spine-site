@@ -246,6 +246,8 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 
 `PreHandle`에서 에러를 반환하면 Controller가 실행되지 않습니다.
 
+이 절의 코드는 에러 처리 지점만 보여주는 메서드 발췌입니다. 실제 인터셉터 타입은 `PreHandle`, `PostHandle`, `BeforeResponse`, `AfterCompletion` 네 메서드를 모두 구현해야 합니다.
+
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")

@@ -236,6 +236,8 @@ func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
 ## Interceptorでのエラー処理
 `PreHandle` からエラーを返した場合、Controller は実行されません。
 
+この節のコードはエラー処理箇所だけを示すメソッドの抜粋です。実際のinterceptor型は`PreHandle`、`PostHandle`、`BeforeResponse`、`AfterCompletion`の4メソッドをすべて実装する必要があります。
+
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")

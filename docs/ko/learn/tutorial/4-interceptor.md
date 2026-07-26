@@ -13,7 +13,7 @@
 
 ## 라이프사이클
 
-인터셉터는 3단계 라이프사이클을 가집니다.
+Spine v0.5.1 인터셉터는 4단계 라이프사이클을 가집니다.
 
 ```mermaid
 graph TD
@@ -24,9 +24,10 @@ graph TD
     
     Controller -- 성공 --> Post["PostHandle<br/>- 요청 성공 시 실행<br/>- 에러 발생 시 스킵"]
     
-    Post --> After["AfterCompletion<br/>- 항상 실행 (성공/실패 무관)<br/>- 리소스 정리, 트랜잭션 커밋/롤백"]
+    Post --> Before["BeforeResponse<br/>- 응답 flush 전 역순 실행<br/>- 트랜잭션 커밋/롤백"]
     
-    Controller -- 에러 --> After
+    Controller -- 에러 --> Before
+    Before --> After["AfterCompletion<br/>- 응답 후 항상 실행<br/>- 로깅, 리소스 정리"]
     
     After --> Response
 ```
@@ -38,6 +39,7 @@ graph TD
 type Interceptor interface {
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
+    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
@@ -46,7 +48,10 @@ type Interceptor interface {
 |--------|----------|------|------|
 | `PreHandle` | 컨트롤러 실행 전 | `error` | 인증, 검증, 트랜잭션 시작 |
 | `PostHandle` | 컨트롤러 성공 후 | 없음 | 응답 가공 |
-| `AfterCompletion` | 항상 (성공/실패) | 없음 | 리소스 정리, 커밋/롤백 |
+| `BeforeResponse` | 응답을 실제로 쓰기 전 | `error` | transaction commit/rollback |
+| `AfterCompletion` | 응답 처리 후 항상 | 없음 | 로깅, 리소스 정리 |
+
+`BeforeResponse`는 직렬화, 쿠키, status 검증 오류를 `executionErr`로 받습니다. transaction 결과 오류는 반드시 반환하십시오. `AfterCompletion` 시점에는 응답이 이미 기록되었을 수 있습니다.
 
 
 ## 전역 인터셉터 vs 라우트 인터셉터
@@ -93,6 +98,10 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
         ctx.Method(),
         ctx.Path(),
     )
+}
+
+func (i *LoggingInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
+    return nil
 }
 
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
@@ -161,6 +170,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 }
 
 func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+
+func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error { return nil }
 
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 
@@ -307,6 +318,10 @@ Request (GET /users/1)
    ├─→ CORS.PostHandle       (전역 2)
    ├─→ Logging.PostHandle    (전역 1)
    │
+   ├─→ Auth.BeforeResponse       (라우트 1)
+   ├─→ CORS.BeforeResponse       (전역 2)
+   ├─→ Logging.BeforeResponse    (전역 1)
+   │
    ├─→ Auth.AfterCompletion       (라우트 1)
    ├─→ CORS.AfterCompletion       (전역 2)
    └─→ Logging.AfterCompletion    (전역 1)
@@ -316,6 +331,7 @@ Response
 
 - `PreHandle`: 전역 → 라우트 순서
 - `PostHandle`: 라우트 → 전역 역순
+- `BeforeResponse`: `PreHandle`에 성공한 인터셉터만 라우트 → 전역 역순
 - `AfterCompletion`: 라우트 → 전역 역순
 
 
@@ -342,6 +358,9 @@ Request (GET /users/1, 토큰 없음)
    ├─→ CORS.PreHandle        ✓
    ├─→ Auth.PreHandle        ✗ (에러 반환)
    │
+   ├─→ CORS.BeforeResponse
+   ├─→ Logging.BeforeResponse
+   │
    ├─→ Auth.AfterCompletion
    ├─→ CORS.AfterCompletion
    └─→ Logging.AfterCompletion
@@ -366,6 +385,8 @@ Response (401 Unauthorized)
 | `Get(key)` | 값 조회 |
 
 ### 인터셉터 간 데이터 전달
+
+아래 코드는 `PreHandle`에서 컨텍스트를 공유하는 부분만 발췌한 예입니다. 새 타입을 실제로 등록하려면 네 수명주기 메서드를 모두 구현해야 합니다.
 
 ```go
 // AuthInterceptor — 사용자 정보 저장
@@ -443,22 +464,24 @@ func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMe
 
 func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
+func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
     v, ok := ctx.Get("tx")
     if !ok {
-        return
+        return nil
     }
     
     tx, ok := v.(bun.Tx)
     if !ok {
-        return
+        return nil
     }
-    if err != nil {
-        _ = tx.Rollback()
+    if executionErr != nil {
+        return tx.Rollback()
     } else {
-        _ = tx.Commit()
+        return tx.Commit()
     }
 }
+
+func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
 ### 등록 (전역)
@@ -533,8 +556,8 @@ app.Route(
 |------|------|
 | **전역 인터셉터** | `app.Interceptor()` — 모든 요청에 적용 |
 | **라우트 인터셉터** | `route.WithInterceptors()` — 특정 라우트만 |
-| **실행 순서** | 전역 → 라우트 (Post/After는 역순) |
-| **3단계 라이프사이클** | PreHandle → PostHandle → AfterCompletion |
+| **실행 순서** | 전역 → 라우트 (`PostHandle`/`BeforeResponse`/`AfterCompletion`은 역순) |
+| **4단계 라이프사이클** | PreHandle → PostHandle → BeforeResponse → AfterCompletion |
 | **에러 시 중단** | PreHandle 에러 → 컨트롤러 스킵 |
 | **컨텍스트 공유** | `ctx.Set()` / `ctx.Get()`으로 데이터 전달 |
 

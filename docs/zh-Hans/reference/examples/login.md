@@ -5,7 +5,7 @@
 ## 安装依赖
 
 ```bash
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 go get github.com/golang-jwt/jwt/v5
 ```
 

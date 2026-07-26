@@ -151,7 +151,7 @@ func (c *UserController) CreateUser(
 ## 你準備好開始了嗎？
 
 ```bash
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 [5 分鐘快速入門 →](/zh-Hant/learn/getting-started/first-app)

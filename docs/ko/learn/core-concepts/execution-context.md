@@ -868,6 +868,8 @@ func (p *Pipeline) resolveArguments(ctx core.ExecutionContext, paramMetas []reso
 
 ### Interceptor
 
+다음 코드는 `ExecutionContext` 사용 지점만 보여주는 `PreHandle` 발췌입니다. 실제 `core.Interceptor` 구현체는 `PostHandle`, `BeforeResponse`, `AfterCompletion`도 구현해야 합니다.
+
 ```go
 // interceptor/cors/cors.go
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {

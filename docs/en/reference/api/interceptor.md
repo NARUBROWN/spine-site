@@ -1,370 +1,199 @@
 # core.Interceptor
 
-API Reference for Interceptor interface.
+API reference for Spine interceptors.
 
-## Overview
-
-`Interceptor` is an interface for handling cross-cutting concerns before and after Controller calls. It is used for logging, authentication, CORS, transaction management, etc.
-
-```go
-import "github.com/NARUBROWN/spine/core"
-```
-
-## Interface Definition
+## Interface
 
 ```go
 type Interceptor interface {
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
+    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
 
-## Methods
+Every interceptor implementation must define all four methods. An interceptor may additionally implement `WebSocketHandshakeInterceptor` when a WebSocket connection must be authenticated before the HTTP upgrade.
+
+## Lifecycle
 
 ### PreHandle
 
-```go
-PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-```
+Runs before controller invocation. Returning an error stops normal execution. `core.ErrAbortPipeline` is an intentional stop for an interceptor that has already prepared a response, such as a CORS preflight.
 
-Executed **before** Controller call.
-
-**Parameters**
-- `ctx` - Request context
-- `meta` - Information about the Controller method to be executed
-
-**Returns**
-- `error` - Aborts pipeline if error is returned
-- `nil` - Proceeds to next step
-- `core.ErrAbortPipeline` - Aborts pipeline (Not an error, response completed state)
-
-**Example**
-```go
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("Authentication required")
-    }
-    
-    user, err := i.auth.Validate(token)
-    if err != nil {
-        return httperr.Unauthorized("Invalid token")
-    }
-    
-    ctx.Set("auth.user", user)
-    return nil
-}
-```
+Global HTTP `PreHandle` runs before routing and receives an empty `HandlerMeta`. Route interceptors run after routing and argument resolution and receive the resolved handler metadata. For WebSocket, `PreHandle` runs for every message.
 
 ### PostHandle
 
+Runs in reverse order after the controller result has been successfully converted into a prepared response and post-execution hooks complete. It is skipped when execution or response preparation fails.
+
+### BeforeResponse
+
 ```go
-PostHandle(ctx ExecutionContext, meta HandlerMeta)
+BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
 ```
 
-Executed **after** Controller call and ReturnValueHandler processing. Called in reverse order.
+Runs in reverse order for every interceptor whose `PreHandle` succeeded. The HTTP response has been fully prepared in memory but has not yet been flushed. `executionErr` contains controller, serialization, cookie/status validation, hook, or earlier finalizer failures.
 
-**Parameters**
-- `ctx` - Request context
-- `meta` - Information about the executed Controller method
+This is the correct place to commit or roll back a request transaction. An error returned here is joined into the final execution error and prevents a prepared success response from being flushed.
 
-**Example**
 ```go
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
+func (i *TxInterceptor) BeforeResponse(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+    executionErr error,
+) error {
+    tx, ok := transactionFrom(ctx)
+    if !ok {
+        return nil
+    }
+    if executionErr != nil {
+        return tx.Rollback()
+    }
+    return tx.Commit()
 }
 ```
 
 ### AfterCompletion
 
+Runs last, in reverse order, with the final pipeline error. Use it for observation and cleanup, not transaction commit: by this point the response may already have been flushed.
+
 ```go
-AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
-```
-
-**Always** executed at the end regardless of success/failure. Guaranteed by `defer`. Called in reverse order. Used for resource cleanup, metrics collection, etc.
-
-**Parameters**
-- `ctx` - Request context
-- `meta` - Information about the executed Controller method
-- `err` - Final error occurred during pipeline execution (`nil` if none)
-
-**Example**
-```go
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
+func (i *LoggingInterceptor) AfterCompletion(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+    err error,
+) {
     if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
+        log.Printf("[ERR] %s %s: %v", ctx.Method(), ctx.Path(), err)
     }
 }
 ```
 
-## Global vs Route Interceptors
+## HTTP execution order
 
-### Global Interceptors
-
-Applied to all requests. `PreHandle` is executed **before routing**.
-
-```go
-app := spine.New()
-
-app.Interceptor(
-    cors.New(cors.Config{
-        AllowOrigins: []string{"*"},
-    }),
-    &LoggingInterceptor{},
-)
+```text
+global PreHandle
+route lookup and argument resolution
+route PreHandle
+controller
+prepare return value (serialization, cookies, status)
+post-execution hooks
+route PostHandle, then global PostHandle (reverse order)
+route BeforeResponse, then global BeforeResponse (reverse order)
+flush prepared response
+route AfterCompletion, then global AfterCompletion (reverse order)
 ```
 
-In `PreHandle` of a Global Interceptor, an empty `HandlerMeta{}` is passed because routing hasn't completed yet.
+Only interceptors whose `PreHandle` succeeded participate in the finalizer phases. When `PreHandle` aborts, the controller and `PostHandle` are skipped; `BeforeResponse` and `AfterCompletion` still run for the already-entered interceptors.
 
-### Route Interceptors
+## Global scopes
 
-Applied only to specific routes. `PreHandle` is executed **after routing, before Controller invocation**. Actual `HandlerMeta` is passed.
+`App.Interceptor` is shorthand for both built-in transports:
 
 ```go
-import "github.com/NARUBROWN/spine/pkg/route"
+app.Interceptor(&LoggingInterceptor{})
 
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors(&AuthInterceptor{}),
-)
+// Equivalent explicit registration:
+app.InterceptorFor(boot.InterceptorAll, &LoggingInterceptor{})
 ```
 
-### Container Resolution via nil Pointer
-
-Registering a Route Interceptor as a nil pointer automatically resolves it from the IoC Container at bootstrap time. This makes it easy to use interceptors with dependencies.
+Use `InterceptorFor` when a policy belongs to only one transport:
 
 ```go
-// nil pointer → Resolves from Container
+app.InterceptorFor(boot.InterceptorHTTP, httpAudit)
+app.InterceptorFor(boot.InterceptorWebSocket, wsAuth)
+```
+
+Available scopes are `boot.InterceptorHTTP`, `boot.InterceptorWebSocket`, and `boot.InterceptorAll`.
+
+### Registration identity
+
+- Registering the same pointer instance for multiple scopes merges its scopes and executes it once.
+- Different pointer instances execute independently even when they have the same concrete type.
+- Repeated typed-nil placeholders of the same type merge and resolve one container singleton.
+- Value-type registrations remain independent.
+
+```go
+shared := &AuditInterceptor{}
+app.InterceptorFor(boot.InterceptorHTTP, shared)
+app.InterceptorFor(boot.InterceptorWebSocket, shared) // one shared instance
+
+app.Interceptor(&AuditInterceptor{}, &AuditInterceptor{}) // two instances
+```
+
+## Route interceptors and DI
+
+```go
 app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
     route.WithInterceptors((*AuthInterceptor)(nil)),
 )
-
-// Passing instance directly
-app.Route("GET", "/public/users/:id", (*UserController).GetUser,
-    route.WithInterceptors(&RateLimitInterceptor{Limit: 100}),
-)
 ```
 
-| Registration Method | Behavior |
-|----------|------|
-| `(*AuthInterceptor)(nil)` | Resolve from Container (Dependency Injection possible) |
-| `&RateLimitInterceptor{Limit: 100}` | Use instance directly |
+A typed-nil pointer is resolved from the container at bootstrap. A non-nil value is used directly. Nil constructors and invalid nil provider results now fail bootstrap with explicit DI errors.
 
+## WebSocket handshake interception
 
-## Execution Order
-
-The actual execution order verified by tests.
-
-### Normal Flow
-
-```
-Global.PreHandle()
-    ↓
-  [Router]
-    ↓
-  [ArgumentResolver]
-    ↓
-Route.PreHandle()
-    ↓
-  [Controller Call]
-    ↓
-  [ReturnValueHandler]
-    ↓
-  [PostExecutionHook]
-    ↓
-Route.PostHandle()        ← Reverse
-    ↓
-Global.PostHandle()       ← Reverse
-    ↓
-Route.AfterCompletion()   ← Reverse, Always Executed
-    ↓
-Global.AfterCompletion()  ← Reverse, Always Executed
-```
-
-### Abort in Route Interceptor
-
-```
-Global.PreHandle()
-    ↓
-  [Router]
-    ↓
-  [ArgumentResolver]
-    ↓
-Route.PreHandle() → ErrAbortPipeline
-    ↓
-Route.AfterCompletion()   ← Always Executed
-    ↓
-Global.AfterCompletion()  ← Always Executed
-```
-
-Controller and PostHandle are not called, but `AfterCompletion` is always guaranteed.
-
-### Abort in Global Interceptor
-
-```
-Global.PreHandle() → ErrAbortPipeline
-    ↓
-Global.AfterCompletion()  ← Always Executed
-```
-
-The Router isn't called either, so Route Interceptors are not executed.
-
-
-## Aborting Pipeline
-
-Returning `core.ErrAbortPipeline` in `PreHandle` terminates the pipeline without calling the Controller. This is treated as a normal termination, not an error.
+Message-stage `PreHandle` runs after the WebSocket is connected. Authentication that must reject the HTTP upgrade belongs in the optional interface:
 
 ```go
-import "github.com/NARUBROWN/spine/core"
+type WebSocketHandshakeInterceptor interface {
+    PreHandshake(ctx WebSocketHandshakeContext, meta HandlerMeta) error
+}
 
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return nil
+func (i *AuthInterceptor) PreHandshake(
+    ctx core.WebSocketHandshakeContext,
+    meta core.HandlerMeta,
+) error {
+    token := ctx.Header("Authorization")
+    if token == "" {
+        return httperr.Unauthorized("missing credentials")
     }
-    rw := rwAny.(core.ResponseWriter)
-    
-    origin := ctx.Header("Origin")
-    if origin != "" && i.isAllowedOrigin(origin) {
-        rw.SetHeader("Access-Control-Allow-Origin", origin)
-        rw.SetHeader("Vary", "Origin")
-    }
-    
-    // Respond to Preflight request without calling Controller
-    if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
-        return core.ErrAbortPipeline  // Normal termination
-    }
-    return nil
+    return i.verify(token)
 }
 ```
 
-## Interceptor Handling in Bootstrap
+Spine reserves a connection slot before `PreHandshake`, and calls `PreHandshake` before the HTTP upgrade. Pending unauthenticated handshakes therefore count against `MaxConnections`. Only route interceptors and interceptors registered for `boot.InterceptorWebSocket` participate in this phase.
 
-### Global Interceptor Deduplication
+The immutable handshake view exposes headers, query values, cookies, remote address, host, request URI, path, and `context.Context`. Message handlers can access the same snapshot through `core.WebSocketMessageContext`.
 
-If the same type of Global Interceptor is registered multiple times, only the first registration is kept.
-
-```go
-// internal/bootstrap/bootstrap.go
-seen := make(map[reflect.Type]struct{})
-ordered := make([]core.Interceptor, 0, len(config.Interceptors))
-for _, interceptor := range config.Interceptors {
-    t := reflect.TypeOf(interceptor)
-    if _, ok := seen[t]; ok {
-        continue  // Ignore duplicate type
-    }
-    seen[t] = struct{}{}
-    ordered = append(ordered, interceptor)
-}
-```
-
-### Global Interceptor nil Pointer Resolution
-
-Registering a Global Interceptor as a nil pointer also resolves it from the Container.
-
-```go
-app.Interceptor((*LoggingInterceptor)(nil))  // Resolves from Container
-```
-
-## Implementation Examples
-
-### Logging Interceptor
-
-```go
-type LoggingInterceptor struct{}
-
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s -> %s.%s",
-        ctx.Method(),
-        ctx.Path(),
-        meta.ControllerType.Name(),
-        meta.Method.Name,
-    )
-    return nil
-}
-
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
-}
-
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
-    }
-}
-```
-
-### Timing Interceptor
-
-```go
-type TimingInterceptor struct{}
-
-func (i *TimingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    ctx.Set("timing.start", time.Now())
-    return nil
-}
-
-func (i *TimingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-func (i *TimingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if start, ok := ctx.Get("timing.start"); ok {
-        elapsed := time.Since(start.(time.Time))
-        log.Printf("[TIMING] %s %s took %v", ctx.Method(), ctx.Path(), elapsed)
-    }
-}
-```
-
-### Auth Interceptor (Route Level)
+## Complete interceptor skeleton
 
 ```go
 type AuthInterceptor struct {
-    auth *AuthService  // Injected from Container
+    auth *AuthService
 }
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("Authentication required")
-    }
-    
     user, err := i.auth.Validate(token)
     if err != nil {
-        return httperr.Unauthorized("Invalid token")
+        return httperr.Unauthorized("invalid token")
     }
-    
     ctx.Set("auth.user", user)
     return nil
 }
 
-func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+func (i *AuthInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
 
-func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
+func (i *AuthInterceptor) BeforeResponse(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) error {
+    return nil
+}
+
+func (i *AuthInterceptor) AfterCompletion(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) {}
 ```
 
-Applying to a route:
+## See also
 
-```go
-// Registering as nil pointer → Resolves from Container with AuthService dependency
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),
-)
-```
-
-## Summary
-
-| Distinction | Global Interceptor | Route Interceptor |
-|------|---------------|---------------|
-| Registration | `app.Interceptor()` | `route.WithInterceptors()` |
-| Scope | All requests | Specific routes only |
-| PreHandle timing | **Before** routing | **After** routing |
-| meta content | Empty `HandlerMeta{}` | Actual `HandlerMeta` |
-| nil pointer | Supports Container Resolve | Supports Container Resolve |
-| Deduplication | Keeps only the first registration of the same type | N/A |
-
-
-## See Also
-
-- [ExecutionContext](/en/reference/api/execution-context) - Request Context Interface
-- [HandlerMeta](/en/learn/core-concepts/handler-meta) - Handler Metadata
-- ResponseWriter - Response Writer Interface
+- [ExecutionContext](/en/reference/api/execution-context)
+- [Execution pipeline](/en/learn/core-concepts/pipeline)
+- [Security configuration](/en/reference/security-configuration)
+- [Current Release](/en/community/changelog)

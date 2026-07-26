@@ -1,42 +1,8 @@
 # core.ExecutionContext
 
-API reference for ExecutionContext.
+API reference for Spine's execution and protocol-specific context contracts.
 
-
-## Overview
-
-`ExecutionContext` is an interface that allows access to request information within the Spine pipeline and shares data between components. It is a unified execution context that handles both HTTP requests and event messages.
-
-```go
-import "github.com/NARUBROWN/spine/core"
-```
-
-
-## Interface Hierarchy
-
-Spine separates Context hierarchically.
-
-```
-ContextCarrier ──────┬──► RequestContext ──┬──► HttpRequestContext
-                     │                     │
-EventBusCarrier ─────┤                     └──► ConsumerRequestContext
-                     │
-                     └──► ExecutionContext
-```
-
-| Interface | Role | Usage Location |
-|-----------|------|----------------|
-| `ContextCarrier` | Deliver Go context | Everywhere |
-| `EventBusCarrier` | Publish events | Controller, Consumer |
-| `RequestContext` | Resolver minimum contract | ArgumentResolver base |
-| `ExecutionContext` | Control execution flow | Router, Pipeline, Interceptor |
-| `HttpRequestContext` | Interpret HTTP input | HTTP ArgumentResolver |
-| `ConsumerRequestContext` | Interpret event input | Consumer ArgumentResolver |
-
-
-## Interface Definition
-
-### Base Interface
+## Base carriers
 
 ```go
 type ContextCarrier interface {
@@ -44,18 +10,104 @@ type ContextCarrier interface {
 }
 
 type EventBusCarrier interface {
-    EventBus() publish.EventBus
-}
-
-type RequestContext interface {
-    ContextCarrier
-    EventBusCarrier
+    EventBus() EventBus
 }
 ```
 
-### WebSocketContext
+`context.Context` carries cancellation and deadlines. `EventBus` collects domain events for post-execution dispatch.
 
-Extended interface dedicated to WebSocket. Embeds `ExecutionContext`.
+## ExecutionContext
+
+```go
+type ExecutionContext interface {
+    ContextCarrier
+    EventBusCarrier
+
+    Method() string
+    Path() string
+    Params() map[string]string
+    Header(name string) string
+    PathKeys() []string
+    Queries() map[string][]string
+    Set(key string, value any)
+    Get(key string) (any, bool)
+}
+```
+
+The router, pipeline, and interceptors use this mutable request-scoped contract. Collection-returning methods return defensive views; do not rely on mutating them to change framework state.
+
+| Method | Meaning |
+|---|---|
+| `Context` | standard cancellation/deadline context |
+| `EventBus` | request/message event collector |
+| `Method` | HTTP method, `EVENT`, or `WS` |
+| `Path` | request path or event route |
+| `Header` | one header value when supported |
+| `Params`, `PathKeys` | matched path values and declaration order |
+| `Queries` | multi-value query map |
+| `Set`, `Get` | interceptor/pipeline request store |
+
+Use namespaced application keys such as `myapp.auth.user`; keys beginning with `spine.` are reserved for framework internals.
+
+## ControllerContext
+
+```go
+type ControllerContext interface {
+    Get(key string) (any, bool)
+}
+```
+
+Controllers receive the read-only `spine.Ctx` facade rather than the mutable `ExecutionContext`:
+
+```go
+func (c *UserController) Me(ctx spine.Ctx) (User, error) {
+    value, ok := ctx.Get("myapp.auth.user")
+    if !ok {
+        return User{}, httperr.Unauthorized("authentication required")
+    }
+    return value.(User), nil
+}
+```
+
+Interfaces that extend `ControllerContext` are resolved using safe assignability and conversion. Unsupported types return an error instead of panicking.
+
+## HttpRequestContext
+
+```go
+type HttpRequestContext interface {
+    ContextCarrier
+    EventBusCarrier
+
+    Param(name string) string
+    Query(name string) string
+    Header(name string) string
+    Params() map[string]string
+    Queries() map[string][]string
+    Headers() map[string][]string
+    Bind(out any) error
+    MultipartForm() (*multipart.Form, error)
+}
+```
+
+HTTP argument resolvers assert this interface to bind path/query/header semantic types, JSON/form DTOs, and multipart uploads.
+
+## ConsumerRequestContext
+
+```go
+type ConsumerRequestContext interface {
+    ContextCarrier
+    EventBusCarrier
+
+    EventName() string
+    Payload() []byte
+}
+```
+
+Consumer resolvers use this narrow interface for the event name, raw payload, and decoded DTOs.
+
+## WebSocket contexts
+
+### Message execution
 
 ```go
 type WebSocketContext interface {
@@ -67,669 +119,103 @@ type WebSocketContext interface {
 }
 ```
 
-### ExecutionContext
+`MessageType` is the Gorilla WebSocket frame type (`1` for text, `2` for binary). `Payload` is the current message body.
+
+### Immutable upgrade request
 
 ```go
-type ExecutionContext interface {
+type WebSocketRequestContext interface {
     ContextCarrier
-    EventBusCarrier
 
-    Method() string
     Path() string
     Header(name string) string
-    Params() map[string]string
-    PathKeys() []string
-    Queries() map[string][]string
-    Set(key string, value any)
-    Get(key string) (any, bool)
-}
-```
-
-### HttpRequestContext
-
-Extended interface dedicated to HTTP.
-
-```go
-type HttpRequestContext interface {
-    RequestContext
-
-    Param(name string) string
+    Headers() map[string][]string
     Query(name string) string
-    Params() map[string]string
     Queries() map[string][]string
-    Bind(out any) error
-    MultipartForm() (*multipart.Form, error)
+    Cookie(name string) (string, bool)
+    Cookies() map[string]string
+    RemoteAddr() string
+    Host() string
+    RequestURI() string
+}
+
+type WebSocketHandshakeContext interface {
+    WebSocketRequestContext
+}
+
+type WebSocketMessageContext interface {
+    WebSocketContext
+    WebSocketRequestContext
 }
 ```
 
-### ConsumerRequestContext
+`WebSocketHandshakeContext` is supplied to `WebSocketHandshakeInterceptor.PreHandshake` before HTTP upgrade. Spine has already reserved a capacity slot, so pending authentication counts toward `MaxConnections`.
 
-Extended interface dedicated to Event Consumers.
-
-```go
-type ConsumerRequestContext interface {
-    RequestContext
-
-    EventName() string
-    Payload() []byte
-}
-```
-
-
-## ExecutionContext Methods
-
-### Context
+The request data is snapshotted and exposed again during message processing through `WebSocketMessageContext`:
 
 ```go
-Context() context.Context
-```
-
-Returns `context.Context` from the Go standard library.
-
-**Returns**
-- `context.Context` - Request scope context
-
-**Example**
-```go
-func (i *TimeoutInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    select {
-    case <-ctx.Context().Done():
-        return ctx.Context().Err()
-    default:
-        return nil
+func (c *ChatController) OnMessage(ctx core.WebSocketContext) error {
+    request, ok := ctx.(core.WebSocketMessageContext)
+    if !ok {
+        return errors.New("handshake request snapshot unavailable")
     }
-}
-```
-
-### EventBus
-
-```go
-EventBus() core.EventBus
-```
-
-Returns the request-scoped EventBus. Used for publishing domain events.
-
-**Returns**
-- `core.EventBus` - Event bus instance
-
-**Example**
-```go
-// Drain events in PostExecutionHook
-func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []any, err error) {
-    if err != nil {
-        return
-    }
-    
-    events := ctx.EventBus().Drain()
-    if len(events) == 0 {
-        return
-    }
-    
-    h.Dispatcher.Dispatch(ctx.Context(), events)
-}
-```
-
-### Method
-
-```go
-Method() string
-```
-
-Returns the request method.
-
-**Returns**
-- HTTP: `"GET"`, `"POST"`, `"PUT"`, `"DELETE"`, etc.
-- Consumer: `"EVENT"`
-- WebSocket: `"WS"`
-
-**Example**
-```go
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    if ctx.Method() == "OPTIONS" {
-        // Handle Preflight request
-    }
+    tenant := request.Query("tenant")
+    token, _ := request.Cookie("session")
+    // ...
     return nil
 }
 ```
 
+Header, query, and cookie maps are defensive copies. Mutating them does not alter the stored handshake snapshot.
 
-### Path
+## Interceptor usage
 
-```go
-Path() string
-```
-
-Returns the request path.
-
-**Returns**
-- HTTP: Request path (e.g. `"/users/123"`)
-- Consumer: Event name (e.g. `"order.created"`)
-- WebSocket: WebSocket path (e.g. `"/ws/chat"`)
-
-**Example**
-```go
-log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
-// HTTP:      [REQ] GET /users/123
-// Consumer:  [REQ] EVENT order.created
-// WebSocket: [REQ] WS /ws/chat
-```
-
-
-### Header
+The following is a complete minimal `core.Interceptor` implementation. Only `PreHandle` uses the context; the other required lifecycle methods are explicit no-ops.
 
 ```go
-Header(name string) string
-```
-
-Returns the HTTP header value for the specified name.
-
-**Parameters**
-- `name` - Header name (case-insensitive)
-
-**Returns**
-- `string` - Header value. Empty string if not found.
-- Always empty string in Consumer/WebSocket.
-
-**Example**
-```go
-origin := ctx.Header("Origin")
-auth := ctx.Header("Authorization")
-```
-
-
-### Params
-
-```go
-Params() map[string]string
-```
-
-Returns all path parameters as a map.
-
-**Returns**
-- `map[string]string` - Path parameter map
-- Empty map in Consumer/WebSocket
-
-**Example**
-```go
-// Route: /users/:userId/posts/:postId
-// Request: /users/123/posts/456
-
-params := ctx.Params()  // {"userId": "123", "postId": "456"}
-```
-
-
-### PathKeys
-
-```go
-PathKeys() []string
-```
-
-Returns path parameter keys in declaration order.
-
-**Returns**
-- `[]string` - Key slice
-- Empty slice in Consumer/WebSocket
-
-**Example**
-```go
-// Route: /users/:userId/posts/:postId
-
-ctx.PathKeys()  // ["userId", "postId"]
-```
-
-
-### Queries
-
-```go
-Queries() map[string][]string
-```
-
-Returns all query parameters as a map.
-
-**Returns**
-- `map[string][]string` - Query parameter map
-- Empty map in Consumer/WebSocket
-
-**Example**
-```go
-// Request: /users?status=active&tag=go&tag=web
-
-queries := ctx.Queries()
-// {"status": ["active"], "tag": ["go", "web"]}
-```
-
-
-### Set
-
-```go
-Set(key string, value any)
-```
-
-Stores a value in the internal storage.
-
-**Parameters**
-- `key` - Key to store
-- `value` - Value to store
-
-**Example**
-```go
-ctx.Set("auth.user", authenticatedUser)
-ctx.Set("request.startTime", time.Now())
-```
-
-
-### Get
-
-```go
-Get(key string) (any, bool)
-```
-
-Retrieves a value from the internal storage.
-
-**Parameters**
-- `key` - Key to retrieve
-
-**Returns**
-- `any` - Stored value
-- `bool` - Whether the key exists
-
-**Example**
-```go
-if rw, ok := ctx.Get("spine.response_writer"); ok {
-    responseWriter := rw.(core.ResponseWriter)
-}
-```
-
-
-## ControllerContext
-
-Controller-specific view used to read values injected by Interceptors.
-
-### Get
-
-```go
-Get(key string) (any, bool)
-```
-
-Delegates to `ExecutionContext.Get()`. Does not provide `Set()` method.
-
-**Implementation**
-```go
-// internal/runtime/controller_ctx.go
-type controllerCtxView struct {
-    ec core.ExecutionContext
-}
-
-func NewControllerContext(ec core.ExecutionContext) core.ControllerContext {
-    return controllerCtxView{ec: ec}
-}
-
-func (v controllerCtxView) Get(key string) (any, bool) {
-    return v.ec.Get(key)
-}
-```
-
-**Example**
-```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (User, error) {
-    // Read value injected by Interceptor with Set("auth.user", ...)
-    if authUser, ok := ctx.Get("auth.user"); ok {
-        user := authUser.(*AuthUser)
-        // ...
+func (i *AuthInterceptor) PreHandle(
+    ctx core.ExecutionContext,
+    meta core.HandlerMeta,
+) error {
+    user, err := i.auth.Validate(ctx.Header("Authorization"))
+    if err != nil {
+        return httperr.Unauthorized("invalid credentials")
     }
-    return c.repo.FindByID(userId.Value)
-}
-```
-
-
-## HttpRequestContext Methods
-
-Additional methods used in HTTP ArgumentResolver.
-
-### Param
-
-```go
-Param(name string) string
-```
-
-Returns the value of a specific path parameter.
-
-**Example**
-```go
-userId := ctx.Param("id")  // "123"
-```
-
-### Query
-
-```go
-Query(name string) string
-```
-
-Returns the first value of a specific query parameter.
-
-**Example**
-```go
-page := ctx.Query("page")  // "1"
-```
-
-### Headers
-
-```go
-Headers() map[string][]string
-```
-
-Returns all HTTP headers as a map.
-
-**Example**
-```go
-headers := ctx.Headers()
-// {"Content-Type": ["application/json"], "Accept": ["text/html", "application/json"]}
-```
-
-### Bind
-
-```go
-Bind(out any) error
-```
-
-Binds the HTTP body to a struct.
-
-**Example**
-```go
-var req CreateUserRequest
-if err := ctx.Bind(&req); err != nil {
-    return err
-}
-```
-
-### MultipartForm
-
-```go
-MultipartForm() (*multipart.Form, error)
-```
-
-Accesses Multipart form data.
-
-**Example**
-```go
-form, err := ctx.MultipartForm()
-if err != nil {
-    return err
-}
-for _, file := range form.File["upload"] {
-    // Process file
-}
-```
-
-
-## ConsumerRequestContext Methods
-
-Methods used in Event Consumer ArgumentResolver.
-
-### EventName
-
-```go
-EventName() string
-```
-
-Returns the name of the received event.
-
-**Example**
-```go
-name := ctx.EventName()  // "order.created"
-```
-
-### Payload
-
-```go
-Payload() []byte
-```
-
-Returns the raw payload of the event.
-
-**Example**
-```go
-payload := ctx.Payload()  // []byte (JSON)
-var event OrderCreated
-json.Unmarshal(payload, &event)
-```
-
-
-## WebSocketContext Methods
-
-Methods used in WebSocket ArgumentResolver.
-
-### ConnID
-
-```go
-ConnID() string
-```
-
-Returns the unique identifier of the WebSocket connection.
-
-**Example**
-```go
-connID := ctx.ConnID()  // "a1b2c3d4-..."
-```
-
-### MessageType
-
-```go
-MessageType() int
-```
-
-Returns the WebSocket message type.
-
-**Returns**
-- `1` - TextMessage
-- `2` - BinaryMessage
-
-**Example**
-```go
-if ctx.MessageType() == ws.TextMessage {
-    // Handle text message
-}
-```
-
-### Payload
-
-```go
-Payload() []byte
-```
-
-Returns the raw payload of the WebSocket message.
-
-**Example**
-```go
-payload := ctx.Payload()  // []byte
-var msg ChatMessage
-json.Unmarshal(payload, &msg)
-```
-
-
-## Reserved Keys
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `spine.response_writer` | `core.ResponseWriter` | Response output interface |
-| `spine.params` | `map[string]string` | Path parameters |
-| `spine.pathKeys` | `[]string` | Path parameter key order |
-
-
-## Usage in Interceptor
-
-`ExecutionContext` is passed as the first argument in all Interceptor methods.
-
-```go
-type Interceptor interface {
-    PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    PostHandle(ctx ExecutionContext, meta HandlerMeta)
-    AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
-}
-```
-
-### Logging Example
-
-```go
-type LoggingInterceptor struct{}
-
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s -> %s.%s",
-        ctx.Method(),
-        ctx.Path(),
-        meta.ControllerType.Name(),
-        meta.Method.Name,
-    )
+    ctx.Set("myapp.auth.user", user)
     return nil
 }
 
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
-}
+func (i *AuthInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
 
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
-    }
-}
-```
-
-### CORS Example
-
-```go
-type CORSInterceptor struct {
-    config Config
-}
-
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return nil
-    }
-    rw := rwAny.(core.ResponseWriter)
-    
-    origin := ctx.Header("Origin")
-    if origin != "" && i.isAllowedOrigin(origin) {
-        rw.SetHeader("Access-Control-Allow-Origin", origin)
-        rw.SetHeader("Vary", "Origin")
-    }
-    
-    if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
-        return core.ErrAbortPipeline
-    }
-    
+func (i *AuthInterceptor) BeforeResponse(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) error {
     return nil
 }
+
+func (i *AuthInterceptor) AfterCompletion(
+    core.ExecutionContext,
+    core.HandlerMeta,
+    error,
+) {}
 ```
 
+Global HTTP `PreHandle` executes before route selection. Do not dereference handler metadata there without first checking whether it is populated.
 
-## Usage in ArgumentResolver
+## Protocol behavior
 
-ArgumentResolver receives `core.ExecutionContext` and type assertions it to a protocol-specific Context as needed.
+| Capability | HTTP | Consumer | WebSocket message |
+|---|---|---|---|
+| `Method()` | HTTP method | `EVENT` | `WS` |
+| `Path()` | request path | event name | route path |
+| headers/queries | native request data | empty views | handshake snapshot via `WebSocketMessageContext` |
+| payload | bound HTTP body | event payload | frame payload |
+| mutable store | yes | yes | yes, concurrency-protected |
 
-### HTTP Resolver Example
+## See also
 
-```go
-func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    // Type assert to HttpRequestContext
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("Not an HTTP request context")
-    }
-
-    raw, ok := httpCtx.Params()[parameterMeta.PathKey]
-    if !ok {
-        return nil, fmt.Errorf("path param not found: %s", parameterMeta.PathKey)
-    }
-
-    value, err := strconv.ParseInt(raw, 10, 64)
-    if err != nil {
-        return nil, err
-    }
-
-    return path.Int{Value: value}, nil
-}
-```
-
-### Consumer Resolver Example
-
-```go
-func (r *EventNameResolver) Resolve(ctx core.ExecutionContext, meta ParameterMeta) (any, error) {
-    // Type assert to ConsumerRequestContext
-    consumerCtx, ok := ctx.(core.ConsumerRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("Not a ConsumerRequestContext")
-    }
-
-    return consumerCtx.EventName(), nil
-}
-```
-
-### WebSocket Resolver Example
-
-```go
-func (r *ConnectionIDResolver) Resolve(ctx core.ExecutionContext, meta ParameterMeta) (any, error) {
-    // Type assert to WebSocketContext
-    wsCtx, ok := ctx.(core.WebSocketContext)
-    if !ok {
-        return nil, fmt.Errorf("Not a WebSocketContext")
-    }
-
-    return ws.ConnectionID{Value: wsCtx.ConnID()}, nil
-}
-```
-
-### Common Resolver Example
-
-Resolver that works for HTTP, Consumer, and WebSocket.
-
-```go
-func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    baseCtx := ctx.Context()
-    bus := ctx.EventBus()
-    if bus != nil {
-        // Inject EventBus into context.Context
-        return context.WithValue(baseCtx, publish.PublisherKey, bus), nil
-    }
-    return baseCtx, nil
-}
-```
-
-### ControllerContext Resolver Example
-
-```go
-func (r *ControllerContextResolver) Resolve(ctx core.ExecutionContext, _ ParameterMeta) (any, error) {
-    return runtime.NewControllerContext(ctx), nil
-}
-```
-
-
-## Protocol-Specific Behavior Difference
-
-| Method | HTTP | Consumer | WebSocket |
-|--------|------|----------|-----------|
-| `Method()` | `"GET"`, `"POST"`, etc. | `"EVENT"` | `"WS"` |
-| `Path()` | `/users/123` | `order.created` | `/ws/chat` |
-| `Header()` | Header value | Empty string | Empty string |
-| `Params()` | path params | Empty map | Empty map |
-| `PathKeys()` | key order | Empty slice | Empty slice |
-| `Queries()` | query params | Empty map | Empty map |
-| `EventBus()` | EventBus | EventBus | EventBus |
-| `Context()` | Request context | Request context | Request context |
-
-
-## Implementations
-
-| Implementation | Interface | Location |
-|----------------|-----------|----------|
-| `echoContext` | `ExecutionContext` + `HttpRequestContext` | `internal/adapter/echo/context_impl.go` |
-| `ConsumerRequestContextImpl` | `ExecutionContext` + `ConsumerRequestContext` | `internal/event/consumer/request_context_impl.go` |
-| `WSExecutionContext` | `WebSocketContext` (⊃ `ExecutionContext`) | `internal/ws/context_impl.go` |
-| `controllerCtxView` | `ControllerContext` | `internal/runtime/controller_ctx.go` |
-
-
-## See Also
-
-- [Interceptor](/en/reference/api/interceptor) - Cross-cutting concerns
-- [Execution Context Concepts](/en/learn/core-concepts/execution-context) - Detailed explanation
+- [Execution Context concept](/en/learn/core-concepts/execution-context)
+- [Interceptor API](/en/reference/api/interceptor)
+- [WebSocket example](/en/reference/examples/websocket)

@@ -24,6 +24,9 @@ graph TD
     PostHook["PostExecutionHook<br>(이벤트 발행 등)"]
     RoutePost["Route Interceptor.PostHandle ↩<br>(라우트 후처리)"]
     GlobalPost["Global Interceptor.PostHandle ↩<br>(글로벌 후처리)"]
+    RouteBefore["Route Interceptor.BeforeResponse ↩<br>(응답 전)"]
+    GlobalBefore["Global Interceptor.BeforeResponse ↩<br>(응답 전)"]
+    Flush["Buffered Response Flush"]
     RouteAfter["Route Interceptor.AfterCompletion ↩<br>(항상 실행)"]
     GlobalAfter["Global Interceptor.AfterCompletion ↩<br>(항상 실행)"]
     ErrorHandler["handleExecutionError<br>(에러 안전망)"]
@@ -40,10 +43,13 @@ graph TD
     ReturnHandler --> PostHook
     PostHook --> RoutePost
     RoutePost --> GlobalPost
-    GlobalPost --> RouteAfter
+    GlobalPost --> RouteBefore
+    RouteBefore --> GlobalBefore
+    GlobalBefore --> ErrorHandler
+    ErrorHandler --> Flush
+    Flush --> RouteAfter
     RouteAfter --> GlobalAfter
-    GlobalAfter --> ErrorHandler
-    ErrorHandler --> Response
+    GlobalAfter --> Response
 ```
 
 
@@ -292,8 +298,11 @@ type Interceptor interface {
     
     // ReturnValueHandler 처리 후 실행
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
+
+    // 응답을 기록하기 전 실행. transaction 결과 오류도 반환
+    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
     
-    // 성공/실패와 관계없이 마지막에 호출
+    // 응답 처리 후 성공/실패와 관계없이 마지막에 호출
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
@@ -458,7 +467,7 @@ func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []
 ```
 
 
-## 10. Interceptor.PostHandle & AfterCompletion
+## 10. Interceptor.PostHandle, BeforeResponse, AfterCompletion
 
 ### PostHandle
 
@@ -474,6 +483,20 @@ for i := len(routeInterceptors) - 1; i >= 0; i-- {
 for i := len(p.interceptors) - 1; i >= 0; i-- {
     p.interceptors[i].PostHandle(ctx, meta)
 }
+```
+
+### BeforeResponse
+
+`PreHandle`에 성공한 인터셉터만 라우트, 글로벌 순서로 각각 역순 실행됩니다. 이 시점에는 반환값 직렬화, 쿠키, status 검증과 post-execution hook이 끝났지만 실제 응답은 아직 flush되지 않았습니다. transaction commit/rollback 오류를 반환하면 최종 오류에 합쳐집니다.
+
+```go
+finalErr = runBeforeResponse(
+    ctx,
+    meta,
+    routeFinalizers,
+    globalFinalizers,
+    finalErr,
+)
 ```
 
 ### AfterCompletion
@@ -548,13 +571,13 @@ func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
 ### 정상 흐름
 
 ```
-pre:global → pre:route → [Controller] → post:route → post:global → after:route → after:global
+pre:global → pre:route → [Controller] → post:route → post:global → before:route → before:global → flush → after:route → after:global
 ```
 
 ### 라우트 인터셉터에서 중단 (ErrAbortPipeline)
 
 ```
-pre:global → pre:route → after:route → after:global
+pre:global → pre:route(중단) → before:global → flush → after:route → after:global
 ```
 
 Controller는 호출되지 않지만, `AfterCompletion`은 항상 실행됩니다.
@@ -562,7 +585,7 @@ Controller는 호출되지 않지만, `AfterCompletion`은 항상 실행됩니�
 ### 글로벌 인터셉터에서 중단 (ErrAbortPipeline)
 
 ```
-pre:global → after:global
+pre:global(중단) → flush → after:global
 ```
 
 Router도 호출되지 않으므로, 라우트 인터셉터도 실행되지 않습니다.
@@ -697,7 +720,9 @@ Pipeline은 단일 HTTP 파이프라인뿐 아니라 Consumer Pipeline, WebSocke
 | 9 | PostExecutionHook | 도메인 이벤트 발행 등 후처리 |
 | 10 | Route Interceptor.PostHandle ↩ | 라우트 후처리 (역순) |
 | 11 | Global Interceptor.PostHandle ↩ | 글로벌 후처리 (역순) |
-| 12 | AfterCompletion ↩ | 정리 (라우트 → 글로벌, 항상 실행) |
-| 13 | handleExecutionError | 에러 안전망 (이중 응답 방지) |
+| 12 | BeforeResponse ↩ | 응답 전 transaction 마무리와 오류 결합 |
+| 13 | handleExecutionError | 오류 응답을 staged writer에 준비 |
+| 14 | buffered response flush | 검증이 끝난 응답만 실제 writer에 기록 |
+| 15 | AfterCompletion ↩ | 정리 (라우트 → 글로벌, 항상 실행) |
 
 이 순서는 **숨겨지지 않으며, 암묵적으로 변경되지 않습니다.** 이것이 Spine의 "No Magic" 철학입니다.

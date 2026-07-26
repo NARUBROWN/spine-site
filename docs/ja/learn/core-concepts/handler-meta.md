@@ -408,6 +408,8 @@ func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, arg
 ### Interceptor 渡し
 Interceptorのすべてのメソッドは`HandlerMeta`を受け取り、実行先情報にアクセスできます。
 
+次のコードは`HandlerMeta`へのアクセスだけを強調した`PreHandle`の抜粋です。登録可能な実装には`PostHandle`、`BeforeResponse`、`AfterCompletion`も必要です。
+
 ```go
 // cmd/demo/logging_interceptor.go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
@@ -423,7 +425,7 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 ```
 
 
-＃＃ブートストラッププロセス
+## ブートストラップprocess
 ### 1. Route宣言
 
 ```go

@@ -4,7 +4,7 @@ Spine을 설치하는 방법.
 
 ## 요구사항
 
-- **Go 1.21 이상**
+- **Go 1.25.5 이상**
 
 ```bash
 # Go 버전 확인
@@ -23,13 +23,13 @@ mkdir my-app && cd my-app
 go mod init my-app
 
 # 3. Spine 설치
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 ### 기존 프로젝트에 추가
 
 ```bash
-go get github.com/NARUBROWN/spine
+go get github.com/NARUBROWN/spine@v0.5.1
 ```
 
 ## 설치 확인
@@ -75,7 +75,7 @@ _____ \___  __ \_  /__  __ \  _ \
 ____/ /__  /_/ /  / _  / / /  __/
 /____/ _  .___//_/  /_/ /_/\___/ 
        /_/        
-2026/01/19 14:37:59 [Bootstrap] Spine version: v0.2.1
+[Bootstrap] Spine version: <설치된 버전>
 ```
 
 ## 다음 단계

@@ -8,6 +8,7 @@
 type HandlerMeta struct {
     ControllerType reflect.Type
     Method         reflect.Method
+    PathKeys       []string
     Interceptors   []core.Interceptor
 }
 ```
@@ -26,7 +27,7 @@ app.Route("GET", "/users/:id", (*UserController).Get,
 
 ## 在 Router 与 Pipeline 中的用途
 
-Router 匹配路径后返回 `HandlerMeta`。Pipeline 依据其方法签名创建参数元数据、解析控制器依赖并按顺序执行全局和路由拦截器，最后调用该方法。
+Router 匹配路径后返回 `HandlerMeta`。`PathKeys` 保存路由声明中路径参数键的顺序；Pipeline 用它把 `path.Int`、`path.String` 等参数按顺序绑定到处理器签名。Pipeline 还会解析控制器依赖、执行全局和路由拦截器，最后调用该方法。
 
 ## 设计原则
 
