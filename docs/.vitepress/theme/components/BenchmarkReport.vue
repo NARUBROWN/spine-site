@@ -3,9 +3,13 @@ import { computed } from 'vue'
 import { useData, withBase } from 'vitepress'
 import { benchmarkCopy } from '../benchmark/copy'
 import { assetRoot, common, high, nameFor, number, snapshot, throughput } from '../benchmark/data'
+import { vmCostCopy } from '../benchmark/vm-cost-copy'
+import VmCostRows from './VmCostRows.vue'
+import VmCostMethod from './VmCostMethod.vue'
 
 const { lang } = useData()
 const copy = computed(() => benchmarkCopy(lang.value))
+const costCopy = computed(() => vmCostCopy(copy.value.path))
 const sourceLinks = [
   ['Web Frameworks Benchmark', 'https://github.com/the-benchmarker/web-frameworks#readme'],
   ['Go garbage collector', 'https://go.dev/doc/gc-guide#GOGC'],
@@ -52,6 +56,13 @@ const sourceLinks = [
       <tbody><tr v-for="row in high" :key="row.case"><td>{{ nameFor(row.case) }}</td><td>{{ number(row.rps) }}</td><td>{{ number(row.p95_ms, 3) }}</td><td>{{ number(row.p99_ms, 3) }}</td></tr></tbody>
     </table>
     <p>{{ copy.highNote }}</p>
+    <section id="vm-cost-estimate" class="report-vm-cost" aria-labelledby="report-vm-cost-heading">
+      <h2 id="report-vm-cost-heading">{{ costCopy.reportTitle }}</h2>
+      <p>{{ costCopy.reportIntro }}</p>
+      <p>{{ costCopy.assumption }}</p>
+      <VmCostRows />
+      <VmCostMethod context="report" />
+    </section>
     <h2>{{ copy.methodTitle }}</h2>
     <table><tbody><tr v-for="item in copy.specifications" :key="item[0]"><th scope="row">{{ item[0] }}</th><td>{{ item[1] }}</td></tr></tbody></table>
     <h3>{{ copy.runtimeTitle }}</h3>
@@ -83,6 +94,8 @@ const sourceLinks = [
 .report-sources li + li { margin-top: 0; }
 .report-sources a { display: block; overflow-wrap: anywhere; }
 .benchmark-report { word-break: normal; overflow-wrap: anywhere; }
+.report-vm-cost { scroll-margin-top: 88px; }
+.report-vm-cost :deep(.vm-cost-rows) { margin: 28px 0; }
 @media (max-width: 640px) {
   .report-sources { grid-template-columns: minmax(0, 1fr); }
 }

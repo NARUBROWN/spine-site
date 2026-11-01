@@ -1,41 +1,25 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useData, withBase } from 'vitepress'
 import { benchmarkCopy } from '../benchmark/copy'
 import { assetRoot, common, nameFor, number, throughput, type Result } from '../benchmark/data'
-import { memoryCostAsset, memoryCostInstance, memoryCostReference, monthlyMemoryCostEquivalentKrw } from '../benchmark/memory-cost'
-import { memoryCostCopy } from '../benchmark/memory-cost-copy'
+import { vmCostCopy } from '../benchmark/vm-cost-copy'
+import VmCostRows from './VmCostRows.vue'
+import VmCostMethod from './VmCostMethod.vue'
 
 const { lang } = useData()
 const copy = computed(() => benchmarkCopy(lang.value))
-const costCopy = computed(() => memoryCostCopy(copy.value.path))
-const mode = ref<'throughput' | 'memory'>('throughput')
+const costCopy = computed(() => vmCostCopy(copy.value.path))
+const metrics = ['throughput', 'memory', 'cost'] as const
+const mode = ref<typeof metrics[number]>('throughput')
 const rows = computed(() => mode.value === 'throughput' ? throughput : common)
 const maximum = computed(() => Math.max(...rows.value.map(value)))
 const spine = computed(() => rows.value[0])
-const costTokens: Record<string, string> = {
-  provider: memoryCostInstance.provider,
-  instance: memoryCostInstance.instance,
-  hours: number(memoryCostReference.monthlyHours),
-  date: memoryCostReference.checkedOn,
-  fxDate: memoryCostReference.fx.date,
-  memory: number(memoryCostInstance.memoryGiB),
-  hourly: number(memoryCostInstance.hourlyUsd, 8),
-  fx: number(memoryCostReference.fx.usdKrw, 2)
-}
 
-function costText(message: string) {
-  return message.replace(/\{(\w+)\}/g, (placeholder, key: string) => costTokens[key] ?? placeholder)
-}
-
-function hourlyUsd(amount: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 8 }).format(amount)
-}
-
-function memoryEquivalent(row: Result) {
-  const difference = row.memory_current_median_mib - common[0].memory_current_median_mib
-  return costCopy.value.equivalent.replace('{value}', number(monthlyMemoryCostEquivalentKrw(difference)))
-}
+onMounted(() => {
+  const requested = new URLSearchParams(window.location.search).get('metric')
+  if (metrics.includes(requested as typeof metrics[number])) mode.value = requested as typeof metrics[number]
+})
 
 function value(row: Result) {
   return mode.value === 'throughput' ? row.rps : row.memory_current_median_mib
@@ -49,7 +33,9 @@ function comparison(row: Result) {
 function selectWithKeyboard(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
   event.preventDefault()
-  mode.value = event.key === 'Home' ? 'throughput' : event.key === 'End' ? 'memory' : mode.value === 'throughput' ? 'memory' : 'throughput'
+  const offset = event.key === 'ArrowLeft' ? -1 : 1
+  mode.value = event.key === 'Home' ? metrics[0] : event.key === 'End' ? metrics[metrics.length - 1]
+    : metrics[(metrics.indexOf(mode.value) + offset + metrics.length) % metrics.length]
   const container = (event.currentTarget as HTMLElement).parentElement
   container?.querySelector<HTMLButtonElement>(`#benchmark-tab-${mode.value}`)?.focus()
 }
@@ -83,24 +69,25 @@ function selectWithKeyboard(event: KeyboardEvent) {
         <p class="stat-context">{{ copy.latencyContext }}</p>
       </div>
     </div>
-    <div class="benchmark-comparison" data-ui>
+    <div class="benchmark-comparison" :class="{ 'is-cost': mode === 'cost' }" data-ui>
       <div class="comparison-header">
         <div>
-          <h3 class="comparison-title">{{ mode === 'throughput' ? copy.throughputTitle : copy.memoryTitle }}</h3>
-          <p class="comparison-direction">{{ mode === 'throughput' ? copy.throughputDirection : copy.memoryDirection }}</p>
+          <h3 class="comparison-title">{{ mode === 'throughput' ? copy.throughputTitle : mode === 'memory' ? copy.memoryTitle : costCopy.title }}</h3>
+          <p class="comparison-direction">{{ mode === 'throughput' ? copy.throughputDirection : mode === 'memory' ? copy.memoryDirection : costCopy.direction }}</p>
         </div>
         <div class="metric-tabs" role="tablist" :aria-label="copy.chartLabel">
-          <button v-for="metric in (['throughput', 'memory'] as const)" :id="`benchmark-tab-${metric}`" :key="metric"
+          <button v-for="metric in metrics" :id="`benchmark-tab-${metric}`" :key="metric"
             type="button" role="tab" :aria-selected="mode === metric" aria-controls="benchmark-comparison-panel"
             :tabindex="mode === metric ? 0 : -1" @click="mode = metric" @keydown="selectWithKeyboard">
-            {{ metric === 'throughput' ? copy.throughput : copy.memory }}
+            {{ metric === 'throughput' ? copy.throughput : metric === 'memory' ? copy.memory : costCopy.tab }}
           </button>
         </div>
       </div>
-      <div id="benchmark-comparison-panel" :aria-describedby="mode === 'throughput' ? 'benchmark-condition benchmark-capacity-note' : 'benchmark-condition benchmark-memory-cost-note'" role="tabpanel" :aria-labelledby="`benchmark-tab-${mode}`" tabindex="0">
+      <div id="benchmark-comparison-panel" :aria-describedby="mode === 'cost' ? 'vm-cost-note-home' : mode === 'throughput' ? 'benchmark-condition benchmark-capacity-note' : 'benchmark-condition'" role="tabpanel" :aria-labelledby="`benchmark-tab-${mode}`" tabindex="0">
         <p v-if="mode === 'throughput'" class="capacity-assumption">{{ copy.capacityAssumption }}</p>
-        <p v-else class="capacity-assumption">{{ costCopy.assumption }}</p>
-        <div class="comparison-rows">
+        <p v-else-if="mode === 'cost'" class="capacity-assumption">{{ costCopy.assumption }}</p>
+        <VmCostRows v-if="mode === 'cost'" />
+        <div v-else class="comparison-rows">
           <div v-for="row in rows" :key="row.case" class="comparison-row" :class="{ 'is-spine': row.case === 'spine' }">
             <div class="row-heading">
               <span class="row-name">{{ nameFor(row.case) }}<span v-if="row.case === 'spine'" class="spine-version">0.5.2</span></span>
@@ -109,38 +96,14 @@ function selectWithKeyboard(event: KeyboardEvent) {
             <div class="bar-track" aria-hidden="true"><div class="bar-fill" :style="{ width: `${value(row) / maximum * 100}%` }"></div></div>
             <p v-if="row.case !== 'spine'" class="row-comparison">
               {{ comparison(row) }}
-              <span v-if="mode === 'memory'" class="row-cost-equivalent">{{ memoryEquivalent(row) }}</span>
             </p>
           </div>
         </div>
       </div>
       <div class="comparison-notes">
-        <p id="benchmark-condition" class="chart-condition">{{ mode === 'throughput' ? copy.throughputCondition : copy.memoryCondition }}</p>
+        <VmCostMethod v-if="mode === 'cost'" context="home" />
+        <p v-else id="benchmark-condition" class="chart-condition">{{ mode === 'throughput' ? copy.throughputCondition : copy.memoryCondition }}</p>
         <p v-if="mode === 'throughput'" id="benchmark-capacity-note" class="capacity-note">{{ copy.capacityNote }}</p>
-        <template v-else>
-          <p id="benchmark-memory-cost-note" class="capacity-note">{{ costCopy.note }}</p>
-          <details class="memory-cost-details">
-            <summary>{{ costCopy.details }}</summary>
-            <p>{{ costText(costCopy.reference) }}</p>
-            <dl class="cost-vms">
-              <div v-for="candidate in memoryCostReference.candidates" :key="candidate.instance" class="cost-vm" :class="{ 'is-selected': candidate.instance === memoryCostInstance.instance }">
-                <dt>{{ candidate.provider }}<strong>{{ candidate.instance }}</strong></dt>
-                <dd>{{ hourlyUsd(candidate.hourlyUsd) }} / {{ costCopy.hourly }}<span>${{ number(candidate.hourlyUsd * memoryCostReference.monthlyHours, 2) }} / {{ costCopy.monthly }}</span></dd>
-              </div>
-            </dl>
-            <p>{{ costCopy.selection }}</p>
-            <p><strong>{{ costCopy.formulaLabel }}</strong></p>
-            <p class="cost-formula">{{ costText(costCopy.formula) }}</p>
-            <p>{{ costText(costCopy.exchange) }}</p>
-            <p>{{ costCopy.exclusions }}</p>
-            <div class="cost-sources">
-              <a :href="memoryCostReference.candidates[0].source" target="_blank" rel="noopener noreferrer">{{ costCopy.aws }}</a>
-              <a :href="memoryCostReference.candidates[1].source" target="_blank" rel="noopener noreferrer">{{ costCopy.gcp }}</a>
-              <a :href="memoryCostReference.fx.source" target="_blank" rel="noopener noreferrer">{{ costCopy.fx }}</a>
-              <a :href="withBase(memoryCostAsset)" download>{{ costCopy.data }}</a>
-            </div>
-          </details>
-        </template>
       </div>
     </div>
     <a class="benchmark-csv" :href="withBase(`${assetRoot}/measurements.csv`)" download>{{ copy.csv }}<span aria-hidden="true">↓</span></a>
@@ -192,7 +155,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .benchmark-section .comparison-title { margin: 0; color: var(--vp-c-text-1); font-size: 24px; line-height: 1.45; letter-spacing: -.03em; font-weight: 600; }
 .benchmark-section .comparison-direction { margin-top: 8px; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.7; }
 .metric-tabs { display: flex; gap: 6px; padding: 4px; background: var(--vp-c-bg-soft); border-radius: 4px; }
-.metric-tabs button { min-height: 44px; padding: 8px 22px; border-radius: 2px; color: var(--vp-c-text-1); font-size: 14px; font-weight: 550; line-height: 1.6; white-space: nowrap; transition: color .18s, background .18s; }
+.metric-tabs button { min-height: 44px; padding: 8px 14px; border-radius: 2px; color: var(--vp-c-text-1); font-size: 14px; font-weight: 550; line-height: 1.6; white-space: nowrap; transition: color .18s, background .18s; }
 .metric-tabs button:hover { background: var(--vp-c-default-soft); }
 .metric-tabs button[aria-selected='true'] { background: var(--vp-c-brand-3); color: var(--vp-c-white); }
 #benchmark-comparison-panel { grid-area: chart; min-width: 0; }
@@ -208,25 +171,9 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .is-spine .row-name, .is-spine .row-value { color: var(--vp-c-brand-1); font-weight: 650; }
 .is-spine .bar-fill { background: var(--vp-c-brand-1); }
 .comparison-row .row-comparison { margin-top: 8px; color: var(--vp-c-text-1); font-size: 14px; font-weight: 450; line-height: 1.8; text-align: right; }
-.row-cost-equivalent { display: block; margin-top: 4px; color: var(--vp-c-brand-1); font-weight: 550; }
 .comparison-notes { grid-area: notes; align-self: start; }
 .benchmark-section .chart-condition, .benchmark-section .capacity-note { max-width: 48ch; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; }
 .benchmark-section .capacity-note { margin-top: 16px; }
-.memory-cost-details { margin-top: 16px; color: var(--vp-c-text-2); font-size: 13px; line-height: 1.7; }
-.memory-cost-details summary { min-height: 44px; color: var(--vp-c-brand-1); font-size: 14px; font-weight: 550; cursor: pointer; }
-.memory-cost-details summary:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 5px; }
-.memory-cost-details[open] summary { margin-bottom: 8px; }
-.benchmark-section .memory-cost-details p { margin-top: 12px; color: var(--vp-c-text-2); font-size: 13px; line-height: 1.7; }
-.cost-vms { display: grid; gap: 16px; margin: 20px 0; }
-.cost-vm { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
-.cost-vm dt { min-width: 0; font-size: 13px; }
-.cost-vm dt strong { display: block; color: var(--vp-c-text-1); font-size: 14px; font-weight: 550; }
-.cost-vm.is-selected dt strong { color: var(--vp-c-brand-1); }
-.cost-vm dd { margin: 0; color: var(--vp-c-text-1); font-size: 13px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.cost-vm dd span { display: block; color: var(--vp-c-text-2); }
-.cost-formula { word-break: normal; overflow-wrap: anywhere; }
-.cost-sources { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; }
-.cost-sources a { display: inline-flex; align-items: center; min-height: 44px; color: var(--vp-c-brand-1); font-size: 13px; }
 .benchmark-csv { display: inline-flex; align-items: center; gap: 10px; margin-top: 28px; min-height: 44px; color: var(--vp-c-brand-1); font-size: 14px; text-decoration: none; }
 .benchmark-section a:focus-visible, .benchmark-section button:focus-visible, [role='tabpanel']:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 5px; }
 @media (max-width: 900px) {
@@ -248,7 +195,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
   .benchmark-stat .stat-number { font-size: 32px; gap: 8px; }
   .benchmark-stat .stat-label { margin-top: 10px; font-size: 14px; }
   .benchmark-stat .stat-context { margin-top: 4px; font-size: 13px; line-height: 1.6; }
-  .benchmark-comparison { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'header' 'chart' 'notes'; gap: 22px; }
+  .benchmark-comparison, .benchmark-comparison.is-cost { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'header' 'chart' 'notes'; gap: 22px; }
   .comparison-header { gap: 16px; }
   .benchmark-section .comparison-title { font-size: 19px; }
   .metric-tabs { width: 100%; }
