@@ -16,7 +16,7 @@ function value(row: Result) {
 }
 
 function comparison(row: Result) {
-  if (mode.value === 'throughput') return copy.value.throughputRatio.replace('{value}', number(spine.value.rps / row.rps, 2))
+  if (mode.value === 'throughput') return copy.value.throughputCapacity.replace('{value}', number(spine.value.rps - row.rps))
   return copy.value.memoryRatio.replace('{value}', number((1 - spine.value.memory_current_median_mib / row.memory_current_median_mib) * 100, 1))
 }
 
@@ -71,6 +71,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
         </div>
       </div>
       <div id="benchmark-comparison-panel" role="tabpanel" :aria-labelledby="`benchmark-tab-${mode}`" tabindex="0">
+        <p v-if="mode === 'throughput'" class="capacity-assumption">{{ copy.capacityAssumption }}</p>
         <div class="comparison-rows">
           <div v-for="row in rows" :key="row.case" class="comparison-row" :class="{ 'is-spine': row.case === 'spine' }">
             <div class="row-heading">
@@ -82,6 +83,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
           </div>
         </div>
         <p class="chart-condition">{{ mode === 'throughput' ? copy.throughputCondition : copy.memoryCondition }}</p>
+        <p v-if="mode === 'throughput'" class="capacity-note">{{ copy.capacityNote }}</p>
       </div>
     </div>
     <div class="benchmark-bottom">
@@ -121,6 +123,8 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .metric-tabs button { padding: 5px 14px; border-radius: 6px; color: var(--vp-c-text-2); font-size: 12px; font-weight: 550; line-height: 1.7; transition: color .15s, background .15s; white-space: nowrap; }
 .metric-tabs button[aria-selected="true"] { background: var(--vp-c-brand-3); color: var(--vp-c-white); }
 .comparison-rows { display: grid; gap: 17px; }
+.benchmark-section .capacity-assumption { margin-bottom: 18px; color: var(--vp-c-text-1); font-size: 13px; font-weight: 600; line-height: 1.7; }
+.benchmark-section .capacity-note { margin-top: 8px; color: var(--vp-c-text-2); font-size: 12px; line-height: 1.8; }
 .row-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 7px; }
 .row-name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--vp-c-text-2); font-size: 13px; line-height: 1.5; }
 .row-value { flex-shrink: 0; font-size: 15px; line-height: 1.5; font-weight: 600; font-variant-numeric: tabular-nums; }
