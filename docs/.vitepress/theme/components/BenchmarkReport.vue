@@ -52,11 +52,13 @@ const sourceLinks = [
     <p>{{ copy.latencyNote }}</p>
     <h3 id="high-load-latency">{{ copy.highTable }}</h3>
     <p>{{ copy.highIntro }}</p>
+    <p><strong>{{ copy.highSuccessNote }}</strong></p>
     <table id="high-load-table" aria-describedby="high-load-rate-note high-load-context-note">
       <thead><tr><th scope="col">{{ copy.framework }}</th><th scope="col">{{ copy.p95 }}</th><th scope="col">{{ copy.p99 }}</th><th scope="col">{{ copy.highRps }}</th></tr></thead>
       <tbody><tr v-for="row in high" :key="row.case"><td>{{ nameFor(row.case) }}</td><td>{{ number(row.p95_ms, 3) }}</td><td>{{ number(row.p99_ms, 3) }}</td><td>{{ number(row.rps) }}</td></tr></tbody>
     </table>
     <p id="high-load-rate-note">{{ copy.highRateNote }}</p>
+    <p>{{ copy.highAccountingNote }}</p>
     <p id="high-load-context-note">{{ copy.highNote }}</p>
     <section id="vm-cost-estimate" class="report-vm-cost" aria-labelledby="report-vm-cost-heading">
       <h2 id="report-vm-cost-heading">{{ costCopy.reportTitle }}</h2>
