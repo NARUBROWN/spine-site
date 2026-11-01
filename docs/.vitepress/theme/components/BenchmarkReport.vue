@@ -7,13 +7,11 @@ import { assetRoot, common, high, nameFor, number, snapshot, throughput } from '
 const { lang } = useData()
 const copy = computed(() => benchmarkCopy(lang.value))
 const sourceLinks = [
-  ['WFB', 'https://github.com/the-benchmarker/web-frameworks#readme'],
-  ['Go GC', 'https://go.dev/doc/gc-guide#GOGC'],
+  ['Web Frameworks Benchmark', 'https://github.com/the-benchmarker/web-frameworks#readme'],
+  ['Go garbage collector', 'https://go.dev/doc/gc-guide#GOGC'],
   ['NestJS', 'https://docs.nestjs.com/techniques/performance#choosing-an-adapter'],
   ['npm: Express', 'https://api.npmjs.org/downloads/point/2026-10-01:2026-10-30/@nestjs%2Fplatform-express'],
   ['npm: Fastify', 'https://api.npmjs.org/downloads/point/2026-10-01:2026-10-30/@nestjs%2Fplatform-fastify'],
-  ['npm: NodeAdapter', 'https://api.npmjs.org/downloads/point/2026-10-01:2026-10-30/@nestjs%2Fplatform-node'],
-  ['NodeAdapter release metadata', 'https://registry.npmjs.org/@nestjs%2Fplatform-node'],
   ['State of Spring 2024 (PDF)', 'https://www.vmware.com/docs/vmw-the-state-of-spring'],
   ['FastAPI / Uvicorn', 'https://fastapi.tiangolo.com/deployment/manually/#asgi-servers'],
   ['Uvicorn', 'https://uvicorn.dev/settings/'],
@@ -58,15 +56,12 @@ const sourceLinks = [
     <table><tbody><tr v-for="item in copy.specifications" :key="item[0]"><th scope="row">{{ item[0] }}</th><td>{{ item[1] }}</td></tr></tbody></table>
     <h3>{{ copy.runtimeTitle }}</h3>
     <table><tbody><tr v-for="(version, id) in snapshot.versions" :key="id"><th scope="row">{{ nameFor(id) }}</th><td>{{ version }}</td></tr></tbody></table>
-    <h3>{{ copy.tuningTitle }}</h3>
-    <p>{{ copy.tuning }}</p>
     <h2>{{ copy.selectionTitle }}</h2>
     <template v-for="item in copy.selection" :key="item[0]"><h3>{{ item[0] }}</h3><p>{{ item[1] }}</p></template>
     <h2>{{ copy.scopeTitle }}</h2>
     <ul><li v-for="item in copy.scope" :key="item">{{ item }}</li></ul>
     <h2>{{ copy.evidenceTitle }}</h2>
     <p>{{ copy.evidence }}</p>
-    <p>{{ copy.wfbNote }}</p>
     <h3>{{ copy.sourcesTitle }}</h3>
     <ul class="report-sources"><li v-for="link in sourceLinks" :key="link[1]"><a :href="link[1]" target="_blank" rel="noopener noreferrer">{{ link[0] }}</a></li></ul>
     <a :href="withBase(`/${copy.path}/#benchmarks`)">← {{ copy.back }}</a>
@@ -83,6 +78,12 @@ const sourceLinks = [
 .benchmark-report td, .benchmark-report th { vertical-align: top; }
 .benchmark-report small { display: block; min-width: 150px; font-size: 10px; color: var(--vp-c-text-3); font-weight: 400; }
 .spine-result td { color: var(--vp-c-brand-1); font-weight: 650; }
-.report-sources { display: flex; flex-wrap: wrap; gap: 6px 24px; list-style: none; padding: 0; }
+.report-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; list-style: none; padding: 0; }
+.report-sources li { min-width: 0; }
+.report-sources li + li { margin-top: 0; }
+.report-sources a { display: block; overflow-wrap: anywhere; }
 .benchmark-report { word-break: normal; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .report-sources { grid-template-columns: minmax(0, 1fr); }
+}
 </style>
