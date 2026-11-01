@@ -12,9 +12,9 @@ const copy = computed(() => vmCostCopy(benchmarkCopy(lang.value).path))
 
 <template>
   <div class="vm-cost-notes">
-    <p>{{ copy.condition }}</p>
-    <p class="vm-cost-spine-plan">{{ vmCostText(copy.spinePlan) }}</p>
-    <p :id="`vm-cost-note-${context}`">{{ copy.note }}</p>
+    <p class="vm-cost-caption">{{ copy.condition }}</p>
+    <p class="vm-cost-caption vm-cost-spine-plan">{{ vmCostText(copy.spinePlan) }}</p>
+    <p :id="`vm-cost-note-${context}`" class="vm-cost-caption">{{ copy.note }}</p>
     <details class="vm-cost-details">
       <summary>{{ copy.details }}</summary>
       <div class="vm-cost-method-body">
@@ -41,6 +41,7 @@ const copy = computed(() => vmCostCopy(benchmarkCopy(lang.value).path))
 <style scoped>
 .vm-cost-notes { min-width: 0; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; }
 .vm-cost-notes p { margin: 0; }
+.vm-cost-notes > .vm-cost-caption { font-size: 12px; line-height: 1.7; }
 .vm-cost-notes p + p { margin-top: 12px; }
 .vm-cost-details { margin-top: 12px; }
 .vm-cost-details summary { display: list-item; min-height: 44px; color: var(--vp-c-brand-1); font-size: 14px; font-weight: 550; cursor: pointer; }
