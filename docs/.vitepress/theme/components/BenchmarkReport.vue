@@ -10,6 +10,9 @@ import VmCostMethod from './VmCostMethod.vue'
 const { lang } = useData()
 const copy = computed(() => benchmarkCopy(lang.value))
 const costCopy = computed(() => vmCostCopy(copy.value.path))
+const highIntro = computed(() => copy.value.highIntro
+  .replace('{spine}', number(throughput.find(row => row.case === 'spine')!.rps))
+  .replace('{spring}', number(throughput.find(row => row.case === 'spring-mvc')!.rps)))
 const sourceLinks = [
   ['Web Frameworks Benchmark', 'https://github.com/the-benchmarker/web-frameworks#readme'],
   ['Go garbage collector', 'https://go.dev/doc/gc-guide#GOGC'],
@@ -35,7 +38,7 @@ const sourceLinks = [
     </div>
     <h2>{{ copy.findingsTitle }}</h2>
     <p>{{ copy.findings }}</p>
-    <h3>{{ copy.throughputTable }}</h3>
+    <h3 id="saturated-throughput">{{ copy.throughputTable }}</h3>
     <table>
       <thead><tr><th>{{ copy.framework }}</th><th>{{ copy.rps }}</th><th>{{ copy.p95 }}</th><th>{{ copy.p99 }}</th></tr></thead>
       <tbody><tr v-for="row in throughput" :key="row.case" :class="{ 'spine-result': row.case === 'spine' }">
@@ -50,12 +53,23 @@ const sourceLinks = [
       </tr></tbody>
     </table>
     <p>{{ copy.latencyNote }}</p>
-    <h3>{{ copy.highTable }}</h3>
-    <table>
-      <thead><tr><th>{{ copy.framework }}</th><th>{{ copy.rps }}</th><th>{{ copy.p95 }}</th><th>{{ copy.p99 }}</th></tr></thead>
-      <tbody><tr v-for="row in high" :key="row.case"><td>{{ nameFor(row.case) }}</td><td>{{ number(row.rps) }}</td><td>{{ number(row.p95_ms, 3) }}</td><td>{{ number(row.p99_ms, 3) }}</td></tr></tbody>
+    <h3 id="high-load-latency">{{ copy.highTable }}</h3>
+    <p>{{ highIntro }}</p>
+    <p id="high-load-success-note"><strong>{{ copy.highSuccessNote }}</strong></p>
+    <table id="high-load-table" aria-labelledby="high-load-latency" aria-describedby="high-load-success-note high-load-context-note">
+      <thead><tr><th scope="col">{{ copy.framework }}</th><th scope="col">{{ copy.p95 }}</th><th scope="col">{{ copy.p99 }}</th></tr></thead>
+      <tbody><tr v-for="row in high" :key="row.case"><td>{{ nameFor(row.case) }}</td><td>{{ number(row.p95_ms, 3) }}</td><td>{{ number(row.p99_ms, 3) }}</td></tr></tbody>
     </table>
-    <p>{{ copy.highNote }}</p>
+    <details class="report-high-details">
+      <summary>{{ copy.highDetails }}</summary>
+      <p id="high-load-rate-note">{{ copy.highRateNote }}</p>
+      <table id="high-load-rate-table" aria-describedby="high-load-rate-note high-load-accounting-note">
+        <thead><tr><th scope="col">{{ copy.framework }}</th><th scope="col">{{ copy.highRps }}</th></tr></thead>
+        <tbody><tr v-for="row in high" :key="row.case"><td>{{ nameFor(row.case) }}</td><td>{{ number(row.rps) }}</td></tr></tbody>
+      </table>
+      <p id="high-load-accounting-note">{{ copy.highAccountingNote }}</p>
+    </details>
+    <p id="high-load-context-note">{{ copy.highNote }}</p>
     <section id="vm-cost-estimate" class="report-vm-cost" aria-labelledby="report-vm-cost-heading">
       <h2 id="report-vm-cost-heading">{{ costCopy.reportTitle }}</h2>
       <p>{{ costCopy.reportIntro }}</p>
@@ -87,6 +101,10 @@ const sourceLinks = [
 .report-downloads a { font-size: 13px; }
 .benchmark-report table { width: 100%; font-variant-numeric: tabular-nums; }
 .benchmark-report td, .benchmark-report th { vertical-align: top; }
+#high-load-table td, #high-load-rate-table td { white-space: nowrap; }
+.report-high-details { margin: 20px 0; }
+.report-high-details summary { min-height: 44px; color: var(--vp-c-brand-1); font-weight: 550; cursor: pointer; }
+.report-high-details summary:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 4px; }
 .benchmark-report small { display: block; min-width: 150px; font-size: 10px; color: var(--vp-c-text-3); font-weight: 400; }
 .spine-result td { color: var(--vp-c-brand-1); font-weight: 650; }
 .report-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; list-style: none; padding: 0; }
@@ -97,6 +115,7 @@ const sourceLinks = [
 .report-vm-cost { scroll-margin-top: 88px; }
 .report-vm-cost :deep(.vm-cost-rows) { margin: 28px 0; }
 @media (max-width: 640px) {
+  #high-load-table th, #high-load-table td, #high-load-rate-table th, #high-load-rate-table td { padding: 8px; }
   .report-sources { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
