@@ -41,8 +41,9 @@ const copy = computed(() => vmCostCopy(benchmarkCopy(lang.value).path))
 <style scoped>
 .vm-cost-notes { min-width: 0; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; }
 .vm-cost-notes p { margin: 0; }
-.vm-cost-notes > .vm-cost-caption { font-size: 12px; line-height: 1.7; }
+.vm-cost-notes > .vm-cost-caption { max-width: 48ch; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; font-weight: 400; }
 .vm-cost-notes p + p { margin-top: 12px; }
+.vm-cost-notes > .vm-cost-caption + .vm-cost-caption { margin-top: 16px; }
 .vm-cost-details { margin-top: 12px; }
 .vm-cost-details summary { display: list-item; min-height: 44px; color: var(--vp-c-brand-1); font-size: 14px; font-weight: 550; cursor: pointer; }
 .vm-cost-method-body { max-width: 76ch; }
@@ -54,5 +55,7 @@ const copy = computed(() => vmCostCopy(benchmarkCopy(lang.value).path))
 .vm-cost-details summary:focus-visible, .vm-cost-sources a:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 4px; }
 @media (max-width: 640px) {
   .vm-cost-notes { font-size: 13px; line-height: 1.7; }
+  .vm-cost-notes > .vm-cost-caption { font-size: 13px; line-height: 1.7; }
+  .vm-cost-notes > .vm-cost-caption + .vm-cost-caption { margin-top: 12px; }
 }
 </style>
