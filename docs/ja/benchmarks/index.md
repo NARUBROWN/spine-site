@@ -1,6 +1,6 @@
 ---
 title: "Spine 内部ラボテスト"
-description: "同じリソースでのHTTP処理量とメモリ使用量。NestJS/Express、Spring MVC、FastAPI/Uvicornとの比較方法とデータを公開します。"
+description: "同じリソースで Spine、NestJS/Express、Spring MVC、FastAPI/Uvicorn の HTTP スループットとメモリ使用量を比較した内部ラボテストです。測定条件と生データを公開しています。"
 sidebar: false
 outline: false
 ---

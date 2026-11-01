@@ -1,6 +1,8 @@
 # 컨트롤러
 
-CLI로 만든 `hello-spine` 프로젝트에 사용자 조회 컨트롤러를 추가합니다. 설치와 프로젝트 생성은 [첫 번째 앱](/ko/learn/getting-started/first-app)을 먼저 따라 하세요. 이미 `resource user`를 생성했다면 다시 생성하지 말고 파일을 확인합니다.
+CLI로 만든 `hello-spine` 프로젝트에 `GET /user/:id` 컨트롤러를 추가하고, 요청 경로의 정수를 JSON 응답으로 반환합니다. 이어서 쿼리, 헤더, 요청 본문을 받는 방법과 응답 타입을 살펴봅니다.
+
+[첫 번째 앱](/ko/learn/getting-started/first-app)의 설치와 프로젝트 생성을 마친 뒤 프로젝트 루트에서 진행하세요. 이미 `spine generate resource user`를 실행했다면 생성 단계를 건너뛰고 파일을 확인합니다.
 
 ## CLI로 컨트롤러 생성
 
@@ -24,7 +26,7 @@ src/user/
 └── user_route.go
 ```
 
-생성된 `src/user/user_controller.go`는 다음과 같습니다. `UserService`와 같은 `user` 패키지에 있으므로 별도 `service` 패키지 import가 없습니다.
+생성된 `src/user/user_controller.go`는 경로의 `id`를 받아 `{"id":1}` 형태의 응답을 반환합니다. `UserService`와 같은 `user` 패키지에 있으므로 별도 서비스 패키지를 가져올 필요가 없습니다.
 
 ```go
 package user
@@ -46,12 +48,63 @@ func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
 ```
 
 ::: info
-`resource`는 조회용 골격입니다. 데이터베이스·도메인 모델·DTO·CRUD를 자동 구현하지 않습니다. 아래 입력·응답 코드는 이 골격에 직접 추가하는 서로 독립적인 핸들러 예시입니다. `UserResponse`, 요청 DTO, `UserService.Get/List/Create/Login` 등의 메서드는 필요한 예제에 맞게 직접 구현해야 합니다. 예시 타입은 `src/user`의 `package user`에 두고 필요한 표준/Spine 패키지를 import하세요. 같은 이름의 메서드 예시를 한 번에 붙여 넣지 마세요.
+`resource`는 조회 라우트와 의존성 등록을 갖춘 기본 구조를 생성합니다. 데이터베이스, 도메인 모델, 데이터 전달 객체(DTO), 생성이나 수정 기능은 직접 구현해야 합니다.
 :::
+
+## 생성된 라우트 등록 확인
+
+CLI는 `src/user/user_route.go`에 생성자와 라우트를 등록합니다. `BuildApplication()`에는 `user.Register(app)` 호출과 오류 처리를 추가합니다. 아래 코드는 이미 생성된 등록을 보여 주므로 다시 추가하지 마세요.
+
+```go
+// src/user/user_route.go
+package user
+
+import "github.com/NARUBROWN/spine"
+
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
+    app.Route("GET", "/user/:id", (*UserController).Get)
+    return nil
+}
+```
+
+```go
+// internal/application/application.go: BuildApplication
+if err := user.Register(app); err != nil {
+    return nil, boot.Options{}, err
+}
+```
+
+`main.go`의 `BuildApplication → Validate → Run` 흐름을 유지합니다. 이후 새 핸들러를 구현하면 해당 패키지의 `Register` 안에 라우트를 추가하세요.
+
+## 생성 결과 검증과 실행
+
+프로젝트 루트에서 계약과 로컬 코드를 검사한 뒤 서버를 실행합니다.
+
+```bash
+spine doctor
+spine contract check
+spine verify
+spine dev
+```
+
+다른 터미널에서 생성된 라우트를 호출합니다.
+
+```bash
+curl http://localhost:8080/user/1
+```
+
+`GET /user/1`은 HTTP 200과 `{"id":1}`을 반환해야 합니다. 이 응답은 경로 바인딩과 라우트 실행을 확인하는 결과이며, 데이터베이스에서 사용자를 조회한 결과는 아닙니다. `spine contract check`와 `spine verify`의 성공 여부는 실제 HTTP 응답과 별도로 확인하세요.
+
+## 확장 예제의 전제
+
+이하 코드는 입력과 응답을 확장하는 서로 독립적인 예제입니다. 생성된 앱 전체를 대체하는 코드가 아니며, 같은 이름의 메서드 여러 개를 한꺼번에 붙여 넣으면 중복 선언 오류가 발생합니다. 필요한 핸들러 하나를 선택해 구현하고 라우트에 등록하세요.
+
+`UserResponse`, 요청 DTO, `HeaderInfo`와 서비스의 `Get`, `List`, `Create`, `Login` 등은 각 예제에 맞게 직접 구현해야 합니다. 타입은 해당 컨트롤러와 같은 패키지에 두고 필요한 Go 표준 패키지와 Spine 패키지를 가져오세요. 아래 서비스 호출에서 생략한 오류 처리는 [오류 응답](#error-response)의 예제를 참고해 구현합니다.
 
 ## 핸들러 시그니처
 
-Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 바인딩합니다.
+Spine은 핸들러의 파라미터 타입에 맞춰 요청 값을 전달합니다. 이를 입력 바인딩이라고 합니다. 반환 타입은 응답을 만드는 방법을 결정합니다.
 
 ### 지원하는 파라미터 타입
 
@@ -62,9 +115,9 @@ Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 �
 | `query.Pagination` | 페이지네이션 | `page query.Pagination` |
 | `header.Values` | HTTP 헤더 | `headers header.Values` |
 | `*struct` (DTO) | JSON 요청 본문 | `req *CreateUserRequest` |
-| `*struct` (Form) | Form Data | `form *CreatePostForm` |
-| `multipart.UploadedFiles` | Multipart 파일 | `files multipart.UploadedFiles` |
-| `path.*` | Path 파라미터 | `userId path.Int` |
+| `*struct` (폼 DTO) | 폼의 텍스트 필드 | `form *CreatePostForm` |
+| `multipart.UploadedFiles` | 멀티파트 업로드 파일 | `files multipart.UploadedFiles` |
+| `path.*` | 경로 파라미터 | `userId path.Int` |
 | `spine.Ctx` | 컨트롤러 컨텍스트 | `spineCtx spine.Ctx` |
 
 ### 지원하는 반환 타입
@@ -73,17 +126,17 @@ Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 �
 |------|------|
 | `httpx.Response[T]` | JSON 또는 문자열 응답 (상태 코드, 헤더, 쿠키 포함) |
 | `httpx.Redirect` | 리다이렉트 응답 |
-| `error` | 에러 응답 |
+| `error` | 오류 응답 |
 | `httpx.Binary` | 바이트 응답 |
 
-포인터 응답과 `(지원하는 응답 타입, error)`도 사용할 수 있습니다. `httpx.Binary`는 명시적인 Content-Type과 바이트를 반환합니다.
+응답 타입의 포인터와 `(지원하는 응답 타입, error)` 조합도 사용할 수 있습니다. `httpx.Binary`는 `Content-Type`과 바이트 본문을 지정할 때 사용합니다.
 
 
 ## 입력 받기
 
 ### 쿼리 파라미터
 
-`query.Values`를 사용해 쿼리 스트링을 파싱합니다.
+`query.Values`에서 쿼리 문자열을 읽습니다. 아래 요청에서는 `id`가 `1`, `name`이 `alice`, `active`가 `true`입니다.
 
 ```go
 // GET /user?id=1&name=alice&active=true
@@ -109,14 +162,14 @@ func (c *UserController) GetUser(
 |--------|----------|------|
 | `Get(key)` | `string` | 첫 번째 값 (없으면 빈 문자열) |
 | `String(key)` | `string` | 문자열 값 |
-| `Int(key, default)` | `int64` | 정수 값 |
-| `GetBoolByKey(key, default)` | `bool` | 불리언 값 |
+| `Int(key, default)` | `int64` | 값이 없거나 정수로 변환할 수 없으면 지정한 기본값 |
+| `GetBoolByKey(key, default)` | `bool` | 값이 없거나 불리언으로 변환할 수 없으면 지정한 기본값 |
 | `Has(key)` | `bool` | 키 존재 여부 |
 
 
 ### 페이지네이션
 
-`query.Pagination`을 사용하면 `page`와 `size` 쿼리 파라미터를 자동으로 파싱합니다.
+`query.Pagination`은 `page`와 `size` 쿼리 파라미터를 정수로 변환합니다. 값이 없거나 정수로 변환할 수 없으면 각각 `1`과 `20`을 사용합니다. 음수나 `0`도 정수로 처리하므로 허용 범위는 앱에서 검증하세요.
 
 ```go
 // GET /user?page=2&size=10
@@ -160,11 +213,9 @@ func (c *CommonController) CheckHeader(
 | `Has(key)` | `bool` | 헤더 존재 여부 |
 
 
-### Path 파라미터
+### 경로 파라미터
 
-경로 파라미터는 선언 순서대로 `path.Int`, `path.String`, `path.Boolean`에 바인딩됩니다.
-
-`path` 패키지의 타입을 사용하여 라우트 경로의 파라미터를 바인딩합니다.
+라우트 경로의 파라미터를 `path.Int`, `path.String`, `path.Boolean`으로 받습니다. 경로에 선언한 파라미터 순서와 핸들러의 `path` 타입 파라미터 순서가 대응합니다. Go 변수명은 경로 파라미터 이름과 달라도 됩니다.
 
 ```go
 // GET /user/:id
@@ -199,9 +250,9 @@ type Boolean struct {
 
 ### JSON 요청 본문
 
-DTO는 포인터여야 합니다. JSON/Form 바인딩은 DTO의 `form` 태그와 요청 Content-Type에 따라 결정됩니다.
+JSON 요청 본문을 받을 DTO는 구조체 포인터로 선언하고 필드에 `json` 태그를 붙입니다. 아래 예제는 `Content-Type: application/json` 요청의 `name`과 `email`을 `CreateUserRequest`에 바인딩한 뒤 HTTP 201로 응답합니다.
 
-DTO 구조체를 포인터로 선언하면 자동으로 JSON이 바인딩됩니다.
+DTO에 `form` 태그가 하나라도 있으면 폼 DTO로 분류됩니다. 실제 본문 해석은 요청의 `Content-Type`에도 영향을 받으므로 JSON과 폼의 태그와 요청 형식을 맞추세요.
 
 ```go
 // POST /user
@@ -230,9 +281,9 @@ type CreateUserRequest struct {
 ```
 
 
-### 컨트롤러 컨텍스트 (spine.Ctx)
+### 컨트롤러 컨텍스트 `spine.Ctx`
 
-인터셉터에서 주입한 값을 컨트롤러에서 참조할 때 `spine.Ctx`를 사용합니다.
+인터셉터가 `ctx.Set`으로 저장한 값은 컨트롤러에서 `spine.Ctx.Get`으로 조회합니다. 컨트롤러에는 조회 기능만 제공됩니다. 아래 예제는 `userRole` 키에 문자열을 저장했다는 전제이므로, 실제 앱에서는 저장하는 쪽과 읽는 쪽의 타입을 맞추세요.
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/spine"
@@ -257,9 +308,9 @@ func (c *UserController) GetUser(
 ## 응답 반환
 
 
-### 1. httpx.Response[T] — JSON/문자열 응답
+### 1. httpx.Response[T]로 JSON과 문자열 응답 반환
 
-`httpx.Response[T]`를 사용하면 상태 코드, 헤더, 쿠키를 세밀하게 제어할 수 있습니다.
+`httpx.Response[T]`의 `Body`에 응답 본문을 넣고 `Options`에서 상태 코드, 헤더, 쿠키를 설정합니다. 상태 코드를 생략하면 HTTP 200을 사용합니다.
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/httpx"
@@ -308,7 +359,7 @@ func (c *UserController) CreateUser(
 }
 ```
 
-#### 커스텀 헤더 추가
+#### 응답 헤더 추가
 
 ```go
 func (c *UserController) GetUser(
@@ -371,14 +422,14 @@ type Cookie struct {
 
 | 함수 | 설명 |
 |------|------|
-| `httpx.AccessTokenCookie(token, ttl)` | Access Token 쿠키 생성 |
-| `httpx.RefreshTokenCookie(token, ttl)` | Refresh Token 쿠키 생성 |
-| `httpx.DefaultRefreshTokenCookie(token)` | 7일 TTL Refresh Token 쿠키 |
-| `httpx.ClearAccessTokenCookie()` | Access Token 쿠키 삭제 |
-| `httpx.ClearRefreshTokenCookie()` | Refresh Token 쿠키 삭제 |
+| `httpx.AccessTokenCookie(token, ttl)` | 액세스 토큰 쿠키 생성 |
+| `httpx.RefreshTokenCookie(token, ttl)` | 갱신 토큰 쿠키 생성 |
+| `httpx.DefaultRefreshTokenCookie(token)` | 유효 기간이 7일인 갱신 토큰 쿠키 생성 |
+| `httpx.ClearAccessTokenCookie()` | 액세스 토큰 쿠키 삭제 |
+| `httpx.ClearRefreshTokenCookie()` | 갱신 토큰 쿠키 삭제 |
 
 
-### 2. httpx.Redirect — 리다이렉트 응답
+### 2. httpx.Redirect로 리다이렉트 응답 반환
 
 `httpx.Redirect`를 사용하면 클라이언트를 다른 URL로 리다이렉트합니다.
 
@@ -450,9 +501,9 @@ func (c *AuthController) Logout() httpx.Redirect {
 ```
 
 
-### 3. error — 에러 응답
+### 3. error로 오류 응답 반환 {#error-response}
 
-`httperr` 패키지를 사용해 HTTP 상태 코드와 메시지를 반환합니다.
+`httperr`로 오류를 반환하면 지정한 HTTP 상태 코드와 `message` 필드를 가진 JSON 응답을 만듭니다. 아래 예제는 서비스 오류를 사용자 조회 실패로 처리해 HTTP 404를 반환합니다. 실제 앱에서는 오류의 원인을 구분해 알맞은 상태 코드로 변환하세요.
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/httperr"
@@ -477,7 +528,8 @@ func (c *UserController) GetUser(
 | `httperr.Unauthorized(msg)` | 401 |
 | `httperr.NotFound(msg)` | 404 |
 
-에러 응답 형식:
+위 예제의 오류 응답 본문은 다음과 같습니다.
+
 ```json
 {
   "message": "유저를 찾을 수 없습니다."
@@ -486,7 +538,7 @@ func (c *UserController) GetUser(
 
 #### httpx.Response[T]와 error 함께 사용
 
-성공 응답과 오류를 함께 반환하려면 `(httpx.Response[T], error)`를 사용합니다. 서비스 오류는 `httperr`로 매핑하고 성공 응답은 `nil` 오류와 반환합니다.
+성공 응답과 오류를 함께 반환하려면 `(httpx.Response[T], error)`를 사용합니다. 실패하면 빈 응답 값과 오류를 반환하고, 성공하면 본문이 있는 응답과 `nil`을 반환합니다. 오류가 있으면 성공 응답 본문은 사용하지 않습니다.
 
 ```go
 func (c *UserController) GetUser(
@@ -502,32 +554,28 @@ func (c *UserController) GetUser(
 ```
 
 
-### 응답 방식 선택 가이드
+### 응답 타입 선택
 
 | 상황 | 권장 반환 타입 |
 |------|---------------|
 | JSON 응답 (상태 코드/헤더/쿠키 포함) | `httpx.Response[T]` |
 | 문자열 응답 | `httpx.Response[string]` |
 | 리다이렉트 | `httpx.Redirect` |
-| 에러만 반환 | `error` |
+| 바이트 본문과 Content-Type 지정 | `httpx.Binary` |
+| 오류만 반환 | `error` |
 
 
-## Form DTO 및 Multipart 사용
+## 폼 DTO와 멀티파트 파일
 
-Spine에서는 **Form DTO**, **Multipart**, 그리고 이 둘을 함께 사용하는 **정석 패턴**을 지원합니다.
+폼의 텍스트 필드는 구조체 포인터인 폼 DTO로 받고, 업로드 파일은 `multipart.UploadedFiles`로 받습니다. 두 타입을 같은 핸들러의 파라미터로 선언하면 한 요청에서 텍스트와 파일을 함께 처리할 수 있습니다.
 
-Spine의 핵심 원칙은 다음과 같습니다.
+이하 예제의 `PostController`와 `FileController`는 직접 구현하고 생성자와 라우트를 등록해야 합니다. `/posts`와 `/upload`가 등록되어 있어야 아래 `curl` 요청을 실행할 수 있으며, 파일 업로드 요청에는 지정한 경로에 실제 파일이 있어야 합니다.
 
-- DTO는 반드시 `*Struct` (포인터)로 받는다
-- 값 타입 `Struct`는 의미 타입(Semantic Type)이다
-- 파일 업로드는 DTO가 아니라 별도의 의미 타입으로 처리한다
-- Resolver는 하나의 의미만 담당한다
+### 1. 폼 텍스트 필드 받기
 
-### 1. Form DTO 예제 (multipart/form-data)
+폼 DTO는 `multipart/form-data` 또는 `application/x-www-form-urlencoded` 요청의 텍스트 필드를 받습니다. DTO 필드에 `form` 태그로 요청 필드명을 지정합니다.
 
-Form DTO는 `multipart/form-data` 또는 `application/x-www-form-urlencoded` 요청에서 **텍스트 필드만 바인딩**하기 위한 DTO입니다.
-
-#### Form DTO 정의
+#### 폼 DTO 정의
 
 ```go
 type CreatePostForm struct {
@@ -536,7 +584,7 @@ type CreatePostForm struct {
 }
 ```
 
-#### Controller
+#### 핸들러 구현
 
 ```go
 func (c *PostController) Create(
@@ -557,11 +605,11 @@ curl -X POST http://localhost:8080/posts \
   -F "content=spine"
 ```
 
-### 2. Multipart 파일 업로드 예제
+### 2. 업로드 파일 받기
 
-파일 업로드는 **DTO가 아닌 의미 타입**으로 처리합니다.
+업로드 파일은 DTO 필드에 넣지 않고 별도의 `multipart.UploadedFiles` 파라미터로 받습니다. 아래 예제는 파일의 필드명, 파일명, 크기를 로그로 출력합니다.
 
-#### Multipart 의미 타입
+#### 업로드 파일 타입
 
 `github.com/NARUBROWN/spine/pkg/multipart` 패키지의 타입을 사용합니다.
 
@@ -569,7 +617,7 @@ curl -X POST http://localhost:8080/posts \
 import "github.com/NARUBROWN/spine/pkg/multipart"
 ```
 
-#### Controller
+#### 핸들러 구현
 
 ```go
 func (c *FileController) Upload(
@@ -609,9 +657,11 @@ curl -X POST http://localhost:8080/upload \
   -F "file=@test2.jpg"
 ```
 
-### 3. Form DTO + Multipart + Query 함께 사용하기
+### 3. 폼, 파일, 쿼리 함께 받기
 
-#### Controller
+같은 핸들러에서 폼 DTO, 업로드 파일, 페이지네이션을 함께 받을 수 있습니다. 아래 예제는 각 값을 읽어 출력하며 파일을 저장하지는 않습니다.
+
+#### 핸들러 구현
 
 ```go
 func (c *PostController) Upload(
@@ -632,70 +682,16 @@ func (c *PostController) Upload(
 }
 ```
 
-### 4. Spine DTO 규칙 요약
+### 입력 타입을 구분하는 기준
 
-```
-*Struct  → DTO (JSON / Form)
- Struct  → 의미 타입 (Query / Path / Multipart)
-```
-
-이 규칙을 따르면 실행 흐름이 시그니처에 그대로 드러납니다.
+JSON과 폼 DTO는 구조체 포인터로 받습니다. 쿼리, 경로, 업로드 파일은 `query.Pagination`, `path.Int`, `multipart.UploadedFiles`처럼 Spine이 지원하는 값 타입으로 받습니다. 임의의 구조체 값을 선언하면 자동으로 바인딩되는 것은 아닙니다.
 
 
-## 자동 등록과 수동 확장
+## 입력 오류 처리 시 주의사항
 
-CLI는 `src/user/user_route.go`를 생성하고 `BuildApplication()`에서 `user.Register(app)`의 오류를 확인하도록 연결합니다. 다음 코드는 생성 결과를 설명하며, 같은 등록을 다시 추가하면 안 됩니다.
-
-```go
-// src/user/user_route.go
-package user
-
-import "github.com/NARUBROWN/spine"
-
-func Register(app spine.App) error {
-    app.Constructor(NewUserRepository, NewUserService, NewUserController)
-    app.Route("GET", "/user/:id", (*UserController).Get)
-    return nil
-}
-```
-
-```go
-// internal/application/application.go: BuildApplication
-if err := user.Register(app); err != nil {
-    return nil, boot.Options{}, err
-}
-```
-
-새 핸들러를 구현했다면 `user_route.go`의 `Register` 안에 해당 라우트를 직접 추가합니다. 다른 패키지의 컨트롤러는 그 패키지의 등록 함수에서 조립하세요. `main.go`는 생성된 `BuildApplication → Validate → Run` 흐름을 유지합니다.
-
-## 검증과 실행
-
-```bash
-spine doctor
-spine contract check
-spine verify
-spine dev
-```
-
-```bash
-curl http://localhost:8080/user/1
-```
-
-계약·로컬 검증의 성공과 실제 HTTP 응답은 각각 확인합니다. `GET /user/1`의 생성된 응답은 `{"id":1}`이며 실제 사용자 조회나 영속 저장을 뜻하지 않습니다.
-
-## 핵심 정리
-
-| 개념 | 설명 |
-|------|------|
-| **어노테이션 없음** | 순수 Go 구조체와 메서드 |
-| **생성자 = 의존성** | 파라미터가 곧 의존성 선언 |
-| **시그니처 = API 스펙** | 입력/출력 타입이 명시적 |
-| **자동 바인딩** | query, JSON 본문, 헤더 자동 파싱 |
-| **httpx.Response[T]** | 상태 코드, 헤더, 쿠키 제어 |
-| **httpx.Redirect** | 리다이렉트 응답 |
-
+경로 값을 정수로 변환하지 못하거나 JSON 본문을 해석하지 못하면 컨트롤러 호출 전에 입력 바인딩이 실패합니다. Spine v0.5.1에서 이 실패가 항상 HTTP 400으로 변환되는 것은 아닙니다. 잘못된 JSON과 정수가 아닌 경로 값은 기본 실행 경로에서 HTTP 500으로 응답할 수 있으므로, 필요한 오류 정책을 구현한 뒤 실제 요청으로 확인하세요.
 
 ## 다음 단계
 
-- [튜토리얼: 의존성 주입](/ko/learn/tutorial/3-dependency-injection) — DI 동작 원리
-- [튜토리얼: 인터셉터](/ko/learn/tutorial/4-interceptor) — 요청 전/후 처리
+- [튜토리얼: 의존성 주입](/ko/learn/tutorial/3-dependency-injection) — 생성자 등록과 의존성 해결
+- [튜토리얼: 인터셉터](/ko/learn/tutorial/4-interceptor) — 요청 전후 처리

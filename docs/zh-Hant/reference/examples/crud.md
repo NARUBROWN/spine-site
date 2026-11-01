@@ -1,8 +1,30 @@
-# CRUD 範例
+# 建立使用者 CRUD API
 
-## 使用 CLI 建立專案
+建立可新增、列出、查詢、修改和刪除使用者的 HTTP API。此範例使用記憶體儲存庫，不使用 ORM，因此不必準備資料庫即可執行。
 
-完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後產生基礎應用程式，再手動加入下方完整的記憶體 CRUD。CLI 的 resource 產生器提供 GET 骨架，`slice --storage memory` 提供新增與查詢骨架，不會自動產生下方完整的修改與刪除邏輯。
+## 開始前的準備
+
+請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。此範例會在 CLI 0.1.4 建立的基本應用程式中，手動加入完整的 CRUD 程式碼。CLI 的 `resource` 提供 GET 骨架，`slice --storage memory` 則提供新增和查詢的骨架。以下程式碼包含修改和刪除功能。
+
+伺服器程序結束後，已儲存的使用者資料就會消失。
+
+請求依序經過控制器、服務和儲存庫。各元件的職責如下。
+
+```mermaid
+graph TD
+    Controller["控制器<br/>以語意型別接收輸入<br/>驗證輸入並轉換錯誤<br/>呼叫服務"]
+
+    Service["服務<br/>套用業務規則<br/>呼叫儲存庫"]
+
+    Repository["儲存庫<br/>查詢和變更記憶體資料"]
+
+    Controller --> Service
+    Service --> Repository
+```
+
+## 1. 建立專案
+
+建立基本應用程式，並檢查相依套件和專案設定。後續命令均在 `crud-example/` 中執行。
 
 ```sh
 spine new crud-example --module example.com/crud-example
@@ -10,6 +32,10 @@ cd crud-example
 go mod tidy
 spine doctor
 ```
+
+### 檔案配置
+
+接下來會在 `src/` 下新增五個檔案，並取代產生的 `internal/application/application.go`。根目錄的 `main.go` 和 `spine.toml` 繼續沿用。
 
 ```text
 crud-example/
@@ -27,7 +53,9 @@ crud-example/
     └── controller/user_controller.go
 ```
 
-## 模型
+## 2. 新增使用者模型
+
+建立 `src/model/user.go`。此結構體儲存使用者資訊，以及建立和修改時間。
 
 ```go
 // src/model/user.go
@@ -44,7 +72,9 @@ type User struct {
 }
 ```
 
-## 儲存庫
+## 3. 新增記憶體儲存庫
+
+建立 `src/repository/user_repository.go`。它負責查詢、儲存和刪除使用者，並提供檢查電子郵件是否重複的函式。
 
 ```go
 // src/repository/user_repository.go
@@ -151,7 +181,9 @@ func (r *UserRepository) Count() int {
 }
 ```
 
-## DTO
+## 4. 新增請求和回應 DTO
+
+建立 `src/dto/user_dto.go`。它定義請求接收的欄位和回應傳送的欄位，並將儲存庫的使用者模型轉換為回應 DTO。
 
 ```go
 // src/dto/user_dto.go
@@ -163,6 +195,8 @@ import (
     "example.com/crud-example/src/model"
 )
 
+// 요청 DTO
+
 type CreateUserRequest struct {
     Name  string `json:"name"`
     Email string `json:"email"`
@@ -172,6 +206,8 @@ type UpdateUserRequest struct {
     Name  string `json:"name"`
     Email string `json:"email"`
 }
+
+// 응답 DTO
 
 type UserResponse struct {
     ID        int64     `json:"id"`
@@ -185,6 +221,8 @@ type UserListResponse struct {
     Users []UserResponse `json:"users"`
     Total int            `json:"total"`
 }
+
+// 변환 함수
 
 func ToUserResponse(user *model.User) UserResponse {
     return UserResponse{
@@ -208,7 +246,9 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 }
 ```
 
-## 服務
+## 5. 新增使用者服務
+
+建立 `src/service/user_service.go`。它會在新增和修改前檢查電子郵件是否重複，並將儲存庫的回傳值轉換為回應 DTO。
 
 ```go
 // src/service/user_service.go
@@ -244,6 +284,7 @@ func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
+    // 이메일 중복 체크
     if s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -263,6 +304,8 @@ func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.Use
     if err != nil {
         return nil, err
     }
+
+    // 이메일 변경 시 중복 체크
     if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -280,7 +323,9 @@ func (s *UserService) DeleteUser(id int64) error {
 }
 ```
 
-## 控制器
+## 6. 新增使用者控制器
+
+建立 `src/controller/user_controller.go`。它會驗證輸入值後呼叫服務，並將找不到使用者和電子郵件重複的情況轉換為 HTTP 錯誤。
 
 ```go
 // src/controller/user_controller.go
@@ -305,12 +350,16 @@ type UserController struct {
 func NewUserController(service *service.UserService) *UserController {
     return &UserController{service: service}
 }
+
+// GET /users
 func (c *UserController) List() httpx.Response[dto.UserListResponse] {
     return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
 }
+
+// GET /users/:id
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
     user, err := c.service.GetUserByID(id.Value)
@@ -320,12 +369,14 @@ func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse],
 
     return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
+
+// POST /users
 func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Name is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
     }
     if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Email is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
     user, err := c.service.CreateUser(req)
@@ -335,15 +386,17 @@ func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.
 
     return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
+
+// PUT /users/:id
 func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
     if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Name is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
     }
     if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Email is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
     user, err := c.service.UpdateUser(id.Value, req)
@@ -353,9 +406,11 @@ func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.
 
     return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
+
+// DELETE /users/:id
 func (c *UserController) Delete(id path.Int) error {
     if id.Value <= 0 {
-        return httperr.BadRequest("Invalid user ID")
+        return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
     err := c.service.DeleteUser(id.Value)
@@ -365,21 +420,23 @@ func (c *UserController) Delete(id path.Int) error {
 
     return nil
 }
+
+// Repository 에러를 HTTP 에러로 변환
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
-        return httperr.NotFound("User not found")
+        return httperr.NotFound("사용자를 찾을 수 없습니다")
     case errors.Is(err, repository.ErrEmailAlreadyExists):
-        return httperr.BadRequest("Email already in use")
+        return httperr.BadRequest("이미 사용 중인 이메일입니다")
     default:
         return httperr.BadRequest(err.Error())
     }
 }
 ```
 
-## 應用程式組裝
+## 7. 註冊建構函式和路由
 
-保留產生的根目錄 `main.go`，依 `BuildApplication`、`Validate`、`Run` 的順序執行。使用以下內容替換 `internal/application/application.go`，並在 `src/` 下手動加入模型、儲存庫、DTO、服務與控制器。
+以下列程式碼取代整個 `internal/application/application.go`。註冊儲存庫、服務和控制器的建構函式，並連接五個路由。產生在根目錄的 `main.go` 會依序執行 `BuildApplication`、`Validate`、`Run`。
 
 ```go
 // internal/application/application.go
@@ -429,7 +486,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 驗證與執行
+## 8. 驗證並啟動伺服器
+
+在專案根目錄整理格式，檢查相依套件和程式碼，然後啟動伺服器。
 
 ```sh
 gofmt -w src internal/application
@@ -439,33 +498,169 @@ spine verify
 spine dev
 ```
 
-`contract check` 檢查靜態契約；`verify` 檢查契約、gofmt、vet 和 Go 測試。請使用下方 HTTP 請求驗證新增、查詢、修改及刪除。記憶體資料在處理程序停止後消失；資料庫持久儲存請參閱[資料庫教學](/zh-Hant/learn/tutorial/5-database)。
+`contract check` 檢查靜態契約。`verify` 檢查靜態契約，並執行 gofmt、go vet 和 Go 測試。接著透過 HTTP 請求確認伺服器是否實際處理請求。
 
-```sh
+## 9. 透過 HTTP 請求確認 CRUD
+
+保持伺服器執行，在另一個終端機依序傳送以下請求。新啟動的伺服器中，第一個使用者的 ID 為 `1`。回應中的日期僅供示範，會隨實際建立和修改時間而不同。
+
+### 新增使用者
+
+傳送姓名和電子郵件後，會收到 HTTP 200 和新增的使用者資訊。
+
+```bash
 curl -X POST http://localhost:8080/users \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice","email":"alice@example.com"}'
+  -H "Content-Type: application/json" \
+  -d '{"name": "홍길동", "email": "hong@example.com"}'
+```
+
+```json
+{
+  "id": 1,
+  "name": "홍길동",
+  "email": "hong@example.com",
+  "created_at": "2025-01-19T10:00:00Z",
+  "updated_at": "2025-01-19T10:00:00Z"
+}
+```
+
+### 取得使用者清單
+
+確認 `users` 包含剛才新增的使用者，且 `total` 為 `1`。
+
+```bash
 curl http://localhost:8080/users
+```
+
+```json
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "홍길동",
+      "email": "hong@example.com",
+      "created_at": "2025-01-19T10:00:00Z",
+      "updated_at": "2025-01-19T10:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+### 查詢使用者
+
+查詢 ID 為 `1` 的使用者資訊。
+
+```bash
 curl http://localhost:8080/users/1
+```
+
+```json
+{
+  "id": 1,
+  "name": "홍길동",
+  "email": "hong@example.com",
+  "created_at": "2025-01-19T10:00:00Z",
+  "updated_at": "2025-01-19T10:00:00Z"
+}
+```
+
+### 修改使用者
+
+同時傳送姓名和電子郵件。確認回應中的這兩個欄位和 `updated_at` 已變更。
+
+```bash
 curl -X PUT http://localhost:8080/users/1 \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice Updated","email":"alice2@example.com"}'
+  -H "Content-Type: application/json" \
+  -d '{"name": "홍길동(수정)", "email": "hong2@example.com"}'
+```
+
+```json
+{
+  "id": 1,
+  "name": "홍길동(수정)",
+  "email": "hong2@example.com",
+  "created_at": "2025-01-19T10:00:00Z",
+  "updated_at": "2025-01-19T10:05:00Z"
+}
+```
+
+### 刪除使用者
+
+刪除 ID 為 `1` 的使用者。再次查詢已刪除的 ID 時，會收到 HTTP 404。
+
+```bash
 curl -X DELETE http://localhost:8080/users/1
 ```
 
-```sh
+### 不存在的使用者和重複的電子郵件
+
+查詢儲存庫中不存在的 ID 時，會收到 HTTP 404 和以下錯誤訊息。
+
+```bash
+# 존재하지 않는 사용자
 curl http://localhost:8080/users/999
 ```
 
-前一步已刪除使用者，因此先用相同電子郵件重新建立使用者（200），再用該電子郵件建立一次以確認重複錯誤（400）。
-
-```sh
-curl -X POST http://localhost:8080/users \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice","email":"alice@example.com"}'
-curl -X POST http://localhost:8080/users \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Bob","email":"alice@example.com"}'
+```json
+{
+  "message": "사용자를 찾을 수 없습니다"
+}
 ```
 
-找不到使用者時回傳 HTTP 404；電子郵件重複時回傳 HTTP 400。
+由於上一個步驟已刪除使用者，請先以相同的電子郵件重新新增使用者。第一個請求會成功並回傳 HTTP 200，接著以相同電子郵件新增的第二個請求會回傳 HTTP 400 和重複錯誤。
+
+```bash
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "홍길동", "email": "hong@example.com"}'
+# 중복 이메일
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "김철수", "email": "hong@example.com"}'
+```
+
+```json
+{
+  "message": "이미 사용 중인 이메일입니다"
+}
+```
+
+## 實作時的注意事項
+
+### 以語意型別接收請求值
+
+控制器的參數使用 `path.Int` 等語意型別，而非 HTTP 請求物件。錯誤以 `httperr` 表示。
+
+```go
+// 의미 타입으로 입력 받음
+func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
+
+// httperr로 의미만 표현
+return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+```
+
+### 相依性注入
+
+根據已註冊建構函式的參數型別，連接儲存庫、服務和控制器的相依關係。
+
+```go
+// 생성자 등록만으로 의존성 자동 해결
+app.Constructor(
+    repository.NewUserRepository,  // 의존성 없음
+    service.NewUserService,        // Repository 의존
+    controller.NewUserController,  // Service 의존
+)
+```
+
+### 各元件的職責
+
+| 元件 | 職責 | 使用的元件 |
+|-------|------|------|
+| 控制器 | 驗證輸入、轉換 HTTP 錯誤 | 服務 |
+| 服務 | 檢查電子郵件是否重複、轉換回應 DTO | 儲存庫 |
+| 儲存庫 | 查詢和變更記憶體資料 | 無 |
+
+## 下一步
+
+若要持久儲存資料，請依照[連接資料庫](/zh-Hant/learn/tutorial/5-database)更換儲存庫。若要進一步了解錯誤處理方式，請參閱[錯誤處理教學](/zh-Hant/learn/tutorial/7-error-handling)。

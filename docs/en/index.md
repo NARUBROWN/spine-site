@@ -1,11 +1,11 @@
 ---
 layout: home
-description: "Familiar patterns. Faster backends. Bring familiar controllers, services, constructor injection and interceptors to Go. Explore throughput and memory results from the Spine internal lab."
+description: "Build faster servers with familiar development patterns. Structure Go apps with controllers, services, constructor injection, and interceptors, and explore throughput and memory usage measured in our internal lab."
 
 hero:
   name: "Spine"
-  text: "Familiar patterns.<br>Faster backends."
-  tagline: "Bring the controller and service structure you know from NestJS and Spring to Go. Build with constructor injection and interceptors, then compare throughput and memory use within the same resource budget."
+  text: "Build faster servers<br>with familiar patterns."
+  tagline: "Structure Go apps with the controllers and services you know from NestJS and Spring. Use constructor injection and interceptors, and explore throughput and memory usage measured with the same resources."
   actions:
     - theme: brand
       text: "Build your first app"
@@ -16,19 +16,18 @@ hero:
 
 features:
   - title: "Familiar controllers and services"
-    details: "Controllers receive requests and services handle business logic. Keep that separation of responsibilities with Go structs and methods."
+    details: "Controllers receive requests, and services handle business logic. Separate these roles with Go structs and methods."
     link: /en/learn/tutorial/2-controller
-    linkText: "Write a controller"
-  - title: "Dependencies connected through constructors"
-    details: "Declare the services you need as constructor parameters. Spine creates objects from registered constructors and connects their dependencies."
+    linkText: "Learn to write controllers"
+  - title: "Dependencies wired through constructors"
+    details: "Declare the services you need as constructor parameters. Spine calls registered constructors to create objects and wire their dependencies."
     link: /en/learn/tutorial/3-dependency-injection
     linkText: "Explore dependency injection"
-  - title: "Shared work handled by interceptors"
-    details: "Separate authentication, transactions and logging from business logic. Register interceptors and choose where they run in the request flow."
+  - title: "Shared processing in interceptors"
+    details: "Separate authentication, transactions, and logging from business logic. Register interceptors and choose when they run in the request flow."
     link: /en/learn/tutorial/4-interceptor
-    linkText: "Use interceptors"
+    linkText: "Learn to use interceptors"
 ---
-
 
 <BenchmarkSection />
 
@@ -39,18 +38,18 @@ features:
 <div class="home-next-steps">
 
 <a href="/en/learn/getting-started/first-app">
-<strong>Create your first app with the CLI <span aria-hidden="true">→</span></strong>
-<span>Install the CLI, generate a project and check its /health response.</span>
+<strong>Build your first app with the CLI</strong>
+<span>Follow the steps from installing the CLI and creating a project to checking the /health response.</span>
 </a>
 
 <a href="/en/reference/examples/login">
-<strong>Explore JWT login <span aria-hidden="true">→</span></strong>
-<span>See how to issue tokens and handle authenticated requests.</span>
+<strong>Explore the JWT login example</strong>
+<span>See how to issue tokens and handle requests that require authentication.</span>
 </a>
 
 <a href="/en/reference/api/spine-app">
-<strong>Look up API behavior <span aria-hidden="true">→</span></strong>
-<span>Check constructor, route and interceptor registration methods and return values.</span>
+<strong>Check API behavior</strong>
+<span>Review how to register constructors, routes, and interceptors, and check their return values.</span>
 </a>
 
 </div>

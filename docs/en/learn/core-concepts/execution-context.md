@@ -1,38 +1,101 @@
-# Execution Context
+# Execution Context (ExecutionContext)
 
-Spine separates execution control, protocol input, and controller-visible state into small context interfaces.
+Spine creates an execution context for each request or message to pass input information and execution state through the pipeline. Interceptors read and write execution state through `core.ExecutionContext`, while HTTP controllers receive only the values they need through semantic types and read-only `spine.Ctx`.
 
-The application handlers below are manual extensions to `src/user/user_controller.go` in a [CLI project](/en/learn/tutorial/1-project-structure). Import response types from `github.com/NARUBROWN/spine/pkg/httpx` and `spine.Ctx` from `github.com/NARUBROWN/spine/pkg/spine`. Keep `BuildApplication` and its checked `user.Register(app)` call; framework implementation excerpts do not belong in application files.
+Understanding this distinction helps you pass values stored by interceptors to controllers and determine which inputs are available in HTTP, event consumers, and WebSocket. The interfaces and behavior in this document are based on Spine v0.5.1.
 
-## Why contexts are separated
+The app handler examples are manual extensions to a [project created with the CLI](/en/learn/tutorial/1-project-structure). Keep the generated `BuildApplication` and the `user.Register(app)` call that checks for errors. The `core/` interfaces are public contracts; you do not need to copy `internal/` implementations into your app.
+
+## Controller and Interceptor Access
+
+The context does not expose one large object to all code. It separates the access needed to control the pipeline from the access needed for business logic.
+
+| Usage | Type received | Available functionality |
+| --- | --- | --- |
+| HTTP controller | `context.Context` | Propagate cancellation and timeouts, and publish domain events |
+| HTTP controller | `pkg/spine.Ctx` | Read values stored by interceptors |
+| HTTP controller | `path.Int`, `query.Values`, DTOs, and others | Bound request input |
+| Interceptor | `core.ExecutionContext` | Read request information, read and write the store, and run processing before and after execution |
+| HTTP argument resolver | `core.HttpRequestContext` | Interpret HTTP input such as bodies, headers, and forms |
+| Consumer argument resolver | `core.ConsumerRequestContext` | Interpret the event name and payload |
+| WebSocket argument resolver | `core.WebSocketContext` | Interpret the connection ID, message type, and payload |
+
+In this document, `spine.Ctx` is a type from `github.com/NARUBROWN/spine/pkg/spine`, not the root app package `github.com/NARUBROWN/spine`. Use aliases to distinguish the two packages if you import both in one file.
+
+The default HTTP resolvers do not inject `core.ExecutionContext` or `core.HttpRequestContext` as controller arguments. Express the required behavior through input types and `httpx.Response[T]` return values instead of handling response writers or body binding directly in controllers.
+
+## Relationships Between Context Contracts
+
+`ContextCarrier` and `EventBusCarrier` represent shared functionality. The HTTP and consumer input contracts embed these two contracts directly, while the WebSocket message contract extends `ExecutionContext`.
 
 ```mermaid
-flowchart TD
-    Carrier["ContextCarrier"] --> Execution["ExecutionContext"]
-    Bus["EventBusCarrier"] --> Execution
-    Carrier --> HTTP["HttpRequestContext"]
+graph TD
+    Base["ContextCarrier<br>Context()"]
+    Bus["EventBusCarrier<br>EventBus()"]
+    Execution["ExecutionContext<br>Method, path, parameters, and store"]
+    HTTP["HttpRequestContext<br>Interpret HTTP input"]
+    Consumer["ConsumerRequestContext<br>Event name and payload"]
+    WS["WebSocketContext<br>Connection ID and message information"]
+    View["ControllerContext / spine.Ctx<br>Separate view exposing only Get()"]
+
+    Base --> Execution
+    Bus --> Execution
+    Base --> HTTP
     Bus --> HTTP
-    Carrier --> Consumer["ConsumerRequestContext"]
+    Base --> Consumer
     Bus --> Consumer
-    Execution --> WS["WebSocketContext"]
-    WS --> WSMessage["WebSocketMessageContext"]
-    WSRequest["WebSocketRequestContext"] --> WSMessage
-    WSRequest --> WSHandshake["WebSocketHandshakeContext"]
-    Execution -. "read-only facade" .-> Controller["ControllerContext / spine.Ctx"]
+    Execution --> WS
+    Execution -. read-only view .-> View
 ```
 
-- The pipeline and interceptors need mutable request state, routing data, and event access.
-- Resolvers need only the protocol-specific input they decode.
-- Controllers should read values placed by interceptors without mutating framework state.
-- WebSocket authentication needs HTTP upgrade data, while message handlers also need frame data.
+The arrows show which contracts are embedded. `ControllerContext` and `spine.Ctx` do not embed `ExecutionContext`. They are separate interfaces that expose only `Get()` to read from the same store.
 
-There is no catch-all `RequestContext` interface in the current public contract. Resolver implementations accept `ExecutionContext` and assert the narrow protocol interface they need.
+The actual HTTP adapter implements both `ExecutionContext` and `HttpRequestContext`. The consumer adapter likewise implements both `ExecutionContext` and `ConsumerRequestContext`. A resolver can therefore receive the shared context and then check for the protocol contract it needs.
 
-## ExecutionContext
+## Shared Base Contracts
 
-`ExecutionContext` is the pipeline contract:
+### ContextCarrier
+
+This contract provides Go's standard `context.Context`. Use it to propagate cancellation signals and deadlines to services, repositories, and external API calls.
 
 ```go
+// core/context.go
+type ContextCarrier interface {
+    Context() context.Context
+}
+```
+
+For HTTP, it uses the request's `context.Context`. When a controller declares a `context.Context` argument, the standard context resolver passes the request context and attaches the EventBus needed to publish domain events.
+
+### EventBusCarrier
+
+This contract provides access to the EventBus for the execution.
+
+```go
+// core/context.go
+type EventBusCarrier interface {
+    EventBus() EventBus
+}
+```
+
+`core.EventBus` is the minimal contract for collecting and draining events. `publish.DomainEvent` is defined in `github.com/NARUBROWN/spine/pkg/event/publish`.
+
+```go
+// core/event_bus.go
+type EventBus interface {
+    Publish(events ...publish.DomainEvent)
+    Drain() []publish.DomainEvent
+}
+```
+
+Controllers usually call `publish.Event()` with the `context.Context` they receive rather than calling `EventBus()` directly. See [EventBus and Event Publishing](#event-publishing) below for usage details.
+
+## ExecutionContext: Pipeline and Interceptor Execution State
+
+`core.ExecutionContext` is the contract shared by the pipeline, router, and interceptors.
+
+```go
+// core/context.go
 type ExecutionContext interface {
     ContextCarrier
     EventBusCarrier
@@ -48,105 +111,302 @@ type ExecutionContext interface {
 }
 ```
 
-An interceptor can store request-scoped authentication or transaction state. This complete minimal implementation makes the three unused lifecycle methods explicit:
+### Request and Routing Information
+
+| Method | Meaning in HTTP | Notes |
+| --- | --- | --- |
+| `Method()` | Request method, such as `GET` or `POST` | Returns `EVENT` for consumers and `WS` for WebSocket |
+| `Path()` | Actual request path, such as `/users/123` | Distinct from the route pattern `/users/:id` |
+| `Header(name)` | Specified request header | Empty string if the header is absent |
+| `Params()` | Path values extracted by the router | Global `PreHandle` runs before Spine routing |
+| `PathKeys()` | Order of path parameters declared in the route | Used for order-based binding of `path.*` types |
+| `Queries()` | Query map that preserves multiple values | A key can have more than one value |
+
+For example, after routing a request for `/users/123/posts/456?tag=go&tag=web` to `/users/:userId/posts/:postId`, you can read the following information.
 
 ```go
-func (i *AuthInterceptor) PreHandle(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-) error {
-    user, err := i.verify(ctx.Header("Authorization"))
-    if err != nil {
-        return httperr.Unauthorized("invalid credentials")
-    }
-    ctx.Set("myapp.auth.user", user)
-    return nil
-}
-
-func (i *AuthInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
-
-func (i *AuthInterceptor) BeforeResponse(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) error {
-    return nil
-}
-
-func (i *AuthInterceptor) AfterCompletion(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) {}
+ctx.Method()   // "GET"
+ctx.Path()     // "/users/123/posts/456"
+ctx.Params()   // {"userId": "123", "postId": "456"}
+ctx.PathKeys() // ["userId", "postId"]
+ctx.Queries()  // {"tag": ["go", "web"]}
 ```
 
-Controllers read the same value through `spine.Ctx`, the public resolver type backed by `ControllerContext`:
+This code illustrates values available to interceptors and similar components. It does not mean that HTTP controllers receive this context directly.
+
+### Set() and Get(): Sharing Values During Execution
+
+Interceptors can use `Set()` to store authentication results or request tracing information. Controllers read the same values through `Get()` on the read-only view.
 
 ```go
-func (c *UserController) Me(ctx spine.Ctx) (httpx.Response[User], error) {
-    value, ok := ctx.Get("myapp.auth.user")
-    if !ok {
-        return httpx.Response[User]{}, httperr.Unauthorized("authentication required")
-    }
-    return httpx.Response[User]{Body: value.(User)}, nil
-}
+// 인터셉터에서 저장
+ctx.Set("auth.user", authInfo)
+
+// 같은 실행에서 조회
+value, ok := ctx.Get("auth.user")
 ```
 
-Keep application keys namespaced and avoid the reserved `spine.` prefix.
+`Get()` returns both the value and whether the key exists. A key's presence does not guarantee the expected type, so check the type where you use the value. The store belongs to a request or message execution; do not use it as a global cache.
 
-## Protocol-specific input
+As with ordinary maps, concurrency guarantees depend on the implementation. Do not assume that the HTTP context store supports concurrent reads and writes from multiple goroutines.
 
-`HttpRequestContext` supplies `Param`, `Query`, `Header`, complete defensive views, body binding, and multipart parsing. HTTP argument resolvers use it to construct semantic types such as `path.Int`, `query.Values`, `header.Values`, DTOs, and uploads.
+## ControllerContext and spine.Ctx: Read-Only Controller Views
 
-`ConsumerRequestContext` supplies `EventName` and `Payload`. Consumer resolvers derive event-name semantic types, raw payload, and event DTOs from it.
-
-`WebSocketContext` extends `ExecutionContext` with `ConnID`, `MessageType`, and `Payload` for each frame.
-
-## WebSocket request snapshots
-
-v0.5.1 preserves immutable HTTP handshake information:
-
-- headers and multi-value queries;
-- cookies;
-- path, host, remote address, and request URI;
-- the request `context.Context`.
-
-`WebSocketHandshakeInterceptor.PreHandshake` receives `WebSocketHandshakeContext` before HTTP upgrade. The connection slot is reserved first, so a pending or rejected authentication attempt counts against the configured capacity.
-
-During message handling, assert `WebSocketMessageContext` when you need both frame data and the original request snapshot:
+`core.ControllerContext` and `pkg/spine.Ctx` provide the same method set.
 
 ```go
-request, ok := ctx.(core.WebSocketMessageContext)
-if !ok {
-    return errors.New("request snapshot unavailable")
+// core/context.go
+type ControllerContext interface {
+    Get(key string) (any, bool)
 }
-origin := request.Header("Origin")
-room := request.Query("room")
 ```
 
-Returned header, query, cookie, and path-parameter collections are defensive copies. Treat all request views as immutable.
+```go
+// pkg/spine/types.go
+type Ctx interface {
+    Get(key string) (any, bool)
+}
+```
 
-## Context and events
+The default HTTP resolver wraps the execution context in this view before passing it to the controller. Controllers can call `Get()`, but not `Set()`, `Method()`, or `EventBus()`. A custom interface that extends the type with additional methods is not automatically supported.
 
-`Context()` carries cancellations and deadlines. Consumer shutdown waits for the active handler and ACK/NACK path to drain, so handlers should pass this context through external calls.
+### Reading Authentication Information Stored by an Interceptor
 
-`EventBus()` collects domain events during a handler. In HTTP, post-execution dispatch begins only after the response has serialized and its cookies/status have validated. This reduces inconsistent outcomes, but broker publication is not atomic with a database commit; durable workflows still need an outbox and idempotency.
+The following method is an example to add to `UserController` in an app where an authentication interceptor stores `auth.user`. Import `context`, `github.com/NARUBROWN/spine/pkg/spine`, `pkg/path`, and `pkg/httpx`. In a real app, check whether `authInfo` exists and has the expected type according to your authentication policy.
 
-## Concurrency
+```go
+// src/user/user_controller.go
+func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId path.Int) httpx.Response[any] {
+    authInfo, _ := cc.Get("auth.user")
+    return httpx.Response[any]{Body: authInfo}
+}
+```
 
-WebSocket execution contexts protect their mutable store and event-bus initialization because messages and connection lifecycle work can overlap. Values stored in the context can still be mutable application objects; synchronize those objects according to your own ownership rules.
+Declaring `core.ControllerContext` provides the same read-only view in HTTP. App code can use `spine.Ctx` to express the access it needs. See the [interceptor tutorial](/en/learn/tutorial/4-interceptor) for how to write and register an authentication interceptor.
 
-## Design rules
+`ControllerContextResolver` is not registered in the default event consumer or WebSocket pipelines. Do not assume that the `spine.Ctx` argument available in HTTP can also be declared unchanged in handlers for other protocols.
 
-- Interceptors use `ExecutionContext` to control the pipeline.
-- Controllers use `spine.Ctx` only when they need interceptor-provided state.
-- Resolvers assert `HttpRequestContext`, `ConsumerRequestContext`, or `WebSocketContext`.
-- Handshake authentication uses `WebSocketHandshakeContext`.
-- Message code needing upgrade metadata asserts `WebSocketMessageContext`.
-- Collection views are snapshots, not mutation APIs.
+## HttpRequestContext: Interpreting HTTP Input
 
-## See also
+`core.HttpRequestContext` is the contract HTTP resolvers use to read individual parameters, all headers, the body, and multipart forms. It embeds the two base contracts directly rather than embedding `ExecutionContext`.
 
-- [ExecutionContext API](/en/reference/api/execution-context)
-- [Execution pipeline](/en/learn/core-concepts/pipeline)
-- [Interceptors](/en/learn/tutorial/4-interceptor)
+```go
+// core/context.go
+type HttpRequestContext interface {
+    ContextCarrier
+    EventBusCarrier
+
+    Param(name string) string
+    Query(name string) string
+    Header(name string) string
+
+    Params() map[string]string
+    Queries() map[string][]string
+    Headers() map[string][]string
+
+    Bind(out any) error
+    MultipartForm() (*multipart.Form, error)
+}
+```
+
+Here, `multipart.Form` is a type from Go's standard `mime/multipart` package.
+
+| Method | Behavior |
+| --- | --- |
+| `Param(name)` | Read the value of the specified path parameter |
+| `Query(name)` | Read the first value of the specified query parameter, or an empty string if absent |
+| `Header(name)` | Read a request header value |
+| `Params()` | Read the path parameter map |
+| `Queries()` | Read the query map with multiple values preserved |
+| `Headers()` | Read the complete request header map |
+| `Bind(out)` | Bind request input to the supplied DTO |
+| `MultipartForm()` | Read multipart form and file information |
+
+### HTTP Adapter Behavior
+
+Spine's HTTP adapter uses Echo. `Param()` first looks for values stored by the Spine router, then checks Echo's path values if none are found. `Params()` returns a copy to prevent changes to the original path map.
+
+HTTP `Headers()`, however, returns the request's header map directly. Use it for reading, and do not assume that every accessor returns a copy.
+
+`Bind()` and `MultipartForm()` delegate to Echo's input handling. The default HTTP DTO resolver creates a struct pointer and passes it to `Bind()`. Declare pointers in app controllers as follows.
+
+```go
+func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User], error)
+```
+
+This code is a method signature example; `CreateUserRequest` and `User` are types defined by the app. Form DTOs use `form` tags on their fields, and uploaded files can be received as `pkg/multipart.UploadedFiles`.
+
+If the body contains malformed JSON or numeric conversion of a path value fails, execution does not reach the controller. In v0.5.1, these binding errors can result in 500 responses, so do not assume that all input errors automatically become 400 responses. [Execution Pipeline](/en/learn/core-concepts/pipeline#error-responses) explains the sequence that converts errors into responses.
+
+## ConsumerRequestContext: Interpreting Event Input
+
+`core.ConsumerRequestContext` provides the event name and raw payload.
+
+```go
+// core/context.go
+type ConsumerRequestContext interface {
+    ContextCarrier
+    EventBusCarrier
+
+    EventName() string
+    Payload() []byte
+}
+```
+
+The consumer adapter implements this contract together with `ExecutionContext`. Since it is not an HTTP request, the shared methods behave as follows.
+
+| Method | Value returned by a consumer |
+| --- | --- |
+| `Method()` | `EVENT` |
+| `Path()` | Event name |
+| `EventName()` | Event name |
+| `Payload()` | Raw bytes of the received message |
+| `Header(name)` | Empty string |
+| `Params()` | `nil` |
+| `PathKeys()` | `nil` |
+| `Queries()` | `nil` |
+
+The default consumer resolvers support `context.Context`, a string event name, a `[]byte` payload, and struct DTO values. DTOs are created by deserializing the JSON payload. The HTTP DTO pointer rule does not apply unchanged to consumers.
+
+If a resolver requires a payload that is absent, or JSON deserialization fails, the handler is not invoked. The consumer runtime and message transport configuration determine how this execution failure affects message acknowledgment, retries, and dead-letter handling. Do not apply the HTTP error response table unchanged.
+
+## WebSocketContext: Message and Connection Information
+
+`core.WebSocketContext` adds WebSocket message information to `ExecutionContext`.
+
+```go
+// core/context.go
+type WebSocketContext interface {
+    ExecutionContext
+
+    ConnID() string
+    MessageType() int
+    Payload() []byte
+}
+```
+
+The WebSocket runtime creates an execution context for each received message. `Method()` returns `WS`, and `Path()` returns the actual path of the connection request. `ConnID()` returns the connection ID, `MessageType()` returns the frame type, such as text or binary, and `Payload()` returns the bytes of that message.
+
+The default resolvers support `context.Context`, `pkg/ws.ConnectionID`, `[]byte`, and struct DTO values. DTOs are created by deserializing the message payload as JSON. Unlike HTTP, DTOs are received as struct values.
+
+### Information from the Original Connection Request
+
+During WebSocket message processing, you can still read the headers, query parameters, and cookies received during the HTTP upgrade. A separate request view provides this information.
+
+```go
+// core/context.go
+type WebSocketRequestContext interface {
+    ContextCarrier
+
+    Path() string
+    Header(name string) string
+    Headers() map[string][]string
+    Query(name string) string
+    Queries() map[string][]string
+    Cookie(name string) (string, bool)
+    Cookies() map[string]string
+    RemoteAddr() string
+    Host() string
+    RequestURI() string
+}
+```
+
+```go
+type WebSocketHandshakeContext interface {
+    WebSocketRequestContext
+}
+
+type WebSocketMessageContext interface {
+    WebSocketContext
+    WebSocketRequestContext
+}
+```
+
+The default WebSocket implementation copies and retains the upgrade request information. `Headers()`, `Queries()`, and `Cookies()` also return copies, so changing the returned values does not change the stored request information. These values describe the request at connection time; they do not mean that a new HTTP request arrives for each message.
+
+| Required values | Contract to use |
+| --- | --- |
+| Message payload and connection ID | `core.WebSocketContext` |
+| Inspect headers, query parameters, and cookies before upgrade | `core.WebSocketHandshakeContext` |
+| Read message information together with the original request information | `core.WebSocketMessageContext` |
+
+The default implementation's `Header()` and `Queries()` read this request information. Values may be absent, but these methods do not always return empty values simply because the protocol is WebSocket. Check the type rather than assuming that a custom `WebSocketContext` implementation also supports the additional request view.
+
+```go
+// WebSocket 메시지를 처리하는 인터셉터 안에서 조회하는 예
+if requestCtx, ok := ctx.(core.WebSocketMessageContext); ok {
+    origin := requestCtx.Header("Origin")
+    _ = origin
+}
+```
+
+This code is not a controller argument injection example. It checks for additional capabilities on the `core.ExecutionContext` received by an interceptor.
+
+### Checks Before Connection and Message Pre-Processing
+
+Implement the optional `core.WebSocketHandshakeInterceptor` contract if authentication or authorization checks are required before a connection is established.
+
+```go
+type WebSocketHandshakeInterceptor interface {
+    PreHandshake(ctx WebSocketHandshakeContext, meta HandlerMeta) error
+}
+```
+
+When a `core.Interceptor` registered for WebSocket also implements this contract, the runtime first reserves a connection slot, then calls `PreHandshake` before the HTTP upgrade. Connections waiting for authentication count toward the connection limit. The ordinary `core.Interceptor.PreHandle` runs each time a message is processed after connection. Keep checks that must reject the connection itself separate from per-message pre-processing.
+
+## Comparing Input Across Protocols
+
+Even with the same execution pipeline, context semantics and default argument types differ.
+
+| Item | HTTP | Event consumer | WebSocket |
+| --- | --- | --- | --- |
+| Execution unit | One HTTP request | One received event | One received message |
+| `Method()` | HTTP method | `EVENT` | `WS` |
+| `Path()` | Actual request path | Event name | Actual path of the connection request |
+| `Header()` | Request header | Empty string | Retained upgrade request header |
+| `Queries()` | Request query parameters | `nil` | Retained upgrade request query parameters |
+| Body input | HTTP `Bind()` | Event `Payload()` | Message `Payload()` |
+| Default DTO type | Struct pointer | Struct value | Struct value |
+| `context.Context` argument | Supported | Supported | Supported |
+| `spine.Ctx` argument | Supported | Not registered by default | Not registered by default |
+
+Check the type for the relevant interface before using protocol-specific functionality. Having an `ExecutionContext` does not mean you can call both HTTP `Bind()` and WebSocket `ConnID()` on it.
+
+## Store Keys and Execution Timing
+
+Spine uses the following keys in its internal store. Do not overwrite them in your app. Use separate, descriptive names such as `auth.user` for app values.
+
+| Key | Value type | Purpose |
+| --- | --- | --- |
+| `spine.params` | `map[string]string` | Path parameters extracted by the router |
+| `spine.pathKeys` | `[]string` | Declaration order of path parameters |
+| `spine.response_writer` | `core.ResponseWriter` | HTTP response writing and buffering |
+
+`spine.response_writer` holds the response writer supplied by the adapter. The pipeline wraps it with a writer that buffers the response until transmission. Return `httpx.Response[T]`, `httpx.Redirect`, or `httpx.Binary` instead of retrieving this key in a controller to write the response directly.
+
+The values available in the context also depend on execution timing. Global `PreHandle` runs before routing, while route `PreHandle` runs after routing and argument binding. Design the stage that creates a value together with the point at which the store must contain it.
+
+## EventBus and Event Publishing {#event-publishing}
+
+When a controller declares `context.Context`, the standard context resolver attaches the execution's EventBus and passes the context to the controller. The controller can use this context to collect domain events.
+
+In the following excerpt, `publish` is imported from `github.com/NARUBROWN/spine/pkg/event/publish`. `OrderCreated` is an event type defined by the app that implements `Name() string` and `OccurredAt() time.Time`.
+
+```go
+// src/user/user_controller.go
+func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
+    // context.Context에 연결된 EventBus로 이벤트를 수집합니다.
+    publish.Event(ctx, OrderCreated{
+        OrderID: orderId.Value,
+        At:      time.Now(),
+    })
+
+    return httpx.Response[string]{Body: "OK"}
+}
+```
+
+Calling `publish.Event()` alone does not complete transmission to an external broker. It collects events in the attached EventBus. If an event dispatch hook is registered, the hook drains the events after the success response has been serialized and validated, then passes them to the dispatcher. Registering the hook requires event publisher configuration.
+
+The dispatch hook does not run if the handler returns an error or success response preparation fails. If dispatch fails, the pipeline treats the error as an execution error. The dispatch hook runs before `BeforeResponse` and actual HTTP response transmission, so collecting or dispatching events alone does not establish that a transaction has committed or the response has been sent.
+
+See [Execution Pipeline](/en/learn/core-concepts/pipeline) for the order of event publishing, transaction completion, and response writing.

@@ -1,6 +1,8 @@
 # 控制器
 
-在 CLI 生成的 `hello-spine` 项目中添加用户查询控制器。安装和生成项目请先参考[第一个应用](/zh-Hans/learn/getting-started/first-app)。如果已经生成了 `resource user`，请直接查看文件，不要重复生成。
+在使用 CLI 创建的 `hello-spine` 项目中添加 `GET /user/:id` 控制器，并将请求路径中的整数作为 JSON 响应返回。随后了解如何接收查询参数、请求头和请求体，以及如何选择响应类型。
+
+完成[第一个应用](/zh-Hans/learn/getting-started/first-app)中的安装和项目创建后，请在项目根目录中继续操作。如果已经运行过 `spine generate resource user`，请跳过生成步骤，直接检查文件。
 
 ## 使用 CLI 生成控制器
 
@@ -8,7 +10,7 @@
 spine generate resource user --dry-run
 ```
 
-在预览中检查生成文件与注册代码的变更，然后执行下方命令生成。
+在预览中确认待生成的文件和注册代码的变更后，运行以下命令生成文件。
 
 ```bash
 spine generate resource user
@@ -24,7 +26,7 @@ src/user/
 └── user_route.go
 ```
 
-生成的 `src/user/user_controller.go` 如下。它与 `UserService` 位于同一个 `user` 包中，因此不需要单独导入 `service` 包。
+生成的 `src/user/user_controller.go` 接收路径中的 `id`，并返回 `{"id":1}` 形式的响应。它与 `UserService` 位于同一个 `user` 包中，无需再导入单独的服务包。
 
 ```go
 package user
@@ -46,43 +48,95 @@ func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
 ```
 
 ::: info
-`resource` 只生成查询骨架，不实现数据库、领域模型、DTO 或完整 CRUD。下文的输入和响应代码是手动扩展骨架的独立处理函数示例。请按示例需要自行实现 `UserResponse`、请求 DTO，以及 `UserService.Get/List/Create/Login` 等方法。示例类型放在 `src/user` 的 `package user` 中，并导入需要的标准库和 Spine 包。不要同时粘贴多个同名的替代方法。
+`resource` 会生成包含查询路由和依赖注册的基本结构。数据库、领域模型、数据传输对象（DTO）以及创建或修改功能需要自行实现。
 :::
 
-## 处理程序签名
+## 检查生成的路由注册
 
-Spine 分析处理程序的函数签名并自动绑定输入。
+CLI 在 `src/user/user_route.go` 中注册构造函数和路由，并在 `BuildApplication()` 中添加 `user.Register(app)` 调用及错误处理。以下代码展示的是已经生成的注册内容，请勿重复添加。
+
+```go
+// src/user/user_route.go
+package user
+
+import "github.com/NARUBROWN/spine"
+
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
+    app.Route("GET", "/user/:id", (*UserController).Get)
+    return nil
+}
+```
+
+```go
+// internal/application/application.go: BuildApplication
+if err := user.Register(app); err != nil {
+    return nil, boot.Options{}, err
+}
+```
+
+保留 `main.go` 中的 `BuildApplication → Validate → Run` 流程。后续实现新的处理器时，请在对应包的 `Register` 中添加路由。
+
+## 验证生成结果并运行
+
+在项目根目录检查契约和本地代码，然后启动服务器。
+
+```bash
+spine doctor
+spine contract check
+spine verify
+spine dev
+```
+
+在另一个终端中调用生成的路由。
+
+```bash
+curl http://localhost:8080/user/1
+```
+
+`GET /user/1` 应返回 HTTP 200 和 `{"id":1}`。该响应验证了路径绑定和路由执行，并不代表从数据库中查询到了用户。请分别确认 `spine contract check`、`spine verify` 是否成功，以及实际 HTTP 响应是否符合预期。
+
+## 扩展示例的前提
+
+以下代码是彼此独立的输入和响应扩展示例，并非用于替换整个生成的应用。一次粘贴多个同名方法会导致重复声明错误。请选择需要的一个处理器，实现后将其注册到路由。
+
+`UserResponse`、请求 DTO、`HeaderInfo` 以及服务的 `Get`、`List`、`Create`、`Login` 等方法，需要根据各示例自行实现。请将类型放在与对应控制器相同的包中，并导入所需的 Go 标准库包和 Spine 包。以下服务调用中省略的错误处理，可参考[错误响应](#error-response)示例实现。
+
+## 处理器签名
+
+Spine 根据处理器的参数类型传入请求值，这称为输入绑定。返回类型决定了响应的构建方式。
 
 ### 支持的参数类型
 
-|类型 |描述 |示例|
+| 类型 | 说明 | 示例 |
 |------|------|------|
-| `context.Context` | `context.Context`请求上下文 | `ctx context.Context` | `ctx context.Context`
-| `query.Values` | `query.Values`查询参数| `q query.Values` | `q query.Values`
-| `query.Pagination` | `query.Pagination`分页 | `page query.Pagination` | `page query.Pagination`
-| `header.Values` | `header.Values` HTTP 标头 | `headers header.Values` | `headers header.Values`
-| `*struct` (DTO) | `*struct` (DTO) | JSON 请求正文 | `req *CreateUserRequest` | `req *CreateUserRequest`
-| `*struct`（表格）|表格数据| `form *CreatePostForm` | `form *CreatePostForm`
-| `multipart.UploadedFiles` | `multipart.UploadedFiles`多部分文件 | `files multipart.UploadedFiles` | `files multipart.UploadedFiles`
-| `path.*` | `path.*`路径参数 | `userId path.Int` | `userId path.Int`
-| `spine.Ctx` | `spine.Ctx`控制器上下文 | `spineCtx spine.Ctx` | `spineCtx spine.Ctx`
+| `context.Context` | 请求上下文 | `ctx context.Context` |
+| `query.Values` | 查询参数 | `q query.Values` |
+| `query.Pagination` | 分页 | `page query.Pagination` |
+| `header.Values` | HTTP 请求头 | `headers header.Values` |
+| `*struct`（DTO） | JSON 请求体 | `req *CreateUserRequest` |
+| `*struct`（表单 DTO） | 表单文本字段 | `form *CreatePostForm` |
+| `multipart.UploadedFiles` | multipart 上传文件 | `files multipart.UploadedFiles` |
+| `path.*` | 路径参数 | `userId path.Int` |
+| `spine.Ctx` | 控制器上下文 | `spineCtx spine.Ctx` |
 
 ### 支持的返回类型
 
-|类型 |描述 |
+| 类型 | 说明 |
 |------|------|
-| `httpx.Response[T]` | `httpx.Response[T]` JSON 或字符串响应（包括状态代码、标头、cookie）|
-| `httpx.Redirect` | `httpx.Redirect`重定向响应 |
-| `error` | `error`错误响应 |
+| `httpx.Response[T]` | JSON 或字符串响应（包含状态码、响应头和 Cookie） |
+| `httpx.Redirect` | 重定向响应 |
+| `error` | 错误响应 |
 | `httpx.Binary` | 字节响应 |
 
-还支持指针响应和 `(支持的响应类型, error)`。`httpx.Binary` 返回字节和明确的 Content-Type。
+也可以使用响应类型的指针，或 `(支持的响应类型, error)` 组合。`httpx.Binary` 用于指定 `Content-Type` 和字节响应体。
 
-## 获取输入
+
+## 接收输入
 
 ### 查询参数
 
-使用 `query.Values` 解析查询字符串。
+通过 `query.Values` 读取查询字符串。在以下请求中，`id` 为 `1`，`name` 为 `alice`，`active` 为 `true`。
 
 ```go
 // GET /user?id=1&name=alice&active=true
@@ -91,9 +145,9 @@ func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
 ) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64, 默认值 0
+    id := q.Int("id", 0)                      // int64, 기본값 0
     name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool, 默认值 false
+    active := q.GetBoolByKey("active", false) // bool, 기본값 false
     _ = name
     _ = active
 
@@ -102,37 +156,39 @@ func (c *UserController) GetUser(
 }
 ```
 
-#### query.Values方法
+#### query.Values 方法
 
-|方法|返回类型 |描述 |
+| 方法 | 返回类型 | 说明 |
 |--------|----------|------|
-| `Get(key)` | `Get(key)` `string` | `string`第一个值（如果没有则为空字符串）|
-| `String(key)` | `String(key)` `string` | `string`字符串值 |
-| `Int(key, default)` | `Int(key, default)` `int64` | `int64`整数值|
-| `GetBoolByKey(key, default)` | `GetBoolByKey(key, default)` `bool` | `bool`布尔值 |
-| `Has(key)` | `Has(key)` `bool` | `bool`关键存在|
+| `Get(key)` | `string` | 第一个值（不存在时返回空字符串） |
+| `String(key)` | `string` | 字符串值 |
+| `Int(key, default)` | `int64` | 值不存在或无法转换为整数时，返回指定的默认值 |
+| `GetBoolByKey(key, default)` | `bool` | 值不存在或无法转换为布尔值时，返回指定的默认值 |
+| `Has(key)` | `bool` | 键是否存在 |
+
 
 ### 分页
 
-使用 `query.Pagination` 自动解析 `page` 和 `size` 查询参数。
+`query.Pagination` 将 `page` 和 `size` 查询参数转换为整数。值不存在或无法转换为整数时，分别使用 `1` 和 `20`。负数和 `0` 也会作为整数处理，请在应用中验证允许的范围。
 
 ```go
-// 获取 /user?page=2&size=10
+// GET /user?page=2&size=10
 
 func (c *UserController) ListUsers(
     ctx context.Context,
     page query.Pagination,
 ) httpx.Response[[]UserResponse] {
-    // 页.页 = 2 （默认值：1）
-    // 页面大小 = 10（默认值：20）
+    // page.Page = 2 (기본값: 1)
+    // page.Size = 10 (기본값: 20)
     users, _ := c.service.List(ctx, page.Page, page.Size)
     return httpx.Response[[]UserResponse]{Body: users}
 }
 ```
 
-### HTTP 标头
 
-使用 `header.Values` 访问 HTTP 标头。
+### HTTP 请求头
+
+使用 `header.Values` 访问 HTTP 请求头。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/header"
@@ -149,21 +205,20 @@ func (c *CommonController) CheckHeader(
 }
 ```
 
-#### header.Values方法
+#### header.Values 方法
 
-|方法|返回类型 |描述 |
+| 方法 | 返回类型 | 说明 |
 |--------|----------|------|
-| `Get(key)` | `Get(key)` `string` | `string`标头值 |
-| `Has(key)` | `Has(key)` `bool` | `bool`标题存在 |
+| `Get(key)` | `string` | 请求头的值 |
+| `Has(key)` | `bool` | 请求头是否存在 |
+
 
 ### 路径参数
 
-路径参数按照声明顺序绑定到 `path.Int`、`path.String` 和 `path.Boolean`。
-
-使用`path`包的类型绑定路由路径的参数。
+使用 `path.Int`、`path.String`、`path.Boolean` 接收路由路径中的参数。路径中声明的参数顺序与处理器中 `path` 类型参数的顺序相对应。Go 变量名可以与路径参数名不同。
 
 ```go
-// 获取/用户/：id
+// GET /user/:id
 
 func (c *UserController) GetUser(
     ctx context.Context,
@@ -174,7 +229,7 @@ func (c *UserController) GetUser(
 }
 ```
 
-#### 路径包结构
+#### path 包中的结构体
 
 ```go
 package path
@@ -192,19 +247,20 @@ type Boolean struct {
 }
 ```
 
+
 ### JSON 请求体
 
-DTO 必须使用指针。JSON/Form 绑定由 DTO 的 `form` 标签与请求 Content-Type 决定。
+用于接收 JSON 请求体的 DTO 应声明为结构体指针，并为字段添加 `json` 标签。以下示例将 `Content-Type: application/json` 请求中的 `name` 和 `email` 绑定到 `CreateUserRequest`，然后返回 HTTP 201。
 
-如果将 DTO 结构声明为指针，它将自动绑定到 JSON。
+只要 DTO 中包含一个 `form` 标签，就会被归类为表单 DTO。实际的请求体解析也受请求 `Content-Type` 的影响，因此请确保 JSON 或表单标签与请求格式一致。
 
 ```go
-// 发布/用户
-// 正文：{“姓名”：“Alice”，“电子邮件”：“alice@example.com”}
+// POST /user
+// Body: {"name": "Alice", "email": "alice@example.com"}
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *CreateUserRequest,  // ← 声明为指针
+    req *CreateUserRequest,  // ← 포인터로 선언
 ) httpx.Response[UserResponse] {
     user, _ := c.service.Create(ctx, req.Name, req.Email)
     return httpx.Response[UserResponse]{
@@ -224,9 +280,10 @@ type CreateUserRequest struct {
 }
 ```
 
-### 控制器上下文 (spine.Ctx)
 
-当引用从控制器中的拦截器注入的值时，使用 `spine.Ctx` 。
+### 控制器上下文 `spine.Ctx`
+
+拦截器通过 `ctx.Set` 保存的值，可在控制器中通过 `spine.Ctx.Get` 读取。控制器仅提供读取功能。以下示例假定 `userRole` 键中保存的是字符串；在实际应用中，请确保写入端与读取端使用的类型一致。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/spine"
@@ -236,7 +293,7 @@ func (c *UserController) GetUser(
     userId path.Int,
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
-    // 检查拦截器中设置的值
+    // 인터셉터에서 Set한 값 조회
     if v, ok := spineCtx.Get("userRole"); ok {
         role := v.(string)
         // ...
@@ -247,12 +304,13 @@ func (c *UserController) GetUser(
 }
 ```
 
+
 ## 返回响应
 
 
-### 1. httpx.Response[T] — JSON/字符串响应
+### 1. 使用 httpx.Response[T] 返回 JSON 和字符串响应
 
-`httpx.Response[T]` 为您提供对状态代码、标头和 cookie 的细粒度控制。
+将响应体放入 `httpx.Response[T]` 的 `Body` 中，并在 `Options` 中设置状态码、响应头和 Cookie。省略状态码时使用 HTTP 200。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/httpx"
@@ -268,7 +326,7 @@ func (c *UserController) GetUser(
     user, _ := c.service.Get(ctx, int(userId.Value))
 
     return httpx.Response[UserResponse]{
-        Body: user,  // 200 OK (默认值)
+        Body: user,  // 200 OK (기본값)
     }
 }
 ```
@@ -301,7 +359,7 @@ func (c *UserController) CreateUser(
 }
 ```
 
-#### 添加自定义标头
+#### 添加响应头
 
 ```go
 func (c *UserController) GetUser(
@@ -322,7 +380,7 @@ func (c *UserController) GetUser(
 }
 ```
 
-#### Cookie 设置
+#### 设置 Cookie
 
 ```go
 func (c *AuthController) Login(
@@ -343,7 +401,7 @@ func (c *AuthController) Login(
 }
 ```
 
-#### httpx.Cookie 结构
+#### httpx.Cookie 结构体
 
 ```go
 type Cookie struct {
@@ -362,19 +420,20 @@ type Cookie struct {
 
 #### Cookie 辅助函数
 
-|功能|描述 |
+| 函数 | 说明 |
 |------|------|
-| `httpx.AccessTokenCookie(token, ttl)` | `httpx.AccessTokenCookie(token, ttl)`创建访问令牌 Cookie |
-| `httpx.RefreshTokenCookie(token, ttl)` | `httpx.RefreshTokenCookie(token, ttl)`创建刷新令牌 Cookie |
-| `httpx.DefaultRefreshTokenCookie(token)` | `httpx.DefaultRefreshTokenCookie(token)` 7 天 TTL 刷新令牌 Cookie |
-| `httpx.ClearAccessTokenCookie()` | `httpx.ClearAccessTokenCookie()`删除访问令牌 Cookie |
-| `httpx.ClearRefreshTokenCookie()` | `httpx.ClearRefreshTokenCookie()`删除刷新令牌 cookie |
+| `httpx.AccessTokenCookie(token, ttl)` | 创建访问令牌 Cookie |
+| `httpx.RefreshTokenCookie(token, ttl)` | 创建刷新令牌 Cookie |
+| `httpx.DefaultRefreshTokenCookie(token)` | 创建有效期为 7 天的刷新令牌 Cookie |
+| `httpx.ClearAccessTokenCookie()` | 删除访问令牌 Cookie |
+| `httpx.ClearRefreshTokenCookie()` | 删除刷新令牌 Cookie |
 
-### 2. httpx.Redirect — 重定向响应
 
-使用 `httpx.Redirect` 将客户端重定向到不同的 URL。
+### 2. 使用 httpx.Redirect 返回重定向响应
 
-#### 默认重定向（302 Found）
+使用 `httpx.Redirect` 将客户端重定向到其他 URL。
+
+#### 基本重定向（302 Found）
 
 ```go
 func (c *AuthController) OAuthCallback(
@@ -385,7 +444,7 @@ func (c *AuthController) OAuthCallback(
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
-        Location: "/dashboard",  // 302 Found (默认值)
+        Location: "/dashboard",  // 302 Found (기본값)
     }
 }
 ```
@@ -405,7 +464,7 @@ func (c *UserController) MovedPermanently() httpx.Redirect {
 }
 ```
 
-#### 使用重定向设置 cookie
+#### 重定向时设置 Cookie
 
 ```go
 func (c *AuthController) Login(
@@ -425,7 +484,7 @@ func (c *AuthController) Login(
 }
 ```
 
-#### 注销（删除cookie后重定向）
+#### 退出登录（删除 Cookie 后重定向）
 
 ```go
 func (c *AuthController) Logout() httpx.Redirect {
@@ -441,9 +500,10 @@ func (c *AuthController) Logout() httpx.Redirect {
 }
 ```
 
-### 3. error — 错误响应
 
-使用 `httperr` 包返回 HTTP 状态代码和消息。
+### 3. 使用 error 返回错误响应 {#error-response}
+
+通过 `httperr` 返回错误时，会生成带有指定 HTTP 状态码和 `message` 字段的 JSON 响应。以下示例将服务错误作为用户查询失败处理，返回 HTTP 404。在实际应用中，请区分错误原因，并转换为适当的状态码。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/httperr"
@@ -454,7 +514,7 @@ func (c *UserController) GetUser(
 ) error {
     _, err := c.service.Get(ctx, int(userId.Value))
     if err != nil {
-        return httperr.NotFound("找不到用户。")
+        return httperr.NotFound("유저를 찾을 수 없습니다.")
     }
     return nil
 }
@@ -462,23 +522,23 @@ func (c *UserController) GetUser(
 
 #### httperr 函数
 
-|功能|状态码|
+| 函数 | 状态码 |
 |------|----------|
-| `httperr.BadRequest(msg)` | `httperr.BadRequest(msg)` 400 |
-| `httperr.Unauthorized(msg)` | `httperr.Unauthorized(msg)` 401 | 401
-| `httperr.NotFound(msg)` | `httperr.NotFound(msg)` 404 | 404
+| `httperr.BadRequest(msg)` | 400 |
+| `httperr.Unauthorized(msg)` | 401 |
+| `httperr.NotFound(msg)` | 404 |
 
-错误响应格式：
+上述示例的错误响应体如下。
 
 ```json
 {
-  "message": "找不到用户。"
+  "message": "유저를 찾을 수 없습니다."
 }
 ```
 
-#### 与 httpx.Response[T] 和错误一起使用
+#### 同时使用 httpx.Response[T] 和 error
 
-使用 `(httpx.Response[T], error)` 返回成功响应或错误。使用 `httperr` 映射服务错误，成功时返回 nil 错误。
+要同时返回成功响应和错误，请使用 `(httpx.Response[T], error)`。失败时返回空响应值和错误，成功时返回带有响应体的响应和 `nil`。存在错误时，不会使用成功响应体。
 
 ```go
 func (c *UserController) GetUser(
@@ -494,31 +554,28 @@ func (c *UserController) GetUser(
 ```
 
 
-### 选择响应方法指南
+### 选择响应类型
 
-|情况|推荐退货类型 |
-|------|----------------|
-| JSON 响应（带有状态代码/标头/cookie）| `httpx.Response[T]` | `httpx.Response[T]`
-|字符串响应 | `httpx.Response[string]` | `httpx.Response[string]`
-|重定向 | `httpx.Redirect` | `httpx.Redirect`
-|仅返回错误 | `error` | `error`
+| 场景 | 推荐的返回类型 |
+|------|---------------|
+| JSON 响应（包含状态码、响应头和 Cookie） | `httpx.Response[T]` |
+| 字符串响应 | `httpx.Response[string]` |
+| 重定向 | `httpx.Redirect` |
+| 指定字节响应体和 Content-Type | `httpx.Binary` |
+| 仅返回错误 | `error` |
 
-## 使用表单 DTO 和 Multipart
 
-Spine 支持**Form DTO**、**Multipart** 以及将两者结合使用的**标准模式**。
+## 表单 DTO 和 multipart 文件
 
-Spine 的核心原则是：
+通过结构体指针形式的表单 DTO 接收表单文本字段，通过 `multipart.UploadedFiles` 接收上传文件。将这两种类型声明为同一处理器的参数，就可以在一个请求中同时处理文本和文件。
 
-- DTO 必须作为 `*Struct` （指针）接收
-- 值类型 `Struct` 是语义类型。
-- 文件上传作为单独的语义类型处理，而不是作为 DTO。
-- 解析器只有一个含义
+以下示例中的 `PostController` 和 `FileController` 需要自行实现，并注册构造函数和路由。只有注册 `/posts` 和 `/upload` 后，才能执行以下 `curl` 请求；文件上传请求还要求指定路径中存在实际文件。
 
-### 1. 表单 DTO 示例（multipart/form-data）
+### 1. 接收表单文本字段
 
-表单 DTO 是用于 **仅绑定 `multipart/form-data` 或 `application/x-www-form-urlencoded` 请求中的文本字段**的 DTO。
+表单 DTO 接收 `multipart/form-data` 或 `application/x-www-form-urlencoded` 请求中的文本字段。通过 DTO 字段上的 `form` 标签指定请求字段名。
 
-#### 表单DTO定义
+#### 定义表单 DTO
 
 ```go
 type CreatePostForm struct {
@@ -527,7 +584,7 @@ type CreatePostForm struct {
 }
 ```
 
-#### 控制器
+#### 实现处理器
 
 ```go
 func (c *PostController) Create(
@@ -548,19 +605,19 @@ curl -X POST http://localhost:8080/posts \
   -F "content=spine"
 ```
 
-### 2. 分段文件上传示例
+### 2. 接收上传文件
 
-文件上传作为语义类型处理，而不是 **DTO**。
+上传文件不放入 DTO 字段，而是通过独立的 `multipart.UploadedFiles` 参数接收。以下示例将文件的字段名、文件名和大小输出到日志。
 
-#### 多部分语义类型
+#### 上传文件类型
 
-使用 `github.com/NARUBROWN/spine/pkg/multipart` 包的类型。
+使用 `github.com/NARUBROWN/spine/pkg/multipart` 包中的类型。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/multipart"
 ```
 
-#### 控制器
+#### 实现处理器
 
 ```go
 func (c *FileController) Upload(
@@ -580,7 +637,7 @@ func (c *FileController) Upload(
 }
 ```
 
-#### 上传文件结构
+#### UploadedFile 结构体
 
 ```go
 type UploadedFile struct {
@@ -600,9 +657,11 @@ curl -X POST http://localhost:8080/upload \
   -F "file=@test2.jpg"
 ```
 
-### 3. 结合使用Form DTO + Multipart + Query
+### 3. 同时接收表单、文件和查询参数
 
-#### 控制器
+在同一处理器中可以同时接收表单 DTO、上传文件和分页参数。以下示例读取并输出各项值，不会保存文件。
+
+#### 实现处理器
 
 ```go
 func (c *PostController) Upload(
@@ -623,68 +682,16 @@ func (c *PostController) Upload(
 }
 ```
 
-### 4. Spine DTO规则总结
+### 区分输入类型的依据
 
-```
-*Struct  → DTO (JSON / Form)
- Struct  → 语义类型（Query / Path / Multipart）
-```
+JSON 和表单 DTO 通过结构体指针接收。查询参数、路径参数和上传文件通过 Spine 支持的值类型接收，例如 `query.Pagination`、`path.Int` 和 `multipart.UploadedFiles`。声明任意结构体值并不会使其自动绑定。
 
-遵循此规则可确保签名中揭示执行流程。
 
-## 自动注册与手动扩展
+## 处理输入错误时的注意事项
 
-CLI 生成 `src/user/user_route.go`，并在 `BuildApplication()` 中添加检查错误的 `user.Register(app)` 调用。下面说明生成结果，请勿重复添加注册。
-
-```go
-// src/user/user_route.go
-package user
-
-import "github.com/NARUBROWN/spine"
-
-func Register(app spine.App) error {
-    app.Constructor(NewUserRepository, NewUserService, NewUserController)
-    app.Route("GET", "/user/:id", (*UserController).Get)
-    return nil
-}
-```
-
-```go
-// internal/application/application.go: BuildApplication
-if err := user.Register(app); err != nil {
-    return nil, boot.Options{}, err
-}
-```
-
-实现新处理函数后，在 `user_route.go` 的 `Register` 中添加对应路由。其他包的控制器由各自的注册函数组装。保留 `main.go` 中生成的 `BuildApplication → Validate → Run` 流程。
-
-## 验证与运行
-
-```bash
-spine doctor
-spine contract check
-spine verify
-spine dev
-```
-
-```bash
-curl http://localhost:8080/user/1
-```
-
-分别检查契约、本地验证和实际 HTTP 响应。`GET /user/1` 的生成响应为 `{"id":1}`，并不执行真实用户查询或持久化。
-
-## 主要摘要
-
-|概念|描述 |
-|------|------|
-| **无注释** | Pure Go 结构和方法 |
-| **构造函数=依赖** |参数声明依赖关系 |
-| **签名 = API 规范** |输入/输出类型是明确的 |
-| **自动绑定** |查询、JSON body、header自动解析 |
-| **httpx.Response[T]** |控制状态代码、标头和 cookie |
-| **httpx.Redirect** |重定向响应 |
+无法将路径值转换为整数，或无法解析 JSON 请求体时，输入绑定会在调用控制器之前失败。在 Spine v0.5.1 中，这类失败并不总是转换为 HTTP 400。格式错误的 JSON 和非整数路径值在默认执行路径中可能返回 HTTP 500，因此请先实现所需的错误策略，再通过实际请求进行确认。
 
 ## 后续步骤
 
-- [教程：依赖注入](/zh-Hans/learn/tutorial/3-dependency-injection) — DI 的工作原理
-- [教程：拦截器](/zh-Hans/learn/tutorial/4-interceptor) — 请求前/请求后处理
+- [教程：依赖注入](/zh-Hans/learn/tutorial/3-dependency-injection) — 注册构造函数和解析依赖
+- [教程：拦截器](/zh-Hans/learn/tutorial/4-interceptor) — 请求前后处理

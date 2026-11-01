@@ -1,11 +1,11 @@
 ---
 layout: home
-description: "익숙한 개발 방식으로, 더 빠른 서버를. 익숙한 컨트롤러와 서비스 구조, 생성자 주입과 인터셉터를 Go로 이어가세요. 내부 랩에서 확인한 처리량과 메모리 결과를 공개합니다."
+description: "익숙한 개발 방식으로 더 빠른 서버를 만드세요. 컨트롤러와 서비스, 생성자 주입과 인터셉터로 Go 앱을 구성하고, 내부 랩에서 측정한 처리량과 메모리 사용량을 확인할 수 있습니다."
 
 hero:
   name: "Spine"
   text: "익숙한 개발 방식으로,<br>더 빠른 서버를."
-  tagline: "NestJS와 Spring에서 익숙했던 컨트롤러와 서비스 구조를 Go에서도 이어가세요. 생성자 주입과 인터셉터로 앱을 구성하고, 같은 자원에서 확인한 처리량과 메모리 차이를 살펴보세요."
+  tagline: "NestJS와 Spring에서 사용하던 컨트롤러와 서비스 구조로 Go 앱을 구성하세요. 생성자 주입과 인터셉터를 사용하고, 같은 자원에서 측정한 처리량과 메모리 사용량을 확인할 수 있습니다."
   actions:
     - theme: brand
       text: "첫 앱 만들기"
@@ -16,11 +16,11 @@ hero:
 
 features:
   - title: "익숙한 컨트롤러와 서비스"
-    details: "컨트롤러는 요청을 받고 서비스는 업무를 처리합니다. Go의 구조체와 메서드로 익숙한 책임 분리를 이어갑니다."
+    details: "컨트롤러는 요청을 받고 서비스는 업무를 처리합니다. Go의 구조체와 메서드로 각 역할을 나눕니다."
     link: /ko/learn/tutorial/2-controller
     linkText: "컨트롤러 작성법 보기"
   - title: "생성자로 연결하는 의존성"
-    details: "필요한 서비스를 생성자 파라미터로 선언합니다. Spine이 등록한 생성자로 객체를 만들고 의존성을 연결합니다."
+    details: "필요한 서비스를 생성자 매개변수로 선언합니다. Spine이 등록된 생성자를 호출해 객체를 만들고 의존성을 연결합니다."
     link: /ko/learn/tutorial/3-dependency-injection
     linkText: "의존성 주입 보기"
   - title: "인터셉터에 모으는 공통 처리"
@@ -29,27 +29,26 @@ features:
     linkText: "인터셉터 사용법 보기"
 ---
 
-
 <BenchmarkSection />
 
 <section class="home-start">
 
-## 첫 앱을 만들어보세요
+## 첫 앱 만들기
 
 <div class="home-next-steps">
 
 <a href="/ko/learn/getting-started/first-app">
-<strong>CLI로 첫 앱 만들기 <span aria-hidden="true">→</span></strong>
+<strong>CLI로 첫 앱 만들기</strong>
 <span>CLI 설치와 프로젝트 생성부터 /health 응답 확인까지 따라갑니다.</span>
 </a>
 
 <a href="/ko/reference/examples/login">
-<strong>JWT 로그인 예제 보기 <span aria-hidden="true">→</span></strong>
+<strong>JWT 로그인 예제 보기</strong>
 <span>토큰을 발급하고 인증이 필요한 요청을 처리하는 구조를 살펴봅니다.</span>
 </a>
 
 <a href="/ko/reference/api/spine-app">
-<strong>API 동작 확인하기 <span aria-hidden="true">→</span></strong>
+<strong>API 동작 확인하기</strong>
 <span>생성자, 라우트, 인터셉터 등록 방법과 반환값을 확인합니다.</span>
 </a>
 

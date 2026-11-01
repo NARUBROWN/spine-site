@@ -1,6 +1,14 @@
-# 查询.值
+# query.Values
 
-先按[第一个应用](/zh-Hans/learn/getting-started/first-app)使用 CLI 创建项目，再按[控制器](/zh-Hans/learn/tutorial/2-controller)生成 `src/user`。应用处理函数示例手动扩展 `src/user` 中的同一个 `package user`。`User`、搜索和分页响应类型、服务的搜索方法都需自行实现，CLI 不会生成。Product、Order 示例也是同样的功能扩展。各处理函数是独立替代方案，只添加需要的方法和路由。成功结果用 `httpx.Response[T]` 包装，并导入 `httpx` 与 `query`。
+使用 `query.Values` 可以读取 HTTP 查询参数并指定默认值。在控制器参数中声明 `q query.Values` 后，即可按需将键对应的值读取为字符串、整数或布尔值。不支持将查询参数自动映射到任意 DTO。
+
+本页以 Spine v0.5.1 的 `github.com/NARUBROWN/spine/pkg/query` 为准。
+
+## 在 CLI 项目中使用
+
+先按照[第一个应用](/zh-Hans/learn/getting-started/first-app)创建项目，再按照[控制器](/zh-Hans/learn/tutorial/2-controller)生成 `src/user` 资源，然后继续本页内容。将示例处理器添加到同一个 `package user` 中，并注册使用该处理器的路由。
+
+`User`、搜索条件、分页响应类型，以及服务的搜索方法都由应用自行定义。商品和订单示例也是以同样方式扩展功能。各示例是独立的实现方案，只需添加所需的方法和路由。成功响应使用 `httpx.Response[T]` 包装，并导入以下两个包。
 
 ```go
 import (
@@ -9,85 +17,51 @@ import (
 )
 ```
 
-显式处理查询参数。
+基础示例从查询参数中读取 `id` 和 `name`，并返回响应。
 
-## 大纲
+```go
+// src/user/user_controller.go
+func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
+    return httpx.Response[User]{Body: User{
+        ID:   q.Int("id", 0),
+        Name: q.String("name"),
+    }}
+}
+```
 
-`query.Values` 提供所有 HTTP 查询参数的只读视图。 Spine 不会自动将查询参数映射到 DTO。相反，它的设计是让Controller直接通过`query.Values`显式地取出并写入必要的值。
+将此方法注册到 `GET /user` 后，请求和响应如下。
+
+```bash
+# 요청
+GET /user?id=123&name=john
+
+# 응답
+{
+    "id": 123,
+    "name": "john"
+}
+```
+
+## 查询值的传递方式
+
+HTTP 请求的查询参数可以在一个键下包含多个字符串值。例如，`?tag=go&tag=web` 包含两个 `tag` 值。Spine 将这个查询映射包装成 `query.Values`，再传给控制器。
 
 ```mermaid
 graph TD
     Request["GET /user?status=active&tag=go&tag=web&page=1"]
-    
+
     Request --> Values
-    
+
     Values["query.Values<br/>values: {<br/>  'status': ['active'],<br/>  'tag':    ['go', 'web'],<br/>  'page':   ['1']<br/>}"]
-    
+
     Values --> Controller
-    
-    Controller["Controller<br/>q.String('status')  → 'active'<br/>q.Int('page', 1)    → 1<br/>q.Has('tag')        → true"]
+
+    Controller["控制器<br/>q.String('status')  → 'active'<br/>q.Int('page', 1)    → 1<br/>q.Has('tag')        → true"]
 ```
 
-## 为什么不自动映射？
+在处理器中，将 `query.Values` 声明为值类型。默认解析器只处理这个确切类型，`*query.Values` 不是相同的注入目标。查询值注入用于 HTTP 请求，不应期望 Consumer 或 WebSocket 处理器具有相同行为。
 
-大多数框架自动将查询参数绑定到结构标签：
-
-```go
-// 其他框架如何工作
-type SearchParams struct {
-    Status string   `query:"status"`
-    Tags   []string `query:"tag"`
-    Page   int      `query:"page"`
-}
-
-func Search(params SearchParams) { ... }
-```
-
-Spine没有采用这种方式。
-
-### 原因 1：明确
-
-查询参数是可变的且可选的。自动映射隐藏了“哪些参数来自哪里”。
-
-```go
-// Spine 方法：显式提取
-func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
-    status := q.String("status")      // 来源清晰
-    page := q.Int("page", 1)          // 默认值明确
-    
-    if q.Has("premium") {             // 条件处理
-        // ...
-    }
-    users := c.service.Search(status, page, q.Has("premium"))
-    return httpx.Response[[]User]{Body: users}
-}
-```
-
-### 原因 2：灵活性
-
-在处理动态查询（例如搜索 API）时，基于结构的绑定成为一个限制。
-
-```go
-// 动态滤波处理
-func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
-    filters := make(map[string]string)
-    
-    // 无法提前知道哪些过滤器会出现
-    if q.Has("min_price") {
-        filters["min_price"] = q.String("min_price")
-    }
-    if q.Has("max_price") {
-        filters["max_price"] = q.String("max_price")
-    }
-    if q.Has("category") {
-        filters["category"] = q.String("category")
-    }
-    
-    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
-}
-```
-
-## 价值观结构
+`query.Values` 的读取方法不会修改原始查询映射。在应用代码或单元测试中自行创建时，可以使用 `query.NewValues(values map[string][]string)`。
 
 ```go
 // pkg/query/types.go
@@ -100,13 +74,23 @@ func NewValues(values map[string][]string) Values {
 }
 ```
 
-`Values` 是 `map[string][]string` 的包装。每个键可以有多个值（例如`?tag=go&tag=web`）。
+`NewValues` 会保存传入的映射，不会复制它。创建后如果修改原始映射，包装同一映射的 `Values` 也会读取到修改后的值。在常规 HTTP 处理器中无需自行创建。
 
-## 方法
+## 读取方法
 
-### 获取（键字符串）字符串
+| 方法 | 返回类型 | 值不存在或无法转换时 |
+| --- | --- | --- |
+| `Get(key)` | `string` | 空字符串 |
+| `String(key)` | `string` | 空字符串，行为与 `Get` 相同 |
+| `Int(key, def)` | `int64` | 调用时指定的 `def` |
+| `GetBoolByKey(key, def)` | `bool` | 调用时指定的 `def` |
+| `Has(key)` | `bool` | 键不存在时为 `false` |
 
-以字符串形式返回指定键的第一个值。如果键不存在，则返回空字符串。
+读取值的方法只使用第一个值。即使同一个键重复出现，`Get`、`String`、`Int` 和 `GetBoolByKey` 也不会返回或检查所有值。
+
+### 读取字符串
+
+`Get` 和 `String` 的行为相同。键不存在或值列表为空时，返回空字符串。
 
 ```go
 // GET /user?name=john&status=active
@@ -116,34 +100,36 @@ q.Get("status")  // "active"
 q.Get("missing") // ""
 ```
 
-### String(键字符串) 字符串
-
-与 `Get()` 相同。作为别名提供。
-
 ```go
 q.String("name")  // "john"
 ```
 
-### Int(键字符串, def int64) int64
+### 读取整数
 
-将指定键的值解析为整数。如果解析失败或密钥丢失，则返回默认值。
+`Int(key string, def int64) int64` 将第一个值转换为十进制的 64 位有符号整数。键不存在或值为空字符串时，返回 `def`。值不是数字或超出 `int64` 范围时，也会使用 `def`，不会返回错误。
 
 ```go
-// 获取 /user?page=3&size=20
+// GET /user?page=3&size=20
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0（键不存在 → 默认值）
-q.Int("page", 1)    // 1（如果 page=abc → 默认值）
+q.Int("offset", 0)  // 0 (키 없음 → 기본값)
+q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
 ```
 
-### GetBoolByKey(key string, def bool) bool
+转换成功的负数或 0 会原样返回。对于页码、价格范围等只允许正数的值，应用必须另行检查。
 
-将指定键的值解析为布尔值。将值转换为小写，然后确定。
+### 读取布尔值
 
-**识别为 true**：`"true"`、`"1"`、`"yes"`、`"y"`、`"on"`（忽略大小写）
+`GetBoolByKey(key string, def bool) bool` 先将第一个值转换为小写，再按以下字符串进行判断。
 
-**识别为 false**：`"false"`、`"0"`、`"no"`、`"n"`、`"off"`（忽略大小写）
+| 结果 | 识别的值 |
+| --- | --- |
+| `true` | `"true"`, `"1"`, `"yes"`, `"y"`, `"on"` |
+| `false` | `"false"`, `"0"`, `"no"`, `"n"`, `"off"` |
+| `def` | 键不存在，或值不在上述列表中 |
+
+不区分大小写，但不会去除空格。例如，`" TRUE "` 不在识别列表中，因此会使用默认值。
 
 ```go
 // GET /user?active=true&verified=1&premium=yes
@@ -151,81 +137,27 @@ q.Int("page", 1)    // 1（如果 page=abc → 默认值）
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false（键不存在 → 默认值）
-q.GetBoolByKey("active", false)    // false（如果 active=maybe → 默认值）
+q.GetBoolByKey("deleted", false)   // false (키 없음 → 기본값)
+q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
 ```
 
-### Has(key string) bool
+### 检查键是否存在
 
-检查指定的键是否存在。即使值为空，如果键存在，它也是 `true`。
+`Has(key string) bool` 检查键是否存在，不检查值。像 `?empty=` 这样，即使值为空，只要存在该键就返回 `true`。
 
 ```go
 // GET /user?status=active&empty=
 
 q.Has("status")  // true
-q.Has("empty")   // true（值为空，但键存在）
+q.Has("empty")   // true (값은 비었지만 키는 존재)
 q.Has("missing") // false
 ```
 
-## 查询值解析器
+如果需要区分键不存在和显式传入空字符串的情况，除了 `Get` 的结果，还应检查 `Has`。同样，`Has` 为 `true` 也不表示整数或布尔值转换成功。
 
-如果使用 `query.Values` 类型作为控制器参数，`QueryValuesResolver` 会自动生成一个值。
+## 用于搜索和筛选
 
-```go
-// 内部/解析器/query_values_resolver.go
-type QueryValuesResolver struct{}
-
-func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
-    return pm.Type == reflect.TypeFor[query.Values]()
-}
-
-func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("不是 HTTP 请求上下文")
-    }
-    return query.NewValues(httpCtx.Queries()), nil
-}
-```
-
-### 它是如何工作的
-
-1. Pipeline分析Controller签名
-2. `query.Values`类型参数发现
-3. `QueryValuesResolver.Supports()` → `true`
-4. 调用`QueryValuesResolver.Resolve()`
-5. 将断言 `ExecutionContext` 键入 `HttpRequestContext`
-6. 使用`httpCtx.Queries()`获取完整查询映射
-7. 用`query.NewValues()`换行并返回
-
-> **注意**：解析器采用 `core.ExecutionContext`，然后键入断言 `core.HttpRequestContext`。在 HTTP 请求（Consumer、WebSocket）以外的上下文中返回错误。
-
-## 用法示例
-
-### 默认启用
-
-```go
-// src/user/user_controller.go
-func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
-    return httpx.Response[User]{Body: User{
-        ID:   q.Int("id", 0),
-        Name: q.String("name"),
-    }}
-}
-```
-
-```bash
-# 要求
-GET /user?id=123&name=john
-
-# 回复
-{
-    "id": 123,
-    "name": "john"
-}
-```
-
-### 搜索API
+可以在调用处为每个筛选条件指定默认值。下面的示例读取搜索词、分类、价格范围和是否有库存，并传给服务。
 
 ```go
 func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] {
@@ -234,7 +166,7 @@ func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] 
     minPrice := q.Int("min_price", 0)
     maxPrice := q.Int("max_price", 999999)
     inStock := q.GetBoolByKey("in_stock", true)
-    
+
     products := c.service.Search(SearchCriteria{
         Keyword:  keyword,
         Category: category,
@@ -242,7 +174,7 @@ func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] 
         MaxPrice: maxPrice,
         InStock:  inStock,
     })
-    
+
     return httpx.Response[SearchResult]{Body: SearchResult{
         Query:    keyword,
         Count:    len(products),
@@ -255,18 +187,74 @@ func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] 
 GET /product?q=laptop&category=electronics&min_price=500&in_stock=true
 ```
 
-### 与分页一起使用
+此示例对无效的数字或布尔值也使用默认值。如果 API 需要对无效输入返回 400 响应，请使用 `String` 读取原始字符串，检查 `strconv.ParseInt` 等函数的转换结果，然后返回 `httperr.BadRequest`。默认值处理与有效性验证是两种不同的策略。
 
-`query.Values` 和 `query.Pagination` 可以一起使用。
+### 只应用已传入的筛选条件
+
+对于可选的筛选条件，可以通过 `Has` 检查是否传入了对应的键。
+
+```go
+func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
+    filters := OrderFilters{}
+
+    if q.Has("user_id") {
+        filters.UserID = q.Int("user_id", 0)
+    }
+
+    if q.Has("status") {
+        filters.Status = q.String("status")
+    }
+
+    if q.Has("from_date") {
+        filters.FromDate = parseDate(q.String("from_date"))
+    }
+
+    if q.Has("to_date") {
+        filters.ToDate = parseDate(q.String("to_date"))
+    }
+
+    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
+}
+```
+
+`OrderFilters` 和 `parseDate` 是应用定义的类型和函数。日期格式、起止日期的先后顺序，以及省略筛选条件时的行为，也必须由应用确定。此示例中的 `Has` 检查不能替代格式验证。
+
+### 自行选择允许的筛选条件
+
+也可以像下面这样，只检查应用接受的筛选条件名称，并将其传给服务。
+
+```go
+// 동적 필터 처리
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
+    filters := make(map[string]string)
+
+    // 어떤 필터가 올지 미리 알 수 없음
+    if q.Has("min_price") {
+        filters["min_price"] = q.String("min_price")
+    }
+    if q.Has("max_price") {
+        filters["max_price"] = q.String("max_price")
+    }
+    if q.Has("category") {
+        filters["category"] = q.String("category")
+    }
+
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
+}
+```
+
+## 配合分页使用
+
+可以将固定的 `page`、`size` 处理交给 `query.Pagination`，再用 `query.Values` 读取搜索条件。
 
 ```go
 func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response[PagedResult] {
     status := q.String("status")
     sortBy := q.String("sort_by")
-    
+
     users := c.service.FindAll(status, sortBy, p.Page, p.Size)
     total := c.service.Count(status)
-    
+
     return httpx.Response[PagedResult]{Body: PagedResult{
         Data:  users,
         Page:  p.Page,
@@ -280,124 +268,49 @@ func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response
 GET /user?page=2&size=20&status=active&sort_by=created_at
 ```
 
-### 条件过滤器
+| 项目 | `query.Values` | `query.Pagination` |
+| --- | --- | --- |
+| 用途 | 名称和默认值由应用确定的查询参数 | 使用 `page`、`size` 的分页 |
+| 默认值 | 调用各读取方法时指定 | `page=1`、`size=20` |
+| 类型转换 | 对每个所需的键调用方法 | 注入分页参数时转换 |
+
+可以在同一个请求中同时声明这两种类型。`query.Values` 也能读取 `page`、`size`，因此请确定以哪一方提供的分页信息为准并传给服务，避免重复处理。
 
 ```go
-func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
-    filters := OrderFilters{}
-    
-    if q.Has("user_id") {
-        filters.UserID = q.Int("user_id", 0)
-    }
-    
-    if q.Has("status") {
-        filters.Status = q.String("status")
-    }
-    
-    if q.Has("from_date") {
-        filters.FromDate = parseDate(q.String("from_date"))
-    }
-    
-    if q.Has("to_date") {
-        filters.ToDate = parseDate(q.String("to_date"))
-    }
-    
-    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
-}
+// 고정된 페이지네이션만 필요 → query.Pagination
+func List(p query.Pagination) httpx.Response[[]User]
+
+// 동적 필터 + 페이지네이션 → 둘 다 사용
+func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
+
+// 완전히 동적인 쿼리 → query.Values만
+func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
-## 多值处理
+## 同一个键有多个值时
 
-查询参数可以传递具有相同键的多个值。
+HTTP 查询可以像下面这样重复同一个键。
 
 ```
 GET /product?tag=go&tag=web&tag=api
 ```
 
-目前，`query.Values` 的 `String()`、`Get()` 方法仅返回第一个值。如果需要多个值，可以添加直接访问内部map的方法，或者使用解析逗号分隔值的方法。
+对于此请求，`q.String("tag")` 和 `q.Get("tag")` 只返回 `"go"`。Spine v0.5.1 的 `query.Values` 没有获取完整值列表的公开方法，应用也无法直接访问私有字段 `values`。
+
+如果需要接收多个值，一种方法是将 API 定义为接收一个用逗号分隔的字符串，再由应用拆分。下面的示例还需要 `strings` 包。
 
 ```go
-// 逗号分隔法
-// 获取 /product?tags=go,web,api
+// 쉼표 구분 방식
+// GET /product?tags=go,web,api
 
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     tagsRaw := q.String("tags")
     tags := strings.Split(tagsRaw, ",")
-    
+
     return httpx.Response[[]Product]{Body: c.service.FindByTags(tags)}
 }
 ```
 
-## 与 query.Pagination 的区别
+此示例中，如果 `tags` 为空，`strings.Split` 的结果会包含空字符串。是否允许空项、重复标签和标签名称中的逗号，应由应用确定并检查。
 
-|特点 |查询.值​​|查询。分页 |
-|------|--------------|--------------------|
-| **使用** |可变查询参数|固定分页|
-| **参数** |所有查询 |仅 `page`、`size` |
-| **默认** |调用方法时指定 |自动应用（页=1，大小=20）|
-| **类型转换** |明确 |自动|
-
-### 使用选择标准
-
-```go
-// 只需要固定分页→query.Pagination
-func List(p query.Pagination) httpx.Response[[]User]
-
-// 动态过滤+分页→同时使用
-func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
-
-// 完全动态查询→query.Values only
-func CustomSearch(q query.Values) httpx.Response[[]User]
-```
-
-## 设计原则
-
-### 1.显式提取
-
-```go
-// ✓ 脊柱：清楚它来自哪里
-status := q.String("status")
-page := q.Int("page", 1)
-
-// ❌ 自动绑定：来源未知
-func Search(params SearchParams) // status 来自 query、body 还是 path？
-```
-
-### 2.指定默认值
-
-```go
-// ✓ 默认值在代码中可见
-page := q.Int("page", 1)
-size := q.Int("size", 20)
-
-// ❌ struct 标签的默认值被隐藏
-type Params struct {
-    Page int `query:"page" default:"1"`  // 难以追踪设置来源
-}
-```
-
-### 3.可选参数处理
-
-```go
-// ✓ 使用 Has() 显式检查是否存在
-if q.Has("premium") {
-    filters.Premium = q.GetBoolByKey("premium", false)
-}
-
-// ❌ 自动绑定无法区分零值和“无值”
-type Params struct {
-    Premium bool `query:"premium"`  // false 是默认值还是显式传入的 false？
-}
-```
-
-## 概括
-
-|方法|返回类型 |使用|
-|--------|----------|------|
-| `Get(key)` | `Get(key)` `string` | `string`字符串值（`""` 如果没有）|
-| `String(key)` | `String(key)` `string` | `string` `Get()` 的别名 |
-| `Int(key, def)` | `Int(key, def)` `int64` | `int64`整数值（失败时默认）|
-| `GetBoolByKey(key, def)` | `GetBoolByKey(key, def)` `bool` | `bool`布尔值（失败时默认）|
-| `Has(key)` | `Has(key)` `bool` | `bool`关键存在|
-
-**核心理念**：Spine 不会“神奇地”自动映射查询参数。通过 `query.Values`，控制器显式地提取并写入必要的值。这与 Spine 的“No Magic”原则是一致的。
+将查询参数的键、默认值和允许范围放在控制器附近，有助于查看请求处理规则。接收请求正文 DTO 的方法请参阅[控制器教程](/zh-Hans/learn/tutorial/2-controller)，错误响应请参阅 [httperr](/zh-Hans/learn/core-concepts/httperr)。

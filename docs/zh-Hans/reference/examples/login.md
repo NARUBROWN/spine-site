@@ -1,8 +1,16 @@
 # JWT 登录示例
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。CLI 0.1.4 不提供 JWT 认证生成器；先生成基础项目，再手动添加以下 `src/` 认证文件。
+创建注册和登录 API，并使用登录时签发的 JWT 查询个人信息。认证拦截器仅应用于 `/me`，因此注册和登录请求无需携带令牌。
 
-## 使用 CLI 创建项目
+## 开始前的准备
+
+请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。CLI 0.1.4 不提供 JWT 认证生成器。创建基础项目后，手动添加下方认证代码，并安装 `github.com/golang-jwt/jwt/v5`。
+
+本示例使用内存存储库、明文密码比较和硬编码的 JWT 密钥，帮助你了解认证流程。服务器结束后，注册信息会消失。在实际服务中使用前，必须改用密码哈希，并通过环境变量管理 JWT 密钥。
+
+## 1. 创建项目
+
+准备基础应用和 JWT 依赖。后续命令均在 `login-example/` 中运行。
 
 ```sh
 spine new login-example --module example.com/login-example
@@ -11,6 +19,10 @@ go mod tidy
 spine doctor
 go get github.com/golang-jwt/jwt/v5
 ```
+
+### 文件布局
+
+在后续步骤中，在 `src/` 下添加四个文件，并替换生成的 `internal/application/application.go`。继续使用根目录中的 `main.go` 和 `spine.toml`。
 
 ```text
 login-example/
@@ -27,7 +39,9 @@ login-example/
     └── store/user_store.go
 ```
 
-## 模型
+## 2. 定义用户模型、请求和响应
+
+新建 `src/model/user.go`。`Password` 的 `json:"-"` 标签可防止密码被包含在 JSON 响应中。
 
 ```go
 // src/model/user.go
@@ -36,7 +50,7 @@ package model
 type User struct {
     ID       int64  `json:"id"`
     Email    string `json:"email"`
-    Password string `json:"-"`
+    Password string `json:"-"` // JSON 응답에서 제외
     Name     string `json:"name"`
 }
 
@@ -57,7 +71,9 @@ type SignupRequest struct {
 }
 ```
 
-## 用户存储
+## 3. 添加用户存储库
+
+新建 `src/store/user_store.go`。在内存中保存用户，并通过邮箱和 ID 查询用户。再次使用相同邮箱注册时返回错误。
 
 ```go
 // src/store/user_store.go
@@ -85,6 +101,8 @@ func NewUserStore() *UserStore {
 func (s *UserStore) Create(email, password, name string) (*model.User, error) {
     s.mu.Lock()
     defer s.mu.Unlock()
+
+    // 이메일 중복 체크
     for _, u := range s.users {
         if u.Email == email {
             return nil, errors.New("email already exists")
@@ -127,7 +145,9 @@ func (s *UserStore) FindByID(id int64) (*model.User, error) {
 }
 ```
 
-## 认证拦截器
+## 4. 添加认证拦截器
+
+新建 `src/interceptor/auth_interceptor.go`。从 `Authorization: Bearer <token>` 请求头中读取 JWT，并验证签名和过期时间。将验证后的 `user_id` 保存到执行上下文中，供控制器读取。
 
 ```go
 // src/interceptor/auth_interceptor.go
@@ -141,34 +161,41 @@ import (
     "github.com/golang-jwt/jwt/v5"
 )
 
-var JWTSecret = []byte("your-secret-key")
+var JWTSecret = []byte("your-secret-key") // 실제 환경에서는 환경변수 사용
 
 type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    // Authorization 헤더에서 토큰 추출
     authHeader := ctx.Header("Authorization")
     if authHeader == "" {
-        return httperr.Unauthorized("Token is required.")
+        return httperr.Unauthorized("토큰이 필요합니다.")
     }
+
+    // "Bearer {token}" 형식 파싱
     parts := strings.Split(authHeader, " ")
     if len(parts) != 2 || parts[0] != "Bearer" {
-        return httperr.Unauthorized("Invalid token format.")
+        return httperr.Unauthorized("잘못된 토큰 형식입니다.")
     }
 
     tokenString := parts[1]
+
+    // JWT 토큰 검증
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("Invalid signing method.")
+            return nil, httperr.Unauthorized("잘못된 서명 방식입니다.")
         }
         return JWTSecret, nil
     }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
     if err != nil || !token.Valid {
-        return httperr.Unauthorized("Invalid token.")
+        return httperr.Unauthorized("유효하지 않은 토큰입니다.")
     }
+
+    // 토큰에서 사용자 ID 추출
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return httperr.Unauthorized("Cannot read token claims.")
+        return httperr.Unauthorized("토큰 클레임을 읽을 수 없습니다.")
     }
 
     rawID, ok := claims["user_id"].(float64)
@@ -176,6 +203,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("Invalid user ID claim.")
     }
     userID := int64(rawID)
+
+    // ExecutionContext에 사용자 ID 저장
     ctx.Set("userID", userID)
 
     return nil
@@ -183,18 +212,16 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
-func (i *AuthInterceptor) BeforeResponse(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-    executionErr error,
-) error {
+func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
     return nil
 }
 
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
-## 控制器
+## 5. 添加认证控制器
+
+新建 `src/controller/auth_controller.go`。注册时保存用户，登录时检查邮箱和密码后签发 JWT。查询个人信息时，使用拦截器保存的用户 ID 查询存储库。
 
 ```go
 // src/controller/auth_controller.go
@@ -222,9 +249,11 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
         userStore: userStore,
     }
 }
+
+// 회원가입 — 인증 불필요
 func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
-        return httpx.Response[model.User]{}, httperr.BadRequest("All fields are required.")
+        return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
     }
 
     user, err := c.userStore.Create(req.Email, req.Password, req.Name)
@@ -234,18 +263,24 @@ func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.
 
     return httpx.Response[model.User]{Body: *user}, nil
 }
+
+// 로그인 — 인증 불필요
 func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("Email and password are required.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
     }
 
     user, err := c.userStore.FindByEmail(req.Email)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Invalid email or password.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
+
+    // 비밀번호 확인 (실제로는 bcrypt 등으로 해시 비교)
     if user.Password != req.Password {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Invalid email or password.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
+
+    // JWT 토큰 생성
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
         "user_id": user.ID,
         "email":   user.Email,
@@ -254,7 +289,7 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
 
     tokenString, err := token.SignedString(interceptor.JWTSecret)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("Failed to generate token.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("토큰 생성에 실패했습니다.")
     }
 
     return httpx.Response[model.LoginResponse]{
@@ -264,25 +299,28 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
         },
     }, nil
 }
+
+// 내 정보 조회 — 인증 필요
 func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
+    // AuthInterceptor가 저장한 userID 조회
     userIDValue, ok := ctx.Get("userID")
     if !ok {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("Authentication info not found.")
+        return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
     }
 
     userID := userIDValue.(int64)
     user, err := c.userStore.FindByID(userID)
     if err != nil {
-        return httpx.Response[model.User]{}, httperr.NotFound("User not found.")
+        return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
     }
 
     return httpx.Response[model.User]{Body: *user}, nil
 }
 ```
 
-## 应用组装
+## 6. 注册构造函数和认证路由
 
-保留生成的根目录 `main.go`，按 `BuildApplication`、`Validate`、`Run` 的顺序执行。使用以下内容替换 `internal/application/application.go`。
+将 `internal/application/application.go` 的全部内容替换为以下代码。注册存储库和控制器的构造函数，并仅为 `/me` 连接认证拦截器。生成的根目录 `main.go` 会依次执行 `BuildApplication`、`Validate` 和 `Run`。
 
 ```go
 // internal/application/application.go
@@ -329,7 +367,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 验证与运行
+## 7. 验证并启动服务器
+
+在项目根目录中格式化代码，检查依赖和代码，然后启动服务器。
 
 ```sh
 gofmt -w src internal/application
@@ -339,19 +379,70 @@ spine verify
 spine dev
 ```
 
-`contract check` 检查静态契约；`verify` 检查契约、gofmt、vet 和 Go 测试。请使用下方 HTTP 示例单独验证注册、登录和认证请求。内存存储及明文密码比较仅用于学习；实际服务应使用密码哈希及环境变量中的 JWT 密钥。
+`contract check` 检查静态契约。`verify` 检查静态契约，并运行 gofmt、go vet 和 Go 测试。接下来通过 HTTP 请求确认实际的注册、登录和认证行为。
 
-```sh
+## 8. 确认注册和认证请求
+
+保持服务器运行，在另一个终端中依次发送以下请求。新启动的服务器中，第一个注册用户的 ID 为 `1`。
+
+### 注册
+
+```bash
 curl -X POST http://localhost:8080/signup \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"alice@example.com","password":"secret","name":"Alice"}'
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "password": "1234", "name": "Alice"}'
+```
+
+服务器会返回 HTTP 200 和注册的用户信息。响应中不包含密码。
+
+```json
+{
+  "id": 1,
+  "email": "alice@example.com",
+  "name": "Alice"
+}
+```
+
+### 登录
+
+```bash
 curl -X POST http://localhost:8080/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"alice@example.com","password":"secret"}'
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "password": "1234"}'
+```
+
+服务器会返回 HTTP 200 和 JWT。下方响应示例缩短了令牌。请求 `/me` 时，请使用实际响应中的 `token` 值。
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "email": "alice@example.com",
+    "name": "Alice"
+  }
+}
+```
+
+### 不携带令牌查询个人信息
+
+请求 `/me` 时不携带认证请求头。
+
+```bash
 curl http://localhost:8080/me
 ```
 
-复制登录响应中完整的 `token` 值。执行下方 `read` 后粘贴令牌并按 Enter，再请求 `/me`。
+服务器会返回 HTTP 401 和以下错误消息。
+
+```json
+{
+  "message": "토큰이 필요합니다."
+}
+```
+
+### 携带令牌查询个人信息
+
+完整复制登录响应中的 `token` 值。先运行下面的 `read` 命令，在等待输入时粘贴令牌并按 Enter。接着使用 `curl` 命令请求 `/me`。
 
 ```sh
 read -r TOKEN
@@ -359,4 +450,53 @@ curl http://localhost:8080/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-`/signup`、`/login` 公开，`/me` 需要登录响应中的实际令牌，缺少令牌时返回 HTTP 401。
+如果令牌有效，服务器会返回 HTTP 200 和该用户的信息。
+
+```json
+{
+  "id": 1,
+  "email": "alice@example.com",
+  "name": "Alice"
+}
+```
+
+## 认证拦截器的执行顺序
+
+CORS 拦截器在所有路由中执行。认证拦截器在 `/me` 中验证令牌，然后向控制器传递用户 ID。
+
+```
+POST /signup (公开)
+   │
+   ├─→ CORS.PreHandle (全局)
+   ├─→ AuthController.Signup
+   └─→ 响应 200
+
+POST /login (公开)
+   │
+   ├─→ CORS.PreHandle (全局)
+   ├─→ AuthController.Login
+   └─→ 响应 200 + JWT 令牌
+
+GET /me (受保护)
+   │
+   ├─→ CORS.PreHandle (全局)
+   ├─→ Auth.PreHandle (路由) ← 验证令牌
+   │       │
+   │       ├─ 无令牌 → 401 Unauthorized
+   │       └─ 令牌有效 → ctx.Set("userID", ...)
+   │
+   ├─→ AuthController.GetMe
+   └─→ 响应 200 + 用户信息
+```
+
+## 各路由的认证范围
+
+| 路由 | 方法 | 拦截器 | 说明 |
+|--------|--------|----------|------|
+| `/signup` | POST | CORS | 无需令牌即可注册 |
+| `/login` | POST | CORS | 无需令牌即可登录并获取 JWT |
+| `/me` | GET | CORS, Auth | 验证 JWT 后查询个人信息 |
+
+## 后续步骤
+
+请在[拦截器 API](/zh-Hans/reference/api/interceptor)中查看执行顺序和各方法的职责。如需持久化保存用户信息，请参阅[连接数据库](/zh-Hans/learn/tutorial/5-database)。

@@ -1,8 +1,28 @@
 # JWT Login Example
 
-Implement JWT-based login with Spine.
+Build signup and login APIs, then retrieve your profile using the JWT issued at login. The authentication interceptor applies only to `/me`, so signup and login requests do not require a token.
 
-## Project Structure
+## Prerequisites
+
+Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.1.4 does not provide a JWT authentication generator. Create a basic project, add the authentication code below, and install `github.com/golang-jwt/jwt/v5`.
+
+This example uses an in-memory store, plaintext password comparison, and a JWT secret hardcoded in the source to teach the authentication flow. Registered users disappear when the server stops. Before using this in a real service, use password hashing and a JWT secret managed through environment variables.
+
+## 1. Create the Project
+
+Prepare a basic app and the JWT dependency. Run subsequent commands from `login-example/`.
+
+```sh
+spine new login-example --module example.com/login-example
+cd login-example
+go mod tidy
+spine doctor
+go get github.com/golang-jwt/jwt/v5
+```
+
+### File Layout
+
+In the next steps, add four files under `src/` and replace the generated `internal/application/application.go`. Keep the root `main.go` and `spine.toml` as generated.
 
 ```text
 login-example/
@@ -19,20 +39,9 @@ login-example/
     └── store/user_store.go
 ```
 
+## 2. Define the User Model, Requests, and Responses
 
-## Create the project with CLI
-
-Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.1.4 does not provide a JWT authentication generator. Generate the base project, then add the authentication files below under `src/` manually.
-
-```sh
-spine new login-example --module example.com/login-example
-cd login-example
-go mod tidy
-spine doctor
-go get github.com/golang-jwt/jwt/v5
-```
-
-## Define Model
+Create `src/model/user.go`. The `json:"-"` tag on `Password` excludes the password from JSON responses.
 
 ```go
 // src/model/user.go
@@ -41,7 +50,7 @@ package model
 type User struct {
     ID       int64  `json:"id"`
     Email    string `json:"email"`
-    Password string `json:"-"` // Exclude from JSON response
+    Password string `json:"-"` // JSON 응답에서 제외
     Name     string `json:"name"`
 }
 
@@ -62,10 +71,9 @@ type SignupRequest struct {
 }
 ```
 
+## 3. Add the User Store
 
-## User Store
-
-Implement simply with an in-memory store.
+Create `src/store/user_store.go`. It stores users in memory and retrieves them by email address or ID. It returns an error if someone signs up again with the same email address.
 
 ```go
 // src/store/user_store.go
@@ -94,7 +102,7 @@ func (s *UserStore) Create(email, password, name string) (*model.User, error) {
     s.mu.Lock()
     defer s.mu.Unlock()
 
-    // Check for email duplication
+    // 이메일 중복 체크
     for _, u := range s.users {
         if u.Email == email {
             return nil, errors.New("email already exists")
@@ -137,10 +145,9 @@ func (s *UserStore) FindByID(id int64) (*model.User, error) {
 }
 ```
 
+## 4. Add the Authentication Interceptor
 
-## Auth Interceptor
-
-Route interceptor that validates JWT tokens.
+Create `src/interceptor/auth_interceptor.go`. It reads a JWT from the `Authorization: Bearer <token>` header and verifies its signature and expiration time. It stores the verified `user_id` in the execution context so the controller can read it.
 
 ```go
 // src/interceptor/auth_interceptor.go
@@ -154,41 +161,41 @@ import (
     "github.com/golang-jwt/jwt/v5"
 )
 
-var JWTSecret = []byte("your-secret-key") // Use environment variables in production
+var JWTSecret = []byte("your-secret-key") // 실제 환경에서는 환경변수 사용
 
 type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // Extract token from Authorization header
+    // Authorization 헤더에서 토큰 추출
     authHeader := ctx.Header("Authorization")
     if authHeader == "" {
-        return httperr.Unauthorized("Token is required.")
+        return httperr.Unauthorized("토큰이 필요합니다.")
     }
 
-    // Parse "Bearer {token}" format
+    // "Bearer {token}" 형식 파싱
     parts := strings.Split(authHeader, " ")
     if len(parts) != 2 || parts[0] != "Bearer" {
-        return httperr.Unauthorized("Invalid token format.")
+        return httperr.Unauthorized("잘못된 토큰 형식입니다.")
     }
 
     tokenString := parts[1]
 
-    // Validate JWT token
+    // JWT 토큰 검증
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("Invalid signing method.")
+            return nil, httperr.Unauthorized("잘못된 서명 방식입니다.")
         }
         return JWTSecret, nil
     }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
     if err != nil || !token.Valid {
-        return httperr.Unauthorized("Invalid token.")
+        return httperr.Unauthorized("유효하지 않은 토큰입니다.")
     }
 
-    // Extract user ID from token
+    // 토큰에서 사용자 ID 추출
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return httperr.Unauthorized("Cannot read token claims.")
+        return httperr.Unauthorized("토큰 클레임을 읽을 수 없습니다.")
     }
 
     rawID, ok := claims["user_id"].(float64)
@@ -196,8 +203,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("Invalid user ID claim.")
     }
     userID := int64(rawID)
-    
-    // Save user ID to ExecutionContext
+
+    // ExecutionContext에 사용자 ID 저장
     ctx.Set("userID", userID)
 
     return nil
@@ -205,21 +212,16 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
-func (i *AuthInterceptor) BeforeResponse(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-    executionErr error,
-) error {
+func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
     return nil
 }
 
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
+## 5. Add the Authentication Controller
 
-## Controller
-
-Implement login, signup, and get current user info.
+Create `src/controller/auth_controller.go`. Signup saves a user, and login checks the email address and password before issuing a JWT. The profile endpoint queries the store using the user ID saved by the interceptor.
 
 ```go
 // src/controller/auth_controller.go
@@ -248,10 +250,10 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
     }
 }
 
-// Signup — Authentication not required
+// 회원가입 — 인증 불필요
 func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
-        return httpx.Response[model.User]{}, httperr.BadRequest("All fields are required.")
+        return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
     }
 
     user, err := c.userStore.Create(req.Email, req.Password, req.Name)
@@ -262,23 +264,23 @@ func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.
     return httpx.Response[model.User]{Body: *user}, nil
 }
 
-// Login — Authentication not required
+// 로그인 — 인증 불필요
 func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("Email and password are required.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
     }
 
     user, err := c.userStore.FindByEmail(req.Email)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Invalid email or password.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
-    // Check password (In reality, compare hashes using bcrypt, etc.)
+    // 비밀번호 확인 (실제로는 bcrypt 등으로 해시 비교)
     if user.Password != req.Password {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Invalid email or password.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
-    // Generate JWT Token
+    // JWT 토큰 생성
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
         "user_id": user.ID,
         "email":   user.Email,
@@ -287,7 +289,7 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
 
     tokenString, err := token.SignedString(interceptor.JWTSecret)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("Failed to generate token.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("토큰 생성에 실패했습니다.")
     }
 
     return httpx.Response[model.LoginResponse]{
@@ -298,28 +300,27 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
     }, nil
 }
 
-// Get Me — Authentication required
+// 내 정보 조회 — 인증 필요
 func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-    // Get userID saved by AuthInterceptor
+    // AuthInterceptor가 저장한 userID 조회
     userIDValue, ok := ctx.Get("userID")
     if !ok {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("Authentication info not found.")
+        return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
     }
 
     userID := userIDValue.(int64)
     user, err := c.userStore.FindByID(userID)
     if err != nil {
-        return httpx.Response[model.User]{}, httperr.NotFound("User not found.")
+        return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
     }
 
     return httpx.Response[model.User]{Body: *user}, nil
 }
 ```
 
+## 6. Register Constructors and Authentication Routes
 
-## Application assembly
-
-Keep the generated root `main.go`: it calls `BuildApplication`, `Validate`, and `Run` in that order. Replace `internal/application/application.go` with the following.
+Replace the entire contents of `internal/application/application.go` with the following code. Register the store and controller constructors, and attach the authentication interceptor only to `/me`. The generated root `main.go` calls `BuildApplication`, `Validate`, and `Run` in that order.
 
 ```go
 // internal/application/application.go
@@ -366,7 +367,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## Verify and run
+## 7. Validate and Start the Server
+
+From the project root, format the code, check dependencies and code, and start the server.
 
 ```sh
 gofmt -w src internal/application
@@ -376,11 +379,13 @@ spine verify
 spine dev
 ```
 
-`contract check` checks the static contract; `verify` checks the contract, gofmt, vet, and Go tests. Check actual signup, login, and authenticated requests separately with the HTTP examples below. The memory store and plain-text password comparison are for learning. Use password hashes and an environment-backed JWT secret in a real service.
+`contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. Use the HTTP requests below to check actual signup, login, and authentication.
 
-## API Test
+## 8. Test Signup and Authentication Requests
 
-### Signup
+With the server running, open another terminal and send the following requests in order. The first registered user on a fresh server has the ID `1`.
+
+### Sign Up
 
 ```bash
 curl -X POST http://localhost:8080/signup \
@@ -388,7 +393,7 @@ curl -X POST http://localhost:8080/signup \
   -d '{"email": "alice@example.com", "password": "1234", "name": "Alice"}'
 ```
 
-Response:
+The response returns HTTP 200 and the registered user's details. It does not include the password.
 
 ```json
 {
@@ -398,7 +403,7 @@ Response:
 }
 ```
 
-### Login
+### Log In
 
 ```bash
 curl -X POST http://localhost:8080/login \
@@ -406,7 +411,7 @@ curl -X POST http://localhost:8080/login \
   -d '{"email": "alice@example.com", "password": "1234"}'
 ```
 
-Response:
+The response returns HTTP 200 and a JWT. The example response below shows an abbreviated token. Use the actual response's `token` value when requesting `/me`.
 
 ```json
 {
@@ -419,25 +424,25 @@ Response:
 }
 ```
 
-### Get My Info (Auth Required)
+### Retrieve Your Profile Without a Token
 
-Request without token:
+Request `/me` without an authentication header.
 
 ```bash
 curl http://localhost:8080/me
 ```
 
-Response:
+The response returns HTTP 401 and the following error message.
 
 ```json
 {
-  "message": "Token is required."
+  "message": "토큰이 필요합니다."
 }
 ```
 
-Request with token:
+### Retrieve Your Profile with a Token
 
-Copy the complete `token` value from your login response. Run `read` below, paste that token, press Enter, then request `/me`.
+Copy the full `token` value from the login response. First run the `read` command below. When it waits for input, paste the token and press Enter. Then use the `curl` command to request `/me`.
 
 ```sh
 read -r TOKEN
@@ -445,7 +450,7 @@ curl http://localhost:8080/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Response:
+If the token is valid, the response returns HTTP 200 and that user's details.
 
 ```json
 {
@@ -455,39 +460,43 @@ Response:
 }
 ```
 
+## Authentication Interceptor Execution Order
 
-## Route Interceptor Flow
+The CORS interceptor runs on every route. On `/me`, the authentication interceptor verifies the token and passes the user ID to the controller.
 
 ```
-POST /signup (Public)
+POST /signup (public)
    │
-   ├─→ CORS.PreHandle (Global)
+   ├─→ CORS.PreHandle (global)
    ├─→ AuthController.Signup
    └─→ Response 200
 
-POST /login (Public)
+POST /login (public)
    │
-   ├─→ CORS.PreHandle (Global)
+   ├─→ CORS.PreHandle (global)
    ├─→ AuthController.Login
-   └─→ Response 200 + JWT Token
+   └─→ Response 200 + JWT token
 
-GET /me (Protected)
+GET /me (protected)
    │
-   ├─→ CORS.PreHandle (Global)
-   ├─→ Auth.PreHandle (Route) ← Validate Token
+   ├─→ CORS.PreHandle (global)
+   ├─→ Auth.PreHandle (route) ← Verify token
    │       │
-   │       ├─ No Token → 401 Unauthorized
-   │       └─ Valid Token → ctx.Set("userID", ...)
+   │       ├─ No token → 401 Unauthorized
+   │       └─ Valid token → ctx.Set("userID", ...)
    │
    ├─→ AuthController.GetMe
-   └─→ Response 200 + User Info
+   └─→ Response 200 + user details
 ```
 
+## Authentication Scope by Route
 
-## Key Points
-
-| Route | Method | Interceptor | Description |
+| Route | Method | Interceptors | Description |
 |--------|--------|----------|------|
-| `/signup` | POST | Global only | Signup (Public) |
-| `/login` | POST | Global only | Login & Issue JWT (Public) |
-| `/me` | GET | Global + Auth | Get My Info (Auth Required) |
+| `/signup` | POST | CORS | Sign up without a token |
+| `/login` | POST | CORS | Log in without a token and receive a JWT |
+| `/me` | GET | CORS, Auth | Verify the JWT and retrieve your profile |
+
+## Next Steps
+
+See the [Interceptor API](/en/reference/api/interceptor) for the execution order and each method's role. To persist user data, see [Database Connection](/en/learn/tutorial/5-database).

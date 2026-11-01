@@ -1,10 +1,12 @@
 # 프로젝트 구조
 
-Spine CLI로 생성한 프로젝트를 기준으로 앱 구성과 기능 코드를 나눕니다. 먼저 [CLI 설치](/ko/learn/getting-started/installation)를 완료하세요.
+Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. 생성된 파일을 살펴보면서 앱 구성 코드를 둘 위치와 컨트롤러, 서비스, 리포지토리의 역할을 익힙니다.
+
+먼저 [CLI 설치](/ko/learn/getting-started/installation)를 완료하세요. [첫 번째 앱](/ko/learn/getting-started/first-app)을 따라 프로젝트를 이미 만들었다면 생성 단계는 건너뛰고 해당 프로젝트에서 이어서 진행할 수 있습니다. 아래 코드의 모듈 경로는 자신의 프로젝트 경로로 바꿔 읽으세요.
 
 ## CLI로 프로젝트 생성
 
-프로젝트를 둘 상위 디렉터리에서 실행합니다.
+프로젝트를 둘 상위 디렉터리에서 실행합니다. 같은 이름의 `my-app` 디렉터리가 이미 있다면 다른 이름을 사용하세요.
 
 ```sh
 spine version
@@ -14,6 +16,8 @@ go mod tidy
 spine doctor
 spine inspect
 ```
+
+`my-app` 디렉터리가 생성되고 의존성이 준비됩니다. `doctor`가 도구와 프로젝트 설정을 진단하며, `inspect`에서 기본 경로인 `GET /health` 등록을 확인할 수 있습니다.
 
 ## 생성되는 기본 구조
 
@@ -34,7 +38,7 @@ my-app/
 
 ## CLI 설정
 
-`module`은 `go.mod`와 일치해야 합니다. `entrypoint`는 실행·빌드 대상이고 `composition`은 계약 검사와 생성기의 자동 등록 대상입니다. 설정 키는 아래 네 개만 지원합니다. DB 연결 같은 앱 설정은 별도로 관리합니다.
+`spine.toml`은 CLI가 프로젝트를 찾고 실행하는 데 필요한 설정을 담습니다. 지원하는 키는 아래 네 개이며, 데이터베이스 연결 같은 앱 설정은 별도로 관리합니다.
 
 ```toml
 module = "example.com/my-app"
@@ -43,9 +47,16 @@ composition = "./internal/application"
 port = 8080
 ```
 
+| 키 | 역할 |
+| --- | --- |
+| `module` | Go 모듈 경로. `go.mod`의 모듈 경로와 일치해야 합니다. |
+| `entrypoint` | 실행하거나 빌드할 대상 |
+| `composition` | 앱 구성을 검사하고 생성한 코드를 자동으로 등록할 위치 |
+| `port` | 개발 서버에서 사용할 포트 |
+
 ## 실행과 앱 구성 분리
 
-`main.go`는 앱 구성, 검증, 실행만 담당합니다. 생성자·라우트·인터셉터는 `internal/application/application.go`의 `BuildApplication`에 등록합니다.
+`main.go`는 앱 구성 함수를 호출하고, 구성을 검증한 뒤 서버를 실행합니다. 생성자, 라우트, 인터셉터는 `internal/application/application.go`의 `BuildApplication`에 등록합니다.
 
 ```go
 package main
@@ -70,7 +81,7 @@ func main() {
 }
 ```
 
-생성된 구성 함수는 리스너를 시작하지 않고 앱과 실행 옵션을 반환합니다. 기본 HTTP 경로는 `GET /health`입니다.
+`BuildApplication`은 서버를 시작하지 않고 앱과 실행 옵션을 반환합니다. 생성된 코드는 기본 HTTP 경로인 `GET /health`를 등록합니다.
 
 ```go
 package application
@@ -120,7 +131,7 @@ src/user/
 └── user_controller.go
 ```
 
-기본 자동 등록은 `BuildApplication`에 아래 코드를 추가합니다. 직접 다시 등록하면 중복되므로 생성 결과를 확인하세요.
+명령이 끝나면 `src/user`에 네 파일이 생성됩니다. CLI는 기본적으로 `BuildApplication`에 다음 등록 코드를 추가합니다. 생성 결과를 확인하고, 같은 코드를 직접 다시 등록하지 마세요.
 
 ```go
 if err := user.Register(app); err != nil {
@@ -128,11 +139,23 @@ if err := user.Register(app); err != nil {
 }
 ```
 
-`user_route.go`는 생성자와 `GET /user/:id`를 등록합니다. 컨트롤러는 HTTP 입출력, 서비스는 비즈니스 로직, 리포지토리는 데이터 접근을 담당합니다. 이 리소스 생성기는 ID를 반환하는 GET 골격만 생성하며 DB 모델이나 영속 저장소를 구현하지 않습니다. 타입이 있는 생성·조회 예제가 필요하면 별도 이름으로 `spine generate slice order --storage memory --field name:string`을 사용하세요. 메모리 저장소는 개발용이며 종료하면 데이터가 사라집니다.
+`user_route.go`는 생성자와 `GET /user/:id`를 등록합니다. 나머지 파일의 역할은 다음과 같습니다.
+
+| 파일 | 역할 |
+| --- | --- |
+| `user_controller.go` | HTTP 요청을 받아 서비스에 전달하고 응답을 반환합니다. |
+| `user_service.go` | 비즈니스 로직을 처리합니다. |
+| `user_repository.go` | 데이터 접근을 담당합니다. |
+
+리소스 생성기는 ID를 반환하는 GET 핸들러의 기본 코드만 생성합니다. 데이터베이스 모델이나 데이터를 영구 저장하는 기능은 직접 구현해야 합니다.
+
+타입이 있는 생성, 조회 예제가 필요하면 별도 이름으로 `spine generate slice order --storage memory --field name:string`을 사용하세요. 이 명령의 메모리 저장소는 개발용이며 앱을 종료하면 데이터가 사라집니다.
 
 ## 등록 규칙과 검증
 
-`BuildApplication() (spine.App, boot.Options, error)`의 최상위에 `app := spine.New()`를 유지합니다. 등록을 조건문·반복문·임의 헬퍼에 숨기지 말고, `Register(app)`의 오류를 확인해 반환합니다.
+CLI가 등록 코드를 검사할 수 있도록 `BuildApplication() (spine.App, boot.Options, error)` 함수 본문의 최상위에 `app := spine.New()`를 유지하세요. 등록 코드를 조건문, 반복문, 임의의 보조 함수 안으로 옮기지 않습니다. `Register(app)`가 반환한 오류도 확인해 반환해야 합니다.
+
+앱 구성을 검사한 뒤 서버를 실행합니다.
 
 ```sh
 spine contract check
@@ -140,7 +163,7 @@ spine verify
 spine dev
 ```
 
-`contract check`는 정적 계약을 검사하고 `verify`는 계약·gofmt·vet·Go 테스트를 확인합니다. DB·브로커 연결과 실제 HTTP 동작은 별도 실행으로 확인합니다.
+`contract check`는 등록 코드에서 추출한 실행 계약을 검사합니다. `verify`는 계약 검사와 `gofmt`, `go vet`, Go 테스트를 실행합니다. 두 명령이 오류 없이 끝나면 `dev`가 개발 서버를 시작합니다. 실제 HTTP 동작과 외부 데이터베이스, 메시지 브로커 연결은 실행 환경에서 별도로 확인해야 합니다.
 
 ## 다음 단계
 

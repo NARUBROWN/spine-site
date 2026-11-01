@@ -1,19 +1,21 @@
 # 最初のアプリ
 
-Spine CLI をインストールしてプロジェクトを生成し、約5分で `GET /health` を実行します。Go 1.25.5 以上が必要で、CLI の推奨バージョンは Go 1.27.3 です。初回の依存関係ダウンロードにかかる時間は環境によって異なります。
+Spine CLIで新しいプロジェクトを作成し、`GET /health`が`{"status":"ok"}`を返すことを確認します。生成されたファイルを読みながら、アプリを構成し、検証してから実行する流れも確認します。
 
-## 1. CLI のインストールと確認
+Go 1.25.5以上が必要です。CLIの推奨バージョンはGo 1.27.3です。初回の依存関係のダウンロードにかかる時間は環境によって異なります。
+
+## 1. CLIのインストールとコマンドの確認
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
 spine version
 ```
 
-`spine version` は `spine-cli 0.1.4` と表示します。コマンドが見つからない場合は、[インストール](/ja/learn/getting-started/installation)で Go 実行ファイルのパス設定を確認してください。
+`spine version`は`spine-cli 0.1.4`を表示します。コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)でGoの実行ファイルのパス設定を確認してください。
 
 ## 2. プロジェクトの生成
 
-プロジェクトを作成する親ディレクトリで実行します。
+プロジェクトを配置する親ディレクトリで実行します。`hello-spine`ディレクトリがすでにある場合は、別の名前を使ってください。
 
 ```bash
 spine new hello-spine --module example.com/hello-spine
@@ -21,9 +23,9 @@ cd hello-spine
 go mod tidy
 ```
 
-CLI は `go.mod` に Spine `v0.5.1` を指定します。`go mod tidy` で依存関係を準備します。
+`hello-spine`ディレクトリにプロジェクトファイルが生成されます。CLIは`go.mod`にSpine `v0.5.1`を指定し、`go mod tidy`が必要な依存関係をダウンロードします。
 
-## 3. 生成された構造を確認
+## 3. 生成された構造の確認
 
 ```text
 hello-spine/
@@ -37,7 +39,7 @@ hello-spine/
     └── application_test.go
 ```
 
-`spine.toml` は、モジュール、実行エントリポイント、登録コードの場所を CLI に伝えます。
+プロジェクトには、実行の起点となる`main.go`と、アプリの構成コードを含む`internal/application`ディレクトリがあります。`spine.toml`は、モジュールパス、エントリーポイント、アプリの構成コードの場所とポートをCLIに伝えます。
 
 ```toml
 module = "example.com/hello-spine"
@@ -46,9 +48,11 @@ composition = "./internal/application"
 port = 8080
 ```
 
-`internal/application/application.go` の `BuildApplication()` がアプリと起動オプションを組み立てます。生成コードは `HealthController` のコンストラクタと `GET /health` を登録し、`boot.HTTPOptions` を明示します。ルート・コンストラクタ・インターセプターの登録は、この関数またはここから呼ぶ `Register(app) error` にまとめます。
+`internal/application/application.go`の`BuildApplication()`は、アプリと実行オプションを返します。生成されたコードは`HealthController`のコンストラクタと`GET /health`を登録し、HTTPの実行オプションとして`boot.HTTPOptions`を明示します。
 
-`main.go` はすでに生成されています。上書きせずに、次の実行フローを確認してください。
+機能を追加するときは、この関数、またはここから呼び出す`Register(app) error`関数に、ルート、コンストラクタ、インターセプターの登録をまとめます。詳しい方法は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で説明します。
+
+`main.go`はすでに生成されているため、変更する必要はありません。次のコードで、アプリの構成、検証、実行の順序を確認してください。
 
 ```go
 func main() {
@@ -65,7 +69,9 @@ func main() {
 }
 ```
 
-## 4. 契約とローカルコードの検証
+## 4. アプリ構成とコードの検証
+
+生成したプロジェクトのルートディレクトリで実行します。
 
 ```bash
 spine doctor
@@ -74,15 +80,17 @@ spine contract check
 spine verify
 ```
 
-`doctor` はツールとプロジェクト設定を診断し、`inspect` は登録された実行契約を表示します。`contract check` は静的契約を検証し、`verify` は契約・gofmt・vet・test を検査します。生成された `application_test.go` もサーバーを起動せずに `BuildApplication()` と `app.Validate(options)` を検証します。
+`doctor`はツールとプロジェクト設定を診断します。`inspect`は、コードに登録されたルートや依存関係などのアプリ構成を表示します。CLIが登録コードから抽出したこの情報を、実行契約と呼びます。
 
-## 5. 実行して応答を確認
+`contract check`は実行契約を検査します。`verify`は契約の検査に加えて、`gofmt`、`go vet`、Goのテストを実行します。生成された`application_test.go`も、サーバーを起動せずに`BuildApplication()`と`app.Validate(options)`を検査します。すべてのコマンドがエラーなく終了すれば、サーバーを実行する準備は完了です。
+
+## 5. 実行とレスポンスの確認
 
 ```bash
 spine dev
 ```
 
-別のターミナルからリクエストします。
+サーバーが動いている状態で、別のターミナルを開いてリクエストを送信します。
 
 ```bash
 curl http://localhost:8080/health
@@ -92,10 +100,10 @@ curl http://localhost:8080/health
 {"status":"ok"}
 ```
 
-開発サーバーは `Ctrl+C` で終了します。CLI で生成したプロジェクト、再利用可能なアプリ組み立て関数、静的契約の検証、実際の HTTP 応答を確認できました。
+上のJSONレスポンスが返れば、`GET /health`が動作したことを確認できます。サーバーを実行したターミナルで`Ctrl+C`を押し、開発サーバーを終了します。
 
 ## 次のステップ
 
-- [プロジェクトの構造](/ja/learn/tutorial/1-project-structure) — 生成したプロジェクトに機能を追加
-- [コントローラー](/ja/learn/tutorial/2-controller) — CLI が生成したルートとハンドラーを確認
-- [データベース](/ja/learn/tutorial/5-database) — リポジトリに Bun ORM を接続
+- [プロジェクト構造](/ja/learn/tutorial/1-project-structure)で、生成したプロジェクトに機能を追加します。
+- [コントローラー](/ja/learn/tutorial/2-controller)で、ルートとハンドラーを確認します。
+- [データベース](/ja/learn/tutorial/5-database)で、リポジトリにBun ORMを接続します。

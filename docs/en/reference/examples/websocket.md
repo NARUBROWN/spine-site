@@ -1,10 +1,14 @@
-# Build WebSocket chat with the CLI
+# Build a WebSocket Chat Server
 
-Generate a WebSocket component, then implement broadcast logic. This local learning example runs in one process.
+Build a chat server that broadcasts messages received at `/ws/chat` to registered clients. Generate WebSocket components with the CLI, implement the handler, then check message sending and receiving in a browser.
 
-## Generate the project and handler
+## Prerequisites
 
-Install the CLI using [installation and the first app](/en/learn/getting-started/first-app), then generate the project and WebSocket handler with these commands.
+Complete [Installation and Your First App](/en/learn/getting-started/first-app) first. This example is local learning code that runs in one server process. It does not include authentication or broadcasting across multiple servers.
+
+## 1. Generate the Project and Message Handler
+
+Generate the project and WebSocket handler. Run subsequent commands from `chat-app/`.
 
 ```sh
 spine new chat-app --module example.com/chat-app
@@ -14,11 +18,13 @@ spine doctor
 spine generate websocket chat --path /ws/chat --field message:string
 ```
 
-The generator writes `src/websocket/chat/chat_message.go`, `chat_handler.go`, and `module.go`, and adds a checked `chatwebsocket.Register(app)` call to `BuildApplication`. Do not register the same path or constructor again.
+The command generates `chat_message.go`, `chat_handler.go`, and `module.go` in `src/websocket/chat/`. It also adds a `chatwebsocket.Register(app)` call and error handling to `BuildApplication`. Do not register the same path or constructor again.
 
-## Implement broadcast
+## 2. Implement the Broadcast Handler
 
-The generated handler returns a not-implemented error. Replace all of `chat_handler.go` with the following code, removing the `errors` import and sentinel error. Keep `ChatMessage` in the generated `chat_message.go`.
+The generated handler returns a not-implemented error. Replace the entire contents of `src/websocket/chat/chat_handler.go` with the code below. Replacing the entire file also removes the existing `errors` import and not-implemented error declaration. Keep `ChatMessage` in `chat_message.go` and `module.go` as generated.
+
+The handler registers the sender for the connection that sent the message, then forwards non-empty messages to all registered connections. It removes connections from the list when sending fails.
 
 ```go
 package chat
@@ -96,9 +102,9 @@ func (c *ChatSocket) Handle(
 }
 ```
 
-## Keep the generated assembly
+## 3. Configure WebSocket Runtime Options
 
-In `internal/application/application.go`, keep the health registration and checked `chatwebsocket.Register(app)` call in `BuildApplication`. Set its returned options as follows and add the `time` import. Keep the generated `main.go` sequence: `BuildApplication` → `Validate` → `Run`.
+In `BuildApplication` in `internal/application/application.go`, replace only the returned options with the code below and add a `time` import. Keep the existing health registration and `chatwebsocket.Register(app)` call. The generated root `main.go` calls `BuildApplication`, `Validate`, and `Run` in that order.
 
 ```go
 return app, boot.Options{
@@ -118,7 +124,9 @@ return app, boot.Options{
 }, nil
 ```
 
-## Verify and run
+## 4. Validate and Start the Server
+
+From the project root, check the code, export the AsyncAPI document, and start the server.
 
 ```sh
 gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
@@ -128,7 +136,11 @@ spine contract export --format asyncapi --output asyncapi.json
 spine dev
 ```
 
-`contract check` checks the static contract; `verify` runs local Go checks. Verify actual connections and message exchange separately. With the server running, open `http://localhost:8080/health` in a browser and execute this in that tab’s developer console.
+`contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. `contract export` writes the registered WebSocket contracts to `asyncapi.json`. Check actual connections and message exchange in the next step.
+
+## 5. Test Sending and Receiving Messages in a Browser
+
+With the server running, open `http://localhost:8080/health` in a browser. Run the following code in the developer tools console of the same tab.
 
 ```js
 const socket = new WebSocket('ws://localhost:8080/ws/chat')
@@ -136,12 +148,20 @@ socket.onmessage = (event) => console.log(JSON.parse(event.data))
 socket.onopen = () => socket.send(JSON.stringify({ message: 'hello' }))
 ```
 
-Each connection must send a message before it is included in the sender map. The map is process-local, and stale senders are removed on a later send failure. This is not durable presence or cross-server broadcast.
+Check that the console displays an object with the fields `type`, `from`, `message`, and `at`. The `message` value is `hello`. Running the same code in another tab lets both the previously registered connection and the new connection receive messages.
 
-## Authentication, origins, and capacity
+To receive broadcasts, each connection must first send a message to register its sender. The sender list is stored only in process memory, and closed connections are removed when a later send fails. Persisting connection state or sharing it across multiple servers requires a separate implementation.
 
-The basic example has no authentication. To add it, implement all four `core.Interceptor` methods and `core.WebSocketHandshakeInterceptor.PreHandshake`, and register the instance with `app.InterceptorFor(boot.InterceptorWebSocket, auth)`. Verify credentials and return an error in `PreHandshake` to reject before upgrade. Message-level `PreHandle` alone does not protect the handshake.
+## Before Using This in Production
 
-With no `AllowedOrigins`, requests with Origin must match both scheme and host; clients without Origin are allowed. Set exact public origins in production and trust only the required proxy CIDRs. Capacity rejection returns HTTP 503, `Retry-After`, and `WEBSOCKET_CAPACITY_EXCEEDED`.
+### Handshake Authentication
 
-[Interceptor API](/en/reference/api/interceptor) · [Security configuration](/en/reference/security-configuration)
+To add authentication, implement the four methods of `core.Interceptor` and `core.WebSocketHandshakeInterceptor.PreHandshake`, then register the interceptor with `app.InterceptorFor(boot.InterceptorWebSocket, auth)`. By verifying credentials in `PreHandshake` and returning an error, you can reject requests before they upgrade to a WebSocket connection. `PreHandle` during message processing alone cannot protect the handshake.
+
+### Origin and Connection Limits
+
+If you omit `AllowedOrigins`, requests that include an Origin must have the same scheme and host. Clients without an Origin are allowed. In production, set the exact public Origin and, if needed, specify only the CIDRs of trusted proxies. When the connection limit is exceeded, the response returns HTTP 503 with `Retry-After` and `WEBSOCKET_CAPACITY_EXCEEDED`.
+
+## Next Steps
+
+See the [Interceptor API](/en/reference/api/interceptor) for the methods needed to implement authentication, and review Origin and connection limits in [Security Configuration](/en/reference/security-configuration).

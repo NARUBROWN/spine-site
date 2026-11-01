@@ -1,44 +1,22 @@
 # Community
 
-Welcome to the Spine Community! This space is for everyone who wants to use, contribute to, and grow with Spine.
+Use the channels below to ask questions about Spine, report bugs, or suggest improvements.
 
-## 💬 Discord Server
+## Questions and experiences
 
-Join the official Spine Discord server to communicate with other developers, ask questions, and share ideas about the project.
+Ask how to use Spine and share your experiences with other developers on Discord.
 
-- [Spine Discord Invite Link](https://discord.gg/8C7tAVzRKe)
+- [Spine Discord invite](https://discord.gg/8C7tAVzRKe)
 
-## 🚀 Contribution
+## Bug reports and suggestions
 
-Spine is an open source project, and your contributions are always welcome! Any contribution is valuable, whether it's adding new features, fixing bugs, or improving documentation.
+Create a GitHub Issue to report a bug or suggest a feature. For bug reports, include steps to reproduce, expected and actual behavior, your Go version, and your operating system.
 
-- [GitHub Repository](https://github.com/NARUBROWN/spine)
+- [Spine GitHub Issues](https://github.com/NARUBROWN/spine/issues/)
 
-## 🤝 Code of Conduct
+## Code and documentation contributions
 
-Please follow the Code of Conduct to ensure that all community members are respected and can participate safely.
+You can contribute features, bug fixes, and documentation improvements. See the contribution guide for the process of opening an Issue and discussing the scope with a maintainer before implementation.
 
-- Coming Soon
-
-## 🌟 Mentoring Program
-
-Do you want to learn Spine or need help contributing to the project? Mentors composed of experienced developers are ready to help you.
-
-- Coming Soon
-
-## 📅 Events
-
-Participate in online and offline events related to Spine to expand your knowledge and build a network.
-
-- Coming Soon
-
-## 💡 Suggest Ideas
-
-If you have any new features or improvement ideas for Spine, please feel free to suggest them. Your ideas can make Spine even better.
-
-- [Suggest an Idea](https://github.com/NARUBROWN/spine/issues/)
-
-
----
-
-Thank you for participating in the Spine community! Let's build a cool project together! 🚀
+- [Contribution guide](/en/community/contributing)
+- [Spine GitHub repository](https://github.com/NARUBROWN/spine)

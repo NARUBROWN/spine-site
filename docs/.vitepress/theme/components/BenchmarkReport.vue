@@ -25,7 +25,7 @@ const sourceLinks = [
 
 <template>
   <div class="benchmark-report">
-    <p class="report-date">{{ snapshot.measuredAt }} · Spine {{ snapshot.spineVersion }} · GOGC=400</p>
+    <p class="report-date">{{ snapshot.measuredAt }}, Spine {{ snapshot.spineVersion }}, GOGC=400</p>
     <p class="report-lead">{{ copy.reportIntro }}</p>
     <div class="report-downloads">
       <a :href="withBase(`${assetRoot}/evidence.zip`)" download>{{ copy.evidenceLink }} ↓</a>

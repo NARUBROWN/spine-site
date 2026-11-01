@@ -1,10 +1,12 @@
 # 数据库连接
 
-使用 Bun 连接到数据库。
+使用 Bun 连接 MySQL，并扩展生成的 `GET /user/:id`，使其从数据库查询用户。同时编写用于建表的迁移和仓储的基本查询。
 
 ## 准备 CLI 项目
 
-继续使用[第一个应用](/zh-Hans/learn/getting-started/first-app)和[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中的 `example.com/my-app`。如果用户资源尚未生成，先检查并应用计划：
+在 [CLI 安装与第一个应用](/zh-Hans/learn/getting-started/first-app)和[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中的 `example.com/my-app` 项目上继续操作。需要一个可连接的 MySQL 数据库，以及有权创建表的账号。所有命令均在项目根目录执行。
+
+如果尚未创建用户资源，先查看将要生成的文件，再应用变更。已创建的资源无需再次生成。
 
 ```sh
 spine generate resource user --dry-run
@@ -14,41 +16,33 @@ spine generate resource user --dry-run
 spine generate resource user
 ```
 
-先查看文本预览中的生成文件，再运行普通生成命令。已有此资源时跳过生成。
+CLI 会生成用户资源的基本文件和注册代码。Bun 依赖、数据库连接、模型和迁移需要在以下步骤中手动添加。保留生成的 `main.go`。
 
-CLI 只生成资源骨架及注册代码，不提供 Bun、数据库连接、模型或迁移生成器。下面的文件和依赖需要手动添加，保留生成的 `main.go`。
+生成的 GET 处理器只返回请求中的 ID。编写仓储后，还需要连接服务和控制器，才能执行实际查询。保存、修改和删除方法仅添加到仓储，本教程不实现相应的 HTTP 路由。
 
-下面的存储库代码用于扩展 `src/user/user_repository.go`。生成的服务和控制器默认只是返回 ID 的 GET 骨架；需要手动连接这些存储库方法，才能提供真实数据库查询或 CRUD。
+## 使用 Bun 编写查询
 
-
-## 什么是 Bun？
-
-[Bun](https://bun.uptrace.dev/) 是一个轻量级的 Go ORM。
-
-- SQL 友好——查询直观
-- 类型安全——编译时验证
-- 快速性能 - 最小反射
-
-Spine 不强制执行特定的 ORM，但建议与 Bun 结合使用。
+本示例使用 [Bun](https://bun.uptrace.dev/) 编写 SQL 查询，并将结果映射到 Go 结构体。Spine 不要求使用特定 ORM。
 
 ## 安装
 
 ```bash
-# Bun Core
+# Bun 코어
 go get github.com/uptrace/bun@v1.2.16
 
-# MySQL 驱动程序 + 方言
+# MySQL 드라이버 + 방언
 go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
-# 如果你使用 PostgreSQL
+# PostgreSQL을 사용한다면
 # go get github.com/uptrace/bun/dialect/pgdialect
 # go get github.com/jackc/pgx/v5/stdlib
 ```
 
+
 ## 数据库连接
 
-### 编写一个串联函数
+### 编写连接函数
 
 ```go
 // src/database/db.go
@@ -84,9 +78,11 @@ func NewDB() *bun.DB {
 }
 ```
 
-`NewDB` 在应用运行时由 DI 创建时检查连接。构造函数只支持一个返回值。`BuildApplication` 只注册提供者，不直接连接数据库，使静态检查和生成的验证测试不依赖数据库。
+`NewDB` 在应用运行期间通过依赖注入（DI）调用时检查连接。如果未设置 `DATABASE_URL`，或连接检查失败，应用将停止运行。
 
-### 注册 Spine
+Spine 构造函数只支持一个返回值，因此不要注册返回 `(*bun.DB, error)` 的函数。在 `BuildApplication` 中只注册构造函数。不要在该函数中直接连接数据库，这样静态检查和生成的验证测试才能在没有数据库的情况下运行。
+
+### 注册到 Spine
 
 ```go
 // internal/application/application.go
@@ -126,9 +122,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## PostgreSQL 连接
+## 连接 PostgreSQL
 
-PostgreSQL 代码用于替换 MySQL 的 `src/database/db.go`。只选择一种，并相应调整 DSN 和迁移 SQL。`sql.Open` 本身不会验证真实连接。
+如果使用 PostgreSQL，请用以下代码替换 MySQL 版本的 `src/database/db.go`。两种实现只能选择一种，连接字符串（DSN）和迁移 SQL 也需要根据所选数据库调整。此 PostgreSQL 示例中的 `sql.Open` 不会检查实际连接，因此可能在执行第一个查询时出现连接错误。
 
 ```go
 // src/database/db.go
@@ -156,9 +152,10 @@ func NewDB() *bun.DB {
 }
 ```
 
-## 使用环境变量
 
-使用环境变量而不是硬编码。
+## 设置连接字符串
+
+上述 `NewDB` 从环境变量 `DATABASE_URL` 读取连接字符串。
 
 ```go
 // src/database/db.go의 NewDB 내부 발췌
@@ -173,9 +170,10 @@ export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=L
 spine dev
 ```
 
-## 实体定义
 
-这是映射到数据库表的结构。
+## 定义用户模型
+
+在 `src/entity/user.go` 中添加映射到 `users` 表的结构体。
 
 ```go
 // src/entity/user.go
@@ -194,22 +192,20 @@ type User struct {
 
 ### Bun 标签
 
-|标签 |描述 |
+| 标签 | 说明 |
 |------|------|
-| `pk` | `pk`主键 |
-| `autoincrement` | `autoincrement`自动增加 |
-| `notnull` | `notnull`不为空|
-| `unique` | `unique`独特的制药|
-| `nullzero` | `nullzero` Go 将零值视为 NULL |
-| `default:value` | `default:value`默认 |
+| `pk` | 主键 |
+| `autoincrement` | 自增 |
+| `notnull` | NOT NULL |
+| `unique` | UNIQUE 约束 |
+| `nullzero` | 将 Go 类型的零值视为 NULL |
+| `default:value` | 默认值 |
 
----
+## 编写仓储
 
-## 创建存储库
+### 使用 bun.IDB 接口
 
-### 使用bun.IDB接口
-
-使用 `bun.IDB` 将接受 `*bun.DB` 和 `bun.Tx`。
+用以下代码替换生成的 `src/user/user_repository.go`，并在同一文件中添加后续的查询、保存、修改和删除方法。`bun.IDB` 是普通连接 `*bun.DB` 和事务 `bun.Tx` 都实现的接口。
 
 ```go
 // src/user/user_repository.go
@@ -223,7 +219,7 @@ import (
 )
 
 type UserRepository struct {
-    db bun.IDB  // 可接受 *bun.DB 或 bun.Tx
+    db bun.IDB  // *bun.DB 또는 bun.Tx 모두 가능
 }
 
 func NewUserRepository(db *bun.DB) *UserRepository {
@@ -231,7 +227,7 @@ func NewUserRepository(db *bun.DB) *UserRepository {
 }
 ```
 
-### 查看
+### 查询
 
 ```go
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, error) {
@@ -271,7 +267,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity
 }
 ```
 
-### 创造
+### 创建
 
 ```go
 func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
@@ -283,7 +279,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
 }
 ```
 
-### 修正
+### 修改
 
 ```go
 func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
@@ -309,9 +305,12 @@ func (r *UserRepository) Delete(ctx context.Context, id int) error {
 }
 ```
 
-## 将生成的 GET 连接到数据库
 
-用以下代码替换 `src/user/user_controller.go`，并添加 `src/user/user_read.go`。保留生成的 `GET /user/:id` 路由及构造函数注册。接口返回已保存的用户，不存在的 ID 返回 HTTP 404。完成此步骤后，生成的 ID 响应才会变为真实数据库查询。
+## 将生成的 GET 连接到数据库查询
+
+用以下代码替换现有的 `src/user/user_controller.go`，并添加 `src/user/user_read.go`。保留生成的 `GET /user/:id` 路由和构造函数注册。
+
+现在 GET 会返回已保存的用户。如果没有与 ID 对应的记录，则返回 HTTP 404；如果发生其他数据库错误，则返回 HTTP 500。
 
 ```go
 // src/user/user_controller.go
@@ -363,9 +362,9 @@ func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, err
 
 ## 迁移
 
-### 创建迁移文件
+### 编写迁移文件
 
-将 SQL 文件放在 `cmd/migrate/migrations` 中。迁移作为独立程序手动添加；没有 `spine migrate` 命令。准备数据库后再明确执行。
+在 `cmd/migrate/migrations` 中创建以下 SQL 文件。迁移通过独立的 Go 程序执行，不存在 `spine migrate` 命令。接下来的执行步骤会向现有数据库添加 `users` 表，因此请确认之前设置的 `DATABASE_URL` 指向示例数据库。
 
 ```sql
 -- cmd/migrate/migrations/001_create_users.up.sql
@@ -427,15 +426,18 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 
 ### 执行
 
+在已设置 `DATABASE_URL` 的终端中执行。迁移成功后会输出 `Migrations applied successfully.`，随后即可启动服务器。
+
 ```bash
-# 运行迁移
+# 마이그레이션 실행
 go run ./cmd/migrate
 
-# 运行服务器
+# 서버 실행
 spine dev
 ```
 
-## 整体结构
+
+## 完整结构
 
 ```text
 my-app/
@@ -461,7 +463,9 @@ my-app/
         └── 001_create_users.down.sql
 ```
 
-## 与 Spine 集成
+## 检查应用注册
+
+检查应用的注册配置，确保能够使用新增文件。`BuildApplication()` 与前面编写的内容相同，如果已经应用，无需再次替换。仓储构造函数通过 DI 接收具体类型 `*bun.DB`。
 
 ```go
 // internal/application/application.go
@@ -511,30 +515,32 @@ func NewUserRepository(db *bun.DB) *UserRepository {
 
 ## 查询示例
 
-### 条件查找
+以下查询语句可作为扩展仓储方法时的参考。`users` 和 `ctx` 需要在各方法中声明。如果要使用 `age` 和 `status` 条件，请先向模型和表中添加相应的列。
+
+### 条件查询
 
 ```go
-// 名称类似于“%alice%”的地方
+// WHERE name LIKE '%alice%'
 err := r.db.NewSelect().
     Model(&users).
     Where("name LIKE ?", "%alice%").
     Scan(ctx)
 
-// 其中年龄 > 20 且状态 = '活跃'
+// WHERE age > 20 AND status = 'active'
 err := r.db.NewSelect().
     Model(&users).
     Where("age > ?", 20).
     Where("status = ?", "active").
     Scan(ctx)
 
-// 哪里 id 在 (1, 2, 3)
+// WHERE id IN (1, 2, 3)
 err := r.db.NewSelect().
     Model(&users).
     Where("id IN (?)", bun.In([]int{1, 2, 3})).
     Scan(ctx)
 ```
 
-### 排序和分页
+### 排序与分页
 
 ```go
 // ORDER BY created_at DESC LIMIT 10 OFFSET 20
@@ -546,39 +552,30 @@ err := r.db.NewSelect().
     Scan(ctx)
 ```
 
-### 计数
+### 聚合
 
 ```go
-// 从用户中选择 COUNT(*) 个
+// SELECT COUNT(*) FROM users
 count, err := r.db.NewSelect().
     Model((*entity.User)(nil)).
     Count(ctx)
 ```
 
-### 加入
+### 连接查询
 
 ```go
-// SELECT * FROM users JOIN 订单 ON users.id =orders.user_id
+// SELECT * FROM users JOIN orders ON users.id = orders.user_id
 err := r.db.NewSelect().
     Model(&users).
     Relation("Orders").
     Scan(ctx)
 ```
 
-关联查询示例需要定义 `Orders` 关联字段、实体及 Bun 关联标签，以上基本 User 模型尚未包含这些定义。
-
-## 主要摘要
-
-|概念|描述 |
-|------|------|
-| **bun.IDB** |接受 DB 和 Tx 的接口 |
-| **实体** |映射到表的 Go 结构 |
-| **存储库** |数据访问层|
-| **迁移** |使用 SQL 文件进行模式管理 |
+连接查询示例中的 `Orders` 关系需要另行定义实体和 Bun 关系标签才能工作。上面的基本 `User` 模型不包含此关系。
 
 ## 验证
 
-执行静态契约和本地 Go 检查。`verify` 通过不代表真实数据库连接、迁移或 CRUD 已验证。请准备 DSN 和测试数据库，另行验证连接与查询。
+执行静态契约检查和本地 Go 检查。`verify` 不会验证实际数据库连接、迁移或查询。
 
 ```sh
 go mod tidy
@@ -587,7 +584,9 @@ spine contract check
 spine verify
 ```
 
-## 后续步骤
+迁移完成后，使用 `spine dev` 运行应用，并请求 `GET /user/:id`。如果表为空，由于不存在对应的 ID，将返回 HTTP 404。若要先保存用户再查询，请应用下一篇事务教程中的 POST 示例。
 
-- [教程：事务](/zh-Hans/learn/tutorial/6-transaction) — 事务拦截器
-- [教程：错误处理](/zh-Hans/learn/tutorial/7-error-handling) — 如何使用 httperr
+## 下一步
+
+- [教程：事务](/zh-Hans/learn/tutorial/6-transaction)：在请求中保存用户并检查回滚
+- [教程：错误处理](/zh-Hans/learn/tutorial/7-error-handling)：使用 `httperr` 返回 HTTP 错误

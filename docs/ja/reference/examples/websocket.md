@@ -1,10 +1,14 @@
-# CLIでWebSocketチャットを作る
+# WebSocket チャットを作る
 
-CLIでWebSocketコンポーネントを生成し、ブロードキャストを実装します。単一プロセスで動くローカル学習用の例です。
+`/ws/chat` で受け取ったメッセージを登録済みのクライアントにブロードキャストするチャットサーバーを作ります。CLI で WebSocket のコンポーネントを生成し、ハンドラーを実装してから、ブラウザーでメッセージの送受信を確認します。
 
-## プロジェクトとハンドラーを生成する
+## 事前準備
 
-[インストールと最初のアプリ](/ja/learn/getting-started/first-app)でCLIをインストールしてから、以下でプロジェクトとWebSocketハンドラーを生成します。
+先に[インストールと最初のアプリ](/ja/learn/getting-started/first-app)を完了してください。この例は、単一のサーバープロセスで動作するローカル学習用のコードです。認証や複数のサーバー間でのブロードキャストは含みません。
+
+## 1. プロジェクトとメッセージハンドラーを生成する
+
+プロジェクトと WebSocket ハンドラーを生成します。以降のコマンドは `chat-app/` で実行します。
 
 ```sh
 spine new chat-app --module example.com/chat-app
@@ -14,11 +18,13 @@ spine doctor
 spine generate websocket chat --path /ws/chat --field message:string
 ```
 
-生成ファイルは `src/websocket/chat/chat_message.go`、`chat_handler.go`、`module.go` です。`BuildApplication` にエラーを確認する `chatwebsocket.Register(app)` が自動追加されます。同じパスやコンストラクタを再登録しないでください。
+`src/websocket/chat/` に `chat_message.go`、`chat_handler.go`、`module.go` が生成されます。`BuildApplication` には、`chatwebsocket.Register(app)` の呼び出しとエラー確認のコードが自動で追加されます。同じパスやコンストラクタを再登録しないでください。
 
-## ブロードキャストを実装する
+## 2. ブロードキャストハンドラーを実装する
 
-生成ハンドラーは未実装エラーを返します。`chat_handler.go` 全体を以下で置き換え、`errors` importと未実装エラーを削除します。`ChatMessage` は生成された `chat_message.go` に残します。
+生成されたハンドラーは未実装エラーを返します。`src/websocket/chat/chat_handler.go` 全体を以下のコードに置き換えます。全体を置き換えると、既存の `errors` のインポートと未実装エラーの宣言も削除されます。`chat_message.go` の `ChatMessage` と `module.go` はそのまま使用します。
+
+ハンドラーは、メッセージを送信した接続の送信器を登録してから、空でないメッセージを登録済みのすべての接続に渡します。送信に失敗した接続は一覧から削除します。
 
 ```go
 package chat
@@ -96,9 +102,9 @@ func (c *ChatSocket) Handle(
 }
 ```
 
-## 生成された構成を維持する
+## 3. WebSocket の実行オプションを設定する
 
-`internal/application/application.go` の `BuildApplication` でhealth登録と `chatwebsocket.Register(app)` を維持し、返すオプションを以下に変更します。`time` importを追加します。生成された `main.go` の `BuildApplication` → `Validate` → `Run` を維持します。
+`internal/application/application.go` の `BuildApplication` が返すオプションだけを以下のコードに変更し、`time` のインポートを追加します。既存の health 登録と `chatwebsocket.Register(app)` の呼び出しは維持します。生成されたルートの `main.go` は、`BuildApplication`、`Validate`、`Run` を順に実行します。
 
 ```go
 return app, boot.Options{
@@ -118,7 +124,9 @@ return app, boot.Options{
 }, nil
 ```
 
-## 検証して実行する
+## 4. 検証してサーバーを起動する
+
+プロジェクトルートでコードを検査し、AsyncAPI ドキュメントをエクスポートしてからサーバーを起動します。
 
 ```sh
 gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
@@ -128,7 +136,11 @@ spine contract export --format asyncapi --output asyncapi.json
 spine dev
 ```
 
-`contract check` は静的契約、`verify` はローカルGo検証です。接続とメッセージ交換は別途確認します。サーバー起動後、ブラウザーで `http://localhost:8080/health` を開き、そのタブの開発者コンソールで実行します。
+`contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。`contract export` は、登録された WebSocket 契約を `asyncapi.json` に記録します。実際の接続とメッセージ交換は、次の手順で確認します。
+
+## 5. ブラウザーでメッセージの送受信を確認する
+
+サーバーの起動後、ブラウザーで `http://localhost:8080/health` を開きます。同じタブの開発者ツールのコンソールで、次のコードを実行します。
 
 ```js
 const socket = new WebSocket('ws://localhost:8080/ws/chat')
@@ -136,12 +148,20 @@ socket.onmessage = (event) => console.log(JSON.parse(event.data))
 socket.onopen = () => socket.send(JSON.stringify({ message: 'hello' }))
 ```
 
-各接続は最初にメッセージを送るとsender一覧に登録されます。一覧はプロセス内メモリのみで、切断したsenderは後の送信失敗時に削除されます。永続的な接続管理やサーバー間の配信は提供しません。
+コンソールに `type`、`from`、`message`、`at` フィールドを持つオブジェクトが出力されることを確認します。`message` の値は `hello` です。別のタブでも同じコードを実行すると、登録済みの接続と新しい接続でメッセージを受信できます。
 
-## 認証・Origin・接続上限
+ブロードキャストを受信するには、各接続から先にメッセージを送信して送信器を登録する必要があります。送信器の一覧はプロセスメモリにのみ保存され、終了した接続は、その後の送信に失敗した時点で削除されます。接続状態を永続的に保存したり、複数のサーバー間で共有したりするには、別途実装が必要です。
 
-基本例に認証はありません。追加する場合は4つの `core.Interceptor` メソッドと `core.WebSocketHandshakeInterceptor.PreHandshake` を実装し、`app.InterceptorFor(boot.InterceptorWebSocket, auth)` で登録します。upgrade前に拒否するには `PreHandshake` で認証情報を検証してエラーを返します。メッセージの `PreHandle` だけではhandshakeを保護できません。
+## 本番環境に適用する前に確認する点
 
-`AllowedOrigins` を省略すると、Origin付きリクエストはschemeとhostの一致が必要です。Originなしクライアントは許可されます。本番では正確な公開Originと必要なproxy CIDRを指定します。上限超過時はHTTP 503、`Retry-After`、`WEBSOCKET_CAPACITY_EXCEEDED` を返します。
+### ハンドシェイク認証
 
-[インターセプターAPI](/ja/reference/api/interceptor) · [セキュリティ設定](/ja/reference/security-configuration)
+認証を追加するには、`core.Interceptor` の 4 つのメソッドと `core.WebSocketHandshakeInterceptor.PreHandshake` を実装し、`app.InterceptorFor(boot.InterceptorWebSocket, auth)` で登録します。`PreHandshake` で認証情報を検証してエラーを返すと、WebSocket 接続に切り替える前にリクエストを拒否できます。メッセージ処理段階の `PreHandle` だけでは、ハンドシェイクを保護できません。
+
+### Origin と接続数の制限
+
+`AllowedOrigins` を省略すると、Origin のあるリクエストはスキームとホストが一致している必要があります。Origin のないクライアントは許可されます。本番環境では正確な公開 Origin を設定し、必要に応じて信頼するプロキシの CIDR のみを指定します。接続数の上限を超えると、HTTP 503 と `Retry-After`、`WEBSOCKET_CAPACITY_EXCEEDED` が返されます。
+
+## 次のステップ
+
+[インターセプター API](/ja/reference/api/interceptor)で認証の実装に必要なメソッドを確認し、[セキュリティ設定](/ja/reference/security-configuration)で Origin と接続制限を確認してください。

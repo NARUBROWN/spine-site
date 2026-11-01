@@ -1,10 +1,12 @@
 # プロジェクト構造
 
-Spine CLIが生成するプロジェクトを基準に、アプリの構成と機能コードを分けます。先に[CLIをインストール](/ja/learn/getting-started/installation)してください。
+Spine CLIでプロジェクトを作成し、ユーザーリソースを追加します。生成されたファイルを確認しながら、アプリの構成コードを置く場所と、コントローラー、サービス、リポジトリの役割を学びます。
 
-## CLIでプロジェクトを作成
+まず[CLIのインストール](/ja/learn/getting-started/installation)を完了してください。[最初のアプリ](/ja/learn/getting-started/first-app)に沿ってプロジェクトをすでに作成している場合は、生成手順を省略し、そのプロジェクトで続けられます。以下のコードのモジュールパスは、自分のプロジェクトのパスに読み替えてください。
 
-プロジェクトを作成する親ディレクトリで実行します。
+## CLIによるプロジェクトの生成
+
+プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。
 
 ```sh
 spine version
@@ -15,9 +17,11 @@ spine doctor
 spine inspect
 ```
 
-## 生成される構造
+`my-app`ディレクトリが生成され、依存関係が用意されます。`doctor`がツールとプロジェクト設定を診断し、`inspect`で既定のパスである`GET /health`の登録を確認できます。
 
-`spine new`は次のファイルを生成します。`go.sum`は後で`go mod tidy`を実行すると作成されます。
+## 生成される基本構造
+
+`spine new`は次のファイルを生成します。`go.sum`は、その後の`go mod tidy`で作成されます。
 
 ```text
 my-app/
@@ -32,9 +36,9 @@ my-app/
         └── application_test.go
 ```
 
-## CLI設定
+## CLIの設定
 
-`module`は`go.mod`と一致させます。`entrypoint`は実行・ビルド対象、`composition`は契約検査と自動登録の対象です。設定キーは以下の4つだけをサポートします。DB接続などのアプリ設定は別に管理します。
+`spine.toml`には、CLIがプロジェクトを見つけて実行するために必要な設定を記述します。対応するキーは次の4つです。データベース接続などのアプリ設定は別途管理します。
 
 ```toml
 module = "example.com/my-app"
@@ -43,9 +47,16 @@ composition = "./internal/application"
 port = 8080
 ```
 
-## 起動とアプリ構成を分離
+| キー | 役割 |
+| --- | --- |
+| `module` | Goのモジュールパス。`go.mod`のモジュールパスと一致する必要があります。 |
+| `entrypoint` | 実行またはビルドする対象 |
+| `composition` | アプリ構成を検査し、生成したコードを自動登録する場所 |
+| `port` | 開発サーバーで使用するポート |
 
-`main.go`はアプリの構成、検証、実行を担当します。コンストラクタ、ルート、インターセプターは`internal/application/application.go`の`BuildApplication`に登録します。
+## 実行とアプリ構成の分離
+
+`main.go`はアプリの構成関数を呼び出し、構成を検証してからサーバーを実行します。コンストラクタ、ルート、インターセプターは、`internal/application/application.go`の`BuildApplication`に登録します。
 
 ```go
 package main
@@ -70,7 +81,7 @@ func main() {
 }
 ```
 
-生成された構成関数はリスナーを起動せず、アプリと実行オプションを返します。既定のHTTPルートは`GET /health`です。
+`BuildApplication`はサーバーを起動せずに、アプリと実行オプションを返します。生成されたコードは、既定のHTTPパスである`GET /health`を登録します。
 
 ```go
 package application
@@ -104,9 +115,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## CLIで機能を追加
+## CLIによる機能の追加
 
-プロジェクトのルートでユーザーリソースを生成します。すでに存在する場合はこのコマンドを省きます。
+プロジェクトのルートでユーザーリソースを生成します。既存のプロジェクトですでに生成している場合は、このコマンドを省略します。
 
 ```sh
 spine generate resource user
@@ -120,7 +131,7 @@ src/user/
 └── user_controller.go
 ```
 
-既定の自動登録は`BuildApplication`に次のコードを追加します。手動で重複登録しないよう、生成結果を確認してください。
+コマンドが終了すると、`src/user`に4つのファイルが生成されます。CLIは既定で、`BuildApplication`に次の登録コードを追加します。生成結果を確認し、同じコードを手動で再度登録しないでください。
 
 ```go
 if err := user.Register(app); err != nil {
@@ -128,11 +139,23 @@ if err := user.Register(app); err != nil {
 }
 ```
 
-`user_route.go`はコンストラクタと`GET /user/:id`を登録します。コントローラーはHTTP入出力、サービスはビジネスロジック、リポジトリはデータアクセスを担当します。リソース生成器はIDを返すGETの骨組みだけを生成し、DBモデルや永続化は実装しません。型付きの作成・取得例には別の名前で`spine generate slice order --storage memory --field name:string`を使います。メモリ保存は開発用で、プロセス終了時にデータが消えます。
+`user_route.go`は、コンストラクタと`GET /user/:id`を登録します。ほかのファイルの役割は次のとおりです。
+
+| ファイル | 役割 |
+| --- | --- |
+| `user_controller.go` | HTTPリクエストを受け取ってサービスに渡し、レスポンスを返します。 |
+| `user_service.go` | ビジネスロジックを処理します。 |
+| `user_repository.go` | データアクセスを担当します。 |
+
+リソースジェネレーターが生成するのは、IDを返すGETハンドラーの基本コードだけです。データベースモデルやデータを永続保存する機能は、自分で実装する必要があります。
+
+型を定義した作成と取得の例が必要な場合は、別の名前で`spine generate slice order --storage memory --field name:string`を使ってください。このコマンドのメモリストレージは開発用で、アプリを終了するとデータが失われます。
 
 ## 登録規則と検証
 
-`BuildApplication() (spine.App, boot.Options, error)`の最上位に`app := spine.New()`を残します。登録は条件分岐、ループ、任意のヘルパーに隠さず直接記述し、`Register(app)`のエラーを確認して返します。
+CLIが登録コードを検査できるように、`BuildApplication() (spine.App, boot.Options, error)`の関数本体の最上位に`app := spine.New()`を維持してください。登録コードを条件分岐、ループ、任意の補助関数の中に移さないでください。`Register(app)`が返したエラーも確認し、返す必要があります。
+
+アプリ構成を検査してからサーバーを実行します。
 
 ```sh
 spine contract check
@@ -140,10 +163,10 @@ spine verify
 spine dev
 ```
 
-`contract check`は静的契約を検査し、`verify`は契約、gofmt、vet、Goテストを確認します。DB・ブローカー接続と実際のHTTP動作は別に確認します。
+`contract check`は、登録コードから抽出した実行契約を検査します。`verify`は契約の検査と、`gofmt`、`go vet`、Goのテストを実行します。両方のコマンドがエラーなく終了すると、`dev`が開発サーバーを起動します。実際のHTTPの動作と、外部のデータベースやメッセージブローカーへの接続は、実行環境で別途確認する必要があります。
 
 ## 次のステップ
 
 - [コントローラー](/ja/learn/tutorial/2-controller)
-- [依存性の注入](/ja/learn/tutorial/3-dependency-injection)
+- [依存性注入](/ja/learn/tutorial/3-dependency-injection)
 - [インターセプター](/ja/learn/tutorial/4-interceptor)

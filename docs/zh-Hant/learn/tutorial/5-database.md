@@ -1,10 +1,12 @@
-# 資料庫連接
+# 資料庫連線
 
-使用 Bun 連線到資料庫。
+使用 Bun 連線至 MySQL，並擴充產生的 `GET /user/:id`，讓它從資料庫查詢使用者。同時撰寫建立資料表的遷移檔與儲存庫的基本查詢。
 
 ## 準備 CLI 專案
 
-繼續使用[第一個應用程式](/zh-Hant/learn/getting-started/first-app)和[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中的 `example.com/my-app`。如果使用者資源尚未產生，先檢查並套用計畫：
+接續 [安裝 CLI 與第一個應用程式](/zh-Hant/learn/getting-started/first-app)和[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中的 `example.com/my-app`。您需要可連線的 MySQL 資料庫，以及具備建立資料表權限的帳號。請在專案根目錄執行命令。
+
+若尚未建立使用者資源，先確認將產生的檔案，再套用變更。已建立的資源不必重新產生。
 
 ```sh
 spine generate resource user --dry-run
@@ -14,41 +16,33 @@ spine generate resource user --dry-run
 spine generate resource user
 ```
 
-先查看文字預覽中的產生檔案，再執行一般產生指令。已有此資源時跳過產生步驟。
+CLI 會產生使用者資源的基本檔案與註冊程式碼。Bun 相依套件、資料庫連線、模型與遷移將在以下步驟中自行新增。請保留產生的 `main.go`。
 
-CLI 只產生資源骨架及註冊程式碼，不提供 Bun、資料庫連線、模型或遷移產生器。以下檔案和依賴需要手動加入，保留產生的 `main.go`。
+產生的 GET 處理器只會回傳請求中的 ID。撰寫儲存庫後，還需要串接服務與控制器，才能實際查詢資料。儲存、修改與刪除方法只會新增至儲存庫，本文件不會實作對應的 HTTP 路徑。
 
-以下存放庫程式碼用於擴充 `src/user/user_repository.go`。產生的服務和控制器預設只是回傳 ID 的 GET 骨架；需要手動連接這些存放庫方法，才能提供實際資料庫查詢或 CRUD。
+## 使用 Bun 撰寫查詢
 
-
-## 什麼是 Bun？
-
-[Bun](https://bun.uptrace.dev/) 是一個輕量級的 Go ORM。
-
-- SQL 友善－查詢直觀
-- 類型安全性－編譯時驗證
-- 快速性能 - 最小反射
-
-Spine 不會強制執行特定的 ORM，但建議與 Bun 結合使用。
+此範例使用 [Bun](https://bun.uptrace.dev/) 撰寫 SQL 查詢，並將結果對應至 Go 結構。Spine 不要求使用特定 ORM。
 
 ## 安裝
 
 ```bash
-# Bun Core
+# Bun 코어
 go get github.com/uptrace/bun@v1.2.16
 
-# MySQL 驅動程式 + 方言
+# MySQL 드라이버 + 방언
 go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
-# 如果你使用 PostgreSQL
-# 去取得 github.com/uptrace/bun/dialect/pgdialect
-# 去取得 github.com/jackc/pgx/v5/stdlib
+# PostgreSQL을 사용한다면
+# go get github.com/uptrace/bun/dialect/pgdialect
+# go get github.com/jackc/pgx/v5/stdlib
 ```
 
-## 資料庫連接
 
-### 寫一個串聯函數
+## 資料庫連線
+
+### 撰寫連線函式
 
 ```go
 // src/database/db.go
@@ -84,9 +78,11 @@ func NewDB() *bun.DB {
 }
 ```
 
-`NewDB` 在應用程式執行時由 DI 建立時檢查連線。建構函式只支援一個回傳值。`BuildApplication` 只註冊提供者，不直接連線資料庫，使靜態檢查和產生的驗證測試不依賴資料庫。
+`NewDB` 在應用程式執行期間由相依性注入（DI）呼叫時，會檢查連線。若未設定 `DATABASE_URL` 或連線檢查失敗，就會停止應用程式。
 
-### 註冊 Spine
+Spine 建構函式只支援一個回傳值，因此不要註冊回傳 `(*bun.DB, error)` 的函式。只在 `BuildApplication` 中註冊建構函式。請勿在此函式中直接連線至資料庫，這樣才能在沒有 DB 的情況下執行靜態檢查與產生的驗證測試。
+
+### 在 Spine 中註冊
 
 ```go
 // internal/application/application.go
@@ -126,9 +122,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## PostgreSQL 連接
+## PostgreSQL 連線
 
-PostgreSQL 程式碼用於替換 MySQL 的 `src/database/db.go`。只選擇一種，並相應調整 DSN 和遷移 SQL。`sql.Open` 本身不會驗證實際連線。
+若使用 PostgreSQL，請以以下程式碼取代 MySQL 版的 `src/database/db.go`。兩種實作只能擇一使用，連線字串（DSN）與遷移 SQL 也需要配合所選的 DB 修改。此 PostgreSQL 範例的 `sql.Open` 不會檢查實際連線，因此可能在第一次查詢時才發生連線錯誤。
 
 ```go
 // src/database/db.go
@@ -156,9 +152,10 @@ func NewDB() *bun.DB {
 }
 ```
 
-## 使用環境變數
 
-使用環境變數而不是硬編碼。
+## 設定連線字串
+
+上方的 `NewDB` 從環境變數 `DATABASE_URL` 讀取連線字串。
 
 ```go
 // src/database/db.go의 NewDB 내부 발췌
@@ -173,9 +170,10 @@ export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=L
 spine dev
 ```
 
-## 實體定義
 
-這是映射到資料庫表的結構。
+## 定義使用者模型
+
+在 `src/entity/user.go` 中新增對應 `users` 資料表的結構。
 
 ```go
 // src/entity/user.go
@@ -194,22 +192,20 @@ type User struct {
 
 ### Bun 標籤
 
-|標籤 |描述 |
+| 標籤 | 說明 |
 |------|------|
-| `pk` | `pk`主鍵 |
-| `autoincrement` | `autoincrement`自動增加 |
-| `notnull` | `notnull`不為空|
-| `unique` | `unique`獨特的製藥|
-| `nullzero` | `nullzero` Go 將零值視為 NULL |
-| `default:value` | `default:value`預設 |
+| `pk` | 主索引鍵 |
+| `autoincrement` | 自動遞增 |
+| `notnull` | NOT NULL |
+| `unique` | UNIQUE 限制 |
+| `nullzero` | 將 Go 型別的預設值視為 NULL |
+| `default:value` | 預設值 |
 
----
+## 撰寫儲存庫
 
-## 建立儲存庫
+### 使用 bun.IDB 介面
 
-### 使用bun.IDB介面
-
-使用 `bun.IDB` 將接受 `*bun.DB` 和 `bun.Tx`。
+以以下程式碼取代產生的 `src/user/user_repository.go`，再將後續的查詢、儲存、修改與刪除方法新增至同一個檔案。`bun.IDB` 是一般連線 `*bun.DB` 與交易 `bun.Tx` 都有實作的介面。
 
 ```go
 // src/user/user_repository.go
@@ -223,7 +219,7 @@ import (
 )
 
 type UserRepository struct {
-    db bun.IDB  // 可接受 *bun.DB 或 bun.Tx
+    db bun.IDB  // *bun.DB 또는 bun.Tx 모두 가능
 }
 
 func NewUserRepository(db *bun.DB) *UserRepository {
@@ -231,7 +227,7 @@ func NewUserRepository(db *bun.DB) *UserRepository {
 }
 ```
 
-### 查看
+### 查詢
 
 ```go
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, error) {
@@ -271,7 +267,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity
 }
 ```
 
-### 創造
+### 建立
 
 ```go
 func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
@@ -283,7 +279,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
 }
 ```
 
-### 修正
+### 修改
 
 ```go
 func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
@@ -309,9 +305,12 @@ func (r *UserRepository) Delete(ctx context.Context, id int) error {
 }
 ```
 
-## 將產生的 GET 連接到資料庫
 
-用以下程式碼替換 `src/user/user_controller.go`，並加入 `src/user/user_read.go`。保留產生的 `GET /user/:id` 路由及建構函式註冊。介面回傳已儲存的使用者，不存在的 ID 回傳 HTTP 404。完成此步驟後，產生的 ID 回應才會變為實際資料庫查詢。
+## 將產生的 GET 串接至 DB 查詢
+
+以以下程式碼取代既有的 `src/user/user_controller.go`，並新增 `src/user/user_read.go`。保留產生的 `GET /user/:id` 路徑與建構函式註冊。
+
+現在 GET 會回傳已儲存的使用者。若沒有符合 ID 的資料列，則回傳 HTTP 404；若發生其他資料庫錯誤，則回傳 HTTP 500。
 
 ```go
 // src/user/user_controller.go
@@ -363,9 +362,9 @@ func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, err
 
 ## 遷移
 
-### 建立遷移文件
+### 撰寫遷移檔
 
-將 SQL 檔案放在 `cmd/migrate/migrations` 中。遷移作為獨立程式手動加入；沒有 `spine migrate` 指令。準備資料庫後再明確執行。
+在 `cmd/migrate/migrations` 中建立以下 SQL 檔案。遷移由獨立的 Go 程式執行，並沒有 `spine migrate` 命令。下一個執行步驟會在既有資料庫中新增 `users` 資料表，因此請確認先前設定的 `DATABASE_URL` 指向範例用 DB。
 
 ```sql
 -- cmd/migrate/migrations/001_create_users.up.sql
@@ -383,7 +382,7 @@ CREATE TABLE users (
 DROP TABLE IF EXISTS users;
 ```
 
-### 遷移執行程式碼
+### 執行遷移的程式碼
 
 ```go
 // cmd/migrate/main.go
@@ -427,15 +426,18 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 
 ### 執行
 
+在已設定 `DATABASE_URL` 的終端機中執行。遷移成功後會輸出 `Migrations applied successfully.`，接著即可啟動伺服器。
+
 ```bash
-# 運行遷移
+# 마이그레이션 실행
 go run ./cmd/migrate
 
-# 運行伺服器
+# 서버 실행
 spine dev
 ```
 
-## 整體結構
+
+## 完整結構
 
 ```text
 my-app/
@@ -461,7 +463,9 @@ my-app/
         └── 001_create_users.down.sql
 ```
 
-## 與 Spine 集成
+## 確認應用程式註冊
+
+確認應用程式的註冊狀態，讓新增的檔案能夠使用。`BuildApplication()` 與先前撰寫的內容相同；若已套用，就不需要再次取代。儲存庫建構函式透過 DI 接收具體型別 `*bun.DB`。
 
 ```go
 // internal/application/application.go
@@ -511,30 +515,32 @@ func NewUserRepository(db *bun.DB) *UserRepository {
 
 ## 查詢範例
 
-### 條件查找
+以下程式碼是在擴充儲存庫方法時可參考的查詢語法。`users` 與 `ctx` 必須在各方法中宣告。若要使用 `age`、`status` 條件，請先在模型與資料表中新增對應欄位。
+
+### 條件查詢
 
 ```go
-// 名稱類似於“%alice%”的地方
+// WHERE name LIKE '%alice%'
 err := r.db.NewSelect().
     Model(&users).
     Where("name LIKE ?", "%alice%").
     Scan(ctx)
 
-// 其中年齡 > 20 且狀態 = '活躍'
+// WHERE age > 20 AND status = 'active'
 err := r.db.NewSelect().
     Model(&users).
     Where("age > ?", 20).
     Where("status = ?", "active").
     Scan(ctx)
 
-// 哪裡 id 在 (1, 2, 3)
+// WHERE id IN (1, 2, 3)
 err := r.db.NewSelect().
     Model(&users).
     Where("id IN (?)", bun.In([]int{1, 2, 3})).
     Scan(ctx)
 ```
 
-### 排序和分頁
+### 排序與分頁
 
 ```go
 // ORDER BY created_at DESC LIMIT 10 OFFSET 20
@@ -546,39 +552,30 @@ err := r.db.NewSelect().
     Scan(ctx)
 ```
 
-### 計數
+### 彙總
 
 ```go
-// 從使用者中選擇 COUNT(*) 個
+// SELECT COUNT(*) FROM users
 count, err := r.db.NewSelect().
     Model((*entity.User)(nil)).
     Count(ctx)
 ```
 
-### 加入
+### 聯結
 
 ```go
-// SELECT * FROM users JOIN 訂單 ON users.id =orders.user_id
+// SELECT * FROM users JOIN orders ON users.id = orders.user_id
 err := r.db.NewSelect().
     Model(&users).
     Relation("Orders").
     Scan(ctx)
 ```
 
-關聯查詢範例需要定義 `Orders` 關聯欄位、實體及 Bun 關聯標籤，以上基本 User 模型尚未包含這些定義。
-
-## 主要摘要
-
-|概念|描述 |
-|------|------|
-| **bun.IDB** |接受 DB 和 Tx 的介面 |
-| **實體** |對應到表格的 Go 結構 |
-| **儲存庫** |資料存取層|
-| **遷移** |使用 SQL 文件進行架构管理 |
+聯結範例中的 `Orders` 關聯必須另外定義實體與 Bun 關聯標籤才能運作。上方的基本 `User` 模型並未包含這些定義。
 
 ## 驗證
 
-執行靜態契約和本機 Go 檢查。`verify` 通過不代表實際資料庫連線、遷移或 CRUD 已驗證。請準備 DSN 和測試資料庫，另行驗證連線與查詢。
+執行靜態契約與本機 Go 檢查。`verify` 不會驗證實際的 DB 連線、遷移與查詢。
 
 ```sh
 go mod tidy
@@ -587,7 +584,9 @@ spine contract check
 spine verify
 ```
 
-## 後續步驟
+遷移後，以 `spine dev` 啟動應用程式，並傳送 `GET /user/:id` 請求。空資料表中沒有對應的 ID，因此會回傳 HTTP 404。若要先儲存使用者再查詢，請套用下一篇交易教學中的 POST 範例。
 
-- [教學：事務](/zh-Hant/learn/tutorial/6-transaction) — 事務攔截器
-- [教學：錯誤處理](/zh-Hant/learn/tutorial/7-error-handling) — 如何使用 httperr
+## 下一步
+
+- [教學：交易](/zh-Hant/learn/tutorial/6-transaction)：以請求為單位儲存使用者並確認回滾
+- [教學：錯誤處理](/zh-Hant/learn/tutorial/7-error-handling)：使用 `httperr` 回傳 HTTP 錯誤

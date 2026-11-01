@@ -1,10 +1,10 @@
 ---
-title: "Spine internal lab benchmark"
-description: "HTTP throughput and memory use on the same resource budget. Compare Spine with NestJS/Express, Spring MVC and FastAPI/Uvicorn, with methods and source data."
+title: "Spine internal lab tests"
+description: "Internal lab tests comparing HTTP throughput and memory usage for Spine, NestJS/Express, Spring MVC, and FastAPI/Uvicorn with the same resources. Measurement conditions and raw data are available."
 sidebar: false
 outline: false
 ---
 
-# Spine internal lab benchmark
+# Spine internal lab tests
 
 <BenchmarkReport />

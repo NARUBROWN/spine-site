@@ -1,10 +1,16 @@
-# Kafka MSA 範例
+# 使用 Kafka 連接訂單服務與庫存服務
 
-使用 CLI 分別產生訂單 HTTP 服務與庫存消費者服務。訂單服務發布 `order.created`，庫存服務處理事件，不需要 HTTP 監聽器。
+分別建立訂單 HTTP 服務和庫存消費服務，透過 Kafka 傳遞 `order.created` 事件。傳送訂單請求後，確認庫存服務的處理日誌。庫存服務不啟動 HTTP 監聽器。
 
-## 使用 CLI 產生兩個服務
+## 開始前的準備
 
-先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)，之後從 `spine-msa/` 執行命令。CLI 0.1.4 提供具型別的 consumer 骨架，不產生 Kafka 代理或傳輸設定。
+請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。CLI 0.1.4 提供具備型別定義的消費者骨架。Kafka broker 和傳輸設定需要另外準備。
+
+若要確認訊息傳遞，需要在 `localhost:9092` 執行的 Kafka broker，以及 `order.created` 主題。此範例使用隔離本機環境中的明文連線。庫存消費者會將事件寫入日誌，不會實際變更庫存數量。
+
+## 1. 建立兩個服務
+
+建立工作目錄，先確認將產生的檔案。
 
 ```sh
 mkdir spine-msa
@@ -13,26 +19,30 @@ spine new order-app --module example.com/order-app --dry-run
 spine new stock-app --module example.com/stock-app --dry-run
 ```
 
-在預覽中檢查產生檔案與註冊程式碼的變更，再執行下方命令產生。
+確認預覽後，建立兩個應用程式。除非另有說明，後續命令均在 `spine-msa/` 中執行。
 
 ```sh
 spine new order-app --module example.com/order-app
 spine new stock-app --module example.com/stock-app
 ```
 
-## 產生消費者骨架
+## 2. 產生庫存消費者骨架
 
-預設自動註冊會向 `stock-app/internal/application/application.go` 加入檢查錯誤的 `order.Register(app)` 呼叫。產生的 handler 在實作前回傳未實作錯誤，因此替換下方程式碼前驗證失敗是預期行為。
+在 `stock-app` 中產生接收訂單事件的消費者。請先確認預覽。
 
 ```sh
 spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
+以下命令會建立消費者檔案，並在 `stock-app/internal/application/application.go` 中加入 `order.Register(app)` 呼叫和錯誤檢查程式碼。剛產生的處理器會回傳未實作錯誤，因此必須以步驟 5 的程式碼取代，才能通過驗證。
+
 ```sh
 spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
-## 最終結構
+### 檔案配置
+
+新增共用事件和訂單控制器，並取代產生的消費者實作與應用程式設定後，結構如下。
 
 ```text
 spine-msa/
@@ -59,9 +69,9 @@ spine-msa/
         └── order_message.go
 ```
 
-## 共用事件
+## 3. 定義共用事件
 
-`order-app/src/events` 是兩個服務共用的事件套件。庫存模組只從訂單模組匯入該套件，後方 `go mod edit` 命令負責連接本機模組。
+建立 `order-app/src/events/order_created.go`。兩個服務共用此套件中的事件型別。步驟 6 會使用 `go mod edit` 連接本機模組，讓 `stock-app` 能匯入 `order-app` 的事件套件。
 
 ```go
 // order-app/src/events/order_created.go
@@ -79,9 +89,11 @@ func (e OrderCreated) Name() string { return "order.created" }
 func (e OrderCreated) OccurredAt() time.Time { return e.At }
 ```
 
-## 訂單服務：發布事件
+## 4. 在訂單服務發布事件
 
-手動加入或替換以下兩個檔案。保留 CLI 產生的根目錄 `main.go` 和 `spine.toml`。`publish.Event` 將事件加入目前請求，沒有回傳值；handler 與回應準備成功後，由已設定的 Kafka writer 發布。
+建立 `order-app/src/controller/order_controller.go`，並以下列程式碼取代 `order-app/internal/application/application.go`。根目錄的 `main.go` 和 `spine.toml` 繼續沿用。
+
+`publish.Event` 會將事件加入目前的請求，沒有回傳值。處理器成功執行且回應準備完成後，設定的 Kafka 發布器便會傳送事件。
 
 ```go
 // order-app/src/controller/order_controller.go
@@ -150,9 +162,11 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 庫存服務：處理事件
+## 5. 在庫存服務處理事件
 
-將產生的 `order_message.go` 改為共用事件別名，實作 `order_handler.go` 並移除未實作錯誤。記憶體去重僅在同一處理程序內有效；實際庫存修改與持久化去重應在同一資料庫交易中實作。使用下方完整程式碼替換組裝檔案，不要重複加入自動註冊。
+分別以下列程式碼取代這三個檔案。將 `order_message.go` 改為共用事件的型別別名，並在 `order_handler.go` 實作驗證、重複檢查和日誌輸出，取代未實作錯誤。產生的 `module.go` 繼續沿用。
+
+`stock-app/internal/application/application.go` 的完整替代程式碼已包含 `order.Register(app)`。請勿再次附加產生時加入的註冊程式碼。
 
 ```go
 // stock-app/src/consumer/order/order_message.go
@@ -227,9 +241,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 連接模組並驗證
+## 6. 連接本機模組並驗證程式碼
 
-兩個服務各有獨立的 `go.mod` 與 `spine.toml`。從 `spine-msa/` 開始執行以下命令，最後返回相同位置。各產生的 `main.go` 依序呼叫 `BuildApplication`、`Validate`、`Run`。
+兩個服務各自使用獨立的 `go.mod` 和 `spine.toml`。以下命令從 `spine-msa/` 開始，連接並檢查兩個模組後，回到相同位置。每個應用程式產生的 `main.go` 會依序執行 `BuildApplication`、`Validate`、`Run`。
 
 ```sh
 cd order-app
@@ -249,56 +263,52 @@ spine verify --root order-app
 spine verify --root stock-app
 ```
 
-此本機明文設定預期讓每個服務回報一個 `INSECURE_TRANSPORT_ENABLED` 警告。預設檢查可通過，使用 `--warnings-as-errors` 則會失敗。
+由於兩個服務都使用本機明文連線，因此各會出現一個 `INSECURE_TRANSPORT_ENABLED` 警告。預設檢查仍會通過，但使用 `--warnings-as-errors` 時會失敗。
 
-`contract check` 檢查靜態契約，`verify` 檢查契約、gofmt、vet 與 Go 測試，不驗證代理連線或訊息交付。
+`contract check` 檢查靜態契約。`verify` 檢查靜態契約，並執行 gofmt、go vet 和 Go 測試。broker 連線和實際訊息傳遞會在下一步確認。
 
-## 準備代理後執行
+## 7. 執行並確認事件傳遞
 
-另外在 `localhost:9092` 準備 Kafka 並建立 `order.created` 主題。於不同終端中，都從 `spine-msa/` 執行。
+確認 Kafka 正在 `localhost:9092` 執行，且已有 `order.created` 主題。將各終端機的工作目錄設為 `spine-msa/`。
+
+在第一個終端機啟動庫存服務。
 
 ```sh
 spine run --root stock-app
 ```
 
+在第二個終端機啟動訂單服務。
+
 ```sh
 spine run --root order-app
 ```
+
+在第三個終端機傳送建立訂單的請求。
 
 ```sh
 curl -i -X POST http://localhost:8080/orders/12345
 ```
 
-POST 回傳 HTTP 202，本文為 `accepted`。代理正常時，在庫存處理程序確認 `topic=order.created order_id=12345` 日誌；僅有 HTTP 回應不能證明消費完成。
+確認回應為 HTTP 202，且本文為 `accepted`。接著在庫存服務的終端機確認 `topic=order.created order_id=12345` 日誌。HTTP 回應是訂單請求的結果，庫存服務的日誌則是事件消費的結果。必須確認兩者，才能驗證服務之間的傳遞。
 
-## 傳輸與一致性邊界
+## 套用於正式環境前的注意事項
 
-`AllowInsecureTransport: true` 僅用於隔離的本機明文代理。正式環境應移除該選項，並設定 TLS/SASL 與代理位址。預設傳輸使用 TLS 1.2 以上；自訂設定需同時保護讀寫。
+### 傳輸安全與主題名稱
 
-`TopicPrefix` 只進行字串串接；writer 使用 `prod.` 時，consumer 必須明確註冊 `prod.order.created`。本例兩端都使用無前綴的 `order.created`，檢查與執行時請保持設定一致。
+`AllowInsecureTransport: true` 僅適用於隔離的本機明文 broker。正式環境應移除此選項，並設定 TLS/SASL 和 broker 位址。預設傳輸使用 TLS 1.2 以上版本。若自行指定傳輸設定，必須同時保護讀取和寫入。
 
-Kafka 至少傳遞一次，需使用穩定事件 ID 與持久化去重。`ConsumerRetry` 控制 reader/傳輸重建，不是業務 handler 的重試次數限制。永久失敗的訊息可能阻塞分割區，Spine 不會自動跳過或選擇 DLQ。
+`TopicPrefix` 會將字串直接加在主題名稱前方。若發布設定使用 `prod.`，消費者註冊的主題也必須設為 `prod.order.created`。此範例兩端都使用不含前綴的 `order.created`。檢查和執行時請使用相同設定。
 
-資料庫提交與代理發布不是原子操作。需要可靠的資料庫與事件一致性時，應另外實作 transactional outbox 與消費者去重。另見[安全設定](/zh-Hant/reference/security-configuration)。
+### 重複處理和失敗訊息
 
-## RabbitMQ
+Kafka 至少傳遞每則訊息一次，因此同一事件可能再次送達。需要使用重新傳送時仍維持不變的事件 ID，並以持久儲存防止重複處理。此範例的重複處理防護僅在同一程序內有效。實際庫存變更和持久化的重複處理防護，必須在同一個 DB 交易中實作。
 
-```go
-RabbitMQ: &boot.RabbitMqOptions{
-	URL: "amqps://user:pass@rabbit.example/vhost",
-	Read: &boot.RabbitMqReadOptions{
-		Exchange:      "orders",
-		PrefetchCount: 16,
-		FailurePolicy: boot.RabbitMqFailureReject,
-		DeadLetter: &boot.RabbitMqDeadLetterOptions{
-			Exchange:   "orders.dlx",
-			RoutingKey: "orders.failed",
-		},
-	},
-	Write: &boot.RabbitMqWriteOptions{Exchange: "orders"},
-}
-```
+`ConsumerRetry` 會調整讀取器和傳輸層的重新設定，不會限制業務處理器的重試次數。持續失敗的訊息可能阻塞分割區。系統不會自動略過訊息或將訊息移至 DLQ。
 
-RabbitMQ 預設要求 `amqps://`。`PrefetchCount` 為零時預設 1；處理失敗預設拒絕且不重新入列。DLX 必須由維運人員預先建立，現有佇列的參數也必須一致。
+### DB 變更與事件發布
 
-發布器使用持久訊息、`mandatory=true` 和 publisher confirms。確認遺失時重試可能重複發布，仍需保持冪等。RabbitMQ 路由使用 AMQP `RoutingKey`，不要依賴生產者提供的 `Type`。
+DB 提交和 broker 發布並非單一原子操作。若需要一致地處理 DB 變更與事件傳遞，請另外實作 transactional outbox 和消費者的重複處理防護。
+
+## 下一步
+
+請在[安全設定](/zh-Hant/reference/security-configuration)中確認 Kafka 連線設定。連接實際庫存儲存庫時，請持久記錄事件 ID，並將其與庫存變更一併提交。

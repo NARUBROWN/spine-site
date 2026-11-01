@@ -1,17 +1,19 @@
 # 交易管理
 
-繼續使用[資料庫](/zh-Hant/learn/tutorial/5-database)中的 CLI 專案 `example.com/my-app`。沿用 `src/database`、`src/entity` 和 `src/user`，手動加入以下交易程式碼。CLI 不提供 Bun 交易或 outbox 產生器。
+將單一 HTTP 請求中執行的多次 INSERT 包在同一個交易中。撰寫攔截器，在請求成功時提交，若中途失敗則將先前的 INSERT 一併回滾。
+
+接續[資料庫](/zh-Hant/learn/tutorial/5-database)中的 `example.com/my-app`。請先準備 `src/database`、`src/entity`、`src/user` 與遷移。以下交易程式碼需要自行新增，CLI 並未提供 Bun 交易或 outbox 產生器。
 
 ## 執行順序
 
-Spine v0.5.1 在 `PreHandle` 中開始交易，在 `BeforeResponse` 中提交或回復。回應序列化、狀態碼、Cookie 驗證與事件派送等準備失敗也能觸發回復。`AfterCompletion` 用於完成後的日誌與清理。
+在 Spine v0.5.1 中，於 `PreHandle` 開始交易，並在 `BeforeResponse` 提交或回滾。回應序列化、狀態碼與 Cookie 驗證、事件發布等回應準備過程中發生的錯誤，也屬於回滾條件。`AfterCompletion` 用於在完成後記錄日誌或清理資源。
 
 ```text
-PreHandle: begin transaction
-→ Controller → response preparation → PostHandle
-→ BeforeResponse: rollback on error, commit on success
-→ HTTP response flush
-→ AfterCompletion: logging / cleanup
+PreHandle: 開始交易
+→ 控制器 → 準備回應 → PostHandle
+→ BeforeResponse: 若有錯誤則回滾，否則提交
+→ 傳送 HTTP 回應
+→ AfterCompletion: 記錄日誌與清理資源
 ```
 
 ## 實作攔截器
@@ -70,11 +72,11 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-必須回傳提交或回復錯誤，以便計入最終執行錯誤。保留包含 `log`、`errors` 的匯入以及四個攔截器方法。
+必須回傳 `Commit()` 與 `Rollback()` 的錯誤，才能將其反映在最終執行錯誤中。請保留包含 `log`、`errors` 的 import，以及全部四個攔截器方法。
 
-## 註冊到產生的應用程式
+## 在產生的應用程式中註冊
 
-向 `internal/application/application.go` 的匯入加入 `example.com/my-app/src/interceptor`。保留資料庫教學中的 `database.NewDB` provider 與 health、user 註冊，只在現有 Constructor 呼叫中加入 `interceptor.NewTxInterceptor`。下方是 `BuildApplication()` 內的註冊片段。
+在 `internal/application/application.go` 的 import 區塊中新增 `example.com/my-app/src/interceptor`。保留資料庫教學中註冊的 `database.NewDB` 以及 health、user 註冊，並在既有的 `app.Constructor` 呼叫中新增 `interceptor.NewTxInterceptor`。以下程式碼是 `BuildApplication()` 中的註冊部分。
 
 ```go
 app.Constructor(
@@ -85,11 +87,15 @@ app.Constructor(
 app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
 ```
 
-typed-nil `(*interceptor.TxInterceptor)(nil)` 會解析為 DI 建立的攔截器實例。`NewTxInterceptor` 回傳一個值。HTTP 交易使用 `boot.InterceptorHTTP`，因為 `app.Interceptor(...)` 也會作用於 WebSocket 訊息。只作用於指定路由時，省略全域攔截器註冊，並向該 `app.Route` 傳入 `route.WithInterceptors((*interceptor.TxInterceptor)(nil))`。
+`(*interceptor.TxInterceptor)(nil)` 用來指定攔截器型別。Spine 透過 DI 建立此型別的執行個體，而 `NewTxInterceptor` 必須只回傳一個值。
 
-## 將請求交易傳給儲存庫
+若只要套用至 HTTP 請求，請如上使用 `boot.InterceptorHTTP`。`app.Interceptor(...)` 也會套用至 WebSocket 訊息。若只要套用至特定路由，請省略全域註冊，並在對應的 `app.Route` 指定 `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` 選項。
 
-以下 POST 範例手動擴充 `src/user`，使用產生的 `UserController.service` 與 `UserService.repository` 欄位。請求 DTO 必須透過指標接收。`spine.Ctx` 來自 `github.com/NARUBROWN/spine/pkg/spine`，與根套件重名時使用 `spinectx` 別名。
+## 將請求的交易傳遞至儲存庫
+
+新增 `src/user/user_create.go`，使用請求的交易儲存使用者。此處使用產生的 `UserController` 中的 `service` 欄位，以及 `UserService` 中的 `repository` 欄位。
+
+請求 DTO 以指標接收。`spine.Ctx` 來自 `github.com/NARUBROWN/spine/pkg/spine`。以下程式碼使用 `spinectx` 別名，避免與應用程式根套件同名。
 
 ```go
 // src/user/user_create.go
@@ -142,9 +148,9 @@ func (s *UserService) Create(ctx context.Context, db bun.IDB, req *CreateUserReq
 }
 ```
 
-服務將 `bun.IDB` 傳給儲存庫。`*bun.DB` 與 `bun.Tx` 都實作此介面，但請求交易不會重新注入建構子。依下方方式加入或調整儲存庫的 `Save(ctx, db, user)`。
+服務以 `bun.IDB` 接收請求的交易，再將其傳遞至儲存庫。雖然 `*bun.DB` 與 `bun.Tx` 實作相同介面，但請求的交易不會自動重新注入儲存庫建構函式。
 
-用以下實作替換已有的 `Save` 方法，不要再宣告同名方法。
+以以下實作取代 `src/user/user_repository.go` 中既有的 `Save` 方法。請勿額外宣告同名方法。
 
 ```go
 // src/user/user_repository.go
@@ -154,15 +160,15 @@ func (r *UserRepository) Save(ctx context.Context, db bun.IDB, user *entity.User
 }
 ```
 
-在 `src/user/user_route.go` 的 `Register` 中手動加入 POST 路由，保留現有 GET 註冊。
+在 `src/user/user_route.go` 的 `Register` 中自行新增 POST 路由。請保留既有的 GET 註冊。
 
 ```go
 app.Route("POST", "/user", (*UserController).Create)
 ```
 
-## 同一請求中的多次寫入與 rollback
+## 合併多次寫入並確認回滾
 
-使用與單筆建立相同的交易儲存多個使用者。加入 `src/user/user_batch.go`，並在 `src/user/user_route.go` 的 `Register` 中註冊以下 POST 路由。如果第二次 INSERT 因 email 重複失敗，第一次 INSERT 也必須 rollback。
+這次在單一請求中儲存多位使用者。建立 `src/user/user_batch.go`，並在 `src/user/user_route.go` 的 `Register` 中新增下方的 POST 路由。若第二次 INSERT 因電子郵件重複而失敗，第一次 INSERT 也應回滾。
 
 ```go
 // src/user/user_batch.go
@@ -213,7 +219,7 @@ app.Route("POST", "/user/batch", (*UserController).CreateBatch)
 
 ## 排除讀取請求
 
-要略過讀取請求，在 `PreHandle` 開頭加入以下條件。`BeforeResponse` 也必須處理沒有交易的情況。不要略過必須使用交易的處理函式。
+若不想在讀取請求中開始交易，請在 `PreHandle` 開頭加入以下條件。`BeforeResponse` 也需要處理沒有交易的情況，上方實作已包含此處理。請勿將使用交易的控制器列為排除對象。
 
 ```go
 if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" {
@@ -233,11 +239,13 @@ spine verify
 spine dev
 ```
 
-契約與本機檢查通過不代表真實資料庫提交或回復成功。執行應用程式需要資料庫教學中的 `DATABASE_URL` 與遷移。請在真實資料庫上另外驗證成功儲存、失敗回復及提交和回復錯誤的處理。
+契約與本機檢查無法確認實際 DB 的提交與回滾。執行應用程式前，需要完成資料庫教學中的 `DATABASE_URL` 設定與遷移。下一步將確認成功請求的儲存，以及失敗請求的回滾。若提交與回滾本身失敗，其錯誤處理仍須另外確認。
 
-## 使用實際資料庫驗證
+## 在實際 DB 中確認
 
-先依資料庫教學執行遷移，再啟動應用程式。以下請求假設測試資料庫為空。第一次請求回傳 HTTP 201，使用回應中的 ID 發起 GET 可讀取儲存的使用者。batch 的第二個 email 重複，因此回傳 HTTP 500。本例將資料庫錯誤作為一般錯誤回傳，回應不會洩漏內部 SQL 錯誤。
+依照資料庫教學執行遷移並啟動應用程式後，在另一個終端機傳送以下請求。範例中的 GET 假設新建測試 DB 的第一位使用者 ID 為 1。若使用既有 DB，請以 POST 回應中的 ID 修改 GET 路徑。
+
+第一個 POST 會以 HTTP 201 儲存使用者，再以回應中的 ID 傳送 GET，便會回傳同一位使用者。`/user/batch` 請求因第二個電子郵件重複而失敗，回傳 HTTP 500。由於 DB 錯誤以一般錯誤回傳，回應不會暴露內部 SQL 錯誤。
 
 ```bash
 curl -i -X POST http://localhost:8080/user \
@@ -254,7 +262,7 @@ curl -i -X POST http://localhost:8080/user \
   -d '{"name":"Bob","email":"bob@example.com"}'
 ```
 
-透過資料庫用戶端確認以下 SELECT 的結果分別為 1 和 0。第二個結果為 0 才能說明錯誤發生前的第一次 INSERT 也已 rollback。之後使用唯一 email 請求，仍應回傳 HTTP 201 並儲存成功。
+請在 DB 用戶端中確認以下 SELECT 的結果分別為 1 與 0。第二個結果若為 0，代表失敗前執行的第一次 INSERT 也已回滾。最後的 Bob 請求使用未重複的電子郵件，因此應再次以 HTTP 201 儲存成功。
 
 ```sql
 SELECT COUNT(*) FROM users WHERE email = 'alice@example.com';
@@ -263,7 +271,9 @@ SELECT COUNT(*) FROM users WHERE email = 'rollback@example.com';
 
 ## 原子性邊界
 
-資料庫提交與 broker 發布或實際 socket write 並不是同一個原子交易。事件發布後仍可能提交失敗，提交後仍可能回應傳送失敗。將業務變更與 outbox 記錄存入同一個資料庫交易，由獨立 relay 發布，消費者使用穩定的事件 ID 去除重複。
+DB 提交、訊息代理的事件發布，以及通訊端的回應傳送，無法包在同一個原子交易中。發布事件後 DB 提交可能失敗，提交後也可能發生回應傳送失敗。
+
+若必須同時保證 DB 變更與事件記錄，請在同一個 DB 交易中儲存 outbox 紀錄，再由獨立的傳遞工作發布事件。重新傳送時也使用相同的事件 ID，消費者則必須以此 ID 判斷是否重複。
 
 - [Interceptor API](/zh-Hant/reference/api/interceptor)
-- [Database](/zh-Hant/learn/tutorial/5-database)
+- [資料庫連線](/zh-Hant/learn/tutorial/5-database)

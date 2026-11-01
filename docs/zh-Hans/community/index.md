@@ -1,43 +1,22 @@
 # 社区
 
-欢迎来到 Spine 社区！这里属于所有想使用、贡献并与 Spine 一同成长的人。
+如果您在使用 Spine 时遇到问题，或想报告错误、提出改进建议，请使用以下渠道。
 
-## 💬 Discord 服务器
+## 提问与分享使用经验
 
-加入官方 Spine Discord，与其他开发者交流、提问并分享项目想法。
+您可以在 Discord 上咨询 Spine 的使用方法，并与其他开发者分享使用经验。
 
 - [Spine Discord 邀请链接](https://discord.gg/8C7tAVzRKe)
 
-## 🚀 贡献
+## 报告错误与提出改进建议
 
-Spine 是开源项目，随时欢迎你的贡献。无论是新增功能、修复问题还是改进文档，每一份贡献都很有价值。
+如果发现错误或想提出功能建议，请创建 GitHub Issue。报告错误时，请一并提供复现步骤、预期行为与实际行为，以及 Go 版本和操作系统信息。
 
-- [GitHub 仓库](https://github.com/NARUBROWN/spine)
+- [Spine GitHub Issues](https://github.com/NARUBROWN/spine/issues/)
 
-## 🤝 行为准则
+## 贡献代码与文档
 
-请遵守行为准则，让每位社区成员都能获得尊重并安全参与。
+您可以参与添加功能、修复错误和改进文档。关于在实现前创建 Issue 并与维护者讨论范围的流程，请参阅贡献指南。
 
-- 即将推出
-
-## 🌟 导师计划
-
-想学习 Spine 或需要参与项目的帮助吗？经验丰富的开发者导师随时准备提供协助。
-
-- 即将推出
-
-## 📅 活动
-
-参加与 Spine 相关的线上、线下活动，拓展知识与人脉。
-
-- 即将推出
-
-## 💡 提出想法
-
-如果你有关于新功能或改进的想法，欢迎告诉我们。你的建议能让 Spine 变得更好。
-
-- [提出想法](https://github.com/NARUBROWN/spine/issues/)
-
----
-
-感谢参与 Spine 社区！一起打造出色的项目吧！🚀
+- [贡献指南](/zh-Hans/community/contributing)
+- [Spine GitHub 仓库](https://github.com/NARUBROWN/spine)

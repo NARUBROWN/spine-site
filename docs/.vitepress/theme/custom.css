@@ -4,6 +4,13 @@
     /* Example brand color */
 }
 
+/* 코드 복사 완료 안내를 페이지 언어에 맞춥니다. */
+:lang(ko) { --vp-code-copy-copied-text-content: '복사 완료'; }
+:lang(en) { --vp-code-copy-copied-text-content: 'Copied'; }
+:lang(ja) { --vp-code-copy-copied-text-content: 'コピーしました'; }
+:lang(zh-CN) { --vp-code-copy-copied-text-content: '已复制'; }
+:lang(zh-TW) { --vp-code-copy-copied-text-content: '已複製'; }
+
 /* Fix for Mermaid text truncation - allow text to overflow container if needed */
 .mermaid svg g.node foreignObject {
     overflow: visible !important;

@@ -1,6 +1,8 @@
 # Swagger와 OpenAPI 문서
 
-[첫 번째 앱](/ko/learn/getting-started/first-app)에서 CLI로 생성한 프로젝트를 사용합니다. `src/user`는 [컨트롤러](/ko/learn/tutorial/2-controller)의 `spine generate resource user`로 생성합니다. CLI의 정적 OpenAPI 내보내기와 Swaggo·Swagger UI 통합은 별도 기능입니다.
+CLI로 OpenAPI 파일을 내보내고, 필요하면 Swaggo 문서와 Swagger UI를 추가해 브라우저에서 요청을 보냅니다. CLI의 정적 OpenAPI 내보내기와 Swaggo를 사용하는 UI 구성은 각각 진행합니다.
+
+[첫 번째 앱](/ko/learn/getting-started/first-app)에서 만든 `example.com/hello-spine` 프로젝트를 사용합니다. [컨트롤러](/ko/learn/tutorial/2-controller)의 `spine generate resource user`로 `src/user`를 먼저 생성하세요. 다른 모듈 경로를 사용했다면 아래 import 경로의 `example.com/hello-spine` 부분만 해당 모듈 경로로 바꾸고 `/docs` 접미사는 유지합니다. 명령은 프로젝트 루트에서 실행합니다.
 
 ## CLI로 OpenAPI 내보내기
 
@@ -12,11 +14,13 @@ spine contract check
 spine contract export --format openapi --output openapi.json
 ```
 
-생성 파일에는 `/health`, `/user/{id}`와 `x-spine-*` 분석 근거가 포함됩니다. Spine의 `/user/:id`는 OpenAPI에서 `/user/{id}`로 표현됩니다. 실행 중 선택하는 status 등은 정적 분석의 한계로 표시됩니다. 내보내기는 Swagger UI를 설치하거나 HTTP 경로에 마운트하지 않습니다. 기존 파일을 교체할 때만 내용을 확인한 뒤 `--force`를 사용하세요.
+생성된 `openapi.json`에서 `/health`와 `/user/{id}`를 확인합니다. Spine의 `/user/:id`는 OpenAPI에서 `/user/{id}`로 표현되며, `x-spine-*` 필드에는 분석 근거와 한계가 기록됩니다. 예를 들어 실행 중에 선택하는 응답 상태 코드는 정적 분석만으로 확정할 수 없습니다.
+
+이 명령은 문서 파일만 생성합니다. Swagger UI가 필요하면 다음 단계를 진행하세요. 기존 파일을 교체할 때는 내용을 확인한 뒤 `--force`를 사용합니다.
 
 ## 선택: Swaggo와 Swagger UI
 
-아래는 Swaggo로 별도의 Swagger 2.0 문서를 만들고 Echo transport에 UI를 직접 연결하는 예제입니다. CLI가 자동 구성하지 않습니다. CLI의 `openapi.json`과 Swaggo의 `docs/swagger.json`은 서로 다른 생성물입니다.
+Swaggo로 Swagger 2.0 문서를 만들고 Echo 전송 계층에 UI 경로를 추가합니다. 파일과 등록 코드는 직접 작성합니다. CLI의 `openapi.json`과 Swaggo의 `docs/swagger.json`은 서로 다른 문서이므로 각각 갱신해야 합니다.
 
 ### 1. 도구 설치
 
@@ -25,9 +29,9 @@ go install github.com/swaggo/swag/cmd/swag@v1.16.6
 go get github.com/swaggo/swag@v1.16.6 github.com/swaggo/http-swagger@v1.3.4
 ```
 
-### 2. 일반 주석 추가
+### 2. API 기본 정보 추가
 
-`internal/application/application.go`의 `BuildApplication()` 바로 위에 추가합니다. 생성된 main과 `spine.toml`의 `composition = "./internal/application"` 설정은 유지합니다.
+`internal/application/application.go`의 `BuildApplication()` 바로 위에 다음 주석을 추가합니다. 생성된 `main.go`와 `spine.toml`의 `composition = "./internal/application"` 설정은 유지합니다.
 
 ```go
 // @title Hello Spine API
@@ -40,9 +44,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-### 3. 실제 조회 핸들러 문서화
+### 3. GET 핸들러 문서화
 
-생성된 `src/user/user_controller.go`를 다음과 같이 직접 확장합니다. `UserIDResponse`는 문서화를 위해 추가한 타입이며 응답 JSON은 기존 `{"id":1}`과 같습니다. DB 조회나 전체 CRUD는 구현하지 않습니다.
+생성된 `src/user/user_controller.go`를 다음 코드로 교체합니다. `UserIDResponse`는 응답 스키마를 문서화하기 위해 추가한 타입입니다. 이 핸들러는 경로의 ID를 반환하며, `/user/1`의 응답 JSON은 기존과 같은 `{"id":1}`입니다. DB에서 사용자를 조회하지는 않습니다.
 
 ```go
 package user
@@ -76,13 +80,13 @@ func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
 
 ### 4. docs 패키지를 먼저 생성
 
-프로젝트 루트에서 실행합니다. 이 단계 전에는 아직 존재하지 않는 `example.com/hello-spine/docs`를 import하지 마세요. `--parseInternal`은 일반 주석이 있는 internal 패키지를 읽도록 지정합니다.
+다음 명령으로 문서 패키지를 생성합니다. 생성 전에는 아직 존재하지 않는 `example.com/hello-spine/docs`를 import하지 마세요. `--parseInternal`은 API 기본 정보가 있는 internal 패키지도 읽도록 지정합니다.
 
 ```bash
 swag init -g internal/application/application.go --parseInternal
 ```
 
-`docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml`이 생성됩니다. `docs.go`의 init 함수가 스펙을 등록하므로 생성 후 blank import가 필요합니다. 생성 파일은 직접 수정하지 않습니다.
+`docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml`이 생성됩니다. `docs.go`의 `init` 함수가 문서를 등록하므로 다음 단계에서 이 패키지를 부수 효과용 import로 추가합니다. 생성 파일은 직접 수정하지 않습니다.
 
 ### 5. UI 연결
 
@@ -96,7 +100,7 @@ import (
 )
 ```
 
-같은 파일의 `BuildApplication()`에서 `app := spine.New()` 이후, return 이전에 추가합니다. 기존 health·user 등록을 유지하세요.
+같은 파일의 `BuildApplication()`에서 `app := spine.New()` 이후, `return` 이전에 다음 코드를 추가합니다. 기존 health와 user 등록은 유지하세요.
 
 ```go
 app.Transport(func(transport any) {
@@ -115,20 +119,22 @@ spine verify
 spine dev
 ```
 
-다른 터미널에서 `http://localhost:8080/swagger/index.html`과 `/swagger/doc.json`을 확인합니다. UI의 Try it out도 실제 `/user/1`에 요청해야 합니다. `app.Transport`로 직접 추가한 Echo 경로는 CLI의 정적 Spine 라우트 계약에 포함되지 않으므로 UI 경로는 따로 확인합니다.
+브라우저에서 `http://localhost:8080/swagger/index.html`을 열어 GET 경로가 표시되는지 확인합니다. `/swagger/doc.json`에서는 생성한 Swagger 2.0 문서가 반환되어야 합니다. UI의 Try it out으로 `/user/1`에 요청하면 HTTP 200과 `{"id":1}`이 반환됩니다.
 
-## 수동 CRUD 확장의 주석·DTO 레퍼런스
+`app.Transport`로 직접 추가한 Echo 경로는 CLI의 정적 Spine 라우트 계약에 포함되지 않으므로, 계약 검사를 통과해도 UI와 문서 경로는 별도로 확인해야 합니다.
 
-아래 태그와 DTO는 추가 기능을 구현할 때 사용하는 참고 예시입니다. `resource` 생성기가 이 요청/응답 타입이나 POST·PUT·DELETE 핸들러를 생성하지는 않습니다. `src/user`의 같은 `package user`에 추가하고 실제 라우트·반환 status와 주석을 맞추세요. 요청 DTO는 핸들러에서 포인터로 받습니다. `example`·`enums`·`minimum` 등은 문서 메타데이터이며 입력 검증을 자동 실행하지 않습니다.
+## 기능 확장에 사용할 주석과 DTO
 
-## 주석 태그 레퍼런스
+아래 태그와 DTO는 기능을 추가할 때 참고할 예시입니다. `resource` 생성기는 이 요청과 응답 타입이나 POST, PUT, DELETE 핸들러를 생성하지 않습니다. `src/user`의 `package user`에 필요한 타입을 추가하고, 실제 라우트와 응답 상태 코드에 맞게 주석을 작성하세요.
 
-### 기본 태그
+요청 DTO는 핸들러에서 포인터로 받습니다. `example`, `enums`, `minimum` 등의 태그는 문서에 사용할 정보이며 입력 검증을 자동 실행하지 않습니다.
+
+### 기본 주석 태그
 
 | 태그 | 설명 | 예시 |
 |------|------|------|
-| `@Summary` | 요약 (한 줄) | `유저 조회` |
-| `@Description` | 상세 설명 | `ID로 유저 정보를 조회합니다` |
+| `@Summary` | 한 줄 요약 | `사용자 조회` |
+| `@Description` | 상세 설명 | `ID로 사용자 정보를 조회합니다` |
 | `@Tags` | 그룹 태그 | `users` |
 | `@Router` | 경로와 메서드 | `/user [get]` |
 
@@ -148,19 +154,19 @@ spine dev
 | `@Failure` | 실패 응답 | `404 {object} ErrorResponse` |
 
 
-## @Param 형식
+## 요청 파라미터 지정
 
 ```
 @Param [이름] [위치] [타입] [필수여부] "[설명]"
 ```
 
-### 위치 (in)
+### 파라미터 위치
 
 | 위치 | 설명 | 예시 |
 |------|------|------|
-| `query` | 쿼리 스트링 | `/user?id=1` |
+| `query` | 쿼리 문자열 | `/user?id=1` |
 | `path` | URL 경로 | `/user/{id}` |
-| `body` | 요청 본문 | JSON body |
+| `body` | 요청 본문 | JSON 객체 |
 | `header` | 헤더 | `Authorization` |
 | `formData` | 폼 데이터 | 파일 업로드 |
 
@@ -245,7 +251,7 @@ type ErrorResponse struct {
 
 ## 문서 다시 생성하기
 
-주석이나 DTO를 변경하면 Swaggo 문서를 다시 생성합니다. `spine dev`는 Swaggo를 자동 실행하지 않습니다. CLI 스펙은 `contract export`로 따로 갱신합니다.
+주석이나 DTO를 변경하면 Swaggo 문서를 다시 생성해야 합니다. `spine dev`는 Swaggo를 자동 실행하지 않습니다. 다음 Makefile을 추가하면 `make run`으로 문서를 갱신한 뒤 앱을 실행할 수 있습니다. CLI의 OpenAPI 파일은 `spine contract export`로 따로 갱신합니다.
 
 ```makefile
 .PHONY: swagger run

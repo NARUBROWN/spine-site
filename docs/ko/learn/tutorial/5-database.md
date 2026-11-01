@@ -1,11 +1,12 @@
 # 데이터베이스 연결
 
-Bun을 사용하여 데이터베이스에 연결하기.
-
+Bun으로 MySQL에 연결하고, 생성된 `GET /user/:id`가 데이터베이스에서 사용자를 조회하도록 확장합니다. 테이블을 만드는 마이그레이션과 저장소의 기본 쿼리도 함께 작성합니다.
 
 ## CLI 프로젝트 준비
 
-[CLI 설치와 첫 앱](/ko/learn/getting-started/first-app), [프로젝트 구조](/ko/learn/tutorial/1-project-structure)의 `example.com/my-app`에서 이어갑니다. 사용자 리소스가 아직 없다면 다음 계획을 검토하고 적용합니다.
+[CLI 설치와 첫 앱](/ko/learn/getting-started/first-app)과 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)의 `example.com/my-app`에서 이어갑니다. 접속할 MySQL 데이터베이스와 테이블을 만들 권한이 있는 계정이 필요합니다. 명령은 프로젝트 루트에서 실행합니다.
+
+사용자 리소스가 아직 없다면 생성할 파일을 확인한 뒤 적용합니다. 이미 만든 리소스는 다시 생성하지 않습니다.
 
 ```sh
 spine generate resource user --dry-run
@@ -15,23 +16,13 @@ spine generate resource user --dry-run
 spine generate resource user
 ```
 
-텍스트 미리보기에서 생성 파일을 확인한 뒤 일반 생성 명령을 실행합니다. 이미 만든 리소스라면 다시 생성하지 않습니다.
+CLI는 사용자 리소스의 기본 파일과 등록 코드를 생성합니다. Bun 의존성, 데이터베이스 연결, 모델, 마이그레이션은 아래 단계에서 직접 추가합니다. 생성된 `main.go`는 유지합니다.
 
-CLI는 사용자 리소스 골격과 등록만 생성합니다. Bun·DB 연결·모델·마이그레이션 생성기는 지원하지 않으므로 아래 파일과 의존성은 직접 추가합니다. 생성된 `main.go`는 유지합니다.
+생성된 GET 핸들러는 요청의 ID만 반환합니다. 저장소를 작성한 뒤 서비스와 컨트롤러를 연결해야 실제 조회가 가능합니다. 저장, 수정, 삭제 메서드는 저장소에만 추가하며 이 문서에서는 해당 HTTP 경로를 구현하지 않습니다.
 
-아래 저장소 코드는 `src/user/user_repository.go`를 확장합니다. 생성된 서비스와 컨트롤러는 기본적으로 ID를 반환하는 GET 골격이므로 실제 조회·CRUD를 제공하려면 서비스와 핸들러도 직접 연결해야 합니다.
+## Bun으로 쿼리 작성
 
-
-## Bun이란?
-
-[Bun](https://bun.uptrace.dev/)은 Go를 위한 경량 ORM입니다.
-
-- SQL 친화적 — 쿼리가 직관적
-- 타입 안전 — 컴파일 타임 검증
-- 빠른 성능 — 리플렉션 최소화
-
-Spine은 특정 ORM을 강제하지 않지만, Bun과의 조합을 권장합니다.
-
+이 예제는 [Bun](https://bun.uptrace.dev/)으로 SQL 쿼리를 작성하고 결과를 Go 구조체에 매핑합니다. Spine은 특정 ORM을 요구하지 않습니다.
 
 ## 설치
 
@@ -87,7 +78,9 @@ func NewDB() *bun.DB {
 }
 ```
 
-`NewDB`는 DI가 실제 앱 실행 중 생성할 때 연결을 확인합니다. 생성자는 반환값 하나만 지원하므로 `(*bun.DB, error)`를 반환하는 함수를 등록하지 않습니다. `BuildApplication`에는 생성자만 등록하고 직접 연결하지 않아 정적 검사와 생성된 검증 테스트가 DB를 요구하지 않게 합니다.
+`NewDB`는 앱 실행 중 의존성 주입(DI)으로 호출될 때 연결을 확인합니다. `DATABASE_URL`이 없거나 연결 확인에 실패하면 앱 실행을 중단합니다.
+
+Spine 생성자는 반환값 하나만 지원하므로 `(*bun.DB, error)`를 반환하는 함수를 등록하지 않습니다. `BuildApplication`에는 생성자만 등록합니다. 이 함수에서 데이터베이스에 직접 연결하지 않아야 정적 검사와 생성된 검증 테스트를 DB 없이 실행할 수 있습니다.
 
 ### Spine에 등록
 
@@ -131,7 +124,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ## PostgreSQL 연결
 
-PostgreSQL 코드는 MySQL용 `src/database/db.go`의 대안입니다. 둘 중 하나만 사용하고 DSN과 마이그레이션 SQL도 선택한 DB에 맞게 변경하세요. `sql.Open` 자체는 실제 연결을 확인하지 않습니다.
+PostgreSQL을 사용한다면 다음 코드로 MySQL용 `src/database/db.go`를 교체합니다. 두 구현 중 하나만 사용하고, 연결 문자열(DSN)과 마이그레이션 SQL도 선택한 DB에 맞게 변경하세요. 이 PostgreSQL 예제의 `sql.Open`은 실제 연결을 확인하지 않으므로 첫 쿼리에서 연결 오류가 발생할 수 있습니다.
 
 ```go
 // src/database/db.go
@@ -160,9 +153,9 @@ func NewDB() *bun.DB {
 ```
 
 
-## 환경 변수 사용
+## 연결 문자열 설정
 
-하드코딩 대신 환경 변수를 사용하세요.
+위의 `NewDB`는 환경 변수 `DATABASE_URL`에서 연결 문자열을 읽습니다.
 
 ```go
 // src/database/db.go의 NewDB 내부 발췌
@@ -178,9 +171,9 @@ spine dev
 ```
 
 
-## Entity 정의
+## 사용자 모델 정의
 
-데이터베이스 테이블과 매핑되는 구조체입니다.
+`src/entity/user.go`에 `users` 테이블에 매핑할 구조체를 추가합니다.
 
 ```go
 // src/entity/user.go
@@ -201,20 +194,18 @@ type User struct {
 
 | 태그 | 설명 |
 |------|------|
-| `pk` | Primary Key |
+| `pk` | 기본 키 |
 | `autoincrement` | 자동 증가 |
 | `notnull` | NOT NULL |
 | `unique` | UNIQUE 제약 |
-| `nullzero` | Go 제로값을 NULL로 처리 |
+| `nullzero` | Go 타입의 기본값을 NULL로 처리 |
 | `default:value` | 기본값 |
 
----
-
-## Repository 작성
+## 저장소 작성
 
 ### bun.IDB 인터페이스 사용
 
-`bun.IDB`를 사용하면 `*bun.DB`와 `bun.Tx` 모두 수용할 수 있습니다.
+생성된 `src/user/user_repository.go`를 다음 코드로 교체하고, 이어지는 조회, 저장, 수정, 삭제 메서드를 같은 파일에 추가합니다. `bun.IDB`는 일반 연결인 `*bun.DB`와 트랜잭션인 `bun.Tx`가 모두 구현하는 인터페이스입니다.
 
 ```go
 // src/user/user_repository.go
@@ -241,37 +232,37 @@ func NewUserRepository(db *bun.DB) *UserRepository {
 ```go
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, error) {
     user := new(entity.User)
-    
+
     err := r.db.NewSelect().
         Model(user).
         Where("id = ?", id).
         Scan(ctx)
-    
+
     if err != nil {
         return nil, err
     }
-    
+
     return user, nil
 }
 
 func (r *UserRepository) FindAll(ctx context.Context) ([]entity.User, error) {
     var users []entity.User
-    
+
     err := r.db.NewSelect().
         Model(&users).
         Scan(ctx)
-    
+
     return users, err
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
     user := new(entity.User)
-    
+
     err := r.db.NewSelect().
         Model(user).
         Where("email = ?", email).
         Scan(ctx)
-    
+
     return user, err
 }
 ```
@@ -283,7 +274,7 @@ func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
     _, err := r.db.NewInsert().
         Model(user).
         Exec(ctx)
-    
+
     return err
 }
 ```
@@ -296,7 +287,7 @@ func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
         Model(user).
         WherePK().
         Exec(ctx)
-    
+
     return err
 }
 ```
@@ -309,7 +300,7 @@ func (r *UserRepository) Delete(ctx context.Context, id int) error {
         Model((*entity.User)(nil)).
         Where("id = ?", id).
         Exec(ctx)
-    
+
     return err
 }
 ```
@@ -317,7 +308,9 @@ func (r *UserRepository) Delete(ctx context.Context, id int) error {
 
 ## 생성된 GET을 DB 조회에 연결
 
-기존 `src/user/user_controller.go`를 아래 코드로 교체하고 `src/user/user_read.go`를 추가합니다. 생성된 `GET /user/:id` 경로와 생성자 등록은 유지합니다. 저장된 사용자를 반환하며, 없는 ID는 HTTP 404입니다. 생성된 ID 반환 골격과 실제 DB 조회를 구분하기 위해 이 단계를 완료하세요.
+기존 `src/user/user_controller.go`를 아래 코드로 교체하고 `src/user/user_read.go`를 추가합니다. 생성된 `GET /user/:id` 경로와 생성자 등록은 유지합니다.
+
+이제 GET은 저장된 사용자를 반환합니다. ID에 해당하는 행이 없으면 HTTP 404를, 그 밖의 데이터베이스 오류가 발생하면 HTTP 500을 반환합니다.
 
 ```go
 // src/user/user_controller.go
@@ -371,7 +364,7 @@ func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, err
 
 ### 마이그레이션 파일 작성
 
-아래 SQL 파일을 `cmd/migrate/migrations`에 만듭니다. 마이그레이션은 별도 실행 파일로 직접 추가하며 `spine migrate` 명령은 없습니다. DB를 준비한 뒤 의도적으로 실행하세요.
+아래 SQL 파일을 `cmd/migrate/migrations`에 만듭니다. 마이그레이션은 별도 Go 프로그램으로 실행하며 `spine migrate` 명령은 없습니다. 다음 실행 단계는 기존 데이터베이스에 `users` 테이블을 추가하므로, 앞에서 설정한 `DATABASE_URL`이 예제용 DB를 가리키는지 확인하세요.
 
 ```sql
 -- cmd/migrate/migrations/001_create_users.up.sql
@@ -433,6 +426,8 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 
 ### 실행
 
+`DATABASE_URL`을 설정한 터미널에서 실행합니다. 마이그레이션이 성공하면 `Migrations applied successfully.`가 출력되고, 이후 서버를 실행할 수 있습니다.
+
 ```bash
 # 마이그레이션 실행
 go run ./cmd/migrate
@@ -468,7 +463,9 @@ my-app/
         └── 001_create_users.down.sql
 ```
 
-## Spine과 통합
+## 앱 등록 확인
+
+추가한 파일을 사용할 수 있도록 앱의 등록 상태를 확인합니다. `BuildApplication()`은 앞에서 작성한 내용과 같으며, 이미 적용했다면 다시 교체할 필요가 없습니다. 저장소 생성자는 DI에서 구체 타입인 `*bun.DB`를 받습니다.
 
 ```go
 // internal/application/application.go
@@ -517,6 +514,8 @@ func NewUserRepository(db *bun.DB) *UserRepository {
 ```
 
 ## 쿼리 예제
+
+다음 코드는 저장소 메서드를 확장할 때 참고할 쿼리 구문입니다. `users`와 `ctx`는 각 메서드에서 선언해야 합니다. `age`, `status` 조건을 사용하려면 해당 열을 모델과 테이블에 먼저 추가하세요.
 
 ### 조건 조회
 
@@ -572,22 +571,11 @@ err := r.db.NewSelect().
     Scan(ctx)
 ```
 
-조인 예제의 `Orders` 관계는 별도 엔티티와 Bun relation 태그를 정의해야 동작합니다. 위의 기본 User 모델에는 포함되지 않습니다.
-
-
-## 핵심 정리
-
-| 개념 | 설명 |
-|------|------|
-| **bun.IDB** | DB와 Tx 모두 수용하는 인터페이스 |
-| **Entity** | 테이블과 매핑되는 Go 구조체 |
-| **Repository** | 데이터 접근 계층 |
-| **Migration** | SQL 파일로 스키마 관리 |
-
+조인 예제의 `Orders` 관계는 별도 엔티티와 Bun 관계 태그를 정의해야 동작합니다. 위의 기본 `User` 모델에는 포함되지 않습니다.
 
 ## 검증
 
-정적 계약과 로컬 Go 검증을 실행합니다. `verify` 성공은 실제 DB 연결·마이그레이션·CRUD 검증을 뜻하지 않습니다. DSN과 테스트 DB를 준비해 연결과 쿼리를 별도로 확인하세요.
+정적 계약과 로컬 Go 검사를 실행합니다. `verify`는 실제 DB 연결, 마이그레이션, 쿼리를 검증하지 않습니다.
 
 ```sh
 go mod tidy
@@ -596,7 +584,9 @@ spine contract check
 spine verify
 ```
 
+마이그레이션 후 `spine dev`로 앱을 실행하고 `GET /user/:id`를 요청합니다. 빈 테이블에서는 해당 ID가 없어 HTTP 404가 반환됩니다. 사용자를 저장한 뒤 조회하려면 다음 트랜잭션 튜토리얼의 POST 예제를 적용하세요.
+
 ## 다음 단계
 
-- [튜토리얼: 트랜잭션](/ko/learn/tutorial/6-transaction) — 트랜잭션 인터셉터
-- [튜토리얼: 에러 처리](/ko/learn/tutorial/7-error-handling) — httperr 사용법
+- [튜토리얼: 트랜잭션](/ko/learn/tutorial/6-transaction): 요청 단위로 사용자를 저장하고 롤백 확인
+- [튜토리얼: 오류 처리](/ko/learn/tutorial/7-error-handling): `httperr`로 HTTP 오류 반환

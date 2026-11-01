@@ -1,34 +1,33 @@
 ---
 layout: home
-description: "使い慣れた設計で、高速なサーバーを。 使い慣れたコントローラー、サービス、コンストラクタ注入、インターセプターをGoで。内部ラボの処理量とメモリ測定結果を公開しています。"
+description: "慣れ親しんだ開発スタイルで、より高速なサーバーを作りましょう。コントローラーとサービス、コンストラクタ注入とインターセプターで Go アプリを構成し、内部ラボで測定したスループットとメモリ使用量を確認できます。"
 
 hero:
   name: "Spine"
-  text: "使い慣れた設計で、<br>高速なサーバーを。"
-  tagline: "NestJSやSpringで使い慣れたコントローラーとサービスの構成をGoでも。コンストラクタ注入とインターセプターでアプリを構築し、同じリソース制約での処理量とメモリ使用量を比較できます。"
+  text: "慣れ親しんだ開発スタイルで、<br>より高速なサーバーを。"
+  tagline: "NestJS や Spring で使っていたコントローラーとサービスの構造で Go アプリを構成しましょう。コンストラクタ注入とインターセプターを使い、同じリソースで測定したスループットとメモリ使用量を確認できます。"
   actions:
     - theme: brand
       text: "最初のアプリを作る"
       link: /ja/learn/getting-started/first-app
     - theme: alt
-      text: "性能を比較する"
+      text: "性能比較を見る"
       link: "#benchmarks"
 
 features:
-  - title: "使い慣れたコントローラーとサービス"
-    details: "コントローラーがリクエストを受け取り、サービスが業務処理を担当します。Goの構造体とメソッドで責務を分離します。"
+  - title: "慣れ親しんだコントローラーとサービス"
+    details: "コントローラーがリクエストを受け、サービスが業務処理を担当します。Go の構造体とメソッドで、それぞれの役割を分けます。"
     link: /ja/learn/tutorial/2-controller
-    linkText: "コントローラーを書く"
-  - title: "コンストラクタで依存関係を接続"
-    details: "必要なサービスを引数として宣言します。Spineが登録されたコンストラクタでオブジェクトを作り、依存関係を接続します。"
+    linkText: "コントローラーの書き方を見る"
+  - title: "コンストラクタでつなぐ依存関係"
+    details: "必要なサービスをコンストラクタのパラメーターとして宣言します。Spine が登録済みのコンストラクタを呼び出してオブジェクトを生成し、依存関係をつなぎます。"
     link: /ja/learn/tutorial/3-dependency-injection
     linkText: "依存性注入を見る"
   - title: "共通処理をインターセプターに集約"
-    details: "認証、トランザクション、ログを業務処理から分離します。インターセプターを登録し、リクエスト処理のどこで実行するかを指定します。"
+    details: "認証、トランザクション、ログ出力を業務コードから分離します。インターセプターを登録し、リクエストの流れの中で実行するタイミングを指定します。"
     link: /ja/learn/tutorial/4-interceptor
-    linkText: "インターセプターを使う"
+    linkText: "インターセプターの使い方を見る"
 ---
-
 
 <BenchmarkSection />
 
@@ -39,17 +38,17 @@ features:
 <div class="home-next-steps">
 
 <a href="/ja/learn/getting-started/first-app">
-<strong>CLIで最初のアプリを作る <span aria-hidden="true">→</span></strong>
-<span>CLIのインストール、プロジェクトの生成、/health の応答確認まで進めます。</span>
+<strong>CLI で最初のアプリを作る</strong>
+<span>CLI のインストールとプロジェクトの作成から、/health のレスポンス確認まで順に進めます。</span>
 </a>
 
 <a href="/ja/reference/examples/login">
-<strong>JWTログインの例を見る <span aria-hidden="true">→</span></strong>
-<span>トークンの発行と認証付きリクエストの処理を確認します。</span>
+<strong>JWT ログインの例を見る</strong>
+<span>トークンを発行し、認証が必要なリクエストを処理する構造を確認します。</span>
 </a>
 
 <a href="/ja/reference/api/spine-app">
-<strong>APIの動作を調べる <span aria-hidden="true">→</span></strong>
+<strong>API の動作を確認する</strong>
 <span>コンストラクタ、ルート、インターセプターの登録方法と戻り値を確認します。</span>
 </a>
 

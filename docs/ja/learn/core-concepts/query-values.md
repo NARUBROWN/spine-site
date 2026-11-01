@@ -1,6 +1,14 @@
 # query.Values
 
-[最初のアプリ](/ja/learn/getting-started/first-app)で CLI プロジェクトを作成し、[コントローラー](/ja/learn/tutorial/2-controller)で `src/user` を生成してから進めます。ハンドラー例は `src/user` の同じ `package user` を手動で拡張します。`User`、検索・ページ応答型、サービスの検索メソッドは例に合わせて実装し、CLI は生成しません。Product・Order も同じ方式の追加機能です。各ハンドラーは独立した代替例なので必要なメソッドとルートだけを追加します。成功応答は `httpx.Response[T]` で包み、`httpx` と `query` を import してください。
+`query.Values`でHTTPクエリパラメーターを読み取り、デフォルト値を指定できます。コントローラーの引数に`q query.Values`を宣言し、必要なキーを文字列、整数、真偽値として取得して使用します。クエリパラメーターを任意のDTOに自動でマッピングする方法はサポートしていません。
+
+このページでは、Spine v0.5.1の`github.com/NARUBROWN/spine/pkg/query`を基準に説明します。
+
+## CLIプロジェクトで使用する
+
+[最初のアプリ](/ja/learn/getting-started/first-app)でプロジェクトを作成し、[コントローラー](/ja/learn/tutorial/2-controller)で`src/user`リソースを生成した後から進めます。サンプルのハンドラーを同じ`package user`に追加し、そのハンドラーを使用するルートも登録してください。
+
+`User`、検索条件とページレスポンスの型、サービスの検索メソッドはアプリで定義します。商品と注文の例も同じ方法による機能拡張です。各例は独立した選択肢なので、必要なメソッドとルートだけを追加してください。成功レスポンスは`httpx.Response[T]`で包み、次の2つのパッケージをインポートします。
 
 ```go
 import (
@@ -9,92 +17,51 @@ import (
 )
 ```
 
-クエリパラメータを明示的に処理する。
+基本例では、クエリパラメーターから`id`と`name`を読み取ってレスポンスを返します。
 
-## 概要
+```go
+// src/user/user_controller.go
+func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
+    return httpx.Response[User]{Body: User{
+        ID:   q.Int("id", 0),
+        Name: q.String("name"),
+    }}
+}
+```
 
-`query.Values` は、HTTP クエリーパラメータ全体の読み取り専用ビューを提供します。 SpineはクエリパラメータをDTOに自動的にマッピングしません。代わりに、`query.Values`を介してControllerが直接必要な値を明示的に取り出すように設計されています。
+このメソッドを`GET /user`に登録した場合、リクエストとレスポンスは次のようになります。
 
+```bash
+# 요청
+GET /user?id=123&name=john
+
+# 응답
+{
+    "id": 123,
+    "name": "john"
+}
+```
+
+## クエリ値が渡される仕組み
+
+HTTPリクエストのクエリパラメーターは、1つのキーに複数の文字列値を持つことができます。たとえば`?tag=go&tag=web`には、`tag`の値が2つあります。Spineはこのクエリマップを`query.Values`で包み、コントローラーに渡します。
 
 ```mermaid
 graph TD
     Request["GET /user?status=active&tag=go&tag=web&page=1"]
-    
+
     Request --> Values
-    
+
     Values["query.Values<br/>values: {<br/>  'status': ['active'],<br/>  'tag':    ['go', 'web'],<br/>  'page':   ['1']<br/>}"]
-    
+
     Values --> Controller
-    
-    Controller["Controller<br/>q.String('status')  → 'active'<br/>q.Int('page', 1)    → 1<br/>q.Has('tag')        → true"]
+
+    Controller["コントローラー<br/>q.String('status')  → 'active'<br/>q.Int('page', 1)    → 1<br/>q.Has('tag')        → true"]
 ```
 
+ハンドラーには、`query.Values`を値型で宣言します。標準のリゾルバーはこの型そのものを処理し、`*query.Values`は同じ注入対象にはなりません。クエリ値の注入はHTTPリクエスト向けなので、ConsumerやWebSocketハンドラーで同じ動作を期待しないでください。
 
-## なぜ自動mappingではないのですか？
-
-ほとんどのフレームワークは、クエリパラメータをstructタグに自動バインドします。
-
-
-```go
-// 他のフレームワークの方式
-type SearchParams struct {
-    Status string   `query:"status"`
-    Tags   []string `query:"tag"`
-    Page   int      `query:"page"`
-}
-
-func Search(params SearchParams) { ... }
-```
-
-Spineはこのアプローチを採用していません。
-
-### 理由 1: 明示性
-
-クエリパラメータは可変でオプションです。自動マッピングは「どのパラメータがどこから来たのか」を隠します。
-
-
-```go
-// Spine 方式: 明示的 抽出
-func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
-    status := q.String("status")      // 明確な出所
-    page := q.Int("page", 1)          // デフォルト値を明示
-    
-    if q.Has("premium") {             // 条件付き処理
-        // ...
-    }
-    users := c.service.Search(status, page, q.Has("premium"))
-    return httpx.Response[[]User]{Body: users}
-}
-```
-
-### 理由 2: 柔軟性
-
-検索APIのように動的なクエリを扱う場合、structベースのバインディングは制約になります。
-
-
-```go
-// 動的フィルタ処理
-func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
-    filters := make(map[string]string)
-    
-    // どのような フィルターが 来るか あらかじめ 分からない
-    if q.Has("min_price") {
-        filters["min_price"] = q.String("min_price")
-    }
-    if q.Has("max_price") {
-        filters["max_price"] = q.String("max_price")
-    }
-    if q.Has("category") {
-        filters["category"] = q.String("category")
-    }
-    
-    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
-}
-```
-
-
-## Values 構造体
-
+`query.Values`の読み取りメソッドは、元のクエリマップを変更しません。アプリのコードや単体テストで直接作成する場合は、`query.NewValues(values map[string][]string)`を使用できます。
 
 ```go
 // pkg/query/types.go
@@ -107,15 +74,23 @@ func NewValues(values map[string][]string) Values {
 }
 ```
 
-`Values`は`map[string][]string`を包むラッパーです。各キーは複数の値を持つことができます（例：`?tag=go&tag=web`）。
+`NewValues`は渡されたマップをコピーせずに保持します。生成後に元のマップを変更すると、同じマップを包む`Values`でも変更後の値を読み取ります。通常のHTTPハンドラーでは直接作成する必要はありません。
 
+## 読み取りメソッド
 
-## メソッド
+| メソッド | 戻り値の型 | 値がない場合や変換できない場合 |
+| --- | --- | --- |
+| `Get(key)` | `string` | 空文字列 |
+| `String(key)` | `string` | 空文字列。`Get`と同じ動作 |
+| `Int(key, def)` | `int64` | 呼び出し時に指定した`def` |
+| `GetBoolByKey(key, def)` | `bool` | 呼び出し時に指定した`def` |
+| `Has(key)` | `bool` | キーがなければ`false` |
 
-### Get(key string) string
+値を読み取るメソッドは、最初の値だけを使用します。同じキーが繰り返されても、`Get`、`String`、`Int`、`GetBoolByKey`がすべての値を返したり検査したりするわけではありません。
 
-指定したキーの最初の値を文字列として返します。キーがない場合は空の文字列を返します。
+### 文字列を読み取る
 
+`Get`と`String`は同じ動作をします。キーがない場合や値の一覧が空の場合は、空文字列を返します。
 
 ```go
 // GET /user?name=john&status=active
@@ -125,37 +100,36 @@ q.Get("status")  // "active"
 q.Get("missing") // ""
 ```
 
-### String(key string) string
-
-`Get()`と同じです。エイリアスとして提供されます。
-
-
 ```go
 q.String("name")  // "john"
 ```
 
-### Int(key string, def int64) int64
+### 整数を読み取る
 
-指定したキーの値を整数として解析します。解析失敗またはキーがない場合はデフォルト値を返します。
-
+`Int(key string, def int64) int64`は、最初の値を10進数の64ビット符号付き整数に変換します。キーがない場合や値が空文字列の場合は、`def`を返します。数値ではない場合や`int64`の範囲を超える場合も、エラーを返さずに`def`を使用します。
 
 ```go
 // GET /user?page=3&size=20
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (キーなし → デフォルト値)
-q.Int("page", 1)    // 1 (もし page=abcなら → デフォルト値)
+q.Int("offset", 0)  // 0 (키 없음 → 기본값)
+q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
 ```
 
-### GetBoolByKey(key string, def bool) bool
+変換に成功した負数や0は、そのまま返します。ページ番号や価格範囲のように正の数だけを許可する値は、アプリで別に検査する必要があります。
 
-指定したキーの値をブーリアンとして解析します。値を小文字に変換して判別します。
+### 真偽値を読み取る
 
-**trueとして認識**：`"true"`、`"1"`、`"yes"`、`"y"`、`"on"`（大文字と小文字を無視）
+`GetBoolByKey(key string, def bool) bool`は、最初の値を小文字に変換してから、次の文字列を判定します。
 
-**falseとして認識**：`"false"`、`"0"`、`"no"`、`"n"`、`"off"`（大文字と小文字を無視）
+| 結果 | 認識する値 |
+| --- | --- |
+| `true` | `"true"`, `"1"`, `"yes"`, `"y"`, `"on"` |
+| `false` | `"false"`, `"0"`, `"no"`, `"n"`, `"off"` |
+| `def` | キーがない場合、または上記の一覧にない値 |
 
+大文字と小文字は区別しませんが、空白は除去しません。たとえば`" TRUE "`は認識する値の一覧にないため、デフォルト値を使用します。
 
 ```go
 // GET /user?active=true&verified=1&premium=yes
@@ -163,88 +137,27 @@ q.Int("page", 1)    // 1 (もし page=abcなら → デフォルト値)
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (キーなし → デフォルト値)
-q.GetBoolByKey("active", false)    // false (もし active=maybe → デフォルト値)
+q.GetBoolByKey("deleted", false)   // false (키 없음 → 기본값)
+q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
 ```
 
-### Has(key string) bool
+### キーの存在を確認する
 
-指定したキーが存在することを確認してください。値が空でもキーがある場合は`true`です。
-
+`Has(key string) bool`は値ではなく、キーの存在を確認します。`?empty=`のように値が空でも、キーがあれば`true`です。
 
 ```go
 // GET /user?status=active&empty=
 
 q.Has("status")  // true
-q.Has("empty")   // true (値は 空ですだけ キーは 存在)
+q.Has("empty")   // true (값은 비었지만 키는 존재)
 q.Has("missing") // false
 ```
 
+キーがない場合と、明示的に空文字列を送信した場合を区別するには、`Get`の結果だけでなく`Has`も確認してください。同様に、`Has`が`true`でも、整数や真偽値への変換に成功したという意味ではありません。
 
-## QueryValuesResolver
+## 検索とフィルターに使用する
 
-`query.Values`タイプをControllerパラメータとして使用すると、`QueryValuesResolver`は自動的に値を生成します。
-
-
-```go
-// internal/resolver/query_values_resolver.go
-type QueryValuesResolver struct{}
-
-func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
-    return pm.Type == reflect.TypeFor[query.Values]()
-}
-
-func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP リクエスト コンテキストが ではありません")
-    }
-    return query.NewValues(httpCtx.Queries()), nil
-}
-```
-
-### 動作原理
-
-1. PipelineがControllerシグネチャを分析する
-2. `query.Values`タイプパラメータ発見
-3. `QueryValuesResolver.Supports()` → `true`
-4. `QueryValuesResolver.Resolve()`呼び出し
-5. `ExecutionContext`を`HttpRequestContext`にタイプ断言
-6. `httpCtx.Queries()`でフルクエリマップを取得
-7. `query.NewValues()`でラップして返す
-
-> **注**: Resolverは`core.ExecutionContext`を受け取った後、`core.HttpRequestContext`にタイプ断言します。 HTTP要求ではなくコンテキスト（Consumer、WebSocket）はエラーを返します。
-
-
-## 使用例
-
-### デフォルトの使用
-
-
-```go
-// src/user/user_controller.go
-func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
-    return httpx.Response[User]{Body: User{
-        ID:   q.Int("id", 0),
-        Name: q.String("name"),
-    }}
-}
-```
-
-
-```bash
-# リクエスト
-GET /user?id=123&name=john
-
-# レスポンス
-{
-    "id": 123,
-    "name": "john"
-}
-```
-
-### 検索API
-
+フィルターごとに、呼び出し側でデフォルト値を指定できます。次の例では、検索語、分類、価格範囲、在庫の有無を読み取り、サービスに渡します。
 
 ```go
 func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] {
@@ -253,7 +166,7 @@ func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] 
     minPrice := q.Int("min_price", 0)
     maxPrice := q.Int("max_price", 999999)
     inStock := q.GetBoolByKey("in_stock", true)
-    
+
     products := c.service.Search(SearchCriteria{
         Keyword:  keyword,
         Category: category,
@@ -261,7 +174,7 @@ func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] 
         MaxPrice: maxPrice,
         InStock:  inStock,
     })
-    
+
     return httpx.Response[SearchResult]{Body: SearchResult{
         Query:    keyword,
         Count:    len(products),
@@ -270,24 +183,78 @@ func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] 
 }
 ```
 
-
 ```bash
 GET /product?q=laptop&category=electronics&min_price=500&in_stock=true
 ```
 
-### ページネーションで使用
+この例では、不正な数値や真偽値もデフォルト値で処理します。不正な入力に400レスポンスを返すAPIでは、`String`で元の文字列を読み取り、`strconv.ParseInt`などによる変換の結果を確認してから`httperr.BadRequest`を返してください。デフォルト値による処理とバリデーションは、それぞれ異なる方針です。
 
-`query.Values`と`query.Pagination`を併用できます。
+### 渡されたフィルターだけを適用する
 
+フィルターが任意の場合は、`Has`でキーが渡されたかを確認します。
+
+```go
+func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
+    filters := OrderFilters{}
+
+    if q.Has("user_id") {
+        filters.UserID = q.Int("user_id", 0)
+    }
+
+    if q.Has("status") {
+        filters.Status = q.String("status")
+    }
+
+    if q.Has("from_date") {
+        filters.FromDate = parseDate(q.String("from_date"))
+    }
+
+    if q.Has("to_date") {
+        filters.ToDate = parseDate(q.String("to_date"))
+    }
+
+    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
+}
+```
+
+`OrderFilters`と`parseDate`は、アプリが定義する型と関数です。日付の形式、開始日と終了日の順序、フィルターを省略した場合の動作も、アプリで決める必要があります。この例の`Has`による確認は、形式の検証の代わりにはなりません。
+
+### 許可するフィルターを直接選ぶ
+
+次のように、アプリが受け付けるフィルター名だけを確認し、サービスに渡すこともできます。
+
+```go
+// 동적 필터 처리
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
+    filters := make(map[string]string)
+
+    // 어떤 필터가 올지 미리 알 수 없음
+    if q.Has("min_price") {
+        filters["min_price"] = q.String("min_price")
+    }
+    if q.Has("max_price") {
+        filters["max_price"] = q.String("max_price")
+    }
+    if q.Has("category") {
+        filters["category"] = q.String("category")
+    }
+
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
+}
+```
+
+## ページネーションと併用する
+
+固定の`page`、`size`の処理を`query.Pagination`に任せ、検索条件を`query.Values`で読み取ることができます。
 
 ```go
 func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response[PagedResult] {
     status := q.String("status")
     sortBy := q.String("sort_by")
-    
+
     users := c.service.FindAll(status, sortBy, p.Page, p.Size)
     total := c.service.Count(status)
-    
+
     return httpx.Response[PagedResult]{Body: PagedResult{
         Data:  users,
         Page:  p.Page,
@@ -297,137 +264,53 @@ func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response
 }
 ```
 
-
 ```bash
 GET /user?page=2&size=20&status=active&sort_by=created_at
 ```
 
-### 条件付きフィルタ
+| 項目 | `query.Values` | `query.Pagination` |
+| --- | --- | --- |
+| 用途 | 名前とデフォルト値をアプリが決めるクエリパラメーター | `page`、`size`を使用するページネーション |
+| デフォルト値 | 各読み取りメソッドの呼び出し時に指定 | `page=1`, `size=20` |
+| 型変換 | 必要なキーごとにメソッドを呼び出す | ページネーション引数の注入時に変換 |
 
+同じリクエストで両方の型を宣言してもかまいません。`query.Values`でも`page`、`size`を読み取れるため、サービスに渡すページ情報の基準をどちらかに統一し、処理の重複を避けてください。
 
 ```go
-func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
-    filters := OrderFilters{}
-    
-    if q.Has("user_id") {
-        filters.UserID = q.Int("user_id", 0)
-    }
-    
-    if q.Has("status") {
-        filters.Status = q.String("status")
-    }
-    
-    if q.Has("from_date") {
-        filters.FromDate = parseDate(q.String("from_date"))
-    }
-    
-    if q.Has("to_date") {
-        filters.ToDate = parseDate(q.String("to_date"))
-    }
-    
-    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
-}
+// 고정된 페이지네이션만 필요 → query.Pagination
+func List(p query.Pagination) httpx.Response[[]User]
+
+// 동적 필터 + 페이지네이션 → 둘 다 사용
+func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
+
+// 완전히 동적인 쿼리 → query.Values만
+func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
+## 同じキーに複数の値がある場合
 
-## 多値処理
-
-クエリパラメータは、同じキーで複数の値を渡すことができます。
+HTTPクエリでは、次のように同じキーを繰り返すことができます。
 
 ```
 GET /product?tag=go&tag=web&tag=api
 ```
 
-現在、`query.Values`の`String()`、`Get()`メソッドは最初の値のみを返します。複数の値が必要な場合は、内部マップに直接アクセスするメソッドを追加したり、コンマ区切り値を解析する方法を使用できます。
+このリクエストで`q.String("tag")`と`q.Get("tag")`は、`"go"`だけを返します。Spine v0.5.1の`query.Values`には、値の一覧全体を取得する公開メソッドがなく、アプリから非公開フィールドの`values`に直接アクセスすることもできません。
 
+複数の値を受け取る必要がある場合は、APIでカンマ区切りの文字列を1つ受け取り、アプリで分割する方法があります。次の例では、`strings`パッケージも必要です。
 
 ```go
-// カンマ 区切り 方式
+// 쉼표 구분 방식
 // GET /product?tags=go,web,api
 
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     tagsRaw := q.String("tags")
     tags := strings.Split(tagsRaw, ",")
-    
+
     return httpx.Response[[]Product]{Body: c.service.FindByTags(tags)}
 }
 ```
 
+この例では、`tags`が空の場合、`strings.Split`の結果に空文字列が含まれます。空の項目、重複するタグ、タグ名に含まれるカンマを許可するかは、アプリで決めて検査してください。
 
-## query.Paginationとの違い
-
-|特性query.Values | query.Pagination |
-|------|--------------|------------------|
-| **用途** |可変クエリパラメータ|固定ページネーション
-| **パラメータ** |すべてのクエリ`page`、`size`のみ|
-| **デフォルト** |メソッド呼び出し時の指定自動適用（page = 1、size = 20）|
-| **タイプ変換** |明示的自動
-
-### 使用選択基準
-
-
-```go
-// 固定の ページネーションだけ 必要 → query.Pagination
-func List(p query.Pagination) httpx.Response[[]User]
-
-// 動的 フィルター + ページネーション → 両方 使用
-func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
-
-// 完全に 動的のクエリ → query.Valuesだけ
-func CustomSearch(q query.Values) httpx.Response[[]User]
-```
-
-## 設計原則
-
-### 1. 明示的な抽出
-
-
-```go
-// ✓ Spine: どこから来たか 明確
-status := q.String("status")
-page := q.Int("page", 1)
-
-// ❌ 自動 バインディング: 出所 不明確
-func Search(params SearchParams) // statusが query? body? path?
-```
-
-### 2. デフォルト値の指定
-
-
-```go
-// ✓ デフォルト値このコードに 明示
-page := q.Int("page", 1)
-size := q.Int("size", 20)
-
-// ❌ struct タグの デフォルト値は 非表示
-type Params struct {
-    Page int `query:"page" default:"1"`  // どこから 設定なったかどうか 追跡困難
-}
-```
-
-### 3. オプションのパラメータ処理
-
-
-```go
-// ✓ Has()に 存在 有無 明示的 確認
-if q.Has("premium") {
-    filters.Premium = q.GetBoolByKey("premium", false)
-}
-
-// ❌ 自動 バインディングは zero valueと "値 なし"を 区別できません
-type Params struct {
-    Premium bool `query:"premium"`  // falseが デフォルト値かどうか 明示的 falseかどうか?
-}
-```
-
-## まとめ
-
-|メソッド戻りタイプ用途|
-|--------|----------|------|
-| `Get(key)` | `string` |文字列値（存在しない場合は`""`）|
-| `String(key)` | `string` | `Get()`のエイリアス|
-| `Int(key, def)` | `int64` |整数値（失敗時のデフォルト）|
-| `GetBoolByKey(key, def)` | `bool` |ブール値（失敗時のデフォルト）|
-| `Has(key)` | `bool` |キーが存在するかどうか
-
-**核心哲学**：Spineはクエリパラメータを「魔法のように」自動マッピングしません。 `query.Values` を介して Controller が必要な値を明示的に取り出し、書き込みます。これはSpineの「No Magic」原則と一致しています。
+クエリパラメーターのキー、デフォルト値、許容範囲をコントローラーの近くに置くと、リクエストの処理規則を確認しやすくなります。リクエスト本文のDTOを受け取る方法は[コントローラーチュートリアル](/ja/learn/tutorial/2-controller)、エラーレスポンスは[httperr](/ja/learn/core-concepts/httperr)を参照してください。

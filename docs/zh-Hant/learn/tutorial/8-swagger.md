@@ -1,10 +1,12 @@
 # Swagger 與 OpenAPI 文件
 
-使用[第一個應用程式](/zh-Hant/learn/getting-started/first-app)中 CLI 產生的專案。依[控制器](/zh-Hant/learn/tutorial/2-controller)的 `spine generate resource user` 產生 `src/user`。CLI 靜態 OpenAPI 匯出和 Swaggo、Swagger UI 整合是獨立功能。
+使用 CLI 匯出 OpenAPI 檔案，並視需要新增 Swaggo 文件與 Swagger UI，以便從瀏覽器傳送請求。CLI 的靜態 OpenAPI 匯出，以及使用 Swaggo 的 UI 設定，分別進行。
+
+使用[第一個應用程式](/zh-Hant/learn/getting-started/first-app)中建立的 `example.com/hello-spine` 專案。請先按照[控制器](/zh-Hant/learn/tutorial/2-controller)使用 `spine generate resource user` 產生 `src/user`。若使用不同的模組路徑，請只將下方 import 路徑中的 `example.com/hello-spine` 部分替換為該模組路徑，並保留 `/docs` 後綴。請在專案根目錄執行命令。
 
 ## 使用 CLI 匯出 OpenAPI
 
-CLI 根據已註冊的路由和處理函式簽章產生 OpenAPI 3.1，不需要 Swaggo 註解。
+CLI 會根據已註冊的路徑與處理器簽章產生 OpenAPI 3.1 文件，不需要 Swaggo 註解。
 
 ```bash
 spine doctor
@@ -12,11 +14,13 @@ spine contract check
 spine contract export --format openapi --output openapi.json
 ```
 
-輸出包含 `/health`、`/user/{id}` 和 `x-spine-*` 分析依據。Spine 的 `/user/:id` 在 OpenAPI 中表示為 `/user/{id}`。執行時選擇的狀態碼等會標為靜態分析邊界。匯出不會安裝 Swagger UI 或註冊 HTTP 端點。只有檢查現有檔案並確認取代時才使用 `--force`。
+確認產生的 `openapi.json` 中有 `/health` 與 `/user/{id}`。Spine 的 `/user/:id` 在 OpenAPI 中表示為 `/user/{id}`，而 `x-spine-*` 欄位會記錄分析依據與限制。例如，執行期間才選定的回應狀態碼，無法僅靠靜態分析確定。
+
+此命令只會產生文件檔案。若需要 Swagger UI，請繼續下一步。取代既有檔案時，請先確認內容，再使用 `--force`。
 
 ## 選用：Swaggo 與 Swagger UI
 
-以下使用 Swaggo 產生獨立的 Swagger 2.0 文件，並手動將 UI 掛載到 Echo transport。CLI 不會自動設定此整合。CLI 的 `openapi.json` 與 Swaggo 的 `docs/swagger.json` 是不同產物。
+使用 Swaggo 建立 Swagger 2.0 文件，並在 Echo 傳輸層新增 UI 路徑。檔案與註冊程式碼需要自行撰寫。CLI 的 `openapi.json` 與 Swaggo 的 `docs/swagger.json` 是不同文件，必須分別更新。
 
 ### 1. 安裝工具
 
@@ -25,9 +29,9 @@ go install github.com/swaggo/swag/cmd/swag@v1.16.6
 go get github.com/swaggo/swag@v1.16.6 github.com/swaggo/http-swagger@v1.3.4
 ```
 
-### 2. 加入一般註解
+### 2. 新增 API 基本資訊
 
-在 `internal/application/application.go` 的 `BuildApplication()` 前加入註解。保留產生的 main 和 `spine.toml` 中的 `composition = "./internal/application"`。
+在 `internal/application/application.go` 的 `BuildApplication()` 正上方新增以下註解。保留產生的 `main.go`，以及 `spine.toml` 中的 `composition = "./internal/application"` 設定。
 
 ```go
 // @title Hello Spine API
@@ -40,9 +44,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-### 3. 為實際查詢處理函式加入文件
+### 3. 撰寫 GET 處理器文件
 
-手動擴充產生的 `src/user/user_controller.go`，如下所示。`UserIDResponse` 是新增的文件型別，回應 JSON 仍為 `{"id":1}`。此範例不實作資料庫查詢或完整 CRUD。
+以以下程式碼取代產生的 `src/user/user_controller.go`。`UserIDResponse` 是為了描述回應結構而新增的型別。此處理器回傳路徑中的 ID，`/user/1` 的回應 JSON 與原本一樣，為 `{"id":1}`。它不會從 DB 查詢使用者。
 
 ```go
 package user
@@ -76,17 +80,17 @@ func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
 
 ### 4. 先產生 docs 套件
 
-在專案根目錄執行。此步驟之前不要匯入尚不存在的 `example.com/hello-spine/docs`。`--parseInternal` 用於解析包含一般註解的 internal 套件。
+使用以下命令產生文件套件。產生前，請勿 import 尚不存在的 `example.com/hello-spine/docs`。`--parseInternal` 指定一併讀取包含 API 基本資訊的 internal 套件。
 
 ```bash
 swag init -g internal/application/application.go --parseInternal
 ```
 
-產生 `docs/docs.go`、`docs/swagger.json` 和 `docs/swagger.yaml`。`docs.go` 的 init 函式負責註冊規格，因此在產生後加入空白匯入。請勿手動編輯產生的檔案。
+這會產生 `docs/docs.go`、`docs/swagger.json`、`docs/swagger.yaml`。由於 `docs.go` 的 `init` 函式會註冊文件，下一步會將此套件以僅執行副作用的方式匯入。請勿直接修改產生的檔案。
 
-### 5. 掛載 UI
+### 5. 串接 UI
 
-向 `internal/application/application.go` 的 import 區塊加入：
+在 `internal/application/application.go` 的 import 區塊中新增以下內容。
 
 ```go
 import (
@@ -96,7 +100,7 @@ import (
 )
 ```
 
-在同一檔案的 `BuildApplication()` 中，`app := spine.New()` 之後、return 之前加入。保留原有的 health 和 user 註冊。
+在同一檔案的 `BuildApplication()` 中，於 `app := spine.New()` 之後、`return` 之前新增以下程式碼。請保留既有的 health 與 user 註冊。
 
 ```go
 app.Transport(func(transport any) {
@@ -115,86 +119,139 @@ spine verify
 spine dev
 ```
 
-在另一個終端機檢查 `http://localhost:8080/swagger/index.html` 和 `/swagger/doc.json`。Try it out 也應請求實際的 `/user/1`。透過 `app.Transport` 直接加入的 Echo 路由不屬於 CLI 靜態 Spine 路由契約，因此需要另外檢查 UI 路徑。
+在瀏覽器開啟 `http://localhost:8080/swagger/index.html`，確認 GET 路徑是否顯示。`/swagger/doc.json` 應回傳產生的 Swagger 2.0 文件。在 UI 中使用 Try it out 向 `/user/1` 傳送請求，應回傳 HTTP 200 與 `{"id":1}`。
 
-## 手動擴充 CRUD 的註解與 DTO 參考
+透過 `app.Transport` 直接新增的 Echo 路徑不在 CLI 的靜態 Spine 路由契約內，因此即使通過契約檢查，仍須另外確認 UI 與文件路徑。
 
-以下標籤與 DTO 用於自行實作的額外功能。`resource` 不會產生這些請求、回應型別或 POST、PUT、DELETE 處理函式。將型別放在 `src/user` 的同一個 `package user` 中，確保註解與實際路由、回應狀態一致。處理函式必須透過指標接收請求 DTO。`example`、`enums`、`minimum` 等是文件中繼資料，不會自動執行輸入驗證。
+## 擴充功能時使用的註解與 DTO
 
-## 註解標籤參考
+下方標籤與 DTO 是新增功能時可參考的範例。`resource` 產生器不會產生這些請求與回應型別，也不會產生 POST、PUT、DELETE 處理器。請在 `src/user` 的 `package user` 中新增所需型別，並依實際路由與回應狀態碼撰寫註解。
 
-| 標籤 | 用途 | 範例 |
-|---|---|---|
-| `@title`, `@version`, `@description` | API 一般資訊 | `Hello Spine API` |
-| `@host`, `@BasePath` | 主機與根路徑 | `localhost:8080`, `/` |
-| `@Summary`, `@Description` | 端點摘要與說明 | `Get user` |
-| `@Tags` | 分組 | `users` |
-| `@Router` | 路徑與方法 | `/user/{id} [get]` |
-| `@Accept`, `@Produce` | Content-Type | `json` |
-| `@Param` | 請求參數 | `id path int true "User ID"` |
-| `@Success`, `@Failure` | 回應狀態與型別 | `200 {object} UserIDResponse` |
+請求 DTO 在處理器中以指標接收。`example`、`enums`、`minimum` 等標籤是供文件使用的資訊，不會自動執行輸入驗證。
 
-## @Param 格式
+### 基本註解標籤
 
-```text
-@Param [name] [in] [type] [required] "[description]"
+| 標籤 | 說明 | 範例 |
+|------|------|------|
+| `@Summary` | 單行摘要 | `查詢使用者` |
+| `@Description` | 詳細說明 | `依 ID 查詢使用者資訊` |
+| `@Tags` | 群組標籤 | `users` |
+| `@Router` | 路徑與方法 | `/user [get]` |
+
+### 請求標籤
+
+| 標籤 | 說明 | 範例 |
+|------|------|------|
+| `@Accept` | 請求 Content-Type | `json` |
+| `@Produce` | 回應 Content-Type | `json` |
+| `@Param` | 參數定義 | `id query int true "User ID"` |
+
+### 回應標籤
+
+| 標籤 | 說明 | 範例 |
+|------|------|------|
+| `@Success` | 成功回應 | `200 {object} UserResponse` |
+| `@Failure` | 失敗回應 | `404 {object} ErrorResponse` |
+
+
+## 指定請求參數
+
+```
+@Param [名稱] [位置] [型別] [是否必填] "[說明]"
 ```
 
-| 位置 | 用途 |
-|---|---|
-| `path` | 路徑中的 `{id}`，必須為 required |
-| `query` | 查詢字串 |
-| `body` | JSON 請求 DTO |
-| `header` | 如 Authorization |
-| `formData` | 表單或檔案 |
+### 參數位置
 
-可使用 `int`/`integer`、`string`、`bool`/`boolean`、`number`、`object`、`array` 型別。
+| 位置 | 說明 | 範例 |
+|------|------|------|
+| `query` | 查詢字串 | `/user?id=1` |
+| `path` | URL 路徑 | `/user/{id}` |
+| `body` | 請求內容 | JSON 物件 |
+| `header` | 標頭 | `Authorization` |
+| `formData` | 表單資料 | 檔案上傳 |
+
+### 型別
+
+| 型別 | 說明 |
+|------|------|
+| `int`, `integer` | 整數 |
+| `string` | 字串 |
+| `bool`, `boolean` | 布林值 |
+| `number` | 實數 |
+| `object` | 物件（DTO） |
+| `array` | 陣列 |
+
+### 範例
 
 ```go
+// 쿼리 파라미터
+// @Param id query int true "User ID"
 // @Param name query string false "User name"
-// @Param body body CreateUserRequest true "Create user"
-// @Param Authorization header string true "Bearer token"
-// @Success 201 {object} UserResponse
-// @Failure 400 {object} ErrorResponse
+// @Param active query bool false "Active status"
+
+// 요청 본문
+// @Param body body CreateUserRequest true "유저 생성 요청"
+
+// 헤더
+// @Param Authorization header string true "Bearer 토큰"
 ```
 
-## DTO 文件
+
+## 撰寫 DTO 文件
+
+### 請求 DTO
 
 ```go
-// src/user/user_types.go
+// src/user/user_request.go
 package user
 
+// CreateUserRequest 유저 생성 요청
 type CreateUserRequest struct {
-    Name string `json:"name" example:"Alice"`
+    Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
+// UpdateUserRequest 유저 수정 요청
 type UpdateUserRequest struct {
-    Name string `json:"name" example:"Alice Updated"`
-}
-
-type UserResponse struct {
-    ID int64 `json:"id" example:"1"`
-    Name string `json:"name" example:"Alice"`
-    Email string `json:"email" example:"alice@example.com"`
-}
-
-type ErrorResponse struct {
-    Message string `json:"message" example:"user not found"`
+    Name  string `json:"name" example:"Alice Updated"`
+    Email string `json:"email" example:"alice.new@example.com"`
 }
 ```
 
-| DTO 標籤 | 用途 | 範例 |
-|---|---|---|
+### 回應 DTO
+
+```go
+// src/user/user_response.go
+package user
+
+// UserResponse 유저 응답
+type UserResponse struct {
+    ID    int    `json:"id" example:"1"`
+    Name  string `json:"name" example:"Alice"`
+    Email string `json:"email" example:"alice@example.com"`
+}
+
+// ErrorResponse 에러 응답
+type ErrorResponse struct {
+    Message string `json:"message" example:"유저를 찾을 수 없습니다."`
+}
+```
+
+### DTO 標籤
+
+| 標籤 | 說明 | 範例 |
+|------|------|------|
 | `example` | 範例值 | `example:"Alice"` |
-| `enums` | 可用值 | `enums:"active,inactive"` |
-| `minimum`, `maximum` | 範圍 | `minimum:"1"` |
+| `enums` | 允許值清單 | `enums:"active,inactive"` |
+| `minimum` | 最小值 | `minimum:"1"` |
+| `maximum` | 最大值 | `maximum:"100"` |
 | `default` | 預設值 | `default:"10"` |
+
 
 
 ## 重新產生文件
 
-修改註解或 DTO 後重新執行 Swaggo。`spine dev` 不會自動執行 Swaggo。CLI 規格使用 `contract export` 另外更新。
+變更註解或 DTO 後，必須重新產生 Swaggo 文件。`spine dev` 不會自動執行 Swaggo。新增以下 Makefile 後，即可使用 `make run` 先更新文件再啟動應用程式。CLI 的 OpenAPI 檔案則以 `spine contract export` 另外更新。
 
 ```makefile
 .PHONY: swagger run
@@ -206,7 +263,7 @@ run: swagger
 	spine dev
 ```
 
-## 後續步驟
+## 下一步
 
 - [Spine API](/zh-Hant/reference/api/spine-app)
 - [Swaggo v1.16.6](https://github.com/swaggo/swag/tree/v1.16.6)

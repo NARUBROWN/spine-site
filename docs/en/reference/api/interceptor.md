@@ -1,10 +1,12 @@
 # core.Interceptor
 
-API reference for Spine interceptors.
+An interface for adding authentication, logging, CORS, and transaction handling before and after controller execution. In Spine v0.5.1, you implement separate methods for preprocessing, processing after success, processing before the response, and final cleanup.
 
 ## Interface
 
 ```go
+import "github.com/NARUBROWN/spine/core"
+
 type Interceptor interface {
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
@@ -13,29 +15,53 @@ type Interceptor interface {
 }
 ```
 
-Every interceptor implementation must define all four methods. An interceptor may additionally implement `WebSocketHandshakeInterceptor` when a WebSocket connection must be authenticated before the HTTP upgrade.
+| Method | When called | Return value |
+| --- | --- | --- |
+| `PreHandle` | Before controller execution. In registration order | Continue on `nil`; stop on error |
+| `PostHandle` | After the controller, response preparation, and post-execution hooks succeed. In reverse registration order | None |
+| `BeforeResponse` | Before writing the actual response. Runs interceptors whose `PreHandle` succeeded, in reverse order | Errors are included in the final execution error |
+| `AfterCompletion` | After response processing. In reverse registration order, regardless of success or failure | None |
 
-## Lifecycle
+## Lifecycle and implementation examples
+
+Your application provides `auth`, `transactionFrom`, and the transaction implementation in the following examples. You must implement all four method signatures to register a type as `core.Interceptor`.
 
 ### PreHandle
 
-Runs before controller invocation. Returning an error stops normal execution. `core.ErrAbortPipeline` is an intentional stop for an interceptor that has already prepared a response, such as a CORS preflight.
+Runs before the controller call in registration order. Returning `nil` continues to the next stage; returning a regular error causes failure. Returning `core.ErrAbortPipeline` stops processing normally without calling the controller.
 
-Global HTTP `PreHandle` runs before routing and receives an empty `HandlerMeta`. Route interceptors run after routing and argument resolution and receive the resolved handler metadata. For WebSocket, `PreHandle` runs for every message.
+Global interceptors run before routing and receive an empty `HandlerMeta{}`. Route interceptors run after routing and input resolution and receive information about the handler.
+
+```go
+func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    token := ctx.Header("Authorization")
+    if token == "" {
+        return httperr.Unauthorized("인증이 필요합니다")
+    }
+    user, err := i.auth.Validate(token)
+    if err != nil {
+        return httperr.Unauthorized("유효하지 않은 토큰입니다")
+    }
+    ctx.Set("auth.user", user)
+    return nil
+}
+```
 
 ### PostHandle
 
-Runs in reverse order after the controller result has been successfully converted into a prepared response and post-execution hooks complete. It is skipped when execution or response preparation fails.
+Runs in reverse order after the controller's return value has been prepared as a response and the post-execution hooks have succeeded. It cannot return errors, so use it for success logs or observation.
+
+```go
+func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
+    log.Printf("[RES] %s %s prepared", ctx.Method(), ctx.Path())
+}
+```
 
 ### BeforeResponse
 
-```go
-BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-```
+Runs in reverse order before the response is written to the actual transport layer. `executionErr` contains errors raised up to this point during preprocessing, routing, input resolution, controller execution, response preparation, and post-execution hooks. Errors returned by earlier `BeforeResponse` calls are also combined and passed to the next interceptor.
 
-Runs in reverse order for every interceptor whose `PreHandle` succeeded. The HTTP response has been fully prepared in memory but has not yet been flushed. `executionErr` contains controller, serialization, cookie/status validation, hook, or earlier finalizer failures.
-
-This is the correct place to commit or roll back a request transaction. An error returned here is joined into the final execution error and prevents a prepared success response from being flushed.
+Commit or roll back request-scoped transactions at this stage. v0.5.1 performs response serialization and cookie and status code validation first, so you can roll back if response preparation fails.
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -56,7 +82,7 @@ func (i *TxInterceptor) BeforeResponse(
 
 ### AfterCompletion
 
-Runs last, in reverse order, with the final pipeline error. Use it for observation and cleanup, not transaction commit: by this point the response may already have been flushed.
+Called in reverse order after response processing, regardless of success or failure. It receives the final `err`; use it for logging, collecting metrics, and releasing resources. You can also check the result of sending the response at this stage. The decision to commit a transaction must already have been made in the previous stage.
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(
@@ -70,77 +96,43 @@ func (i *LoggingInterceptor) AfterCompletion(
 }
 ```
 
-## HTTP execution order
+## Registration and scopes
 
-```text
-global PreHandle
-route lookup and argument resolution
-route PreHandle
-controller
-prepare return value (serialization, cookies, status)
-post-execution hooks
-route PostHandle, then global PostHandle (reverse order)
-route BeforeResponse, then global BeforeResponse (reverse order)
-flush prepared response
-route AfterCompletion, then global AfterCompletion (reverse order)
-```
+`app.Interceptor` is equivalent to `app.InterceptorFor(boot.InterceptorAll, ...)`. It applies to both HTTP requests and WebSocket messages, but not event consumers. Specify a scope if the interceptor depends on a particular transport, as CORS does when handling HTTP responses.
 
-Only interceptors whose `PreHandle` succeeded participate in the finalizer phases. When `PreHandle` aborts, the controller and `PostHandle` are skipped; `BeforeResponse` and `AfterCompletion` still run for the already-entered interceptors.
-
-## Global scopes
-
-`App.Interceptor` is shorthand for both built-in transports:
+| Scope | Applies to |
+| --- | --- |
+| `boot.InterceptorHTTP` | HTTP requests |
+| `boot.InterceptorWebSocket` | WebSocket messages and optional processing before connection establishment |
+| `boot.InterceptorAll` | Both scopes |
 
 ```go
-app.Interceptor(&LoggingInterceptor{})
+app.InterceptorFor(boot.InterceptorAll, auth)
+app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.InterceptorFor(boot.InterceptorWebSocket, wsRateLimiter)
 
-// Equivalent explicit registration:
-app.InterceptorFor(boot.InterceptorAll, &LoggingInterceptor{})
-```
-
-Use `InterceptorFor` when a policy belongs to only one transport:
-
-```go
-app.InterceptorFor(boot.InterceptorHTTP, httpAudit)
-app.InterceptorFor(boot.InterceptorWebSocket, wsAuth)
-```
-
-Available scopes are `boot.InterceptorHTTP`, `boot.InterceptorWebSocket`, and `boot.InterceptorAll`.
-
-### Registration identity
-
-- Registering the same pointer instance for multiple scopes merges its scopes and executes it once.
-- Different pointer instances execute independently even when they have the same concrete type.
-- Repeated typed-nil placeholders of the same type merge and resolve one container singleton.
-- Value-type registrations remain independent.
-
-```go
-shared := &AuditInterceptor{}
-app.InterceptorFor(boot.InterceptorHTTP, shared)
-app.InterceptorFor(boot.InterceptorWebSocket, shared) // one shared instance
-
-app.Interceptor(&AuditInterceptor{}, &AuditInterceptor{}) // two instances
-```
-
-## Route interceptors and DI
-
-```go
 app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
     route.WithInterceptors((*AuthInterceptor)(nil)),
 )
 ```
 
-A typed-nil pointer is resolved from the container at bootstrap. A non-nil value is used directly. Nil constructors and invalid nil provider results now fail bootstrap with explicit DI errors.
+If you register a typed nil pointer such as `(*AuthInterceptor)(nil)`, the container looks up and uses an instance of that type. Nil pointers of the same type use the container's shared instance.
 
-## WebSocket handshake interception
+If you register the same pointer as a global interceptor in multiple scopes, the scopes are combined and the instance runs once. Different pointers run separately, even if they have the same type. Value types also run separately for each registration.
 
-Message-stage `PreHandle` runs after the WebSocket is connected. Authentication that must reject the HTTP upgrade belongs in the optional interface:
+## Processing before a WebSocket connection
+
+Interceptors that need to authenticate connections implement the following optional interface in addition to `core.Interceptor`.
 
 ```go
 type WebSocketHandshakeInterceptor interface {
     PreHandshake(ctx WebSocketHandshakeContext, meta HandlerMeta) error
 }
+```
 
+A connection slot is reserved first, then `PreHandshake` runs before the HTTP upgrade. Connection requests waiting for authentication therefore count toward `MaxConnections`. `PreHandle` continues to run for every WebSocket message rather than once per connection. Read request headers, queries, cookies, and other information through [`WebSocketHandshakeContext`](/en/reference/api/execution-context#websocket-request-context).
+
+```go
 func (i *AuthInterceptor) PreHandshake(
     ctx core.WebSocketHandshakeContext,
     meta core.HandlerMeta,
@@ -153,47 +145,33 @@ func (i *AuthInterceptor) PreHandshake(
 }
 ```
 
-Spine reserves a connection slot before `PreHandshake`, and calls `PreHandshake` before the HTTP upgrade. Pending unauthenticated handshakes therefore count against `MaxConnections`. Only route interceptors and interceptors registered for `boot.InterceptorWebSocket` participate in this phase.
+## Execution order
 
-The immutable handshake view exposes headers, query values, cookies, remote address, host, request URI, path, and `context.Context`. Message handlers can access the same snapshot through `core.WebSocketMessageContext`.
+The normal HTTP flow is as follows.
 
-## Complete interceptor skeleton
-
-```go
-type AuthInterceptor struct {
-    auth *AuthService
-}
-
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    token := ctx.Header("Authorization")
-    user, err := i.auth.Validate(token)
-    if err != nil {
-        return httperr.Unauthorized("invalid token")
-    }
-    ctx.Set("auth.user", user)
-    return nil
-}
-
-func (i *AuthInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
-
-func (i *AuthInterceptor) BeforeResponse(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) error {
-    return nil
-}
-
-func (i *AuthInterceptor) AfterCompletion(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) {}
+```text
+Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
+→ Controller → Response preparation → Post-execution hooks
+→ Route.PostHandle → Global.PostHandle
+→ Route.BeforeResponse → Global.BeforeResponse
+→ Write the actual response
+→ Route.AfterCompletion → Global.AfterCompletion
 ```
+
+Each stage that runs in reverse order starts with route interceptors, then continues with global interceptors. Calls after routing receive the resolved `HandlerMeta`.
+
+## Constraints and errors
+
+- `BeforeResponse` is called only for interceptors whose `PreHandle` returned `nil`. Interceptors that returned an error or `core.ErrAbortPipeline` are excluded.
+- `AfterCompletion` runs for global interceptors and route interceptors identified during routing. It may be called even if that interceptor's `PreHandle` did not run, so check that resources exist before releasing them.
+- Authentication in route interceptors runs after input resolution. Use a global interceptor if authentication must run before input resolution.
+- When stopping with `core.ErrAbortPipeline`, the interceptor must prepare the required response. The controller and subsequent success processing stages do not run.
+- Sending the actual response can fail after the DB commit. `BeforeResponse` does not make DB operations and network transmission atomic.
+
+For details on early termination and error propagation, see the [v0.5.1 pipeline implementation](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/pipeline/pipeline.go). For the order of processing before connection establishment, see the [WebSocket runtime implementation](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/ws/runtime.go).
 
 ## See also
 
-- [ExecutionContext](/en/reference/api/execution-context)
 - [Execution pipeline](/en/learn/core-concepts/pipeline)
-- [Security configuration](/en/reference/security-configuration)
-- [Current Release](/en/community/changelog)
+- [Transaction management](/en/learn/tutorial/6-transaction)
+- [Current release](/en/community/changelog)

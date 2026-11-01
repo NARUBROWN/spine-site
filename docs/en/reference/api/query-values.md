@@ -1,31 +1,23 @@
 # query.Values
 
-Continue after creating a project with the CLI in [First App](/en/learn/getting-started/first-app) and generating `src/user` in [Controllers](/en/learn/tutorial/2-controller). Application handler examples manually extend the same `package user` under `src/user`. Implement `User`, search/page response types, and service search methods for your application; the CLI does not generate them. Product and Order snippets illustrate additional features following the same pattern. Handlers are independent alternatives, so add only the methods and routes you need. Wrap success results in `httpx.Response[T]` and import `httpx` and `query` for these handlers.
-
-```go
-import (
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-```
-
-API Reference for query.Values helper.
-
-## Overview
-
-`query.Values` provides a read-only view of all HTTP query parameters. If declared as a parameter in a Controller signature, `QueryValuesResolver` automatically injects the values.
+`query.Values` is a helper for reading HTTP query parameters. When you declare the value type `query.Values` as a controller parameter, the runtime injects the request's query values.
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/query"
 ```
 
-## Struct Definition
+## Public API
 
-```go
-type Values struct {
-    values map[string][]string
-}
-```
+| Signature | Return value and default behavior |
+| --- | --- |
+| `NewValues(values map[string][]string) Values` | Values created from the supplied map |
+| `(q Values) Get(key string) string` | First value, or an empty string if absent |
+| `(q Values) String(key string) string` | Same behavior as `Get` |
+| `(q Values) Int(key string, def int64) int64` | Decimal integer. Returns `def` if the value is absent or conversion fails |
+| `(q Values) GetBoolByKey(key string, def bool) bool` | Boolean value. Returns `def` if unrecognized |
+| `(q Values) Has(key string) bool` | Whether the key exists, regardless of its value |
+
+The fields of `Values` are not exported. It provides only methods for reading values, and uses the first value for each key. Use `core.HttpRequestContext.Queries()` in input resolution code that needs to read all repeated values.
 
 ## Constructor
 
@@ -35,13 +27,15 @@ type Values struct {
 func NewValues(values map[string][]string) Values
 ```
 
-Creates a new `Values` instance. Generally not called directly, used internally by `QueryValuesResolver`.
+Creates `Values`. You do not need to call it directly in controllers. You can use it to create standalone values or test inputs.
 
 **Parameters**
-- `values` - Query parameter map
+
+- `values` - Map of query parameters
 
 **Returns**
-- `Values` - Values instance
+
+- `Values` - The query values created
 
 ## Methods
 
@@ -54,12 +48,15 @@ func (q Values) Get(key string) string
 Returns the first value for the specified key.
 
 **Parameters**
+
 - `key` - Query parameter key
 
 **Returns**
-- `string` - Value. Empty string if key is missing.
+
+- `string` - Value, or an empty string if the key is absent
 
 **Example**
+
 ```go
 // GET /user?name=john
 q.Get("name")     // "john"
@@ -72,15 +69,18 @@ q.Get("missing")  // ""
 func (q Values) String(key string) string
 ```
 
-Returns the first value for the specified key as a string. Has the same implementation as `Get()`.
+Returns the first value for the specified key as a string. It has the same implementation as `Get()`.
 
 **Parameters**
+
 - `key` - Query parameter key
 
 **Returns**
-- `string` - Value. Empty string if key is missing.
+
+- `string` - Value, or an empty string if the key is absent
 
 **Example**
+
 ```go
 // GET /user?status=active&name=john
 q.String("status")  // "active"
@@ -94,24 +94,27 @@ q.String("missing") // ""
 func (q Values) Int(key string, def int64) int64
 ```
 
-Parses the value of the specified key as an integer. Internally, it calls `Get()` to retrieve the value and then converts it using `strconv.ParseInt()`.
+Converts the first value for the specified key to a decimal `int64`. Returns `def` if the key is absent, the value is empty, or the value is out of range.
 
 **Parameters**
+
 - `key` - Query parameter key
-- `def` - Default value to return on parse failure or missing key
+- `def` - Default value returned when parsing fails or the key is absent
 
 **Returns**
+
 - `int64` - Parsed integer or default value
 
 **Example**
+
 ```go
 // GET /user?page=3&size=20
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (key missing)
+q.Int("offset", 0)  // 0 (키 없음)
 
 // GET /user?page=abc
-q.Int("page", 1)    // 1 (parse failed)
+q.Int("page", 1)    // 1 (파싱 실패)
 ```
 
 ### GetBoolByKey
@@ -120,33 +123,38 @@ q.Int("page", 1)    // 1 (parse failed)
 func (q Values) GetBoolByKey(key string, def bool) bool
 ```
 
-Parses the value of the specified key as a boolean. Internally, it calls `Get()` and then converts the string to lowercase before evaluating.
+Converts the first value for the specified key to a boolean. Case-insensitive.
 
-**Values recognized as true** (Case-insensitive)
+**Values recognized as true** (case-insensitive)
+
 - `"true"`, `"1"`, `"yes"`, `"y"`, `"on"`
 
-**Values recognized as false** (Case-insensitive)
+**Values recognized as false** (case-insensitive)
+
 - `"false"`, `"0"`, `"no"`, `"n"`, `"off"`
 
-Values not matching any of the above will return the default value.
+Other values return the default.
 
 **Parameters**
+
 - `key` - Query parameter key
-- `def` - Default value to return on parse failure or missing key
+- `def` - Default value returned when parsing fails or the key is absent
 
 **Returns**
+
 - `bool` - Parsed boolean or default value
 
 **Example**
+
 ```go
 // GET /user?active=true&verified=1&premium=yes
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (key missing)
+q.GetBoolByKey("deleted", false)   // false (키 없음)
 
 // GET /user?active=maybe
-q.GetBoolByKey("active", false)    // false (unrecognized)
+q.GetBoolByKey("active", false)    // false (인식 불가)
 ```
 
 ### Has
@@ -155,47 +163,35 @@ q.GetBoolByKey("active", false)    // false (unrecognized)
 func (q Values) Has(key string) bool
 ```
 
-Checks if the specified key exists.
+Checks whether the specified key exists.
 
 **Parameters**
+
 - `key` - Query parameter key
 
 **Returns**
-- `bool` - Existence of key
+
+- `bool` - Whether the key exists
 
 **Example**
+
 ```go
 // GET /user?status=active&empty=
 q.Has("status")  // true
-q.Has("empty")   // true (key exists even if value is empty)
+q.Has("empty")   // true (값이 비어도 키는 존재)
 q.Has("missing") // false
 ```
 
-## QueryValuesResolver
+## Using Values in controllers
 
-If the `query.Values` type is declared as a Controller parameter, `QueryValuesResolver` automatically injects the value.
+These examples extend the `src/user` resource from [Create your first app](/en/learn/getting-started/first-app) and [Controllers](/en/learn/tutorial/2-controller). Implement `User`, `Product`, the search result types, and the services' search methods in your application. Each handler is an independent example, so add only the methods and routes you need.
 
 ```go
-// internal/resolver/query_values_resolver.go
-type QueryValuesResolver struct{}
-
-func (r *QueryValuesResolver) Supports(pm ParameterMeta) bool {
-    return pm.Type == reflect.TypeFor[query.Values]()
-}
-
-func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("Not an HTTP request context")
-    }
-    return query.NewValues(httpCtx.Queries()), nil
-}
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
 ```
-
-The Resolver type asserts `core.ExecutionContext` to `core.HttpRequestContext` and fetches the full query map via `Queries()`. It returns an error in non-HTTP contexts (e.g., Consumer, WebSocket).
-
-
-## Usage in Controller
 
 ```go
 func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
@@ -203,7 +199,7 @@ func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     page := q.Int("page", 1)
     size := q.Int("size", 20)
     active := q.GetBoolByKey("active", true)
-    
+
     return httpx.Response[[]User]{Body: c.service.Search(status, page, size, active)}
 }
 ```
@@ -211,19 +207,30 @@ func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
 ```go
 func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
-    
+
     if q.Has("category") {
         filters["category"] = q.String("category")
     }
     if q.Has("min_price") {
         filters["min_price"] = q.String("min_price")
     }
-    
+
     return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
-## See Also
+## Constraints and errors
 
-- query.Pagination - Pagination Helper
-- [ArgumentResolver](/en/learn/core-concepts/pipeline#parameter-resolver) - Argument Resolution
+- Automatic injection supports the value type `query.Values`. Do not declare `*query.Values`.
+- Automatic injection is supported only for HTTP inputs. Event consumer and WebSocket message contexts cannot be asserted to `HttpRequestContext`, so input resolution fails.
+- `Int` and `GetBoolByKey` do not return errors. If you need to distinguish invalid values from omitted values, check with `Has` and `Get` and validate them in your application.
+- `Get` and `String` do not distinguish an empty string value from an absent key. `Has` returns `true` even when the value is empty, as in `?empty=`.
+- Leading and trailing whitespace is not removed from boolean values. For example, `" true "` is unrecognized and returns `def`.
+- `NewValues` does not copy the supplied map. Changing the original map after construction also changes lookup results.
+
+For the implementation, see the [query helper](https://github.com/NARUBROWN/spine/blob/v0.5.1/pkg/query/types.go) and [automatic injection code](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/query_values_resolver.go).
+
+## See also
+
+- `query.Pagination`: Helper for reading the page number and size
+- [Execution pipeline](/en/learn/core-concepts/pipeline): Parameter resolution order

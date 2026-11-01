@@ -1,19 +1,18 @@
 # 依赖注入
 
-查看[控制器](/zh-Hans/learn/tutorial/2-controller)中 CLI 生成的 `src/user` 资源的依赖关系。安装和生成项目请参考[第一个应用](/zh-Hans/learn/getting-started/first-app)。
+以[控制器](/zh-Hans/learn/tutorial/2-controller)中创建的 `src/user` 资源为基础，了解构造函数注册和依赖注入（DI）。完成后，你将能够连接控制器、服务和仓储，并检查循环依赖或缺失的构造函数。
 
-了解 Spine 的 DI。
+请准备好[第一个应用](/zh-Hans/learn/getting-started/first-app)中的项目，并在 `hello-spine` 根目录继续操作。后面的数据库和包装类型示例是独立扩展，不会自动包含在基本资源中。
 
-## 关键概念
 
-Spine 的依赖注入是**基于构造函数的**。
+## 核心概念
 
-- 无注释（`@Autowired`、`@Injectable` 不需要）
-- 没有配置文件
-- 构造函数参数被声明为依赖项
+Spine 根据已注册构造函数的参数类型，先创建所需对象，再将其传入。无需使用 `@Autowired`、`@Injectable` 等注解，也不需要 DI 专用配置文件。`spine.toml` 是 CLI 的项目配置文件。
+
+在以下构造函数中，`*UserRepository` 是 `UserService` 所需的依赖。
 
 ```go
-// 通过查看参数类型自动注入依赖项
+// 파라미터 타입을 보고 자동으로 의존성 주입
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
@@ -21,19 +20,19 @@ func NewUserService(repository *UserRepository) *UserService {
 
 ## CLI 生成的依赖
 
-尚未生成资源时，在 `hello-spine` 根目录运行以下命令。已经存在时请跳过。
+如果尚未生成资源，请在 `hello-spine` 根目录执行以下命令。如果已经生成，请勿重复执行。
 
 ```bash
 spine generate resource user --dry-run
 ```
 
-在预览中检查生成文件与注册代码的变更，然后执行下方命令生成。
+在预览中确认待生成的文件和注册代码的变更后，运行以下命令生成文件。
 
 ```bash
 spine generate resource user
 ```
 
-CLI 在 `src/user` 的同一个 `package user` 中生成以下构造函数。
+以下仅摘录了 CLI 在同一个 `user` 包中生成的类型和构造函数。请勿用这些代码覆盖现有文件。保留生成文件中控制器的 `Get` 方法。
 
 ```go
 // src/user/user_repository.go
@@ -66,7 +65,7 @@ func NewUserController(service *UserService) *UserController {
 }
 ```
 
-`src/user/user_route.go` 的 `Register` 注册这些构造函数和 `GET /user/:id`。CLI 在 `internal/application/application.go` 的 `BuildApplication()` 中添加检查错误的 `user.Register(app)`。请勿重复注册相同构造函数。
+`src/user/user_route.go` 中的 `Register` 注册三个构造函数和 `GET /user/:id`。CLI 会在 `internal/application/application.go` 的 `BuildApplication()` 中添加 `user.Register(app)` 调用及错误处理。请勿重复添加已经注册的构造函数。
 
 ```go
 // src/user/user_route.go: Register
@@ -74,12 +73,14 @@ app.Constructor(NewUserRepository, NewUserService, NewUserController)
 app.Route("GET", "/user/:id", (*UserController).Get)
 ```
 
-## 注册与解析顺序
+## 注册顺序和解析顺序
 
-无论注册顺序如何，都会先解析所需的依赖。容器共享已创建的实例，不会为每个请求重新创建。
+构造函数的注册顺序不决定对象的创建顺序。创建控制器需要服务，创建服务需要仓储，因此会先创建仓储。生成的实例由容器共享，不会为每个请求重新创建。
+
+即使像下面这样更改注册顺序，依赖的解析顺序也相同。
 
 ```go
-// 此示例替换 user_route.go 中现有的 Constructor 调用。
+// user_route.go의 기존 Constructor 호출을 대체하는 예시입니다.
 app.Constructor(NewUserController, NewUserService, NewUserRepository)
 ```
 
@@ -93,22 +94,24 @@ graph LR
 
 ### 参数
 
-构造函数参数必须是**已注册的类型**。
+每个参数类型都必须有已注册的构造函数来提供。没有依赖时可以省略参数，需要多个依赖时则声明多个参数。
+
+以下示例仅展示签名。实际代码需要实现各函数的函数体和返回类型。
 
 ```go
-// ✅ 正确的例子
+// 저장소 의존성 선언
 func NewUserService(repo *UserRepository) *UserService
 
-// ✅ 可能有多个依赖项
+// 여러 의존성 선언
 func NewUserController(svc *UserService, logger *Logger) *UserController
 
-// ✅ 没有依赖性
+// 의존성 없는 생성자
 func NewLogger() *Logger
 ```
 
 ### 返回类型
 
-构造函数必须只返回一个值，不支持返回 `(值, error)`。返回类型确定提供的类型；返回 nil 也会报错。
+构造函数必须且只能返回一个值。该返回类型就是注册到容器中的类型。不支持返回 `(值, error)` 的构造函数；如果返回指针或接口的构造函数返回了 `nil`，依赖解析将失败。
 
 ```go
 func NewUserService(repository *UserRepository) *UserService {
@@ -116,7 +119,7 @@ func NewUserService(repository *UserRepository) *UserService {
 }
 ```
 
-数据库provider也应像[数据库示例](/zh-Hans/learn/tutorial/5-database)中的 `database.NewDB() *bun.DB` 一样只返回一个值，并注册构造函数。`BuildApplication` 只负责注册，因此生成的验证测试不会连接数据库。连接错误在应用启动、执行provider时处理；实际连接需要单独验证。
+数据库连接函数也应像[数据库示例](/zh-Hans/learn/tutorial/5-database)中的 `database.NewDB() *bun.DB` 一样，只返回一个值。仅在 `BuildApplication` 中注册构造函数并不会调用连接函数。因此，生成的验证测试成功并不代表数据库连接成功。请在应用启动并执行构造函数的阶段检查连接初始化和错误处理。
 
 ```go
 // internal/application/application.go: BuildApplication
@@ -125,25 +128,29 @@ app.Constructor(database.NewDB)
 
 ## 使用接口
 
-本节是[数据库](/zh-Hans/learn/tutorial/5-database)中的手动扩展；`resource` 不生成 Bun 配置。优先使用类型精确匹配的接口 provider，否则只能有一个实现该接口的 provider。多个候选会产生错误。请求中的 `bun.Tx` 不会自动重新注入应用级构造函数。应从请求上下文读取事务，经控制器和服务传给接受 `bun.IDB` 的仓储方法。
+将参数声明为接口类型时，会按以下顺序查找依赖。
 
-### 问题情况
+1. 使用返回类型与该接口完全一致的构造函数。
+2. 如果没有完全一致的构造函数，则查找返回类型可赋值给该接口的构造函数。
+3. 如果只有一个候选，则注入该依赖；如果有多个候选，则返回 `multiple constructors registered for interface` 错误。如果没有候选，则返回依赖缺失错误。
 
-使用事务时，存储库必须同时处理 `*bun.DB` 和 `bun.Tx`。
+以下是在已完成[数据库](/zh-Hans/learn/tutorial/5-database)配置的应用中使用的扩展示例。CLI 的 `resource` 生成结果不包含 Bun 配置。
+
+### 数据库和事务的通用类型
+
+如果将仓储字段固定为 `*bun.DB`，就无法向该字段传入 `bun.Tx`。
 
 ```go
-// ❌这将禁用交易
+// 이 필드에는 *bun.DB만 저장할 수 있음
 type UserRepository struct {
-    db *bun.DB  // 无法接收 bun.Tx
+    db *bun.DB  // bun.Tx를 받을 수 없음
 }
 ```
 
-### 已解决：使用接口
-
-`bun.IDB` 接口允许您同时容纳两者。
+使用 `*bun.DB` 和 `bun.Tx` 均实现的 `bun.IDB`，就能通过同一个契约处理两种类型。以下代码展示了仓储构造函数接收 `bun.IDB` 依赖的方式。
 
 ```go
-// ✅ *bun.DB 和 bun.Tx 都实现了 bun.IDB
+// *bun.DB와 bun.Tx는 모두 bun.IDB를 구현
 type UserRepository struct {
     db bun.IDB
 }
@@ -153,59 +160,37 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 }
 ```
 
-### 拦截器中的事务注入
+### 传递每个请求的事务
 
-```go
-// 拦截器/tx_interceptor.go
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
+构造函数注入与请求值传递的生命周期不同。由构造函数创建的服务和仓储在应用中共享，因此，每个请求创建的 `bun.Tx` 不会自动重新注入已有实例的字段。将请求专属事务覆盖到共享字段中，可能使其与其他请求混用。
 
-    ctx.Set("tx", tx)  // 保存事务
-    return nil
-}
+按以下顺序传递每个请求的事务。
 
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+1. 在拦截器的 `PreHandle` 中启动事务，并通过 `ctx.Set("tx", tx)` 保存。
+2. 控制器通过 `spine.Ctx.Get("tx")` 读取值，并确认其类型为 `bun.Tx`。
+3. 控制器调用服务和仓储的方法，以 `bun.IDB` 参数显式传入事务。
+4. 在拦截器的 `BeforeResponse` 中根据执行结果提交或回滚，并返回此过程中的错误。
 
-func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    v, ok := ctx.Get("tx")
-    if !ok {
-        return nil
-    }
+关于拦截器四个生命周期方法的实现和注册方式，请参阅[需要依赖注入的拦截器](/zh-Hans/learn/tutorial/4-interceptor)。
 
-    tx, ok := v.(bun.Tx)
-    if !ok {
-        return errors.New("transaction type is invalid")
-    }
-
-    if executionErr != nil {
-        return tx.Rollback()
-    }
-    return tx.Commit()
-}
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
-```
 
 ## 按功能注册
 
-使用 CLI 生成另一个功能后，它会注册到同一个组装入口。以下生成独立的 `order` 资源。CLI 会添加 `user.Register` 和 `order.Register` 调用，请勿手动重复添加。
+通过 CLI 生成其他功能时，会连接对应包的 `Register` 函数和组装应用的 `BuildApplication`。以下是可选的独立 `order` 资源添加示例。CLI 会添加 `order.Register(app)` 调用，请勿手动重复注册。
 
 ```bash
 spine generate resource order --dry-run
 ```
 
-在预览中检查生成文件与注册代码的变更，然后执行下方命令生成。
+在预览中确认待生成的文件和注册代码的变更后，运行以下命令生成文件。
 
 ```bash
 spine generate resource order
 ```
 
-### 多次调用 Constructor
+### 分多次调用注册构造函数
 
-可以在同一个 `Register` 中分多次调用注册。每个类型只注册一次。
+在同一个 `Register` 中，也可以分多次调用完成注册。每种类型只注册一次。
 
 ```go
 // src/user/user_route.go: Register
@@ -214,15 +199,17 @@ app.Constructor(NewUserService)
 app.Constructor(NewUserController)
 ```
 
-## 多个相同类型
+## 同一类型的多个实例
 
-如果需要同一类型的多个实例，请使用包装类型。
+如果以同一类型注册主数据库和副本数据库，仅凭参数名无法区分两者。请声明不同的包装类型来区分。
+
+以下是一个独立的仓储设计示例。`App`、`UserRepository` 的 `writer` 和 `reader` 字段，以及 `connectToPrimary`、`connectToReplica`，需要根据应用自行实现。
 
 ```go
-// ❌ 难以区分
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 无法区分各自用途
+// 파라미터 이름만으로 인스턴스를 구분할 수 없음
+func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 어떤 게 어떤 건지?
 
-// ✅ 按包装类型分类
+// 서로 다른 래퍼 타입으로 구분
 type PrimaryDB struct{ *bun.DB }
 type ReplicaDB struct{ *bun.DB }
 
@@ -242,33 +229,39 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
 }
 ```
 
-## 错误处理
+## 检查依赖错误
 
 ### 循环依赖
 
+如果 `A` 需要 `B`，而 `B` 又需要 `A`，就无法先创建其中任何一个对象。以下伪代码展示了这种关系。
+
 ```go
-// ❌A→B→A循环
+// A → B → A 순환
 func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
-// 启动时出现错误
+// 부팅 시 에러 발생
 // circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
-### 缺少依赖项
+### 缺失的依赖
+
+所需类型没有对应的构造函数时，依赖解析会失败。以下示例省略了 `NewUserRepository` 的注册。
 
 ```go
-// 如果您没有注册UserRepository
+// UserRepository를 등록하지 않으면
 app.Constructor(
-    NewUserService,     // *需要 UserRepository
+    NewUserService,     // *UserRepository 필요
     NewUserController,
 )
 
-// 启动时出现错误
+// 부팅 시 에러 발생
 // no constructor registered for *user.UserRepository
 ```
 
-## 验证范围
+## 验证注册并检查运行结果
+
+在项目根目录执行以下命令。
 
 ```bash
 spine doctor
@@ -276,18 +269,11 @@ spine contract check
 spine verify
 ```
 
-`contract check` 检查静态 DI 契约，`verify` 还执行本地代码检查。仅调用 `app.Validate(options)` 不能证明构造函数执行或 DI warm-up 成功。实际初始化、数据库连接和请求需要运行应用并单独进行 E2E 验证。循环或缺少依赖会在解析时返回错误，生成的 main 会检查 Run 错误。
+`spine contract check` 检查从源代码提取的 DI 契约，`spine verify` 还会检查格式、`go vet` 和测试。仅有 `app.Validate(options)` 成功，并不能证明构造函数已经执行或实例已经初始化。
 
-## 主要摘要
-
-|概念|描述 |
-|------|------|
-| **基于构造函数** |声明与参数类型的依赖关系 |
-| **自动解析** |不考虑注册顺序，图分析后生成|
-| **类型匹配** |相同类型自动注入 |
-| **界面** |灵活的依赖性处理成为可能 |
+请通过 `spine dev` 启动应用后，检查实际的初始化和请求处理。如果接入了数据库，还需要单独确认实际连接和查询。循环依赖或缺失的构造函数会在依赖解析过程中返回错误，生成的 `main.go` 会检查 `Run` 错误。
 
 ## 后续步骤
 
-- [教程：拦截器](/zh-Hans/learn/tutorial/4-interceptor) — 请求前/请求后处理
-- [教程：数据库](/zh-Hans/learn/tutorial/5-database) — Bun ORM 连接
+- [教程：拦截器](/zh-Hans/learn/tutorial/4-interceptor) — 请求前后处理
+- [教程：数据库](/zh-Hans/learn/tutorial/5-database) — 连接 Bun ORM

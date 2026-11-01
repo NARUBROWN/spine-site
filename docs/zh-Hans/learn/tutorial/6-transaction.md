@@ -1,17 +1,19 @@
 # 事务管理
 
-继续使用[数据库](/zh-Hans/learn/tutorial/5-database)中的 CLI 项目 `example.com/my-app`。沿用 `src/database`、`src/entity` 和 `src/user`，手动添加以下事务代码。CLI 不提供 Bun 事务或 outbox 生成器。
+将一次 HTTP 请求中执行的多个 INSERT 合并到同一个事务。编写拦截器，在请求成功时提交，中途失败时连同之前的 INSERT 一并回滚。
+
+在[数据库](/zh-Hans/learn/tutorial/5-database)教程的 `example.com/my-app` 项目上继续操作。请先准备 `src/database`、`src/entity`、`src/user` 和迁移。以下事务代码需要手动添加，CLI 不提供 Bun 事务或 outbox 生成器。
 
 ## 执行顺序
 
-Spine v0.5.1 在 `PreHandle` 中开启事务，在 `BeforeResponse` 中提交或回滚。响应序列化、状态码、Cookie 验证和事件派发等响应准备失败也能触发回滚。`AfterCompletion` 用于完成后的日志与清理。
+在 Spine v0.5.1 中，在 `PreHandle` 中启动事务，并在 `BeforeResponse` 中提交或回滚。响应序列化、状态码和 Cookie 验证、事件发布等响应准备过程中发生的错误，也会触发回滚。`AfterCompletion` 用于在完成后记录日志或清理资源。
 
 ```text
-PreHandle: begin transaction
-→ Controller → response preparation → PostHandle
-→ BeforeResponse: rollback on error, commit on success
-→ HTTP response flush
-→ AfterCompletion: logging / cleanup
+PreHandle: 启动事务
+→ 控制器 → 响应准备 → PostHandle
+→ BeforeResponse: 有错误则回滚，否则提交
+→ 发送 HTTP 响应
+→ AfterCompletion: 记录日志并清理资源
 ```
 
 ## 实现拦截器
@@ -70,11 +72,11 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-必须返回提交或回滚错误，以便计入最终执行错误。保留包含 `log`、`errors` 的导入以及四个拦截器方法。
+必须返回 `Commit()` 和 `Rollback()` 的错误，才能将其计入最终执行错误。请保留包含 `log` 和 `errors` 的 import，以及全部四个拦截器方法。
 
 ## 注册到生成的应用
 
-向 `internal/application/application.go` 的导入添加 `example.com/my-app/src/interceptor`。保留数据库教程中的 `database.NewDB` provider 以及 health、user 注册，只在现有 Constructor 调用中添加 `interceptor.NewTxInterceptor`。下面是 `BuildApplication()` 内的注册片段。
+在 `internal/application/application.go` 的 import 块中添加 `example.com/my-app/src/interceptor`。保留数据库教程中注册的 `database.NewDB`，以及 health 和 user 注册，并在现有的 `app.Constructor` 调用中添加 `interceptor.NewTxInterceptor`。以下代码是 `BuildApplication()` 中的注册部分。
 
 ```go
 app.Constructor(
@@ -85,11 +87,15 @@ app.Constructor(
 app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
 ```
 
-typed-nil `(*interceptor.TxInterceptor)(nil)` 会解析为 DI 创建的拦截器实例。`NewTxInterceptor` 返回一个值。HTTP 事务使用 `boot.InterceptorHTTP`，因为 `app.Interceptor(...)` 也作用于 WebSocket 消息。只作用于指定路由时，省略全局拦截器注册，并向该 `app.Route` 传入 `route.WithInterceptors((*interceptor.TxInterceptor)(nil))`。
+`(*interceptor.TxInterceptor)(nil)` 指定拦截器类型。Spine 通过 DI 创建该类型的实例，`NewTxInterceptor` 必须只返回一个值。
 
-## 将请求事务传给仓储
+若只应用于 HTTP 请求，请按上例使用 `boot.InterceptorHTTP`。`app.Interceptor(...)` 也会应用于 WebSocket 消息。若只应用于特定路由，请省略全局注册，并在相应的 `app.Route` 中指定 `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` 选项。
 
-下面的 POST 示例手动扩展 `src/user`，使用生成的 `UserController.service` 和 `UserService.repository` 字段。请求 DTO 必须通过指针接收。`spine.Ctx` 来自 `github.com/NARUBROWN/spine/pkg/spine`，与根包重名时使用 `spinectx` 别名。
+## 将请求事务传递给仓储
+
+添加 `src/user/user_create.go`，使用请求中的事务保存用户。这里使用生成的 `UserController` 的 `service` 字段和 `UserService` 的 `repository` 字段。
+
+请求 DTO 通过指针接收。`spine.Ctx` 来自 `github.com/NARUBROWN/spine/pkg/spine`。以下代码使用别名 `spinectx`，以免与应用根包重名。
 
 ```go
 // src/user/user_create.go
@@ -142,9 +148,9 @@ func (s *UserService) Create(ctx context.Context, db bun.IDB, req *CreateUserReq
 }
 ```
 
-服务将 `bun.IDB` 传给仓储。`*bun.DB` 与 `bun.Tx` 都实现此接口，但请求事务不会重新注入构造函数。按下方方式添加或调整仓储的 `Save(ctx, db, user)`。
+服务以 `bun.IDB` 接收请求中的事务，并传递给仓储。`*bun.DB` 和 `bun.Tx` 实现相同的接口，但请求中的事务不会自动重新注入仓储构造函数。
 
-用下面的实现替换已有的 `Save` 方法，不要再声明同名方法。
+用以下实现替换 `src/user/user_repository.go` 中现有的 `Save` 方法。不要额外声明同名方法。
 
 ```go
 // src/user/user_repository.go
@@ -154,15 +160,15 @@ func (r *UserRepository) Save(ctx context.Context, db bun.IDB, user *entity.User
 }
 ```
 
-在 `src/user/user_route.go` 的 `Register` 中手动添加 POST 路由，保留现有 GET 注册。
+在 `src/user/user_route.go` 的 `Register` 中手动添加 POST 路由。保留现有的 GET 注册。
 
 ```go
 app.Route("POST", "/user", (*UserController).Create)
 ```
 
-## 同一请求中的多次写入与 rollback
+## 合并多次写入并检查回滚
 
-使用与单个创建相同的事务保存多个用户。添加 `src/user/user_batch.go`，并在 `src/user/user_route.go` 的 `Register` 中注册下面的 POST 路由。如果第二次 INSERT 因 email 重复失败，第一次 INSERT 也必须 rollback。
+这次在一次请求中保存多个用户。创建 `src/user/user_batch.go`，并将以下 POST 路由添加到 `src/user/user_route.go` 的 `Register` 中。如果第二个 INSERT 因邮箱重复而失败，第一个 INSERT 也应回滚。
 
 ```go
 // src/user/user_batch.go
@@ -213,7 +219,7 @@ app.Route("POST", "/user/batch", (*UserController).CreateBatch)
 
 ## 排除读取请求
 
-要跳过读取请求，在 `PreHandle` 开头添加以下条件。`BeforeResponse` 也必须处理没有事务的情况。不要跳过必须使用事务的处理函数。
+如果不希望在读取请求中启动事务，请在 `PreHandle` 的开头添加以下条件。`BeforeResponse` 也必须处理不存在事务的情况，上面的实现已经包含该处理。不要将使用事务的控制器列入排除范围。
 
 ```go
 if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" {
@@ -233,11 +239,13 @@ spine verify
 spine dev
 ```
 
-契约与本地检查通过并不能证明真实数据库提交或回滚成功。运行应用需要数据库教程中的 `DATABASE_URL` 与迁移。请在真实数据库上单独验证成功保存、失败回滚及提交和回滚错误的处理。
+契约检查和本地检查无法确认实际数据库中的提交与回滚。运行应用需要完成数据库教程中的 `DATABASE_URL` 设置和迁移。下一步将检查成功请求的数据保存和失败请求的回滚。如果提交或回滚本身失败，相应的错误处理需要另行检查。
 
-## 使用真实数据库验证
+## 在实际数据库中检查
 
-先按数据库教程运行迁移，再启动应用。以下请求假设测试数据库为空。第一次请求返回 HTTP 201，使用响应中的 ID 发起 GET 可读取保存的用户。batch 的第二个 email 重复，因此返回 HTTP 500。本例将数据库错误作为普通错误返回，响应不会泄露内部 SQL 错误。
+按照数据库教程执行迁移并启动应用后，在另一终端中发送以下请求。示例中的 GET 假设使用新建的测试数据库，且第一个用户的 ID 为 1。如果使用现有数据库，请根据 POST 响应中的 ID 修改 GET 路径。
+
+第一个 POST 会保存用户并返回 HTTP 201，随后使用响应中的 ID 发起 GET 请求，会返回同一用户。`/user/batch` 请求会因第二个邮箱重复而失败，返回 HTTP 500。由于数据库错误以普通错误返回，响应不会暴露内部 SQL 错误。
 
 ```bash
 curl -i -X POST http://localhost:8080/user \
@@ -254,7 +262,7 @@ curl -i -X POST http://localhost:8080/user \
   -d '{"name":"Bob","email":"bob@example.com"}'
 ```
 
-通过数据库客户端确认下面 SELECT 的结果分别为 1 和 0。第二个结果为 0 才能说明错误发生前的第一次 INSERT 也已 rollback。随后使用唯一 email 请求，仍应返回 HTTP 201 并保存成功。
+在数据库客户端中，确认以下 SELECT 的结果分别为 1 和 0。如果第二个结果为 0，说明失败前执行的第一个 INSERT 也已回滚。最后的 Bob 请求使用不重复的邮箱，因此应再次保存成功并返回 HTTP 201。
 
 ```sql
 SELECT COUNT(*) FROM users WHERE email = 'alice@example.com';
@@ -263,7 +271,9 @@ SELECT COUNT(*) FROM users WHERE email = 'rollback@example.com';
 
 ## 原子性边界
 
-数据库提交与 broker 发布或实际 socket write 不是一个原子事务。事件发布后仍可能提交失败，提交后仍可能响应发送失败。将业务变更与 outbox 记录存入同一数据库事务，由独立 relay 发布，消费者使用稳定的事件 ID 去重。
+数据库提交、向消息代理发布事件、通过套接字发送响应，无法合并为一个原子事务。可能在发布事件后数据库提交失败，也可能在提交后响应发送失败。
+
+如果需要同时保证数据库变更和事件记录，请在同一个数据库事务中保存 outbox 记录，再通过独立的投递任务发布事件。重发时也应使用相同的事件 ID，消费者需要根据此 ID 判断重复事件。
 
 - [Interceptor API](/zh-Hans/reference/api/interceptor)
-- [Database](/zh-Hans/learn/tutorial/5-database)
+- [数据库连接](/zh-Hans/learn/tutorial/5-database)

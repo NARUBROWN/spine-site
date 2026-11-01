@@ -1,26 +1,30 @@
-# CRUD 예제
+# 사용자 CRUD API 만들기
 
-기본적인 CRUD 구현 예제.
+사용자를 생성하고 목록 조회, 개별 조회, 수정, 삭제하는 HTTP API를 만듭니다. ORM 없이 메모리 저장소를 사용하므로 데이터베이스를 준비하지 않고 실행할 수 있습니다.
 
-## 개요
+## 시작 전 준비
 
-ORM 없이 인메모리 저장소를 사용하는 User CRUD 예제입니다. Controller → Service → Repository 레이어 구조로 구성되어 있습니다.
+[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. 이 예제는 CLI 0.1.4로 만든 기본 앱에 전체 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다. 수정과 삭제는 아래 코드에 포함되어 있습니다.
+
+저장한 사용자는 서버 프로세스를 종료하면 사라집니다.
+
+요청은 컨트롤러, 서비스, 저장소 순서로 전달됩니다. 각 구성 요소는 다음 역할을 맡습니다.
 
 ```mermaid
 graph TD
-    Controller["Controller<br/>• HTTP를 모름<br/>• 의미 타입으로 입력 받음<br/>• Service 호출"]
-    
-    Service["Service<br/>• 비즈니스 로직<br/>• 트랜잭션 경계<br/>• Repository 호출"]
-    
-    Repository["Repository<br/>• 데이터 접근<br/>• 인메모리 / DB"]
-    
+    Controller["컨트롤러<br/>의미 타입으로 입력 받기<br/>입력 검증과 오류 변환<br/>서비스 호출"]
+
+    Service["서비스<br/>업무 규칙 적용<br/>저장소 호출"]
+
+    Repository["저장소<br/>메모리 데이터 조회와 변경"]
+
     Controller --> Service
     Service --> Repository
 ```
 
-## CLI로 프로젝트 생성
+## 1. 프로젝트 생성
 
-[CLI 설치](/ko/learn/getting-started/installation)를 완료한 뒤 기본 앱을 생성합니다. 아래 전체 CRUD는 생성된 앱에 직접 추가하는 메모리 저장소 예제입니다. CLI의 `resource`는 GET 골격, `slice --storage memory`는 생성·조회 골격만 제공하므로 수정·삭제까지 자동 생성한다고 해석하지 않습니다.
+기본 앱을 생성하고 의존성과 프로젝트 설정을 확인합니다. 이후 명령은 `crud-example/`에서 실행합니다.
 
 ```sh
 spine new crud-example --module example.com/crud-example
@@ -29,7 +33,9 @@ go mod tidy
 spine doctor
 ```
 
-## 프로젝트 구조
+### 파일 배치
+
+다음 단계에서 `src/` 아래에 다섯 파일을 추가하고, 생성된 `internal/application/application.go`를 교체합니다. 루트의 `main.go`와 `spine.toml`은 그대로 사용합니다.
 
 ```text
 crud-example/
@@ -47,7 +53,9 @@ crud-example/
     └── controller/user_controller.go
 ```
 
-## Model
+## 2. 사용자 모델 추가
+
+`src/model/user.go`를 새로 만듭니다. 사용자 정보와 생성 및 수정 시각을 저장하는 구조체입니다.
 
 ```go
 // src/model/user.go
@@ -64,7 +72,9 @@ type User struct {
 }
 ```
 
-## Repository
+## 3. 메모리 저장소 추가
+
+`src/repository/user_repository.go`를 새로 만듭니다. 사용자 조회와 저장, 삭제를 담당하고 이메일 중복 여부를 확인할 함수를 제공합니다.
 
 ```go
 // src/repository/user_repository.go
@@ -171,7 +181,9 @@ func (r *UserRepository) Count() int {
 }
 ```
 
-## DTO
+## 4. 요청과 응답 DTO 추가
+
+`src/dto/user_dto.go`를 새로 만듭니다. 요청으로 받을 필드와 응답으로 보낼 필드를 정의하고, 저장소의 사용자 모델을 응답 DTO로 변환합니다.
 
 ```go
 // src/dto/user_dto.go
@@ -234,7 +246,9 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 }
 ```
 
-## Service
+## 5. 사용자 서비스 추가
+
+`src/service/user_service.go`를 새로 만듭니다. 생성과 수정 전에 이메일 중복을 확인하고 저장소의 반환값을 응답 DTO로 바꿉니다.
 
 ```go
 // src/service/user_service.go
@@ -309,7 +323,9 @@ func (s *UserService) DeleteUser(id int64) error {
 }
 ```
 
-## Controller
+## 6. 사용자 컨트롤러 추가
+
+`src/controller/user_controller.go`를 새로 만듭니다. 입력값을 검증한 뒤 서비스를 호출하고, 사용자를 찾지 못한 경우와 이메일이 중복된 경우를 HTTP 오류로 변환합니다.
 
 ```go
 // src/controller/user_controller.go
@@ -418,9 +434,9 @@ func toHTTPError(err error) error {
 }
 ```
 
-## 앱 구성
+## 7. 생성자와 라우트 등록
 
-생성된 루트 `main.go`는 유지합니다. `BuildApplication` → `Validate` → `Run` 순서로 실행하며, 다음 코드로 `internal/application/application.go`를 대체합니다. 모델·저장소·DTO·서비스·컨트롤러 파일은 `src/` 아래에 직접 추가합니다.
+`internal/application/application.go` 전체를 다음 코드로 교체합니다. 저장소와 서비스, 컨트롤러 생성자를 등록하고 다섯 라우트를 연결합니다. 생성된 루트 `main.go`는 `BuildApplication`, `Validate`, `Run`을 순서대로 실행합니다.
 
 ```go
 // internal/application/application.go
@@ -470,7 +486,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 검증과 실행
+## 8. 검증하고 서버 실행
+
+프로젝트 루트에서 형식을 정리하고 의존성과 코드를 검사한 뒤 서버를 실행합니다.
 
 ```sh
 gofmt -w src internal/application
@@ -480,11 +498,15 @@ spine verify
 spine dev
 ```
 
-`contract check`는 정적 계약, `verify`는 계약·gofmt·vet·Go 테스트를 확인합니다. 실제 생성·조회·수정·삭제는 아래 HTTP 요청으로 확인합니다. 이 저장소는 프로세스를 종료하면 데이터가 사라집니다. DB 영속화는 [데이터베이스 튜토리얼](/ko/learn/tutorial/5-database)에서 별도로 구성합니다.
+`contract check`는 정적 계약을 검사합니다. `verify`는 정적 계약과 gofmt, go vet, Go 테스트를 검사합니다. 서버가 실제 요청을 처리하는지는 다음 HTTP 요청으로 확인합니다.
 
-## API 테스트
+## 9. HTTP 요청으로 CRUD 확인
+
+서버를 실행한 상태에서 다른 터미널을 열어 아래 요청을 순서대로 보냅니다. 새 서버에서 첫 사용자의 ID는 `1`입니다. 응답의 날짜는 예시이며 실제 생성 시각과 수정 시각에 따라 달라집니다.
 
 ### 사용자 생성
+
+이름과 이메일을 보내면 HTTP 200과 생성한 사용자 정보가 반환됩니다.
 
 ```bash
 curl -X POST http://localhost:8080/users \
@@ -503,6 +525,8 @@ curl -X POST http://localhost:8080/users \
 ```
 
 ### 사용자 목록 조회
+
+앞서 만든 사용자가 `users`에 포함되고 `total`이 `1`인지 확인합니다.
 
 ```bash
 curl http://localhost:8080/users
@@ -525,6 +549,8 @@ curl http://localhost:8080/users
 
 ### 사용자 조회
 
+ID가 `1`인 사용자의 정보를 조회합니다.
+
 ```bash
 curl http://localhost:8080/users/1
 ```
@@ -540,6 +566,8 @@ curl http://localhost:8080/users/1
 ```
 
 ### 사용자 수정
+
+이름과 이메일을 함께 보냅니다. 응답에서 두 필드와 `updated_at`이 바뀌었는지 확인합니다.
 
 ```bash
 curl -X PUT http://localhost:8080/users/1 \
@@ -559,11 +587,15 @@ curl -X PUT http://localhost:8080/users/1 \
 
 ### 사용자 삭제
 
+ID가 `1`인 사용자를 삭제합니다. 삭제한 ID로 다시 조회하면 HTTP 404가 반환됩니다.
+
 ```bash
 curl -X DELETE http://localhost:8080/users/1
 ```
 
-### 에러 응답
+### 존재하지 않는 사용자와 중복 이메일
+
+저장소에 없는 ID를 조회하면 HTTP 404와 다음 오류 메시지가 반환됩니다.
 
 ```bash
 # 존재하지 않는 사용자
@@ -576,7 +608,7 @@ curl http://localhost:8080/users/999
 }
 ```
 
-앞 단계에서 사용자를 삭제했으므로 동일 이메일의 사용자를 먼저 다시 생성합니다(200). 이어 같은 이메일로 생성하면 중복 오류가 납니다(400).
+앞 단계에서 사용자를 삭제했으므로 같은 이메일의 사용자를 먼저 다시 생성합니다. 첫 요청은 HTTP 200으로 성공하고, 이어 같은 이메일로 생성하는 두 번째 요청은 HTTP 400과 중복 오류를 반환합니다.
 
 ```bash
 curl -X POST http://localhost:8080/users \
@@ -594,19 +626,23 @@ curl -X POST http://localhost:8080/users \
 }
 ```
 
-## 핵심 포인트
+## 구현에서 확인할 점
 
-### Controller는 HTTP를 모른다
+### 의미 타입으로 요청값 받기
+
+컨트롤러는 HTTP 요청 객체 대신 `path.Int`와 같은 의미 타입을 인자로 받습니다. 오류는 `httperr`로 표현합니다.
 
 ```go
-// ✓ 의미 타입으로 입력 받음
+// 의미 타입으로 입력 받음
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
-// ✓ httperr로 의미만 표현
+// httperr로 의미만 표현
 return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 ```
 
 ### 의존성 주입
+
+등록한 생성자의 인자 타입을 바탕으로 저장소, 서비스, 컨트롤러의 의존성을 연결합니다.
 
 ```go
 // 생성자 등록만으로 의존성 자동 해결
@@ -617,10 +653,14 @@ app.Constructor(
 )
 ```
 
-### 레이어 분리
+### 구성 요소별 책임
 
-| 레이어 | 책임 | 의존 |
+| 구성 요소 | 책임 | 사용하는 구성 요소 |
 |-------|------|------|
-| Controller | 입력 검증, 에러 변환 | Service |
-| Service | 비즈니스 로직 | Repository |
-| Repository | 데이터 접근 | 없음 |
+| 컨트롤러 | 입력 검증, HTTP 오류 변환 | 서비스 |
+| 서비스 | 이메일 중복 확인, 응답 DTO 변환 | 저장소 |
+| 저장소 | 메모리 데이터 조회와 변경 | 없음 |
+
+## 다음 단계
+
+데이터를 영속적으로 저장하려면 [데이터베이스 연결](/ko/learn/tutorial/5-database)을 따라 저장소를 바꾸세요. 오류 처리 방식을 더 살펴보려면 [에러 처리 튜토리얼](/ko/learn/tutorial/7-error-handling)을 확인하세요.

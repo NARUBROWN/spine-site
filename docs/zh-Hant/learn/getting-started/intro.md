@@ -1,26 +1,26 @@
-# 介紹
+# 簡介
 
-## 什麼是脊椎？
+Spine 是透過 Go 程式碼註冊建構函式、路由與攔截器的網頁框架。從註冊程式碼就能看出由哪個處理器接收請求，以及在呼叫前後執行哪些工作。
 
-Spine 是**不隱藏請求流程的 Go Web 框架**。
+如果是第一次使用，請從[第一個應用程式](/zh-Hant/learn/getting-started/first-app)開始，透過 CLI 建立專案並確認 `GET /health` 的回應。本篇介紹設定應用程式時會用到的核心概念。
 
-明確執行管道揭示如何解釋請求、執行順序、何時調用業務邏輯以及如何在回應中完成請求。
+## 設定與執行應用程式
 
-在 CLI 產生的 `internal/application/application.go` 中組裝應用程式。以下範例加入使用者功能；保留產生的 `main.go` 中 `BuildApplication` → `Validate` → `Run` 的順序。
+在 CLI 建立的專案中，應用程式的設定程式碼集中放在 `internal/application/application.go` 的 `BuildApplication()`。`main.go` 依照 `BuildApplication` → `Validate` → `Run` 的順序，先設定及驗證應用程式，再執行。
 
-以下註冊片段假設使用者型別和攔截器已手動實作。CLI 的 `resource user` 產生 `src/user` 中的 `UserController.Get`，路由為 `GET /user/:id`。在產生的專案中，保留 `BuildApplication` 內檢查錯誤的 `user.Register(app)` 呼叫，不要重複註冊相同的建構函式或路由。產生和修改步驟見[專案結構](/zh-Hant/learn/tutorial/1-project-structure)。
+以下是自行實作使用者功能後的註冊範例。範例省略了 `UserController` 與攔截器的實作，請勿用這段程式碼覆寫產生的檔案。
 
 ```go
 func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
 
-    // 註冊相依性 — 順序不限，只要註冊建構函式即可自動解析
+    // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
 
-    // 攔截器－執行順序在程式碼中可見
+    // 인터셉터를 실행할 순서대로 등록합니다.
     app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
 
-    // 路線 — 哪個方法是哪一條路線一目了然。
+    // HTTP 메서드와 경로에 핸들러를 연결합니다.
     app.Route("GET", "/users", (*UserController).GetUser)
 
     return app, boot.Options{
@@ -32,77 +32,46 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 為什麼是脊椎？
 
-### 沒有隱藏的魔法
+CLI 指令 `spine generate resource user` 產生的程式碼，其名稱與路徑和上述範例不同。產生的處理器是 `src/user` 中的 `UserController.Get`，路徑則是 `GET /user/:id`。建構函式已註冊時，請勿再次註冊相同的建構函式或路由。也必須保留新增至 `BuildApplication` 的 `user.Register(app)` 呼叫及錯誤處理。詳細步驟請參閱[專案結構](/zh-Hant/learn/tutorial/1-project-structure)。
 
-Spring Boot 中為 `@Autowired`，NestJS 中為 `@Injectable`。
-方便，但很難看到裡面發生了什麼。
+## 核心概念
 
-脊柱不一樣。
+### 1. 以建構函式進行相依性注入
 
-- **無註解** — 純 Go 程式碼
-- **沒有模組定義** - DI 只需透過註冊建構函式即可解決
-- **無代理** — 堆疊追蹤非常直觀
-
-阅读代码即可看到執行流程。
-
-### 熟悉的結構
-
-如果您使用過Spring或NestJS，您可以立即開始。
-
-```
-Controller → Service → Repository
-```
-
-建構函式注入、攔截器鏈和分層架構。
-將熟悉的模式带入 Go。
-
-### Go 中的效能
-
-- 無需 JVM 預熱
-- 沒有 Node.js 運行時初始化
-- 編譯後的二進位檔案立即執行
-
-針對容器和無伺服器環境進行了最佳化。
-
-## 關鍵概念
-
-### 1. 基於建構子的依賴注入
+透過建構函式的參數宣告所需的相依性，再將建構函式註冊至 `app.Constructor`。在下列範例中，`UserService` 會接收 `UserRepository`。
 
 ```go
-// 建構函數參數是依賴關係的聲明
+// 생성자 파라미터가 곧 의존성 선언
 func NewUserService(repo *UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 
-// 簡單註冊並自動解決依賴圖
+// 등록만 하면 자동으로 의존성 그래프 해결
 app.Constructor(NewUserRepository, NewUserService, NewUserController)
 ```
 
-### 2.攔截器管道
+### 2. 攔截器管線
+
+攔截器在控制器呼叫前後，執行身分驗證、交易與記錄日誌等共通工作。以下範例展示三個自行實作的攔截器的註冊順序。
 
 ```go
 app.Interceptor(
-    &TxInterceptor{},      // 1. 開始事务
-    &AuthInterceptor{},    // 2. 检查認證
-    &LoggingInterceptor{}, // 3. 日志记录
+    &TxInterceptor{},      // 1. 트랜잭션 시작
+    &AuthInterceptor{},    // 2. 인증 확인
+    &LoggingInterceptor{}, // 3. 로깅
 )
 
 ```
 
-**執行順序：**
+`PreHandle` 依註冊順序執行。控制器返回後的 `PostHandle`、處理回應前的 `BeforeResponse`，以及處理回應後的 `AfterCompletion`，則依反向順序執行。發生錯誤時的呼叫條件，請參閱[攔截器](/zh-Hant/learn/tutorial/4-interceptor)。
 
-```mermaid
-graph LR
-   Request --> Tx.Pre --> Auth.Pre --> Log.Pre --> Controller
-   Controller --> Log.After --> Auth.After --> Tx.After --> Response
-```
+### 3. 明確的路由註冊
 
-### 3.明確路由
+使用 `app.Route` 將 HTTP 方法、路徑與處理器連結起來。為各項功能建立註冊函式，就能集中管理相關路由。
 
 ```go
-// 在一處管理您的所有路線
+// 한 곳에서 모든 라우트를 관리
 func RegisterUserRoutes(app spine.App) {
     app.Route("GET", "/users", (*UserController).GetUser)
     app.Route("POST", "/users", (*UserController).CreateUser)
@@ -111,14 +80,16 @@ func RegisterUserRoutes(app spine.App) {
 }
 ```
 
-### 4. 類型安全處理程式
+### 4. 型別安全的處理器
+
+透過處理器的參數與回傳型別，表達要從請求讀取的值及回應格式。下列範例的查詢處理器會讀取查詢參數，建立處理器則會以結構體指標接收 JSON 請求主體。服務、請求與回應型別都需要自行實作。
 
 ```go
-// 函數簽名是API規範
+// 함수 시그니처가 곧 API 스펙
 func (c *UserController) GetUser(
-    ctx context.Context,      // 上下文
-    q query.Values,           // 查詢參數
-) (httpx.Response[UserResponse], error) {     // 回應型別
+    ctx context.Context,      // 컨텍스트
+    q query.Values,           // 쿼리 파라미터
+) (httpx.Response[UserResponse], error) {     // 응답 타입
     user, err := c.svc.Get(ctx, q.Int("id", 0))
     if err != nil {
         return httpx.Response[UserResponse]{}, err
@@ -126,10 +97,10 @@ func (c *UserController) GetUser(
     return httpx.Response[UserResponse]{Body: user}, nil
 }
 
-// DTO 自動綁定
+// DTO는 자동으로 바인딩
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *CreateUserRequest,    // JSON body → 结构体（指针）
+    req *CreateUserRequest,    // JSON body → 구조체 (포인터)
 ) (httpx.Response[UserResponse], error) {
     user, err := c.svc.Create(ctx, req)
     if err != nil {
@@ -139,22 +110,11 @@ func (c *UserController) CreateUser(
 }
 ```
 
-## 與其他框架的比較
-
-| |脊柱 | NestJS |春季啟動 |
-|---|:---:|:---:|:---:|
-| **語言** |去 |打字稿 | Java/Kotlin |
-| **執行時期** |本機二進位 | Node.js | JVM |
-| **IoC 容器** | ✅ | ✅ | ✅ |
-| **註解/裝飾器** |沒有必要|必填|必填|
-| **模組定義** |沒有必要|必填|沒有必要|
-| **類型安全性** |編譯時間|執行時期|編譯時間|
-
-## 你準備好開始了嗎？
+## 開始使用
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
 spine version
 ```
 
-先安裝 CLI，再按照[第一個應用程式](/zh-Hant/learn/getting-started/first-app)檢查變更計畫並產生專案。
+安裝 CLI 後，請依照[第一個應用程式](/zh-Hant/learn/getting-started/first-app)建立專案並確認 HTTP 回應。若找不到指令，請參閱[安裝說明](/zh-Hant/learn/getting-started/installation)中的路徑設定。

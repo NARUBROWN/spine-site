@@ -1,19 +1,21 @@
 # 第一個應用程式
 
-安裝 Spine CLI、產生專案，並在約 5 分鐘內執行 `GET /health`。需要 Go 1.25.5 或更新版本，CLI 建議使用 Go 1.27.3。首次下載相依套件所需的時間取決於環境。
+透過 Spine CLI 建立新專案，並確認 `GET /health` 會回傳 `{"status":"ok"}`。閱讀產生的檔案，同時了解設定、驗證到執行應用程式的流程。
 
-## 1. 安裝並檢查 CLI
+需要 Go 1.25.5 以上版本，CLI 建議使用 Go 1.27.3。首次下載相依套件所需的時間會因環境而異。
+
+## 1. 安裝 CLI 並確認指令
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
 spine version
 ```
 
-`spine version` 會輸出 `spine-cli 0.1.4`。如果找不到命令，請參考[安裝指南](/zh-Hant/learn/getting-started/installation)設定 Go 執行檔路徑。
+`spine version` 會輸出 `spine-cli 0.1.4`。若找不到指令，請參閱[安裝說明](/zh-Hant/learn/getting-started/installation)，確認 Go 執行檔的路徑設定。
 
 ## 2. 建立專案
 
-在準備存放專案的上層目錄中執行：
+在預計放置專案的上層目錄執行。若已有 `hello-spine` 目錄，請使用其他名稱。
 
 ```bash
 spine new hello-spine --module example.com/hello-spine
@@ -21,9 +23,9 @@ cd hello-spine
 go mod tidy
 ```
 
-CLI 在 `go.mod` 中指定 Spine `v0.5.1`，使用 `go mod tidy` 準備相依套件。
+專案檔案會產生在 `hello-spine` 目錄。CLI 會在 `go.mod` 中指定 Spine `v0.5.1`，而 `go mod tidy` 會下載所需的相依套件。
 
-## 3. 查看產生的結構
+## 3. 確認產生的結構
 
 ```text
 hello-spine/
@@ -37,7 +39,7 @@ hello-spine/
     └── application_test.go
 ```
 
-`spine.toml` 告訴 CLI 模組路徑、執行進入點和註冊程式碼的位置。
+專案包含作為執行起點的 `main.go`，以及存放應用程式設定程式碼的 `internal/application` 目錄。`spine.toml` 會告知 CLI 模組路徑、執行進入點、應用程式設定程式碼的位置與連接埠。
 
 ```toml
 module = "example.com/hello-spine"
@@ -46,9 +48,11 @@ composition = "./internal/application"
 port = 8080
 ```
 
-`internal/application/application.go` 中的 `BuildApplication()` 負責組裝應用程式和啟動選項。產生的程式碼註冊 `HealthController` 建構子與 `GET /health`，並明確設定 `boot.HTTPOptions`。將路由、建構子和攔截器註冊集中在此函式中，或集中在它呼叫的 `Register(app) error` 函式中。
+`internal/application/application.go` 中的 `BuildApplication()` 會回傳應用程式與執行選項。產生的程式碼會註冊 `HealthController` 建構函式與 `GET /health`，並明確指定 HTTP 執行選項 `boot.HTTPOptions`。
 
-`main.go` 已經產生，無須覆寫。可以查看它的執行流程：
+新增功能時，請將路由、建構函式與攔截器的註冊程式碼集中放在此函式，或此處呼叫的 `Register(app) error` 函式中。詳細方式請參閱[專案結構](/zh-Hant/learn/tutorial/1-project-structure)。
+
+`main.go` 已經產生，無需修改。請透過下列程式碼確認應用程式的設定、驗證與執行順序。
 
 ```go
 func main() {
@@ -65,7 +69,9 @@ func main() {
 }
 ```
 
-## 4. 驗證契約與本機程式碼
+## 4. 驗證應用程式設定與程式碼
+
+在建立的專案根目錄執行。
 
 ```bash
 spine doctor
@@ -74,7 +80,9 @@ spine contract check
 spine verify
 ```
 
-`doctor` 診斷工具與專案設定，`inspect` 顯示已註冊的執行契約。`contract check` 驗證靜態契約，`verify` 執行契約、gofmt、vet 與 test 檢查。產生的 `application_test.go` 也會在不啟動伺服器的情況下檢查 `BuildApplication()` 與 `app.Validate(options)`。
+`doctor` 會診斷工具與專案設定。`inspect` 會顯示程式碼中註冊的路由與相依性等應用程式設定。CLI 從註冊程式碼擷取的這些資訊稱為執行契約。
+
+`contract check` 會檢查執行契約，`verify` 除了檢查契約，還會執行 `gofmt`、`go vet` 與 Go 測試。產生的 `application_test.go` 也會在不啟動伺服器的情況下，檢查 `BuildApplication()` 與 `app.Validate(options)`。若所有指令都執行完畢且未發生錯誤，就可以啟動伺服器。
 
 ## 5. 執行並確認回應
 
@@ -82,7 +90,7 @@ spine verify
 spine dev
 ```
 
-在另一個終端機中傳送請求：
+伺服器執行時，開啟另一個終端機發送請求。
 
 ```bash
 curl http://localhost:8080/health
@@ -92,10 +100,10 @@ curl http://localhost:8080/health
 {"status":"ok"}
 ```
 
-按 `Ctrl+C` 停止開發伺服器。至此，你已確認 CLI 產生的專案、可重複使用的應用程式組裝函式、靜態契約檢查和實際 HTTP 回應。
+若回傳上述 JSON 回應，表示 `GET /health` 已正常運作。在執行伺服器的終端機按下 `Ctrl+C`，即可結束開發伺服器。
 
-## 後續步驟
+## 下一步
 
-- [專案結構](/zh-Hant/learn/tutorial/1-project-structure) — 向產生的專案加入功能
-- [控制器](/zh-Hant/learn/tutorial/2-controller) — 查看 CLI 產生的路由和處理函式
-- [資料庫](/zh-Hant/learn/tutorial/5-database) — 為儲存庫連接 Bun ORM
+- 依照[專案結構](/zh-Hant/learn/tutorial/1-project-structure)，在產生的專案中新增功能。
+- 透過[控制器](/zh-Hant/learn/tutorial/2-controller)了解路由與處理器。
+- 依照[資料庫](/zh-Hant/learn/tutorial/5-database)，將 Bun ORM 連接至儲存庫。

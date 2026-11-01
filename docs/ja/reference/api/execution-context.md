@@ -1,51 +1,33 @@
 # core.ExecutionContext
 
-ExecutionContextへのAPIリファレンス。
-
-
-以下のControllerコードは、[CLIプロジェクト](/ja/learn/tutorial/1-project-structure)の `src/user/user_controller.go` に追加する手動拡張例です。`User`・`AuthUser` とRepositoryのフィールドはアプリで定義し、HTTP応答は `httpx.Response[T]` で返します。生成された `BuildApplication` のエラーを確認する `user.Register(app)` とルートの `main.go` は維持します。
-
-## 概要
-
-`ExecutionContext`は、Spineパイプラインから要求情報にアクセスし、コンポーネント間のデータを共有するインタフェースです。 HTTPリクエスト、イベントメッセージ、WebSocketメッセージの両方を処理する統合実行コンテキスト。
-
+`ExecutionContext`は、インターセプターと実行パイプラインでリクエスト情報を読み取り、処理段階の間で値を共有するためのインターフェースです。HTTPリクエスト、イベント、WebSocketメッセージで共通に使用し、トランスポートごとの追加情報は個別のインターフェースで提供します。
 
 ```go
 import "github.com/NARUBROWN/spine/core"
 ```
 
+## インターフェースの選択
 
-## インターフェイス層
+HTTPコントローラーでインターセプターが保存した値を読み取るには、`core.ControllerContext`を引数として宣言します。インターセプターでは`core.ExecutionContext`を使用します。HTTPとイベントの入力の解釈には、それぞれ`HttpRequestContext`と`ConsumerRequestContext`を使用します。
 
-SpineはContextを階層的に分離します。
+| インターフェース | 含むインターフェース | 提供する機能 |
+| --- | --- | --- |
+| `ContextCarrier` | なし | Go標準の`context.Context` |
+| `EventBusCarrier` | なし | リクエストスコープのイベントバス |
+| `ExecutionContext` | `ContextCarrier`, `EventBusCarrier` | リクエストのメソッドとパス、ヘッダーとパラメータ、値の保存と取得 |
+| `ControllerContext` | なし | インターセプターが保存した値の取得 |
+| `HttpRequestContext` | `ContextCarrier`, `EventBusCarrier` | HTTP入力の取得、本文のバインド、マルチパートフォーム |
+| `ConsumerRequestContext` | `ContextCarrier`, `EventBusCarrier` | イベント名と生の本文 |
+| `WebSocketContext` | `ExecutionContext` | 接続ID、メッセージ型、生の本文 |
+| `WebSocketRequestContext` | `ContextCarrier` | 接続を要求したHTTPリクエストの情報 |
+| `WebSocketHandshakeContext` | `WebSocketRequestContext` | HTTPアップグレード前の認証と認可に使用するリクエスト情報 |
+| `WebSocketMessageContext` | `WebSocketContext`, `WebSocketRequestContext` | メッセージと元の接続リクエスト情報 |
 
-```
-ContextCarrier ──────┬──► ExecutionContext ──► WebSocketContext
-                     │
-EventBusCarrier ─────┤
-                     │
-                     ├──► HttpRequestContext
-                     │
-                     ├──► ConsumerRequestContext
-                     │
-                     └──► ControllerContext（読み取り専用 Facade）
-```
+`ControllerContext`は`ExecutionContext`を含まず、`Get`だけを提供します。`HttpRequestContext`と`ConsumerRequestContext`も`ExecutionContext`を含みません。ランタイムが提供する実装は、必要なインターフェースを併せて実装します。
 
-|インターフェース|役割|使用場所|
-|-----------|------|----------|
-| `ContextCarrier` | Go context配信|どこでも
-| `EventBusCarrier` |イベント発行|コントローラー、コンシューマー
-| `ExecutionContext` |実行フロー制御|ルーター、パイプライン、インターセプター|
-| `ControllerContext` | ExecutionContext読み取り専用Facade | Controller |
-| `HttpRequestContext` | HTTP入力の解釈HTTP ArgumentResolver |
-| `ConsumerRequestContext` |イベント入力の解釈Consumer ArgumentResolver |
-| `WebSocketContext` | WebSocket入力解析| WebSocket ArgumentResolver |
+## インターフェース定義
 
-
-## インタフェース定義
-
-### ベースのインタフェース
-
+### 基底インターフェース
 
 ```go
 type ContextCarrier interface {
@@ -57,10 +39,9 @@ type EventBusCarrier interface {
 }
 ```
 
-> **注**：`EventBusCarrier`の戻り値の種類は`core.EventBus`です。 `core.EventBus`は、`Publish(events ...publish.DomainEvent)`と`Drain() []publish.DomainEvent`メソッドを持つインタフェースです。
+`EventBus()`は`core.EventBus`を返します。イベントを収集する`Publish(events ...publish.DomainEvent)`と、収集したイベントを取り出す`Drain() []publish.DomainEvent`を提供します。
 
 ### ExecutionContext
-
 
 ```go
 type ExecutionContext interface {
@@ -80,8 +61,7 @@ type ExecutionContext interface {
 
 ### ControllerContext
 
-Controllerのみ読み取り専用Facadeです。 Interceptorが`Set()`に注入した値をControllerから`Get()`に参照するための公式通路です。
-
+HTTPコントローラーで値を読み取るための専用インターフェースです。インターセプターが`Set()`で保存した値を`Get()`で取得できます。標準のコンシューマーとWebSocketの入力リゾルバーは、この型を注入しません。
 
 ```go
 type ControllerContext interface {
@@ -91,36 +71,34 @@ type ControllerContext interface {
 
 ### HttpRequestContext
 
-HTTP 専用拡張インターフェイスです。 `ContextCarrier`と`EventBusCarrier`を直接埋め込みます。
-
+HTTP入力を読み取るインターフェースです。`ContextCarrier`と`EventBusCarrier`を含みます。
 
 ```go
 type HttpRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // 個別アクセス
+    // 개별 접근
     Param(name string) string
     Query(name string) string
     Header(name string) string
 
-    // 全体ビューへのアクセス
+    // 전체 뷰 접근
     Params() map[string]string
     Queries() map[string][]string
     Headers() map[string][]string
 
-    // body
+    // 요청 본문
     Bind(out any) error
 
-    // Multipart
+    // 멀티파트
     MultipartForm() (*multipart.Form, error)
 }
 ```
 
 ### ConsumerRequestContext
 
-イベントコンシューマ専用の拡張インタフェースです。 `ContextCarrier`と`EventBusCarrier`を直接埋め込みます。
-
+イベントコンシューマーの入力を読み取るインターフェースです。`ContextCarrier`と`EventBusCarrier`を含みます。
 
 ```go
 type ConsumerRequestContext interface {
@@ -134,8 +112,7 @@ type ConsumerRequestContext interface {
 
 ### WebSocketContext
 
-WebSocket 専用の拡張インターフェイスです。 `ExecutionContext`を埋め込みます。
-
+WebSocketメッセージを読み取るインターフェースです。`ExecutionContext`を含みます。
 
 ```go
 type WebSocketContext interface {
@@ -147,9 +124,9 @@ type WebSocketContext interface {
 }
 ```
 
-### WebSocket handshake・messageのrequest情報
+### WebSocketの接続リクエスト情報 {#websocket-request-context}
 
-v0.5.1ではHTTP upgrade要求の不変snapshotを別の契約として提供します。
+v0.5.1はHTTPアップグレードリクエストの情報をコピーして保持します。次のインターフェースで、ヘッダー、クエリ、Cookie、リモートアドレス、ホスト、リクエストURIを取得できます。
 
 ```go
 type WebSocketRequestContext interface {
@@ -174,22 +151,21 @@ type WebSocketMessageContext interface {
 }
 ```
 
-`WebSocketHandshakeContext`は`PreHandshake`で、`WebSocketMessageContext`はmessage処理中に元のhandshake要求を参照するときに使用します。
+`WebSocketHandshakeContext`は`PreHandshake`で使用します。メッセージの処理中は、`ExecutionContext`を`WebSocketMessageContext`に型アサーションして、元の接続リクエスト情報を読み取ります。`Headers()`、`Queries()`、`Cookies()`はコピーを返すため、返されたマップを変更しても、保持されているリクエスト情報は変わりません。
 
-
-## ExecutionContextメソッド
+## ExecutionContextのメソッド
 
 ### Context
-
 
 ```go
 Context() context.Context
 ```
 
-Go 標準ライブラリの `context.Context` を返します。
+Go標準ライブラリの`context.Context`を返します。
 
 **戻り値**
-- `context.Context` - 要求スコープのコンテキスト
+
+- `context.Context` - リクエストスコープのコンテキスト
 
 **例**
 
@@ -206,36 +182,19 @@ func (i *TimeoutInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 
 ### EventBus
 
-
 ```go
 EventBus() core.EventBus
 ```
 
-リクエストスコープのEventBusを返します。ドメインイベントの発行に使用されます。
+リクエストスコープのイベントバスを返します。ドメインイベントの発行に使用します。
 
 **戻り値**
-- `core.EventBus` - イベントバスインスタンス
 
-**例**
+- `core.EventBus` - イベントバスのインスタンス
 
-```go
-// PostExecutionHook でイベントを drain
-func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []any, err error) {
-    if err != nil {
-        return
-    }
-    
-    events := ctx.EventBus().Drain()
-    if len(events) == 0 {
-        return
-    }
-    
-    h.Dispatcher.Dispatch(ctx.Context(), events)
-}
-```
+イベントを発行するコントローラーでは、`context.Context`を引数として受け取り、`publish.Event(ctx, event)`を呼び出します。ランタイムがイベントバスを標準コンテキストに接続します。[イベント発行の例](/ja/reference/api/spine-app#event-publishing)を参照してください。
 
 ### Method
-
 
 ```go
 Method() string
@@ -244,8 +203,9 @@ Method() string
 リクエストメソッドを返します。
 
 **戻り値**
-- HTTP：`"GET"`、`"POST"`、`"PUT"`、`"DELETE"`など
-- Consumer: `"EVENT"`
+
+- HTTP: `"GET"`、`"POST"`、`"PUT"`、`"DELETE"`など
+- イベントコンシューマー: `"EVENT"`
 - WebSocket: `"WS"`
 
 **例**
@@ -253,26 +213,25 @@ Method() string
 ```go
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     if ctx.Method() == "OPTIONS" {
-        // Preflight リクエスト 処理
+        // CORS 사전 요청 처리
     }
     return nil
 }
 ```
 
-
 ### Path
-
 
 ```go
 Path() string
 ```
 
-要求パスを返します。
+リクエストパスを返します。
 
 **戻り値**
-- HTTP：リクエストパス（例：`"/users/123"`）
-- Consumer：イベント名（例：`"order.created"`）
-- WebSocket：WebSocketパス（例：`"/ws/chat"`）
+
+- HTTP: リクエストパス（例: `"/users/123"`）
+- イベントコンシューマー: イベント名（例: `"order.created"`）
+- WebSocket: WebSocketのパス（例: `"/ws/chat"`）
 
 **例**
 
@@ -283,9 +242,7 @@ log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
 // WebSocket: [REQ] WS /ws/chat
 ```
 
-
 ### Header
-
 
 ```go
 Header(name string) string
@@ -293,12 +250,15 @@ Header(name string) string
 
 指定した名前のHTTPヘッダー値を返します。
 
-**パラメータ**
-- `name` - ヘッダ名（大文字と小文字の区別なし）
+**引数**
+
+- `name` - ヘッダー名（大文字と小文字を区別しません）
 
 **戻り値**
-- `string` - ヘッダー値。なければ空の文字列
-- Consumer/WebSocketでは常に空の文字列
+
+- `string` - ヘッダー値。存在しない場合は空文字列
+- イベントコンシューマー: 空文字列
+- WebSocket: HTTPアップグレードリクエストから保持したヘッダー値
 
 **例**
 
@@ -307,19 +267,19 @@ origin := ctx.Header("Origin")
 auth := ctx.Header("Authorization")
 ```
 
-
 ### Params
-
 
 ```go
 Params() map[string]string
 ```
 
-すべてのパスパラメータをマップとして返​​します。
+すべてのパスパラメータをマップで返します。
 
 **戻り値**
-- `map[string]string` - パスパラメータマップ
-- Consumer/WebSocketでは空のマップ
+
+- `map[string]string` - パスパラメータのマップ
+- イベントコンシューマー: `nil`
+- WebSocket: ルーターが解釈したパスパラメータ。ルーティング前は空のマップ
 
 **例**
 
@@ -330,19 +290,19 @@ Params() map[string]string
 params := ctx.Params()  // {"userId": "123", "postId": "456"}
 ```
 
-
 ### PathKeys
-
 
 ```go
 PathKeys() []string
 ```
 
-パスパラメータキーを宣言順に返します。
+パスパラメータのキーを宣言順に返します。
 
 **戻り値**
-- `[]string` - キースライス
-- Consumer/WebSocketでは、空のスライス
+
+- `[]string` - キーのスライス
+- イベントコンシューマー: `nil`
+- WebSocket: ルーターが解釈したキーの順序。ルーティング前は空のスライス
 
 **例**
 
@@ -352,19 +312,19 @@ PathKeys() []string
 ctx.PathKeys()  // ["userId", "postId"]
 ```
 
-
 ### Queries
-
 
 ```go
 Queries() map[string][]string
 ```
 
-すべてのクエリパラメータをマップとして返​​します。
+すべてのクエリパラメータをマップで返します。
 
 **戻り値**
-- `map[string][]string` - クエリパラメータマップ
-- Consumer/WebSocketでは空のマップ
+
+- `map[string][]string` - クエリパラメータのマップ
+- イベントコンシューマー: `nil`
+- WebSocket: HTTPアップグレードリクエストから保持したクエリパラメータ
 
 **例**
 
@@ -375,9 +335,7 @@ queries := ctx.Queries()
 // {"status": ["active"], "tag": ["go", "web"]}
 ```
 
-
 ### Set
-
 
 ```go
 Set(key string, value any)
@@ -385,7 +343,8 @@ Set(key string, value any)
 
 内部ストアに値を保存します。
 
-**パラメータ**
+**引数**
+
 - `key` - 保存するキー
 - `value` - 保存する値
 
@@ -396,22 +355,22 @@ ctx.Set("auth.user", authenticatedUser)
 ctx.Set("request.startTime", time.Now())
 ```
 
-
 ### Get
-
 
 ```go
 Get(key string) (any, bool)
 ```
 
-内部ストアから値を照会します。
+内部ストアから値を取得します。
 
-**パラメータ**
-- `key` - 照会するキー
+**引数**
+
+- `key` - 取得するキー
 
 **戻り値**
+
 - `any` - 保存された値
-- `bool` - キーが存在するかどうか
+- `bool` - キーの存在有無
 
 **例**
 
@@ -421,42 +380,23 @@ if rw, ok := ctx.Get("spine.response_writer"); ok {
 }
 ```
 
-
 ## ControllerContext
 
-Controller で Interceptor が注入した値を読み取るための専用ビューです。
+コントローラーでインターセプターが保存した値を読み取るインターフェースです。
 
 ### Get
-
 
 ```go
 Get(key string) (any, bool)
 ```
 
-`ExecutionContext.Get()`に委任します。 `Set()` メソッドは提供しません。
+`ExecutionContext.Get()`に委譲します。`Set()`メソッドは提供しません。
 
-**実装**
-
-```go
-// internal/runtime/controller_ctx.go
-type controllerCtxView struct {
-    ec core.ExecutionContext
-}
-
-func NewControllerContext(ec core.ExecutionContext) core.ControllerContext {
-    return controllerCtxView{ec: ec}
-}
-
-func (v controllerCtxView) Get(key string) (any, bool) {
-    return v.ec.Get(key)
-}
-```
-
-**使用例**
+以下のコードは、[CLIプロジェクト](/ja/learn/tutorial/1-project-structure)の`src/user/user_controller.go`を拡張する例です。`User`、`AuthUser`、リポジトリのフィールドはアプリで定義します。生成された`user.Register(app)`とルートの`main.go`は維持します。
 
 ```go
 func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
-    // Interceptor が Set("auth.user", ...) で注入した値を読み取る
+    // 인터셉터가 Set("auth.user", ...)으로 저장한 값 조회
     if authUser, ok := ctx.Get("auth.user"); ok {
         _ = authUser.(*AuthUser)
         // ...
@@ -469,19 +409,17 @@ func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (h
 }
 ```
 
+## HttpRequestContextのメソッド
 
-## HttpRequestContext メソッド
-
-HTTP ArgumentResolver で使用される追加のメソッドです。
+HTTP入力を解釈するときに使用する追加メソッドです。
 
 ### Param
-
 
 ```go
 Param(name string) string
 ```
 
-特定のパスパラメータ値を返します。
+指定したパスパラメータの値を返します。
 
 **例**
 
@@ -491,12 +429,11 @@ userId := ctx.Param("id")  // "123"
 
 ### Query
 
-
 ```go
 Query(name string) string
 ```
 
-特定のクエリパラメータの最初の値を返します。
+指定したクエリパラメータの最初の値を返します。
 
 **例**
 
@@ -506,12 +443,11 @@ page := ctx.Query("page")  // "1"
 
 ### Headers
 
-
 ```go
 Headers() map[string][]string
 ```
 
-すべてのHTTPヘッダーをマップとして返​​します。
+すべてのHTTPヘッダーをマップで返します。
 
 **例**
 
@@ -522,12 +458,11 @@ headers := ctx.Headers()
 
 ### Bind
 
-
 ```go
 Bind(out any) error
 ```
 
-HTTP bodyを構造体にバインドします。
+HTTPリクエストの本文を構造体にバインドします。
 
 **例**
 
@@ -540,12 +475,11 @@ if err := ctx.Bind(&req); err != nil {
 
 ### MultipartForm
 
-
 ```go
 MultipartForm() (*multipart.Form, error)
 ```
 
-Multipart form データにアクセスします。
+マルチパートフォームのデータにアクセスします。
 
 **例**
 
@@ -555,17 +489,15 @@ if err != nil {
     return err
 }
 for _, file := range form.File["upload"] {
-    // ファイル処理
+    // 파일 처리
 }
 ```
 
+## ConsumerRequestContextのメソッド
 
-## ConsumerRequestContext メソッド
-
-イベントコンシューマ ArgumentResolver で使用されるメソッドです。
+イベント入力を解釈するときに使用するメソッドです。
 
 ### EventName
-
 
 ```go
 EventName() string
@@ -581,7 +513,6 @@ name := ctx.EventName()  // "order.created"
 
 ### Payload
 
-
 ```go
 Payload() []byte
 ```
@@ -596,19 +527,17 @@ var event OrderCreated
 json.Unmarshal(payload, &event)
 ```
 
+## WebSocketContextのメソッド
 
-## WebSocketContext メソッド
-
-WebSocket ArgumentResolver で使用されるメソッドです。
+WebSocket入力を解釈するときに使用するメソッドです。
 
 ### ConnID
-
 
 ```go
 ConnID() string
 ```
 
-WebSocket 接続の一意の識別子を返します。
+WebSocket接続の一意の識別子を返します。
 
 **例**
 
@@ -618,14 +547,14 @@ connID := ctx.ConnID()  // "a1b2c3d4-..."
 
 ### MessageType
 
-
 ```go
 MessageType() int
 ```
 
-WebSocket メッセージタイプを返します。
+WebSocketメッセージの型を返します。
 
 **戻り値**
+
 - `1` - TextMessage
 - `2` - BinaryMessage
 
@@ -633,18 +562,17 @@ WebSocket メッセージタイプを返します。
 
 ```go
 if ctx.MessageType() == ws.TextMessage {
-    // テキストメッセージ処理
+    // 텍스트 메시지 처리
 }
 ```
 
 ### Payload
 
-
 ```go
 Payload() []byte
 ```
 
-WebSocket メッセージの生のペイロードを返します。
+WebSocketメッセージの生のペイロードを返します。
 
 **例**
 
@@ -654,20 +582,17 @@ var msg ChatMessage
 json.Unmarshal(payload, &msg)
 ```
 
+## 予約済みキー
 
-## 予約キー
-
-|キー|タイプ|説明
+| キー | 型 | 説明 |
 |----|------|------|
-| `spine.response_writer` | `core.ResponseWriter` |応答出力インターフェース|
-| `spine.params` | `map[string]string` |パスパラメータ|
-| `spine.pathKeys` | `[]string` |パスパラメータキーシーケンス|
+| `spine.response_writer` | `core.ResponseWriter` | レスポンス出力インターフェース |
+| `spine.params` | `map[string]string` | パスパラメータ |
+| `spine.pathKeys` | `[]string` | パスパラメータのキーの順序 |
 
+## インターセプターでの使用
 
-## Interceptorで使用
-
-`ExecutionContext` は、Interceptor のすべてのメソッドで最初の引数として渡されます。
-
+`ExecutionContext`は、インターセプターのすべてのメソッドに第1引数として渡されます。
 
 ```go
 type Interceptor interface {
@@ -678,19 +603,13 @@ type Interceptor interface {
 }
 ```
 
-### ロギングの例
-
+### ログ出力の例
 
 ```go
 type LoggingInterceptor struct{}
 
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s -> %s.%s",
-        ctx.Method(),
-        ctx.Path(),
-        meta.ControllerType.Name(),
-        meta.Method.Name,
-    )
+    log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
     return nil
 }
 
@@ -711,6 +630,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 
 ### CORSの例
 
+次は、レスポンス出力インターフェースにアクセスする例です。`Config`と`isAllowedOrigin`はアプリで定義します。CORS全体の設定には、[検証可能な標準インターセプター](/ja/reference/security-configuration#cors-cookies)を使用してください。
 
 ```go
 type CORSInterceptor struct {
@@ -723,134 +643,65 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return nil
     }
     rw := rwAny.(core.ResponseWriter)
-    
+
     origin := ctx.Header("Origin")
     if origin != "" && i.isAllowedOrigin(origin) {
         rw.SetHeader("Access-Control-Allow-Origin", origin)
         rw.SetHeader("Vary", "Origin")
     }
-    
+
     if ctx.Method() == "OPTIONS" {
         rw.WriteStatus(204)
         return core.ErrAbortPipeline
     }
-    
+
     return nil
 }
 ```
 
+## 入力の解釈での使用
 
-## ArgumentResolverで使用
+入力を解釈するコンポーネントは、`core.ExecutionContext`を受け取り、トランスポートに対応するインターフェースに型アサーションします。たとえば、HTTPのパスパラメータを読み取るには`core.HttpRequestContext`、イベント名を読み取るには`core.ConsumerRequestContext`、WebSocketの接続IDを読み取るには`core.WebSocketContext`が必要です。対応するインターフェースを実装していないコンテキストでは、型アサーションが失敗します。
 
-ArgumentResolver は `core.ExecutionContext` を受け取り、必要に応じてプロトコル固有の Context で型断言します。
+HTTPコントローラーの`context.Context`引数には標準コンテキストとリクエストスコープのイベントバスを渡し、`core.ControllerContext`引数には`Get()`だけを提供するビューを渡します。コンシューマーとWebSocketの標準入力リゾルバーには、`ControllerContext`を注入する機能がありません。ランタイムの入力解釈コードは、次のソースで確認できます。
 
-### HTTP Resolverの例
+- [HTTPパスパラメータの解釈](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/path_int_resolver.go)
+- [標準コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/std_context_resolver.go)
+- [コントローラーの取得用コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/controller_context_resolver.go)
+- [イベント入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.5.1/internal/event/consumer/resolver)
+- [WebSocket入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.5.1/internal/ws/resolver)
 
+## プロトコルごとの動作の違い
 
-```go
-func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    // HttpRequestContext への型アサーション
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP リクエストコンテキストではありません")
-    }
-
-    raw, ok := httpCtx.Params()[parameterMeta.PathKey]
-    if !ok {
-        return nil, fmt.Errorf("path param が見つかりません: %s", parameterMeta.PathKey)
-    }
-
-    value, err := strconv.ParseInt(raw, 10, 64)
-    if err != nil {
-        return nil, err
-    }
-
-    return path.Int{Value: value}, nil
-}
-```
-
-### Consumer Resolverの例
-
-
-```go
-func (r *EventNameResolver) Resolve(ctx core.ExecutionContext, meta ParameterMeta) (any, error) {
-    // ConsumerRequestContext への型アサーション
-    consumerCtx, ok := ctx.(core.ConsumerRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("ConsumerRequestContext ではありません")
-    }
-
-    return consumerCtx.EventName(), nil
-}
-```
-
-### WebSocket Resolverの例
-
-
-```go
-func (r *ConnectionIDResolver) Resolve(ctx core.ExecutionContext, meta ParameterMeta) (any, error) {
-    // WebSocketContext への型アサーション
-    wsCtx, ok := ctx.(core.WebSocketContext)
-    if !ok {
-        return nil, fmt.Errorf("WebSocketContext ではありません")
-    }
-
-    return ws.ConnectionID{Value: wsCtx.ConnID()}, nil
-}
-```
-
-### Common Resolverの例
-
-HTTP、Consumer、WebSocketの両方で動作するResolverです。
-
-
-```go
-func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    baseCtx := ctx.Context()
-    bus := ctx.EventBus()
-    if bus != nil {
-        // EventBus を context.Context に注入
-        return context.WithValue(baseCtx, publish.PublisherKey, bus), nil
-    }
-    return baseCtx, nil
-}
-```
-
-### ControllerContext Resolverの例
-
-
-```go
-func (r *ControllerContextResolver) Resolve(ctx core.ExecutionContext, _ ParameterMeta) (any, error) {
-    return runtime.NewControllerContext(ctx), nil
-}
-```
-
-
-## プロトコル固有の動作の違い
-
-|メソッドHTTP |消費者WebSocket |
+| メソッド | HTTP | イベントコンシューマー | WebSocket |
 |--------|------|----------|-----------|
-| `Method()` | `"GET"`、`"POST"`など`"EVENT"` | `"WS"` |
+| `Method()` | `"GET"`、`"POST"`など | `"EVENT"` | `"WS"` |
 | `Path()` | `/users/123` | `order.created` | `/ws/chat` |
-| `Header()` |ヘッダー値|空の文字列空の文字列
-| `Params()` | path params |空の地図空の地図
-| `PathKeys()` |キーシーケンス|空のスライス|空のスライス|
-| `Queries()` | query params |空の地図空の地図
+| `Header()` | ヘッダー値 | 空文字列 | 接続リクエストのヘッダー値 |
+| `Params()` | パスパラメータ | `nil` | ルーターが解釈したパスパラメータ |
+| `PathKeys()` | パスパラメータのキーの順序 | `nil` | パスパラメータのキーの順序 |
+| `Queries()` | クエリパラメータ | `nil` | 接続リクエストのクエリパラメータ |
 | `EventBus()` | EventBus | EventBus | EventBus |
-| `Context()` |リクエストコンテキストリクエストコンテキストリクエストコンテキスト
-
+| `Context()` | リクエストコンテキスト | イベント処理コンテキスト | メッセージ処理コンテキスト |
 
 ## 実装
 
-|実装インターフェース|場所
+| 実装 | インターフェース | 場所 |
 |--------|-----------|------|
 | `echoContext` | `ExecutionContext` + `HttpRequestContext` | `internal/adapter/echo/context_impl.go` |
 | `ConsumerRequestContextImpl` | `ExecutionContext` + `ConsumerRequestContext` | `internal/event/consumer/request_context_impl.go` |
-| `WSExecutionContext` | `WebSocketContext` (⊃ `ExecutionContext`) | `internal/ws/context_impl.go` |
+| `WSExecutionContext` | `WebSocketMessageContext` | `internal/ws/context_impl.go` |
 | `controllerCtxView` | `ControllerContext` | `internal/runtime/controller_ctx.go` |
 
+## 制約とエラー
 
-## 注
+- グローバルインターセプターの`PreHandle`は、ルーティング前に実行されます。この時点では`HandlerMeta{}`が空のため、コントローラーの型やメソッドに直接アクセスしないでください。パスパラメータもルーティング後に読み取る必要があります。
+- `Get`は、キーが存在しない場合に`(nil, false)`を返します。保存された値の型を確認してから使用してください。`ControllerContext`は、保存されたオブジェクト自体の変更を防ぐものではありません。
+- `Header`と`Query`は、値が存在しない場合に空文字列を返します。WebSocketの`Cookie`は、値と存在有無を併せて返します。
+- `Bind`と`MultipartForm`は、本文の解釈に失敗するとエラーを返します。呼び出し元にエラーを返し、処理を中断してください。
+- `spine.`で始まる予約済みキーは、ランタイムが使用します。アプリで共有する値には、`auth.user`のような別の名前を使用してください。
 
-- [Interceptor](/ja/reference/api/interceptor) - 横断関心事の処理
+## 関連情報
+
+- [インターセプター](/ja/reference/api/interceptor): 認証やログ出力などの共通処理
 - [実行コンテキストの概念](/ja/learn/core-concepts/execution-context) - 詳細な説明

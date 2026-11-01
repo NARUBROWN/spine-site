@@ -1,10 +1,16 @@
-# KafkaによるMSAの例
+# Kafka で注文サービスと在庫サービスを接続する
 
-CLIで注文HTTPサービスと在庫コンシューマーを別々に生成します。注文サービスが`order.created`を発行し、HTTPリスナーを持たない在庫サービスが処理します。
+注文用の HTTP サービスと在庫のコンシューマーサービスをそれぞれ作成し、Kafka で `order.created` イベントを渡します。注文リクエストを送信した後、在庫サービスの処理ログまで確認します。在庫サービスは HTTP リスナーなしで実行します。
 
-## CLIで2つのサービスを生成
+## 事前準備
 
-先に[CLIをインストール](/ja/learn/getting-started/installation)します。以降は`spine-msa/`で実行します。CLI 0.1.4は型付きconsumerの骨組みを生成しますが、Kafkaブローカーや転送設定は生成しません。
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI 0.1.4 は、型を定義したコンシューマーのひな形を提供します。Kafka ブローカーとトランスポートの設定は別途準備します。
+
+メッセージの配信を確認するには、`localhost:9092` の Kafka ブローカーと `order.created` トピックが必要です。この例では、隔離されたローカル環境の平文接続を使用します。在庫コンシューマーはイベントをログに記録し、実際の在庫数は変更しません。
+
+## 1. 2 つのサービスを作成する
+
+作業ディレクトリを作り、生成するファイルを先に確認します。
 
 ```sh
 mkdir spine-msa
@@ -13,26 +19,30 @@ spine new order-app --module example.com/order-app --dry-run
 spine new stock-app --module example.com/stock-app --dry-run
 ```
 
-プレビューで生成ファイルと登録コードの変更を確認し、以下のコマンドで生成します。
+プレビューを確認してから 2 つのアプリを作成します。以降のコマンドは、別途指定がなければ `spine-msa/` で実行します。
 
 ```sh
 spine new order-app --module example.com/order-app
 spine new stock-app --module example.com/stock-app
 ```
 
-## コンシューマーの骨組みを生成
+## 2. 在庫コンシューマーのひな形を生成する
 
-既定の自動登録は`stock-app/internal/application/application.go`にエラーを確認する`order.Register(app)`を追加します。生成直後のhandlerは未実装エラーを返すため、以下の実装に置き換えるまで検証には通りません。
+`stock-app` に、注文イベントを受け取るコンシューマーを生成します。まずプレビューを確認します。
 
 ```sh
 spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
+次のコマンドはコンシューマーのファイルを作成し、`stock-app/internal/application/application.go` に `order.Register(app)` の呼び出しとエラー確認のコードを追加します。生成直後のハンドラーは未実装エラーを返すため、検証を通過するには手順 5 のコードに置き換える必要があります。
+
 ```sh
 spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
-## 最終的な構造
+### ファイル構成
+
+共有イベントと注文コントローラーを追加し、生成されたコンシューマーの実装とアプリ設定を置き換えると、次の構成になります。
 
 ```text
 spine-msa/
@@ -59,9 +69,9 @@ spine-msa/
         └── order_message.go
 ```
 
-## 共有イベント
+## 3. 共有イベントを定義する
 
-`order-app/src/events`は両サービスが再利用するイベントパッケージです。この例ではstockモジュールがorderモジュールの該当パッケージだけをインポートします。後述の`go mod edit`でローカルモジュールを接続します。
+`order-app/src/events/order_created.go` を新規作成します。2 つのサービスは、このパッケージのイベント型を共用します。`stock-app` が `order-app` のイベントパッケージをインポートできるよう、手順 6 で `go mod edit` を使ってローカルモジュールを接続します。
 
 ```go
 // order-app/src/events/order_created.go
@@ -79,9 +89,11 @@ func (e OrderCreated) Name() string { return "order.created" }
 func (e OrderCreated) OccurredAt() time.Time { return e.At }
 ```
 
-## 注文サービス：イベント発行
+## 4. 注文サービスでイベントを発行する
 
-以下の2ファイルを手動で追加・置換します。CLIが生成したルートの`main.go`と`spine.toml`は維持します。`publish.Event`は現在のリクエストにイベントを追加し、戻り値はありません。handlerとレスポンス準備の成功後、設定されたKafka writerが発行します。
+`order-app/src/controller/order_controller.go` を新規作成し、`order-app/internal/application/application.go` を以下のコードに置き換えます。ルートの `main.go` と `spine.toml` はそのまま使用します。
+
+`publish.Event` は現在のリクエストにイベントを追加し、戻り値はありません。ハンドラーが成功し、レスポンスの準備が完了すると、設定した Kafka パブリッシャーがイベントを送信します。
 
 ```go
 // order-app/src/controller/order_controller.go
@@ -150,9 +162,11 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 在庫サービス：イベント処理
+## 5. 在庫サービスでイベントを処理する
 
-生成された`order_message.go`を共有イベントのエイリアスに変え、`order_handler.go`の未実装エラーを除きます。メモリ重複排除は同じプロセス内だけで有効です。実際の在庫変更と永続的な重複排除は同じDBトランザクションで実装します。構成ファイルは以下の全体コードで置き換え、自動登録を重複追加しないでください。
+次の 3 つのファイルを、それぞれ以下のコードに置き換えます。`order_message.go` は共有イベントの型エイリアスに変更し、`order_handler.go` には未実装エラーの代わりに検証、重複確認、ログ出力を実装します。生成された `module.go` はそのまま使用します。
+
+`stock-app/internal/application/application.go` を丸ごと置き換えるコードには、`order.Register(app)` が含まれています。生成時に追加された登録コードを重ねて追加しないでください。
 
 ```go
 // stock-app/src/consumer/order/order_message.go
@@ -227,9 +241,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## モジュール接続と検証
+## 6. ローカルモジュールを接続し、コードを検証する
 
-各サービスに独立した`go.mod`と`spine.toml`があります。以下は`spine-msa/`から開始し、最後に同じ場所へ戻ります。生成された各`main.go`は`BuildApplication`、`Validate`、`Run`の順に実行します。
+2 つのサービスは、それぞれ独立した `go.mod` と `spine.toml` を使用します。次のコマンドは `spine-msa/` から開始し、2 つのモジュールを接続して検査した後、同じ場所に戻ります。各アプリに生成された `main.go` は、`BuildApplication`、`Validate`、`Run` を順に実行します。
 
 ```sh
 cd order-app
@@ -249,34 +263,52 @@ spine verify --root order-app
 spine verify --root stock-app
 ```
 
-ローカル平文設定のため、各サービスで`INSECURE_TRANSPORT_ENABLED`が1件出るのは想定どおりです。既定の検査には通りますが、`--warnings-as-errors`では失敗します。
+各サービスはローカルの平文接続を使用するため、`INSECURE_TRANSPORT_ENABLED` の警告が 1 件ずつ出ます。通常の検査は通過しますが、`--warnings-as-errors` を使用すると失敗します。
 
-`contract check`は静的契約、`verify`は契約、gofmt、vet、Goテストを検査します。ブローカー接続やメッセージ配信は確認しません。
+`contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。ブローカー接続と実際のメッセージ配信は、次の手順で確認します。
 
-## ブローカー準備後に実行
+## 7. 実行してイベントの配信を確認する
 
-Kafkaを別途`localhost:9092`で準備し、`order.created`トピックを作成します。別々のターミナルを開き、どちらも`spine-msa/`から実行します。
+Kafka が `localhost:9092` で起動しており、`order.created` トピックが存在することを確認します。各ターミナルの作業ディレクトリを `spine-msa/` に合わせます。
+
+1 つ目のターミナルで在庫サービスを起動します。
 
 ```sh
 spine run --root stock-app
 ```
 
+2 つ目のターミナルで注文サービスを起動します。
+
 ```sh
 spine run --root order-app
 ```
+
+3 つ目のターミナルで注文作成リクエストを送信します。
 
 ```sh
 curl -i -X POST http://localhost:8080/orders/12345
 ```
 
-POSTの応答はHTTP 202、本文は`accepted`です。ブローカーが正常なら在庫プロセスで`topic=order.created order_id=12345`のログを確認します。HTTP応答だけでは消費完了の証拠になりません。
+HTTP 202 と本文 `accepted` が返されることを確認します。続けて在庫サービスのターミナルで、`topic=order.created order_id=12345` のログを確認します。HTTP レスポンスは注文リクエストの結果であり、在庫サービスのログはイベント消費の結果です。サービス間の配信を検証するには、両方を確認する必要があります。
 
-## 転送と整合性の境界
+## 本番環境に適用する前に確認する点
 
-`AllowInsecureTransport: true`は隔離されたローカル平文ブローカー専用です。本番では除去し、TLS/SASLとbrokerアドレスを設定します。既定の転送はTLS 1.2以上で、独自設定では読み書きの両方を保護します。
+### トランスポートのセキュリティとトピック名
 
-`TopicPrefix`は単純な文字列連結です。writerに`prod.`を使う場合、consumerも`prod.order.created`で明示登録します。この例では両方とも接頭辞なしの`order.created`を使います。検査と実行で同じ設定を使ってください。
+`AllowInsecureTransport: true` は、隔離されたローカルの平文ブローカーにのみ使用します。本番環境ではこのオプションを削除し、TLS/SASL とブローカーアドレスを設定します。既定のトランスポートは TLS 1.2 以上を使用します。トランスポート設定を直接指定する場合は、読み取りと書き込みの両方を保護する必要があります。
 
-Kafkaは少なくとも1回配信するため、安定したイベントIDと永続的な重複排除が必要です。`ConsumerRetry`はreader・転送の再構築を制御し、業務handlerの再試行回数を制限しません。永続的に失敗するメッセージはパーティションを止めることがあり、自動skipやDLQへの移動は行いません。
+`TopicPrefix` は、トピック名の先頭に文字列をそのまま付加します。発行設定に `prod.` を使用する場合、コンシューマーの登録トピックも `prod.order.created` に合わせる必要があります。この例では、両方ともプレフィックスなしの `order.created` を使用します。検査と実行で同じ設定を使用してください。
 
-DBコミットとbroker発行は原子的ではありません。確実なDB・イベント処理にはtransactional outboxとconsumerの重複排除を別途実装します。[セキュリティ設定](/ja/reference/security-configuration)も参照してください。
+### 重複処理と失敗するメッセージ
+
+Kafka はメッセージを少なくとも 1 回配信するため、同じイベントが再度届くことがあります。同じイベントを再送する際にも維持されるイベント ID と、永続的な重複処理の防止が必要です。この例の重複処理の防止は、同じプロセス内でのみ有効です。実際の在庫変更と永続的な重複処理の防止は、同じ DB トランザクションで実装する必要があります。
+
+`ConsumerRetry` はリーダーとトランスポート層の再構成を調整するもので、業務ハンドラーの再試行回数は制限しません。失敗し続けるメッセージは、パーティションの処理を止める可能性があります。メッセージを自動的にスキップしたり、DLQ に移動したりはしません。
+
+### DB の変更とイベントの発行
+
+DB コミットとブローカーへの発行は、単一のアトミックな操作ではありません。DB の変更とイベント配信の整合性を保つ必要がある場合は、transactional outbox とコンシューマーの重複処理の防止を別途実装してください。
+
+## 次のステップ
+
+[セキュリティ設定](/ja/reference/security-configuration)で Kafka の接続設定を確認してください。実際の在庫リポジトリを接続する際は、イベント ID を永続的に記録し、在庫変更と一緒にコミットするよう構成してください。

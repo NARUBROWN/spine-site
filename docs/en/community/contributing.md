@@ -1,53 +1,72 @@
 # Contributing
 
-How to contribute to Spine.
+Follow this process to propose features, bug fixes, and documentation improvements for Spine and submit a Pull Request. Discuss the purpose and scope of your change in a GitHub Issue before implementation.
 
-## Contribution Process
+## Contribution process
 
-If you want to contribute a feature or improvement to Spine, please follow the steps below.
+Start by opening an Issue, then proceed through maintainer review and approval, implementation, and a Pull Request.
 
 ```mermaid
 flowchart TD
-    A[1. Create Issue<br/>Feature Proposal or Bug Report] --> B[2. Maintainer Review<br/>Feedback and Discussion]
-    B --> C{3. Issue Approval}
-    C -->|Approved| D[4. Implementation<br/>Fork → Branch → Commit]
-    C -->|Rejected| A
-    D --> E[5. Pull Request<br/>Code Review and Merge]
-    E --> F[Merged]
+    A[1. Create an Issue<br/>Feature request or bug report] --> B[2. Maintainer review<br/>Feedback and discussion]
+    B --> C{3. Issue approval}
+    C -->|Approved| D[4. Implement the feature<br/>Fork → Branch → Commit]
+    C -->|Declined| A
+    D --> E[5. Pull Request<br/>Code review and merge]
+    E --> F[Merge complete]
 ```
 
-## 1. Create Issue
+## 1. Create an Issue
 
-Please **create an Issue first** before starting any implementation.
+Always open an Issue before implementing a feature.
 
-Create a new Issue at [Spine GitHub Issues](https://github.com/NARUBROWN/spine/issues) and include the following:
+Create a new Issue in [Spine GitHub Issues](https://github.com/NARUBROWN/spine/issues) and include the information for your proposal type.
 
-**For Feature Proposals**
-- Description of the proposed feature
-- Reason why this feature is needed
+For feature requests:
+
+- The feature you propose
+- Why the feature is needed
 - Expected usage examples
 
-**For Bug Reports**
-- How to reproduce the bug
-- Expected vs Actual behavior
-- Environment info (Go version, OS, etc.)
+For bug reports:
 
-## 2. Maintainer Review
+- Steps to reproduce the bug
+- Expected and actual behavior
+- Your runtime environment, including Go version and operating system
 
-Once an Issue is created, a Maintainer will review and leave comments. Discussions on design direction and implementation scope may happen at this stage.
+## 2. Maintainer review
 
-## 3. Issue Approval
+A maintainer reviews the Issue and leaves feedback. Discuss the design and implementation scope together as needed.
 
-You can proceed with implementation once the Maintainer approves the Issue. PRs created without approval might not be merged, so please verify approval before starting implementation.
+## 3. Issue approval
+
+Start implementation after a maintainer approves the Issue. Pull Requests opened before approval may not be merged.
 
 ## 4. Pull Request
 
-Create a Pull Request on GitHub. Please specify the related Issue number in the PR description.
+Once implementation is complete, create a Pull Request on GitHub and include the related Issue number in the description.
 
 ```
 Closes #123
 ```
 
-## If you have questions
+## Documentation changes and translations
 
-If you have any questions during implementation, leave a comment on the relevant Issue.
+This documentation site uses `docs/ko` as the single source of truth for its content. Update and review the Korean documentation first, then translate it into `docs/en`, `docs/ja`, `docs/zh-Hans`, and `docs/zh-Hant`, preserving the same content, code, and structure.
+
+From the documentation site's repository root, run the following command to check that document structure and executable code match across languages.
+
+```bash
+python3 scripts/check-doc-translations.py
+```
+
+After building the documentation, also check translated internal paths and section links.
+
+```bash
+npm run docs:build
+python3 scripts/check-doc-translations.py --check-rendered
+```
+
+## Questions
+
+If you need clarification during implementation, leave a comment on the related Issue.

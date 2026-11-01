@@ -1,10 +1,12 @@
-# Swagger and OpenAPI Documentation
+# Swagger and OpenAPI documentation
 
-Use the CLI-generated project from [First App](/en/learn/getting-started/first-app). Generate `src/user` with `spine generate resource user` as described in [Controllers](/en/learn/tutorial/2-controller). CLI static OpenAPI export and Swaggo/Swagger UI integration are separate features.
+Export an OpenAPI file with the CLI, then add Swaggo documentation and Swagger UI if you want to send requests from a browser. The CLI's static OpenAPI export and the Swaggo UI setup are separate workflows.
+
+Use the `example.com/hello-spine` project from [Your first app](/en/learn/getting-started/first-app). First generate `src/user` with `spine generate resource user` from [Controllers](/en/learn/tutorial/2-controller). If you used a different module path, replace only the `example.com/hello-spine` prefix in the import path below with your module path and keep the `/docs` suffix. Run commands from the project root.
 
 ## Export OpenAPI with the CLI
 
-The CLI generates OpenAPI 3.1 from registered routes and handler signatures. Swaggo annotations are not required.
+The CLI generates an OpenAPI 3.1 document from registered routes and handler signatures. Swaggo annotations are not required.
 
 ```bash
 spine doctor
@@ -12,22 +14,24 @@ spine contract check
 spine contract export --format openapi --output openapi.json
 ```
 
-The output includes `/health`, `/user/{id}`, and `x-spine-*` analysis evidence. Spine `/user/:id` becomes OpenAPI `/user/{id}`. Runtime-selected status codes and other limits remain explicit. Exporting does not install Swagger UI or mount an HTTP endpoint. Review an existing output before replacing it with `--force`.
+Check the generated `openapi.json` for `/health` and `/user/{id}`. Spine's `/user/:id` is represented as `/user/{id}` in OpenAPI, and the `x-spine-*` fields record the analysis evidence and its limitations. For example, static analysis alone cannot determine response status codes selected at runtime.
+
+This command generates only a documentation file. If you need Swagger UI, continue with the next steps. To replace an existing file, review its contents before using `--force`.
 
 ## Optional: Swaggo and Swagger UI
 
-The following creates a separate Swagger 2.0 document with Swaggo and manually mounts its UI on the Echo transport. The CLI does not configure this integration. CLI `openapi.json` and Swaggo `docs/swagger.json` are different outputs.
+Generate Swagger 2.0 documentation with Swaggo and add a UI route to the Echo transport layer. Write the files and registration code yourself. The CLI's `openapi.json` and Swaggo's `docs/swagger.json` are separate documents, so update each one separately.
 
-### 1. Install tools
+### 1. Install the tools
 
 ```bash
 go install github.com/swaggo/swag/cmd/swag@v1.16.6
 go get github.com/swaggo/swag@v1.16.6 github.com/swaggo/http-swagger@v1.3.4
 ```
 
-### 2. Add general annotations
+### 2. Add API metadata
 
-Add these immediately above `BuildApplication()` in `internal/application/application.go`. Keep the generated main and `composition = "./internal/application"` in `spine.toml`.
+Add the following comments directly above `BuildApplication()` in `internal/application/application.go`. Keep the generated `main.go` and the `composition = "./internal/application"` setting in `spine.toml`.
 
 ```go
 // @title Hello Spine API
@@ -40,9 +44,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-### 3. Document the actual lookup handler
+### 3. Document the GET handler
 
-Manually extend the generated `src/user/user_controller.go` as follows. `UserIDResponse` is an added documentation type; the response JSON remains `{"id":1}`. This does not implement database lookup or full CRUD.
+Replace the generated `src/user/user_controller.go` with the following code. `UserIDResponse` is a type added to document the response schema. This handler returns the ID from the path, so the JSON response for `/user/1` remains `{"id":1}`. It does not look up a user in the database.
 
 ```go
 package user
@@ -76,17 +80,17 @@ func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
 
 ### 4. Generate the docs package first
 
-Run from the project root. Do not import `example.com/hello-spine/docs` before it exists. `--parseInternal` includes the internal package containing the general annotations.
+Generate the documentation package with the following command. Do not import `example.com/hello-spine/docs` before it has been generated. `--parseInternal` includes the internal package that contains the API metadata.
 
 ```bash
 swag init -g internal/application/application.go --parseInternal
 ```
 
-This generates `docs/docs.go`, `docs/swagger.json`, and `docs/swagger.yaml`. The init function in `docs.go` registers the specification, so add its blank import after generation. Do not edit generated files manually.
+This generates `docs/docs.go`, `docs/swagger.json`, and `docs/swagger.yaml`. The `init` function in `docs.go` registers the documentation, so add a side-effect import for this package in the next step. Do not edit the generated files directly.
 
-### 5. Mount the UI
+### 5. Connect the UI
 
-Add these imports to `internal/application/application.go`.
+Add these imports to the import block in `internal/application/application.go`.
 
 ```go
 import (
@@ -96,7 +100,7 @@ import (
 )
 ```
 
-Add this inside `BuildApplication()`, after `app := spine.New()` and before its return. Keep the existing health and user registrations.
+In `BuildApplication()` in the same file, add the following code after `app := spine.New()` and before `return`. Keep the existing health and user registrations.
 
 ```go
 app.Transport(func(transport any) {
@@ -115,83 +119,85 @@ spine verify
 spine dev
 ```
 
-In another terminal, check `http://localhost:8080/swagger/index.html` and `/swagger/doc.json`. Try it out must also reach the real `/user/1` endpoint. Echo routes added directly through `app.Transport` are outside the CLI static Spine route contract, so verify the UI endpoint separately.
+Open `http://localhost:8080/swagger/index.html` in a browser and check that the GET route appears. `/swagger/doc.json` should return the generated Swagger 2.0 document. Use Try it out in the UI to request `/user/1`; the response should be HTTP 200 with `{"id":1}`.
 
-## Annotations and DTOs for manual CRUD extensions
+Echo routes added directly through `app.Transport` are not included in the CLI's static Spine route contract. Even if the contract checks pass, check the UI and documentation routes separately.
 
-The tags and DTOs below are reference examples for additional features you implement. The `resource` generator does not create these request/response types or POST, PUT, and DELETE handlers. Put them in the same `package user` under `src/user` and match annotations to real routes and response status codes. Receive request DTOs as pointers. Tags such as `example`, `enums`, and `minimum` describe documentation; they do not execute input validation.
+## Annotations and DTOs for additional features
 
-## Annotation Tag Reference
+The tags and DTOs below are examples to refer to when adding features. The `resource` generator does not generate these request and response types or POST, PUT, and DELETE handlers. Add the types you need to `package user` in `src/user`, and write annotations that match your actual routes and response status codes.
 
-### Basic Tags
+Receive request DTOs as pointers in handlers. Tags such as `example`, `enums`, and `minimum` supply information for documentation; they do not run input validation automatically.
+
+### Basic annotation tags
 
 | Tag | Description | Example |
 |------|------|------|
-| `@Summary` | Summary (One line) | `Get User` |
-| `@Description` | Detailed Description | `Get user info by ID` |
-| `@Tags` | Group Tag | `users` |
-| `@Router` | Path and Method | `/user [get]` |
+| `@Summary` | One-line summary | `Look up a user` |
+| `@Description` | Detailed description | `Look up user information by ID` |
+| `@Tags` | Group tag | `users` |
+| `@Router` | Path and method | `/user [get]` |
 
-### Request Tags
+### Request tags
 
 | Tag | Description | Example |
 |------|------|------|
 | `@Accept` | Request Content-Type | `json` |
 | `@Produce` | Response Content-Type | `json` |
-| `@Param` | Parameter Definition | `id query int true "User ID"` |
+| `@Param` | Parameter definition | `id query int true "User ID"` |
 
-### Response Tags
+### Response tags
 
 | Tag | Description | Example |
 |------|------|------|
-| `@Success` | Success Response | `200 {object} UserResponse` |
-| `@Failure` | Failure Response | `404 {object} ErrorResponse` |
+| `@Success` | Successful response | `200 {object} UserResponse` |
+| `@Failure` | Error response | `404 {object} ErrorResponse` |
 
 
-## @Param Format
+## Specify request parameters
 
 ```
-@Param [Name] [Location] [Type] [Required] "[Description]"
+@Param [name] [location] [type] [required] "[description]"
 ```
 
-### Location (in)
+### Parameter locations
 
 | Location | Description | Example |
 |------|------|------|
-| `query` | Query String | `/user?id=1` |
-| `path` | URL Path | `/user/{id}` |
-| `body` | Request Body | JSON body |
+| `query` | Query string | `/user?id=1` |
+| `path` | URL path | `/user/{id}` |
+| `body` | Request body | JSON object |
 | `header` | Header | `Authorization` |
-| `formData` | Form Data | File Upload |
+| `formData` | Form data | File upload |
 
-### Type
+### Types
 
 | Type | Description |
 |------|------|
 | `int`, `integer` | Integer |
 | `string` | String |
 | `bool`, `boolean` | Boolean |
-| `number` | Float/Double |
+| `number` | Real number |
 | `object` | Object (DTO) |
 | `array` | Array |
 
-### Examples
+### Example
 
 ```go
-// Query Parameter
+// 쿼리 파라미터
 // @Param id query int true "User ID"
 // @Param name query string false "User name"
 // @Param active query bool false "Active status"
 
-// Request Body
-// @Param body body CreateUserRequest true "User creation request"
+// 요청 본문
+// @Param body body CreateUserRequest true "유저 생성 요청"
 
-// Header
-// @Param Authorization header string true "Bearer Token"
+// 헤더
+// @Param Authorization header string true "Bearer 토큰"
 ```
 
 
-## DTO Documentation
+## Document DTOs
 
 ### Request DTO
 
@@ -199,13 +205,13 @@ The tags and DTOs below are reference examples for additional features you imple
 // src/user/user_request.go
 package user
 
-// CreateUserRequest User creation request
+// CreateUserRequest 유저 생성 요청
 type CreateUserRequest struct {
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// UpdateUserRequest User update request
+// UpdateUserRequest 유저 수정 요청
 type UpdateUserRequest struct {
     Name  string `json:"name" example:"Alice Updated"`
     Email string `json:"email" example:"alice.new@example.com"`
@@ -218,34 +224,34 @@ type UpdateUserRequest struct {
 // src/user/user_response.go
 package user
 
-// UserResponse User response
+// UserResponse 유저 응답
 type UserResponse struct {
     ID    int    `json:"id" example:"1"`
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// ErrorResponse Error response
+// ErrorResponse 에러 응답
 type ErrorResponse struct {
-    Message string `json:"message" example:"User not found."`
+    Message string `json:"message" example:"유저를 찾을 수 없습니다."`
 }
 ```
 
-### DTO Tags
+### DTO tags
 
 | Tag | Description | Example |
 |------|------|------|
-| `example` | Example Value | `example:"Alice"` |
-| `enums` | Allowed Values | `enums:"active,inactive"` |
-| `minimum` | Minimum Value | `minimum:"1"` |
-| `maximum` | Maximum Value | `maximum:"100"` |
-| `default` | Default Value | `default:"10"` |
+| `example` | Example value | `example:"Alice"` |
+| `enums` | List of allowed values | `enums:"active,inactive"` |
+| `minimum` | Minimum value | `minimum:"1"` |
+| `maximum` | Maximum value | `maximum:"100"` |
+| `default` | Default value | `default:"10"` |
 
 
 
 ## Regenerate documentation
 
-Regenerate Swaggo output after changing annotations or DTOs. `spine dev` does not run Swaggo automatically. Refresh the CLI specification separately with `contract export`.
+Regenerate the Swaggo documentation whenever you change annotations or DTOs. `spine dev` does not run Swaggo automatically. Add the following Makefile to update the documentation before starting the app with `make run`. Update the CLI's OpenAPI file separately with `spine contract export`.
 
 ```makefile
 .PHONY: swagger run

@@ -1,94 +1,62 @@
 # 실행 컨텍스트 (ExecutionContext)
 
-Spine 요청의 핵심.
+Spine은 요청이나 메시지마다 실행 컨텍스트를 만들어 입력 정보와 실행 상태를 파이프라인에 전달합니다. 인터셉터는 `core.ExecutionContext`로 실행 상태를 읽고 쓰며, HTTP 컨트롤러는 의미 타입과 읽기 전용 `spine.Ctx`로 필요한 값만 받습니다.
 
+이 구분을 이해하면 인터셉터에서 저장한 값을 컨트롤러로 전달하고, HTTP, 이벤트 컨슈머, WebSocket에서 사용할 수 있는 입력을 판단할 수 있습니다. 이 문서의 인터페이스와 동작은 Spine v0.5.1을 기준으로 합니다.
 
-아래 앱 핸들러는 [CLI 프로젝트](/ko/learn/tutorial/1-project-structure)의 `src/user/user_controller.go`에 추가하는 수동 확장 예입니다. 필요한 응답 타입은 `github.com/NARUBROWN/spine/pkg/httpx`에서 가져옵니다. 생성된 `BuildApplication`과 오류를 확인하는 `user.Register(app)`는 유지합니다. 프레임워크 내부 구현 발췌는 앱에 복사하지 않습니다.
+앱 핸들러 예제는 [CLI로 만든 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 수동 확장입니다. 생성된 `BuildApplication`과 오류를 확인하는 `user.Register(app)` 호출을 유지하세요. `core/` 인터페이스는 공개 계약이며, `internal/` 구현을 앱에 복사할 필요는 없습니다.
 
-## 개요
+## 컨트롤러와 인터셉터의 접근 범위
 
-`ExecutionContext`는 Spine 파이프라인 전체에서 공유되는 요청 스코프 컨텍스트입니다. HTTP 요청이 도착하면 Transport 어댑터가 `ExecutionContext`를 생성하고, 이 컨텍스트는 파이프라인의 모든 단계를 통과하며 요청 정보와 실행 상태를 전달합니다.
+컨텍스트는 하나의 큰 객체를 모든 코드에 노출하기 위한 장치가 아닙니다. 파이프라인을 제어하는 코드와 비즈니스 로직에 필요한 접근 범위를 나눕니다.
+
+| 사용할 위치 | 받을 타입 | 사용할 기능 |
+| --- | --- | --- |
+| HTTP 컨트롤러 | `context.Context` | 취소와 타임아웃 전달, 도메인 이벤트 발행 |
+| HTTP 컨트롤러 | `pkg/spine.Ctx` | 인터셉터가 저장한 값 조회 |
+| HTTP 컨트롤러 | `path.Int`, `query.Values`, DTO 등 | 바인딩한 요청 입력 |
+| 인터셉터 | `core.ExecutionContext` | 요청 정보 조회, 저장소 읽기와 쓰기, 실행 전후 처리 |
+| HTTP 인자 리졸버 | `core.HttpRequestContext` | HTTP 본문, 헤더, 폼 등 입력 해석 |
+| 컨슈머 인자 리졸버 | `core.ConsumerRequestContext` | 이벤트 이름과 페이로드 해석 |
+| WebSocket 인자 리졸버 | `core.WebSocketContext` | 연결 ID, 메시지 타입과 페이로드 해석 |
+
+이 문서에서 `spine.Ctx`는 루트 앱 패키지 `github.com/NARUBROWN/spine`이 아니라 `github.com/NARUBROWN/spine/pkg/spine`의 타입입니다. 두 패키지를 한 파일에서 가져오면 별칭으로 구분하세요.
+
+기본 HTTP 리졸버는 `core.ExecutionContext`나 `core.HttpRequestContext`를 컨트롤러 인자로 주입하지 않습니다. 컨트롤러에서 응답 작성기나 본문 바인딩을 직접 다루기보다 입력 타입과 `httpx.Response[T]` 반환값으로 필요한 동작을 표현합니다.
+
+## 컨텍스트 계약의 관계
+
+`ContextCarrier`와 `EventBusCarrier`는 공통 기능을 나타냅니다. HTTP와 컨슈머 입력 계약은 이 두 계약을 직접 포함하고, WebSocket 메시지 계약은 `ExecutionContext`를 확장합니다.
 
 ```mermaid
 graph TD
-    Request["HTTP Request / Event Message / WebSocket Message"]
-    
-    Transport["Transport Adapter<br>• Echo (HTTP)<br>• Kafka/RabbitMQ (Event)<br>• WebSocket"]
-    
-    Context["ExecutionContext<br>• Method, Path, Headers<br>• Path Parameters<br>• Query Parameters<br>• EventBus<br>• Internal Store"]
-    
-    Router["Router"]
-    Interceptor["Interceptor"]
-    ArgResolver["ArgumentResolver"]
-    Invoker["Invoker"]
-    ReturnHandler["ReturnValueHandler"]
+    Base["ContextCarrier<br>Context()"]
+    Bus["EventBusCarrier<br>EventBus()"]
+    Execution["ExecutionContext<br>메서드와 경로, 매개변수, 저장소"]
+    HTTP["HttpRequestContext<br>HTTP 입력 해석"]
+    Consumer["ConsumerRequestContext<br>이벤트 이름과 페이로드"]
+    WS["WebSocketContext<br>연결 ID와 메시지 정보"]
+    View["ControllerContext / spine.Ctx<br>Get()만 제공하는 별도 뷰"]
 
-    Request --> Transport
-    Transport --> Context
-    
-    Context --> Router
-    Context --> Interceptor
-    Context --> ArgResolver
-    Context --> Invoker
-    Context --> ReturnHandler
+    Base --> Execution
+    Bus --> Execution
+    Base --> HTTP
+    Bus --> HTTP
+    Base --> Consumer
+    Bus --> Consumer
+    Execution --> WS
+    Execution -. 읽기 전용 뷰 .-> View
 ```
 
+화살표는 포함하는 계약의 관계를 나타냅니다. `ControllerContext`와 `spine.Ctx`는 `ExecutionContext`를 임베딩하지 않습니다. 같은 저장소를 조회할 수 있도록 `Get()`만 노출한 별도 인터페이스입니다.
 
-## Context 계층 구조
+실제 HTTP 어댑터는 `ExecutionContext`와 `HttpRequestContext`를 모두 구현합니다. 컨슈머 어댑터도 `ExecutionContext`와 `ConsumerRequestContext`를 모두 구현합니다. 따라서 리졸버는 공통 컨텍스트를 받은 뒤 필요한 프로토콜 계약을 확인할 수 있습니다.
 
-Spine은 Context를 **계층적으로 분리**합니다. 이는 HTTP, Event Consumer, WebSocket을 동일한 파이프라인 모델로 처리하기 위한 설계입니다.
-
-```mermaid
-graph TB
-    subgraph "기반 계약"
-        ContextCarrier["ContextCarrier<br>Context() context.Context"]
-        EventBusCarrier["EventBusCarrier<br>EventBus() core.EventBus"]
-    end
-    
-    subgraph "실행 계약"
-        ExecutionContext["ExecutionContext<br>• Method(), Path()<br>• Params(), Queries()<br>• Set(), Get()"]
-    end
-    
-    subgraph "Controller 전용"
-        ControllerContext["ControllerContext<br>• Get()"]
-    end
-    
-    subgraph "프로토콜별 확장"
-        HttpRequestContext["HttpRequestContext<br>• Param(), Query()<br>• Bind(), Headers()<br>• MultipartForm()"]
-        ConsumerRequestContext["ConsumerRequestContext<br>• EventName()<br>• Payload()"]
-        WebSocketContext["WebSocketContext<br>• ConnID()<br>• MessageType()<br>• Payload()"]
-    end
-    
-    ContextCarrier --> ExecutionContext
-    EventBusCarrier --> ExecutionContext
-    ExecutionContext --> ControllerContext
-    ContextCarrier --> HttpRequestContext
-    EventBusCarrier --> HttpRequestContext
-    ExecutionContext --> WebSocketContext
-    ContextCarrier --> ConsumerRequestContext
-    EventBusCarrier --> ConsumerRequestContext
-```
-
-### 왜 이렇게 분리하는가?
-
-| 계층 | 담당 | 사용 위치 |
-|------|------|----------|
-| `ContextCarrier` | Go 표준 context 전달 | 모든 곳 |
-| `EventBusCarrier` | 도메인 이벤트 발행 (`core.EventBus`) | Controller, Consumer |
-| `ExecutionContext` | 실행 흐름 제어 | Router, Pipeline, Interceptor |
-| `ControllerContext` | ExecutionContext의 읽기 전용 Facade | Controller (Interceptor 주입 값 참조) |
-| `HttpRequestContext` | HTTP 입력 해석 | HTTP ArgumentResolver |
-| `ConsumerRequestContext` | 이벤트 입력 해석 | Consumer ArgumentResolver |
-| `WebSocketContext` | WebSocket 입력 해석 | WebSocket ArgumentResolver |
-
-**목표**: HTTP, Event Consumer, WebSocket이 동일한 파이프라인 모델을 공유하면서, 각 프로토콜의 특성에 맞는 입력 해석이 가능하게 합니다.
-
-
-## 기반 인터페이스
+## 공통 기반 계약
 
 ### ContextCarrier
 
-Go 표준 `context.Context`를 전달하는 최소 계약입니다.
+Go 표준 `context.Context`를 전달합니다. 취소 신호와 기한을 서비스, 저장소, 외부 API 호출로 전달할 때 사용합니다.
 
 ```go
 // core/context.go
@@ -97,9 +65,11 @@ type ContextCarrier interface {
 }
 ```
 
+HTTP에서는 요청의 `context.Context`를 사용합니다. 컨트롤러가 `context.Context`를 인자로 선언하면 표준 컨텍스트 리졸버가 요청 컨텍스트를 전달하고, 도메인 이벤트 발행에 필요한 EventBus도 연결합니다.
+
 ### EventBusCarrier
 
-도메인 이벤트 발행을 위한 EventBus 접근 계약입니다. 반환 타입은 `core.EventBus`입니다.
+실행에 속한 EventBus에 접근합니다.
 
 ```go
 // core/context.go
@@ -108,7 +78,7 @@ type EventBusCarrier interface {
 }
 ```
 
-`core.EventBus`는 도메인 이벤트를 수집했다가 실행 후 한 번에 방출하기 위한 최소 계약입니다.
+`core.EventBus`는 이벤트를 수집하고 꺼내는 최소 계약입니다. `publish.DomainEvent`는 `github.com/NARUBROWN/spine/pkg/event/publish`에 정의되어 있습니다.
 
 ```go
 // core/event_bus.go
@@ -118,12 +88,11 @@ type EventBus interface {
 }
 ```
 
-> **참고**: `internal/event/publish.EventBus`는 `core.EventBus`의 타입 별칭(`type EventBus = core.EventBus`)으로, 내부 구현체가 이 타입을 만족하도록 구성됩니다.
+컨트롤러는 보통 `EventBus()`를 직접 호출하지 않고, 전달받은 `context.Context`로 `publish.Event()`를 호출합니다. 구체적인 사용법은 아래 [EventBus와 이벤트 발행](#event-publishing)에서 설명합니다.
 
+## ExecutionContext: 파이프라인과 인터셉터의 실행 상태
 
-## ExecutionContext 인터페이스
-
-파이프라인 전체에서 사용되는 실행 흐름 제어용 인터페이스입니다.
+`core.ExecutionContext`는 파이프라인, 라우터, 인터셉터가 공통으로 사용하는 계약입니다.
 
 ```go
 // core/context.go
@@ -131,106 +100,59 @@ type ExecutionContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // HTTP 요청 정보 (Consumer/WebSocket에서는 의미가 다름)
-    Method() string                    // HTTP: GET, POST... / Consumer: "EVENT" / WS: "WS"
-    Path() string                      // HTTP: /users/123 / Consumer: EventName / WS: path
-    Header(name string) string         // HTTP 헤더 (Consumer, WS는 빈 문자열)
-    
-    // 파라미터 접근
-    Params() map[string]string         // Path parameters
-    PathKeys() []string                // Path key 순서
-    Queries() map[string][]string      // Query parameters
-    
-    // 내부 저장소
-    Set(key string, value any)         // 값 저장
-    Get(key string) (any, bool)        // 값 조회
+    Method() string
+    Path() string
+    Params() map[string]string
+    Header(name string) string
+    PathKeys() []string
+    Queries() map[string][]string
+    Set(key string, value any)
+    Get(key string) (any, bool)
 }
 ```
 
-### 메서드 상세
+### 요청과 라우팅 정보
 
-#### Context()
+| 메서드 | HTTP에서의 의미 | 주의할 점 |
+| --- | --- | --- |
+| `Method()` | `GET`, `POST` 등 요청 메서드 | 컨슈머는 `EVENT`, WebSocket은 `WS` 반환 |
+| `Path()` | `/users/123` 같은 실제 요청 경로 | 라우트 패턴 `/users/:id`와 구분 |
+| `Header(name)` | 지정한 요청 헤더 | 헤더가 없으면 빈 문자열 |
+| `Params()` | 라우터가 추출한 경로 값 | 전역 `PreHandle`은 Spine 라우팅 전 실행 |
+| `PathKeys()` | 라우트에 선언한 경로 매개변수 순서 | `path.*` 타입의 순서 기반 바인딩에 사용 |
+| `Queries()` | 여러 값을 보존한 쿼리 맵 | 하나의 키에 여러 값이 있을 수 있음 |
 
-Go 표준 `context.Context`를 반환합니다. 요청 취소, 타임아웃, 값 전달에 사용됩니다.
-
-```go
-func (e *echoContext) Context() context.Context {
-    return e.reqCtx  // HTTP 요청의 context
-}
-```
-
-#### EventBus()
-
-요청 스코프의 EventBus를 반환합니다. Controller에서 도메인 이벤트를 발행할 때 사용됩니다.
+예를 들어 `/users/:userId/posts/:postId` 라우트에 `/users/123/posts/456?tag=go&tag=web` 요청이 들어오면 라우팅 후 다음 정보를 읽을 수 있습니다.
 
 ```go
-func (c *echoContext) EventBus() publish.EventBus {
-    return c.eventBus
-}
+ctx.Method()   // "GET"
+ctx.Path()     // "/users/123/posts/456"
+ctx.Params()   // {"userId": "123", "postId": "456"}
+ctx.PathKeys() // ["userId", "postId"]
+ctx.Queries()  // {"tag": ["go", "web"]}
 ```
 
-#### Method() / Path()
+위 코드는 인터셉터 등에서 읽을 수 있는 값의 예시입니다. HTTP 컨트롤러가 이 컨텍스트를 직접 받는다는 뜻은 아닙니다.
 
-HTTP 요청의 메서드와 경로를 반환합니다. Consumer와 WebSocket에서는 다른 의미로 사용됩니다.
+### Set()과 Get(): 실행 중 값 공유
+
+인터셉터는 `Set()`으로 인증 결과나 요청 추적 정보를 저장할 수 있습니다. 컨트롤러는 읽기 전용 뷰의 `Get()`으로 같은 값을 읽습니다.
 
 ```go
-// HTTP
-ctx.Method()  // "GET"
-ctx.Path()    // "/users/123/posts/456"
+// 인터셉터에서 저장
+ctx.Set("auth.user", authInfo)
 
-// Consumer
-ctx.Method()  // "EVENT"
-ctx.Path()    // "order.created" (EventName)
-
-// WebSocket
-ctx.Method()  // "WS"
-ctx.Path()    // WebSocket 경로
+// 같은 실행에서 조회
+value, ok := ctx.Get("auth.user")
 ```
 
-#### Params() / PathKeys()
+`Get()`은 값과 존재 여부를 함께 반환합니다. 키가 있다고 해서 원하는 타입이라는 뜻은 아니므로, 값을 사용하는 코드에서 타입도 확인하세요. 저장소는 요청 또는 메시지 실행에 속하며 전역 캐시로 사용하지 않습니다.
 
-Path parameter 정보를 제공합니다.
+일반 맵과 마찬가지로 동시 접근 보장은 구현체에 따라 다릅니다. HTTP 컨텍스트의 저장소를 여러 고루틴에서 동시에 읽고 쓰는 사용법을 가정하지 마세요.
 
-```go
-// Route: /users/:userId/posts/:postId
-// Request: /users/123/posts/456
+## ControllerContext와 spine.Ctx: 컨트롤러의 읽기 전용 뷰
 
-ctx.Params()    // {"userId": "123", "postId": "456"}
-ctx.PathKeys()  // ["userId", "postId"]
-```
-
-`PathKeys()`는 파라미터의 **선언 순서**를 보장합니다. Spine의 순서 기반 바인딩에 필수적입니다.
-
-#### Queries()
-
-Query parameter를 다중 값 형태로 반환합니다.
-
-```go
-// Request: /users?status=active&tag=go&tag=web
-
-ctx.Queries()  // {"status": ["active"], "tag": ["go", "web"]}
-```
-
-#### Set() / Get()
-
-파이프라인 내부에서 값을 공유하는 저장소입니다.
-
-```go
-// Router에서 path params 저장
-ctx.Set("spine.params", params)
-ctx.Set("spine.pathKeys", keys)
-
-// Adapter에서 ResponseWriter 저장
-ctx.Set("spine.response_writer", NewEchoResponseWriter(c))
-
-// Interceptor에서 조회
-rw, ok := ctx.Get("spine.response_writer")
-```
-
-
-## ControllerContext 인터페이스
-
-Controller 전용 Context View입니다. `ExecutionContext`의 읽기 전용 Facade로, Interceptor에서 주입한 값을 Controller에서 참조하기 위한 공식 통로입니다.
+`core.ControllerContext`와 `pkg/spine.Ctx`는 같은 메서드 집합을 제공합니다.
 
 ```go
 // core/context.go
@@ -239,39 +161,34 @@ type ControllerContext interface {
 }
 ```
 
-### 구현
-
 ```go
-// internal/runtime/controller_ctx.go
-type controllerCtxView struct {
-    ec core.ExecutionContext
-}
-
-func NewControllerContext(ec core.ExecutionContext) core.ControllerContext {
-    return controllerCtxView{ec: ec}
-}
-
-func (v controllerCtxView) Get(key string) (any, bool) {
-    return v.ec.Get(key)
+// pkg/spine/types.go
+type Ctx interface {
+    Get(key string) (any, bool)
 }
 ```
 
-### 사용 예시
+기본 HTTP 리졸버는 실행 컨텍스트를 이 뷰로 감싸 전달합니다. 컨트롤러는 `Get()`을 호출할 수 있지만 `Set()`, `Method()`, `EventBus()`는 호출할 수 없습니다. 추가 메서드를 요구하는 사용자 인터페이스로 타입을 확장해도 자동으로 지원되지는 않습니다.
+
+### 인터셉터가 저장한 인증 정보 읽기
+
+다음 메서드는 인증 인터셉터가 `auth.user`를 저장한 앱의 `UserController`에 추가하는 예입니다. `context`, `github.com/NARUBROWN/spine/pkg/spine`, `pkg/path`, `pkg/httpx`를 가져옵니다. 실제 앱에서는 `authInfo`의 존재 여부와 타입을 인증 정책에 맞게 검사하세요.
 
 ```go
-// Controller에서 Interceptor가 주입한 값 참조
-func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) httpx.Response[any] {
+// src/user/user_controller.go
+func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId path.Int) httpx.Response[any] {
     authInfo, _ := cc.Get("auth.user")
     return httpx.Response[any]{Body: authInfo}
 }
 ```
 
-> **참고**: `pkg/spine/types.go`에는 `Ctx` 인터페이스(`Get(key string) (any, bool)`)가 정의되어 있어, 사용자 코드에서 `spine.Ctx`로도 접근 가능합니다.
+`core.ControllerContext`를 선언해도 HTTP에서는 같은 읽기 전용 뷰를 받습니다. 앱 코드에서는 `spine.Ctx`로 필요한 접근 범위를 표현할 수 있습니다. 인증 인터셉터 작성과 등록은 [인터셉터 튜토리얼](/ko/learn/tutorial/4-interceptor)을 참고하세요.
 
+이벤트 컨슈머와 WebSocket의 기본 파이프라인에는 `ControllerContextResolver`가 등록되어 있지 않습니다. HTTP에서 사용할 수 있는 `spine.Ctx` 인자를 다른 프로토콜의 핸들러에도 그대로 선언하지 마세요.
 
-## HttpRequestContext 인터페이스
+## HttpRequestContext: HTTP 입력 해석
 
-HTTP 전용 확장 인터페이스입니다. HTTP ArgumentResolver에서 사용됩니다.
+`core.HttpRequestContext`는 HTTP 리졸버가 개별 매개변수, 전체 헤더, 본문, 멀티파트 폼을 읽는 계약입니다. `ExecutionContext`를 임베딩하지 않고 두 기반 계약을 직접 포함합니다.
 
 ```go
 // core/context.go
@@ -279,87 +196,51 @@ type HttpRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // 개별 파라미터 접근
-    Param(name string) string          // 특정 path param
-    Query(name string) string          // 특정 query param (첫 번째 값)
-    Header(name string) string         // 특정 헤더
-    
-    // 전체 뷰 접근
-    Params() map[string]string         // 모든 path params
-    Queries() map[string][]string      // 모든 query params
-    Headers() map[string][]string      // 모든 헤더
-    
-    // Body 바인딩
-    Bind(out any) error                // JSON body → struct
-    
-    // Multipart
+    Param(name string) string
+    Query(name string) string
+    Header(name string) string
+
+    Params() map[string]string
+    Queries() map[string][]string
+    Headers() map[string][]string
+
+    Bind(out any) error
     MultipartForm() (*multipart.Form, error)
 }
 ```
 
-> **참고**: `HttpRequestContext`는 `RequestContext`를 포함하지 않습니다. `ContextCarrier`와 `EventBusCarrier`를 직접 임베딩합니다. 또한 `Headers() map[string][]string` 메서드가 추가되어 전체 헤더 맵에 접근할 수 있습니다.
+여기서 `multipart.Form`은 Go 표준 `mime/multipart`의 타입입니다.
 
-### 메서드 상세
+| 메서드 | 동작 |
+| --- | --- |
+| `Param(name)` | 해당 경로 매개변수의 값 조회 |
+| `Query(name)` | 해당 쿼리의 첫 번째 값 조회, 없으면 빈 문자열 |
+| `Header(name)` | 요청 헤더 값 조회 |
+| `Params()` | 경로 매개변수 맵 조회 |
+| `Queries()` | 다중 값을 보존한 쿼리 맵 조회 |
+| `Headers()` | 전체 요청 헤더 맵 조회 |
+| `Bind(out)` | 요청 입력을 전달한 DTO에 바인딩 |
+| `MultipartForm()` | 멀티파트 폼과 파일 정보 조회 |
 
-#### Param() / Query()
+### HTTP 어댑터의 동작
 
-개별 파라미터에 편리하게 접근합니다.
+Spine의 HTTP 어댑터는 Echo를 사용합니다. `Param()`은 Spine 라우터가 저장한 값을 먼저 찾고, 없으면 Echo의 경로 값을 확인합니다. `Params()`는 원본 경로 맵을 바꾸지 않도록 복사본을 반환합니다.
 
-```go
-// Route: /users/:id?page=1&size=20
+반면 HTTP `Headers()`는 요청의 헤더 맵을 그대로 반환합니다. 모든 조회 결과가 복사본이라고 가정하지 말고 읽기 용도로 사용하세요.
 
-ctx.Param("id")      // "123"
-ctx.Query("page")    // "1"
-ctx.Query("size")    // "20"
-ctx.Query("missing") // "" (없으면 빈 문자열)
-```
-
-#### Bind()
-
-HTTP body를 구조체로 바인딩합니다.
-
-```go
-// internal/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP 요청 컨텍스트가 아닙니다")
-    }
-
-    valuePtr := reflect.New(parameterMeta.Type)
-
-    if err := httpCtx.Bind(valuePtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO 바인딩 실패 (%s): %w", parameterMeta.Type.Name(), err)
-    }
-
-    return valuePtr.Elem().Interface(), nil
-}
-```
-
-#### MultipartForm()
-
-Multipart form 데이터에 접근합니다. 파일 업로드 처리에 사용됩니다.
+`Bind()`와 `MultipartForm()`은 Echo의 입력 처리에 위임합니다. 기본 HTTP DTO 리졸버는 구조체 포인터를 만들고 `Bind()`에 전달합니다. 앱의 컨트롤러에서도 다음과 같이 포인터를 선언합니다.
 
 ```go
-// internal/resolver/uploaded_files_resolver.go
-func (r *UploadedFilesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP 요청 컨텍스트가 아닙니다")
-    }
-
-    form, err := httpCtx.MultipartForm()
-    if err != nil {
-        return nil, err
-    }
-    // ...
-}
+func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User], error)
 ```
 
+이 코드는 메서드 시그니처의 예이며, `CreateUserRequest`와 `User`는 앱에서 정의하는 타입입니다. 폼 DTO는 필드에 `form` 태그를 사용하며, 업로드 파일은 `pkg/multipart.UploadedFiles`로 받을 수 있습니다.
 
-## ConsumerRequestContext 인터페이스
+본문이 잘못된 JSON이거나 경로 값의 숫자 변환이 실패하면 컨트롤러까지 도달하지 않습니다. v0.5.1에서는 이런 바인딩 오류가 500으로 이어질 수 있으므로, 모든 입력 오류가 자동으로 400이 된다고 가정하지 마세요. 오류가 응답으로 바뀌는 순서는 [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)에서 설명합니다.
 
-Event Consumer 전용 확장 인터페이스입니다.
+## ConsumerRequestContext: 이벤트 입력 해석
+
+`core.ConsumerRequestContext`는 이벤트 이름과 원시 페이로드를 제공합니다.
 
 ```go
 // core/context.go
@@ -367,582 +248,154 @@ type ConsumerRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    EventName() string    // 이벤트 이름 (예: "order.created")
-    Payload() []byte      // 이벤트 페이로드 (JSON 등)
+    EventName() string
+    Payload() []byte
 }
 ```
 
-### 메서드 상세
+컨슈머 어댑터는 이 계약과 `ExecutionContext`를 함께 구현합니다. HTTP 요청이 아니므로 공통 메서드는 다음과 같이 동작합니다.
 
-#### EventName()
+| 메서드 | 컨슈머에서 반환하는 값 |
+| --- | --- |
+| `Method()` | `EVENT` |
+| `Path()` | 이벤트 이름 |
+| `EventName()` | 이벤트 이름 |
+| `Payload()` | 수신한 메시지의 원시 바이트 |
+| `Header(name)` | 빈 문자열 |
+| `Params()` | `nil` |
+| `PathKeys()` | `nil` |
+| `Queries()` | `nil` |
 
-수신한 이벤트의 이름을 반환합니다.
+기본 컨슈머 리졸버는 `context.Context`, 문자열 이벤트 이름, `[]byte` 페이로드, 구조체 DTO 값을 지원합니다. DTO는 JSON 페이로드를 역직렬화해 만듭니다. HTTP DTO의 포인터 규칙을 컨슈머에 그대로 적용하지 않습니다.
 
-```go
-ctx.EventName()  // "order.created"
-```
+리졸버가 요구하는 페이로드가 없거나 JSON 역직렬화에 실패하면 핸들러를 호출하지 않습니다. 이 실행 실패를 메시지 확인, 재시도, dead-letter 처리에 어떻게 반영할지는 컨슈머 런타임과 메시지 전송 설정의 책임입니다. HTTP 오류 응답 표를 그대로 적용하지 마세요.
 
-#### Payload()
+## WebSocketContext: 메시지와 연결 정보
 
-이벤트의 원시 페이로드를 반환합니다.
-
-```go
-payload := ctx.Payload()  // []byte (JSON)
-```
-
-### Consumer Resolver 예시
-
-```go
-// internal/event/consumer/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    consumerCtx, ok := ctx.(core.ConsumerRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("ConsumerRequestContext가 아닙니다")
-    }
-
-    payload := consumerCtx.Payload()
-    if payload == nil {
-        return nil, fmt.Errorf("Payload가 비어있어 DTO를 생성할 수 없습니다")
-    }
-
-    dtoPtr := reflect.New(meta.Type)
-    if err := json.Unmarshal(payload, dtoPtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO 역직렬화에 실패했습니다: %w", err)
-    }
-
-    return dtoPtr.Elem().Interface(), nil
-}
-```
-
-
-## WebSocketContext 인터페이스
-
-WebSocket 전용 ExecutionContext 확장입니다. `ExecutionContext`를 임베딩하여 파이프라인 호환성을 유지합니다.
+`core.WebSocketContext`는 `ExecutionContext`에 WebSocket 메시지 정보를 추가합니다.
 
 ```go
 // core/context.go
 type WebSocketContext interface {
     ExecutionContext
 
-    ConnID() string       // 연결 ID
-    MessageType() int     // 메시지 타입 (Text, Binary 등)
-    Payload() []byte      // 메시지 페이로드
+    ConnID() string
+    MessageType() int
+    Payload() []byte
 }
 ```
 
-### WebSocket Resolver 예시
+WebSocket 런타임은 수신한 메시지마다 실행 컨텍스트를 만듭니다. `Method()`는 `WS`, `Path()`는 연결 요청의 실제 경로를 반환합니다. `ConnID()`는 연결 ID, `MessageType()`은 텍스트나 바이너리 등 프레임 타입, `Payload()`는 해당 메시지의 바이트를 반환합니다.
+
+기본 리졸버는 `context.Context`, `pkg/ws.ConnectionID`, `[]byte`, 구조체 DTO 값을 지원합니다. DTO는 메시지 페이로드를 JSON으로 역직렬화합니다. HTTP와 달리 DTO는 구조체 값으로 받습니다.
+
+### 원래 연결 요청의 정보
+
+WebSocket에서는 HTTP upgrade 때 받은 헤더와 쿼리, 쿠키를 메시지 처리 중에도 조회할 수 있습니다. 이를 위해 별도의 요청 뷰를 제공합니다.
 
 ```go
-// internal/ws/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    wsCtx, ok := ctx.(core.WebSocketContext)
-    if !ok {
-        return nil, fmt.Errorf("WebSocketContext가 아닙니다")
-    }
+// core/context.go
+type WebSocketRequestContext interface {
+    ContextCarrier
 
-    payload := wsCtx.Payload()
-    if payload == nil {
-        return nil, fmt.Errorf("Payload가 비어있어 DTO를 생성할 수 없습니다")
-    }
-
-    dtoPtr := reflect.New(meta.Type)
-    if err := json.Unmarshal(payload, dtoPtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO 역직렬화 실패: %w", err)
-    }
-
-    return dtoPtr.Elem().Interface(), nil
+    Path() string
+    Header(name string) string
+    Headers() map[string][]string
+    Query(name string) string
+    Queries() map[string][]string
+    Cookie(name string) (string, bool)
+    Cookies() map[string]string
+    RemoteAddr() string
+    Host() string
+    RequestURI() string
 }
 ```
-
-
-## Echo 어댑터 구현
-
-Spine은 Echo를 HTTP Transport 레이어로 사용합니다. `echoContext`가 `ExecutionContext`와 `HttpRequestContext`를 모두 구현합니다.
 
 ```go
-// internal/adapter/echo/context_impl.go
-type echoContext struct {
-    echo     echo.Context           // Echo의 원본 컨텍스트
-    reqCtx   context.Context        // 요청 스코프 컨텍스트
-    store    map[string]any         // 내부 저장소
-    eventBus publish.EventBus       // 이벤트 버스
+type WebSocketHandshakeContext interface {
+    WebSocketRequestContext
 }
 
-func NewContext(c echo.Context) core.ExecutionContext {
-    return &echoContext{
-        echo:     c,
-        reqCtx:   c.Request().Context(),
-        store:    make(map[string]any),
-        eventBus: publish.NewEventBus(),
-    }
+type WebSocketMessageContext interface {
+    WebSocketContext
+    WebSocketRequestContext
 }
 ```
 
-### 주요 구현
+기본 WebSocket 구현은 upgrade 요청 정보를 복사해 보관합니다. `Headers()`, `Queries()`, `Cookies()`도 복사본을 반환하므로 조회 결과를 바꿔도 보관한 요청 정보가 변경되지 않습니다. 이 값은 연결 당시의 정보이며, 메시지마다 새로운 HTTP 요청을 받는다는 뜻은 아닙니다.
 
-#### Path Parameters
+| 필요한 값 | 사용할 계약 |
+| --- | --- |
+| 메시지 페이로드와 연결 ID | `core.WebSocketContext` |
+| upgrade 전 헤더, 쿼리, 쿠키 검사 | `core.WebSocketHandshakeContext` |
+| 메시지 처리와 원래 요청 정보 함께 조회 | `core.WebSocketMessageContext` |
 
-Router가 매칭한 결과를 우선 사용하고, 없으면 Echo의 값을 사용합니다.
+기본 구현의 `Header()`와 `Queries()`는 이 요청 정보를 조회합니다. 값이 없을 수는 있지만, WebSocket이라는 이유로 항상 빈 값을 반환하지는 않습니다. 직접 작성한 `WebSocketContext` 구현이 추가 요청 뷰도 지원한다고 가정하지 말고 타입을 확인하세요.
 
 ```go
-func (e *echoContext) Param(name string) string {
-    // Spine Router가 저장한 값 우선
-    if raw, ok := e.store["spine.params"]; ok {
-        if m, ok := raw.(map[string]string); ok {
-            if v, ok := m[name]; ok {
-                return v
-            }
-        }
-    }
-    // Fallback to Echo
-    return e.echo.Param(name)
+// WebSocket 메시지를 처리하는 인터셉터 안에서 조회하는 예
+if requestCtx, ok := ctx.(core.WebSocketMessageContext); ok {
+    origin := requestCtx.Header("Origin")
+    _ = origin
 }
 ```
 
-#### Params() - 방어적 복사
+이 코드는 컨트롤러 인자 주입 예제가 아닙니다. 인터셉터가 받은 `core.ExecutionContext`에서 추가 기능의 지원 여부를 확인하는 코드입니다.
 
-외부에서 원본 맵을 변경하지 못하도록 복사본을 반환합니다. `maps.Copy`를 사용합니다.
+### 연결 전 검사와 메시지 전처리
+
+연결 전에 인증이나 권한 검사가 필요하면 선택적 `core.WebSocketHandshakeInterceptor` 계약을 구현합니다.
 
 ```go
-func (e *echoContext) Params() map[string]string {
-    if raw, ok := e.store["spine.params"]; ok {
-        if m, ok := raw.(map[string]string); ok {
-            // return a shallow copy to avoid mutation
-            copyMap := make(map[string]string, len(m))
-            maps.Copy(copyMap, m)
-            return copyMap
-        }
-    }
-    // Echo에서 직접 구성
-    names := e.echo.ParamNames()
-    values := e.echo.ParamValues()
-    params := make(map[string]string, len(names))
-    for i, name := range names {
-        if i < len(values) {
-            params[name] = values[i]
-        }
-    }
-    return params
+type WebSocketHandshakeInterceptor interface {
+    PreHandshake(ctx WebSocketHandshakeContext, meta HandlerMeta) error
 }
 ```
 
-#### Headers()
+WebSocket에 적용하도록 등록한 `core.Interceptor`가 이 계약도 구현하면, 런타임은 연결 슬롯을 먼저 예약한 뒤 HTTP upgrade 전에 `PreHandshake`를 호출합니다. 인증을 기다리는 연결도 연결 상한에 포함됩니다. 일반 `core.Interceptor.PreHandle`은 연결 뒤에 메시지를 처리할 때마다 호출됩니다. 연결 자체를 거부해야 하는 검사와 메시지별 전처리를 구분해서 작성하세요.
 
-모든 HTTP 헤더를 맵으로 반환합니다.
+## 프로토콜별 입력 비교
 
-```go
-func (e *echoContext) Headers() map[string][]string {
-    return e.echo.Request().Header
-}
-```
+같은 실행 파이프라인을 사용해도 컨텍스트의 의미와 기본 인자 타입은 다릅니다.
 
-#### EventBus
+| 항목 | HTTP | 이벤트 컨슈머 | WebSocket |
+| --- | --- | --- | --- |
+| 실행 단위 | HTTP 요청 한 건 | 수신 이벤트 한 건 | 수신 메시지 한 건 |
+| `Method()` | HTTP 메서드 | `EVENT` | `WS` |
+| `Path()` | 실제 요청 경로 | 이벤트 이름 | 연결 요청의 실제 경로 |
+| `Header()` | 요청 헤더 | 빈 문자열 | 보존한 upgrade 요청 헤더 |
+| `Queries()` | 요청 쿼리 | `nil` | 보존한 upgrade 요청 쿼리 |
+| 본문 입력 | HTTP `Bind()` | 이벤트 `Payload()` | 메시지 `Payload()` |
+| 기본 DTO 타입 | 구조체 포인터 | 구조체 값 | 구조체 값 |
+| `context.Context` 인자 | 지원 | 지원 | 지원 |
+| `spine.Ctx` 인자 | 지원 | 기본 미등록 | 기본 미등록 |
 
-요청 스코프의 EventBus를 반환합니다.
+프로토콜에 특화된 기능은 해당 인터페이스로 타입을 확인한 뒤 사용합니다. `ExecutionContext`가 있다고 해서 HTTP `Bind()`나 WebSocket `ConnID()`를 모두 호출할 수 있는 것은 아닙니다.
 
-```go
-func (c *echoContext) EventBus() publish.EventBus {
-    return c.eventBus
-}
-```
+## 저장소 키와 실행 시점
 
+Spine은 내부 저장소에서 다음 키를 사용합니다. 앱에서 같은 키를 덮어쓰지 마세요. 앱의 값에는 `auth.user`처럼 용도가 드러나는 별도 이름을 사용합니다.
 
-## Consumer 어댑터 구현
+| 키 | 값의 타입 | 용도 |
+| --- | --- | --- |
+| `spine.params` | `map[string]string` | 라우터가 추출한 경로 매개변수 |
+| `spine.pathKeys` | `[]string` | 경로 매개변수의 선언 순서 |
+| `spine.response_writer` | `core.ResponseWriter` | HTTP 응답 작성과 버퍼 처리 |
 
-Event Consumer용 Context 구현입니다.
+`spine.response_writer`에는 어댑터가 제공한 응답 작성기가 연결되며, 파이프라인은 응답을 전송하기 전까지 버퍼를 사용하는 작성기로 이를 감쌉니다. 컨트롤러가 이 키를 꺼내 응답을 직접 쓰는 방식 대신 `httpx.Response[T]`, `httpx.Redirect`, `httpx.Binary`를 반환하세요.
 
-```go
-// internal/event/consumer/request_context_impl.go
-type ConsumerRequestContextImpl struct {
-    ctx      context.Context
-    msg      *Message
-    eventBus publish.EventBus
-    store    map[string]any
-}
+컨텍스트에서 어떤 값을 읽을 수 있는지는 실행 시점에도 달려 있습니다. 전역 `PreHandle`은 라우팅 전, 라우트 `PreHandle`은 라우팅과 인자 바인딩 후에 실행합니다. 저장소에 값이 있어야 하는 시점과 이 값을 만드는 단계를 함께 설계해야 합니다.
 
-func NewRequestContext(
-    ctx context.Context,
-    msg *Message,
-    eventBus publish.EventBus,
-) core.ExecutionContext {
-    return &ConsumerRequestContextImpl{
-        ctx:      ctx,
-        msg:      msg,
-        eventBus: eventBus,
-        store:    make(map[string]any),
-    }
-}
-```
+## EventBus와 이벤트 발행 {#event-publishing}
 
-### Consumer Context의 특수 동작
+컨트롤러가 `context.Context`를 선언하면 표준 컨텍스트 리졸버가 실행의 EventBus를 연결해 전달합니다. 컨트롤러는 이 컨텍스트로 도메인 이벤트를 수집할 수 있습니다.
 
-Consumer는 HTTP가 아니므로 일부 메서드가 다르게 동작합니다.
-
-```go
-func (c *ConsumerRequestContextImpl) Method() string {
-    // Consumer 실행은 HTTP Method 개념이 없으며, 라우팅 구분을 위해 "EVENT" 사용
-    return "EVENT"
-}
-
-func (c *ConsumerRequestContextImpl) Path() string {
-    // Consumer 라우팅에서 Path는 EventName을 그대로 사용
-    return c.msg.EventName
-}
-
-func (c *ConsumerRequestContextImpl) Header(key string) string {
-    // Consumer에는 HTTP Header 개념이 없음
-    return ""
-}
-
-func (c *ConsumerRequestContextImpl) Params() map[string]string {
-    // Consumer에는 Path Parameter 개념이 없음
-    return map[string]string{}
-}
-
-func (c *ConsumerRequestContextImpl) PathKeys() []string {
-    // Consumer에는 Path Key 개념이 없음
-    return []string{}
-}
-
-func (c *ConsumerRequestContextImpl) Queries() map[string][]string {
-    // Consumer에는 Query Parameter 개념이 없음
-    return map[string][]string{}
-}
-```
-
-
-## WebSocket 어댑터 구현
-
-WebSocket용 Context 구현입니다. `core.WebSocketContext`를 구현합니다.
-
-```go
-// internal/ws/context_impl.go
-type WSExecutionContext struct {
-    ctx         context.Context
-    connID      string
-    path        string
-    messageType int
-    payload     []byte
-    eventBus    publish.EventBus
-    store       map[string]any
-}
-
-func NewWSExecutionContext(
-    ctx context.Context,
-    connID string,
-    path string,
-    messageType int,
-    payload []byte,
-    eventBus publish.EventBus,
-    sendFn func(int, []byte) error,
-) core.WebSocketContext {
-    ctx = context.WithValue(ctx, pkgws.SenderKey, &connSender{send: sendFn})
-
-    return &WSExecutionContext{
-        ctx:         ctx,
-        connID:      connID,
-        path:        path,
-        messageType: messageType,
-        payload:     payload,
-        eventBus:    eventBus,
-        store:       make(map[string]any),
-    }
-}
-```
-
-### WebSocket Context의 특수 동작
-
-```go
-func (w *WSExecutionContext) Method() string {
-    return "WS"
-}
-
-func (w *WSExecutionContext) ConnID() string {
-    return w.connID
-}
-
-func (w *WSExecutionContext) MessageType() int {
-    return w.messageType
-}
-
-func (w *WSExecutionContext) Payload() []byte {
-    return w.payload
-}
-
-func (w *WSExecutionContext) EventBus() core.EventBus {
-    return w.eventBus
-}
-```
-
-
-## ArgumentResolver와 Context
-
-ArgumentResolver는 `ExecutionContext`를 받고, 필요에 따라 프로토콜별 Context로 타입 단언합니다.
-
-```go
-// internal/resolver/argument.go
-type ArgumentResolver interface {
-    Supports(parameterMeta ParameterMeta) bool
-    Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error)
-}
-```
-
-### HTTP Resolver 예시
-
-```go
-// internal/resolver/path_int_resolver.go
-func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    // HttpRequestContext로 타입 단언
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP 요청 컨텍스트가 아닙니다")
-    }
-
-    raw, ok := httpCtx.Params()[parameterMeta.PathKey]
-    if !ok {
-        return nil, fmt.Errorf("path param을 찾을 수 없습니다. %s", parameterMeta.PathKey)
-    }
-
-    value, err := strconv.ParseInt(raw, 10, 64)
-    if err != nil {
-        return nil, err
-    }
-
-    return path.Int{Value: value}, nil
-}
-```
-
-### Consumer Resolver 예시
-
-```go
-// internal/event/consumer/resolver/event_name_resolver.go
-func (r *EventNameResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    // ConsumerRequestContext로 타입 단언
-    consumerCtx, ok := ctx.(core.ConsumerRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("ConsumerRequestContext가 아닙니다")
-    }
-
-    name := consumerCtx.EventName()
-    if name == "" {
-        return nil, fmt.Errorf("EventName을 RequestContext에서 찾을 수 없습니다")
-    }
-
-    return name, nil
-}
-```
-
-### WebSocket Resolver 예시
-
-```go
-// internal/ws/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    wsCtx, ok := ctx.(core.WebSocketContext)
-    if !ok {
-        return nil, fmt.Errorf("WebSocketContext가 아닙니다")
-    }
-
-    payload := wsCtx.Payload()
-    if payload == nil {
-        return nil, fmt.Errorf("Payload가 비어있어 DTO를 생성할 수 없습니다")
-    }
-
-    dtoPtr := reflect.New(meta.Type)
-    if err := json.Unmarshal(payload, dtoPtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO 역직렬화 실패: %w", err)
-    }
-
-    return dtoPtr.Elem().Interface(), nil
-}
-```
-
-### 공통 Resolver 예시
-
-`StdContextResolver`는 HTTP, Consumer, WebSocket 모두에서 동작합니다.
-
-```go
-// internal/resolver/std_context_resolver.go
-func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    baseCtx := ctx.Context()
-    bus := ctx.EventBus()
-    if bus != nil {
-        return context.WithValue(baseCtx, publish.PublisherKey, bus), nil
-    }
-    return baseCtx, nil
-}
-```
-
-### ControllerContext Resolver
-
-`ControllerContextResolver`는 `ExecutionContext`를 읽기 전용 `ControllerContext`로 래핑합니다.
-
-```go
-// internal/resolver/controller_context_resolver.go
-func (r *ControllerContextResolver) Resolve(ctx core.ExecutionContext, _ ParameterMeta) (any, error) {
-    return runtime.NewControllerContext(ctx), nil
-}
-```
-
-
-## 파이프라인에서의 사용
-
-### Router
-
-```go
-// internal/router/router.go
-func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
-    for _, route := range r.routes {
-        if route.Method != ctx.Method() {
-            continue
-        }
-        
-        ok, params, keys := matchPath(route.Path, ctx.Path())
-        if !ok {
-            continue
-        }
-        
-        // 매칭된 정보를 Context에 저장
-        ctx.Set("spine.params", params)
-        ctx.Set("spine.pathKeys", keys)
-        
-        return route.Meta, nil
-    }
-    return core.HandlerMeta{}, httperr.NotFound("핸들러가 없습니다.")
-}
-```
-
-### Pipeline - Execute 흐름
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
-    // 1. 글로벌 Interceptor PreHandle (라우팅 전)
-    // 2. Router가 실행 대상을 결정
-    // 3. 라우트 Interceptor PreHandle
-    // 4. ArgumentResolver 체인 실행
-    // 5. Controller Method 호출 (Invoker)
-    // 6. ReturnValueHandler 처리
-    // 7. PostExecutionHook (이벤트 발행 등)
-    // 8. 라우트 Interceptor PostHandle (역순)
-    // 9. 글로벌 Interceptor PostHandle (역순)
-    // 10. AfterCompletion (성공/실패 무관, 역순)
-}
-```
-
-### Pipeline - ArgumentResolver 호출
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) resolveArguments(ctx core.ExecutionContext, paramMetas []resolver.ParameterMeta) ([]any, error) {
-    args := make([]any, 0, len(paramMetas))
-
-    for _, paramMeta := range paramMetas {
-        resolved := false
-
-        for _, r := range p.argumentResolvers {
-            if !r.Supports(paramMeta) {
-                continue
-            }
-
-            // ExecutionContext를 직접 전달
-            // Resolver 내부에서 필요한 타입으로 단언
-            val, err := r.Resolve(ctx, paramMeta)
-            if err != nil {
-                return nil, err
-            }
-
-            args = append(args, val)
-            resolved = true
-            break
-        }
-
-        if !resolved {
-            return nil, fmt.Errorf(
-                "ArgumentResolver에 parameter가 없습니다. %d (%s)",
-                paramMeta.Index,
-                paramMeta.Type.String(),
-            )
-        }
-    }
-    return args, nil
-}
-```
-
-### Interceptor
-
-다음 코드는 `ExecutionContext` 사용 지점만 보여주는 `PreHandle` 발췌입니다. 실제 `core.Interceptor` 구현체는 `PostHandle`, `BeforeResponse`, `AfterCompletion`도 구현해야 합니다.
-
-```go
-// interceptor/cors/cors.go
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // ResponseWriter 획득
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return nil
-    }
-    rw := rwAny.(core.ResponseWriter)
-    
-    // 요청 정보 확인
-    origin := ctx.Header("Origin")
-    if origin != "" && i.isAllowedOrigin(origin) {
-        rw.SetHeader("Access-Control-Allow-Origin", origin)
-    }
-    
-    // Preflight 처리
-    if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
-        return core.ErrAbortPipeline
-    }
-    
-    return nil
-}
-```
-
-
-## 내부 저장소 규약
-
-`Set()`/`Get()`으로 사용하는 키에는 명확한 규약이 있습니다.
-
-### Spine 예약 키
-
-| 키 | 타입 | 설정 위치 | 용도 |
-|----|------|----------|------|
-| `spine.params` | `map[string]string` | Router | Path parameter 값 |
-| `spine.pathKeys` | `[]string` | Router | Path key 순서 |
-| `spine.response_writer` | `core.ResponseWriter` | Adapter | 응답 출력 |
-
-### 사용 예시
-
-```go
-// ReturnValueHandler에서 ResponseWriter 사용
-func (h *JSONReturnHandler) Handle(value any, ctx core.ExecutionContext) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return fmt.Errorf("ExecutionContext 안에서 ResponseWriter를 찾을 수 없습니다.")
-    }
-    
-    rw, ok := rwAny.(core.ResponseWriter)
-    if !ok {
-        return fmt.Errorf("ResponseWriter 타입이 올바르지 않습니다.")
-    }
-    
-    return rw.WriteJSON(200, value)
-}
-```
-
-
-## EventBus 통합
-
-`ExecutionContext`에 `core.EventBus`가 통합되어 있습니다.
-
-### Controller에서 이벤트 발행
-
-이 발췌의 `publish`는 `github.com/NARUBROWN/spine/pkg/event/publish`에서 가져옵니다. `OrderCreated`는 앱에서 정의하며 `Name() string`과 `OccurredAt() time.Time`을 구현하는 이벤트 타입입니다.
+다음 발췌의 `publish`는 `github.com/NARUBROWN/spine/pkg/event/publish`에서 가져옵니다. `OrderCreated`는 앱에서 정의하고 `Name() string`과 `OccurredAt() time.Time`을 구현하는 이벤트 타입입니다.
 
 ```go
 // src/user/user_controller.go
 func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    // context.Context에서 EventBus를 꺼내 이벤트 발행
+    // context.Context에 연결된 EventBus로 이벤트를 수집합니다.
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),
@@ -952,119 +405,8 @@ func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) http
 }
 ```
 
-### EventBus 주입 흐름
+`publish.Event()` 호출만으로 외부 브로커 전송이 완료되는 것은 아닙니다. 연결된 EventBus에 이벤트를 모으며, 이벤트 디스패치 훅이 등록되어 있다면 성공 응답의 직렬화와 검증 뒤에 이벤트를 꺼내 디스패처로 전달합니다. 훅 등록에는 이벤트 퍼블리셔 구성이 필요합니다.
 
-```go
-// internal/resolver/std_context_resolver.go
-func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    baseCtx := ctx.Context()
-    bus := ctx.EventBus()
-    if bus != nil {
-        // EventBus를 context.Context에 주입
-        return context.WithValue(baseCtx, publish.PublisherKey, bus), nil
-    }
-    return baseCtx, nil
-}
-```
+핸들러가 오류를 반환하거나 성공 응답 준비가 실패하면 디스패치 훅을 실행하지 않습니다. 디스패치가 실패하면 그 오류를 파이프라인의 실행 오류로 처리합니다. 디스패치 훅은 `BeforeResponse`와 실제 HTTP 응답 전송보다 먼저 실행하므로, 이벤트를 수집하거나 디스패치했다는 사실만으로 트랜잭션 커밋이나 응답 전송 완료를 판단하지 마세요.
 
-### PostExecutionHook에서 이벤트 방출
-
-Pipeline 실행 완료 후 수집된 이벤트를 한 번에 방출합니다.
-
-```go
-// internal/event/hook/post_execution.go
-func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []any, err error) {
-    if err != nil {
-        return
-    }
-
-    events := ctx.EventBus().Drain()
-    if len(events) == 0 {
-        return
-    }
-
-    h.Dispatcher.Dispatch(ctx.Context(), events)
-}
-```
-
-
-## 설계 원칙
-
-### 1. Controller는 ExecutionContext를 모른다
-
-Controller는 `ExecutionContext`나 `HttpRequestContext`를 직접 받지 않습니다. 대신 의미 타입(`path.Int`, `query.Values` 등), `context.Context`, 그리고 필요 시 `ControllerContext`로 값만 받습니다.
-
-```go
-// ❌ 안티패턴
-func (c *UserController) GetUser(ctx core.ExecutionContext) httpx.Response[User]
-
-// ✓ Spine 방식
-func (c *UserController) GetUser(ctx context.Context, userId path.Int) httpx.Response[User]
-
-// ✓ Interceptor 주입 값이 필요할 때
-func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) httpx.Response[User]
-```
-
-### 2. Resolver는 ExecutionContext를 받고 필요한 타입으로 단언한다
-
-ArgumentResolver는 `ExecutionContext`를 받습니다. 프로토콜별 기능이 필요하면 `HttpRequestContext`, `ConsumerRequestContext`, 또는 `WebSocketContext`로 타입 단언합니다.
-
-```go
-func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP 요청 컨텍스트가 아닙니다")
-    }
-    // ...
-}
-```
-
-### 3. 단일 파이프라인, 다중 프로토콜
-
-HTTP, Event Consumer, WebSocket이 동일한 파이프라인 구조를 공유합니다. Context 계층 분리로 각 프로토콜의 특성을 지원하면서 코드 재사용을 극대화합니다.
-
-```go
-// HTTP Pipeline
-httpPipeline.AddArgumentResolver(
-    &resolver.StdContextResolver{},           // 공통
-    &resolver.ControllerContextResolver{},    // 공통
-    &resolver.HeaderResolver{},               // HTTP 전용
-    &resolver.PathIntResolver{},              // HTTP 전용
-    &resolver.PathStringResolver{},           // HTTP 전용
-    &resolver.PathBooleanResolver{},          // HTTP 전용
-    &resolver.PaginationResolver{},           // HTTP 전용
-    &resolver.QueryValuesResolver{},          // HTTP 전용
-    &resolver.DTOResolver{},                  // HTTP 전용
-    &resolver.FormDTOResolver{},              // HTTP 전용
-    &resolver.UploadedFilesResolver{},        // HTTP 전용
-)
-
-// Consumer Pipeline
-consumerPipeline.AddArgumentResolver(
-    &resolver.StdContextResolver{},           // 공통
-    &eventResolver.EventNameResolver{},       // Consumer 전용
-    &eventResolver.DTOResolver{},             // Consumer 전용
-)
-
-// WebSocket Pipeline
-wsPipeline.AddArgumentResolver(
-    &resolver.StdContextResolver{},           // 공통
-    &wsResolver.ConnectionIDResolver{},       // WebSocket 전용
-    &wsResolver.DTOResolver{},                // WebSocket 전용
-)
-```
-
-
-## 요약
-
-| 인터페이스 | 역할 | 주요 메서드 | 사용 위치 |
-|-----------|------|------------|----------|
-| `ContextCarrier` | Go context 전달 | `Context()` | 모든 곳 |
-| `EventBusCarrier` | 이벤트 발행 (`core.EventBus`) | `EventBus()` | Controller, Consumer |
-| `ExecutionContext` | 실행 흐름 제어 | `Method()`, `Path()`, `Header()`, `Set()`, `Get()` | Router, Pipeline, Interceptor |
-| `ControllerContext` | ExecutionContext 읽기 전용 Facade | `Get()` | Controller |
-| `HttpRequestContext` | HTTP 입력 해석 | `Param()`, `Query()`, `Header()`, `Headers()`, `Bind()`, `MultipartForm()` | HTTP ArgumentResolver |
-| `ConsumerRequestContext` | 이벤트 입력 해석 | `EventName()`, `Payload()` | Consumer ArgumentResolver |
-| `WebSocketContext` | WebSocket 입력 해석 | `ConnID()`, `MessageType()`, `Payload()` | WebSocket ArgumentResolver |
-
-**핵심 원칙**: Context 계층 분리로 HTTP, Event Consumer, WebSocket이 동일한 파이프라인 모델을 공유합니다. Controller는 실행 모델을 전혀 알지 못하며, 오직 비즈니스 로직에만 집중합니다.
+이벤트 발행, 트랜잭션 마무리, 응답 기록의 순서는 [실행 파이프라인](/ko/learn/core-concepts/pipeline)에서 확인할 수 있습니다.

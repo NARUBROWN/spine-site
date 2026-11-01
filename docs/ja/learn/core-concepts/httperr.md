@@ -1,115 +1,95 @@
 # httperrパッケージ
 
-以下のコントローラー例は[CLIで生成したプロジェクト](/ja/learn/tutorial/1-project-structure)に追加するコード断片です。`github.com/NARUBROWN/spine/pkg/httpx`、`github.com/NARUBROWN/spine/pkg/httperr`、`github.com/NARUBROWN/spine/pkg/path`をインポートし、コンストラクタとルートを`BuildApplication`に登録します。HTTPの成功値は`httpx.Response[T]`で包み、リクエストDTOは`*Request`のようなポインターで受け取ります。`User`やリポジトリなどの業務型はアプリで定義します。
+`httperr`は、HTTPステータスコードとクライアントに伝えるエラーメッセージを保持するパッケージです。コントローラーから`httperr.NotFound("사용자를 찾을 수 없습니다")`のようにエラーを返すと、SpineがステータスコードとJSONエラーレスポンスに変換します。コントローラーでEchoなどのレスポンスオブジェクトを直接扱う必要はありません。
 
-標準化されたHTTPエラー処理。
+このページでは、Spine v0.5.1の`github.com/NARUBROWN/spine/pkg/httperr`を基準に説明します。
 
+## CLIプロジェクトで使用する
 
-## 概要
+以下のコントローラーは、[CLIで生成したプロジェクト](/ja/learn/tutorial/1-project-structure)に追加するコード断片です。`httpx`、`httperr`、`path`は、それぞれ`github.com/NARUBROWN/spine/pkg`配下のパッケージです。コントローラーのコンストラクタとルートを、`BuildApplication`で使用する登録経路に接続してください。`User`、リポジトリ、サービスなどの業務用の型は、アプリで定義します。
 
-`httperr` パッケージは、コントローラで HTTP ステータスコードを明示的に表現しながら、HTTP レイヤに直接依存しないように設計されたエラータイプを提供します。 Controllerはビジネスロジックの観点からエラーを返し、`ErrorReturnHandler`はそれを適切なHTTP応答に変換します。
-
-
-```mermaid
-graph TD
-    Controller["Controller"]
-    Controller -- "return httperr.NotFound(...)" --> HTTPError
-    
-    HTTPError["HTTPError<br/>Status: 404<br/>Message: 'ユーザーが見つかりません'<br/>Cause: nil"]
-    
-    HTTPError -- ErrorReturnHandler --> Response
-    
-    Response["HTTP Response<br/>Status: 404 Not Found<br/>Body: {'message': 'ユーザーを ...'}"]
-```
-
-
-## なぜhttperrなのか？
-
-### 問題：ControllerはHTTPを知る必要がありますか？
-
-一般的な方法では、ControllerはHTTP応答を直接作成します。
-
+成功値は`httpx.Response[T]`で包み、失敗時には空のレスポンス値とエラーを一緒に返します。リクエスト本文を受け取る例のDTOは、`*PaymentRequest`のようにポインターで宣言します。
 
 ```go
-// ❌ HTTP層に直接依存
-func (c *UserController) GetUser(ctx echo.Context) error {
-    user, err := c.repo.FindByID(id)
-    if err != nil {
-        return ctx.JSON(404, map[string]string{"error": "not found"})
-    }
-    return ctx.JSON(200, user)
-}
-```
-
-このアプローチの問題：
-- ControllerがHTTPフレームワーク(Echo)に依存
-- ステータスコードと応答形式がビジネスロジックと混在する
-- テストするのが難しい
-
-### 解決: 意味タイプによるエラー表現
-
-
-```go
-// ✓ Spine 方式: HTTPを知らなくても意味は明確
 func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
+    if userId.Value <= 0 {
+        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+    }
+
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
+        return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
     }
+
     return httpx.Response[User]{Body: user}, nil
 }
 ```
 
-コントローラーは：
-- HTTPフレームワークを知らない
-- ステータスコードの**意味**のみ表現(NotFound、BadRequestなど)
-- 実際のHTTP変換は`ErrorReturnHandler`が担当
+このメソッドを`GET /users/:id`に登録した場合、次のように応答します。この例では、リポジトリの検索エラーをすべて404として処理すると仮定しています。実際のアプリでは、検索結果がない場合とデータベース障害を区別してステータスコードを選んでください。
 
+```bash
+# 잘못된 ID
+GET /users/-1
+→ 400 {"message": "유효하지 않은 사용자 ID입니다"}
 
-## HTTPError構造体
+# 존재하지 않는 사용자
+GET /users/999
+→ 404 {"message": "사용자를 찾을 수 없습니다"}
 
+# 정상
+GET /users/123
+→ 200 {"id": 123, "name": "john"}
+```
+
+```mermaid
+graph TD
+    Controller["コントローラーからエラーを返す"] --> Error["HTTPError<br/>Status: 404<br/>Message: ユーザーが見つかりません"]
+    Error --> Handler["Spineのエラーレスポンス処理"]
+    Handler --> Response["HTTP 404<br/>JSONのmessageフィールド"]
+```
+
+## HTTPErrorのフィールド
+
+`HTTPError`はGoの`error`インターフェースを実装し、`Error()`は`Message`を返します。
 
 ```go
 // pkg/httperr/types.go
 type HTTPError struct {
-    Status  int    // HTTPステータスコード
-    Message string // エラーメッセージ
-    Cause   error  // 原因エラー（任意）
+    Status  int    // HTTP 상태 코드
+    Message string // 에러 메시지
+    Cause   error  // 원인 에러 (선택)
 }
 
-// error インターフェース 実装
+// error 인터페이스 구현
 func (e *HTTPError) Error() string {
     return e.Message
 }
 ```
 
-### フィールドの説明
+| フィールド | 型 | 用途 |
+| --- | --- | --- |
+| `Status` | `int` | クライアントに送信するHTTPエラーステータスコード |
+| `Message` | `string` | JSONレスポンスの`message`フィールドに送信するメッセージ |
+| `Cause` | `error` | アプリが保持する原因エラー。JSONレスポンスには含まれない |
 
-|フィールド|タイプ|説明
-|------|------|------|
-| `Status` | `int` | HTTPステータスコード（400、401、404、500など）|
-| `Message` | `string` |クライアントに渡すエラーメッセージ
-| `Cause` | `error` |原因となるサブエラー（デバッグ/ロギング用）
+ヘルパー関数は`error`インターフェース型を返しますが、実際の値は`*httperr.HTTPError`です。`errors.As`でこの型を取得できます。`fmt.Errorf("문맥: %w", err)`のようにエラーをラップしても、Spineは内部の`HTTPError`を探し、そのステータスコードと`Message`を使用します。
 
-### errorインターフェース
+`Message`はクライアントにそのまま渡されます。SQL、秘密の値、内部パスのように公開すべきでない情報をメッセージに含めず、原因エラーやログに保持してください。
 
-`HTTPError`はGoの`error`インターフェースを実装します。したがって、通常のエラーのように返して処理できます。
+## 標準のヘルパー関数
 
+Spine v0.5.1は、次の4つのヘルパーを提供します。すべて`msg string`を受け取り、`error`を返します。
 
-```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    // httperr.NotFound()は error 型を 返却
-    return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
-}
-```
+| 関数 | ステータスコード | 使用する状況 |
+| --- | --- | --- |
+| `BadRequest(msg)` | 400 | リクエスト値がAPIの条件を満たさない |
+| `Unauthorized(msg)` | 401 | 認証情報がない、または認証に失敗した |
+| `NotFound(msg)` | 404 | リクエストされたリソースが見つからない |
+| `InternalServerError(msg)` | 500 | サーバー内部のエラーを明示的なメッセージで応答する必要がある |
 
+### 不正なリクエスト値
 
-## ヘルパー関数
-
-よく使用するHTTPステータスコードのヘルパー関数を提供します。
-
-### BadRequest
-
+`BadRequest`は、型変換後にも必要な業務上の条件を検査する場合に使用できます。
 
 ```go
 func BadRequest(msg string) error {
@@ -117,17 +97,15 @@ func BadRequest(msg string) error {
 }
 ```
 
-クライアント要求が間違っているときに使用します。
-
-
 ```go
 if userId.Value <= 0 {
-    return httpx.Response[User]{}, httperr.BadRequest("無効なユーザーIDです")
+    return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
 }
 ```
 
-### Unauthorized
+### 認証の失敗
 
+`Unauthorized`は、認証が必要な場合や認証に失敗した場合に使用します。認証済みのユーザーに必要な権限がない場合は、以下の拡張例のように403ステータスコードを選択できます。
 
 ```go
 func Unauthorized(msg string) error {
@@ -135,17 +113,15 @@ func Unauthorized(msg string) error {
 }
 ```
 
-認証が必要または失敗したときに使用します。
-
-
 ```go
 if !c.auth.IsValid(token) {
-    return httpx.Response[User]{}, httperr.Unauthorized("認証が必要です")
+    return httpx.Response[User]{}, httperr.Unauthorized("인증이 필요합니다")
 }
 ```
 
-### NotFound
+### リソースがない場合
 
+`NotFound`は、リクエストされたリソースがない場合に使用します。
 
 ```go
 func NotFound(msg string) error {
@@ -153,18 +129,16 @@ func NotFound(msg string) error {
 }
 ```
 
-リソースが見つからない場合に使用します。
-
-
 ```go
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
+    return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 }
 ```
 
-### InternalServerError
+### サーバー内部のエラー
 
+`InternalServerError`は、ステータスコード500と指定したメッセージを返します。通常の`error`をそのまま返す場合とは異なり、このメッセージはクライアントに公開されます。
 
 ```go
 func InternalServerError(msg string) error {
@@ -172,158 +146,59 @@ func InternalServerError(msg string) error {
 }
 ```
 
-サーバー内部エラーを明示的に表現するときに使用します。
-
-
 ```go
 result, err := c.externalService.Call()
 if err != nil {
-    return httpx.Response[Result]{}, httperr.InternalServerError("外部サービス 呼び出しに 失敗しました")
+    return httpx.Response[Result]{}, httperr.InternalServerError("외부 서비스 호출에 실패했습니다")
 }
 ```
 
+## コントローラーの戻り値とエラーレスポンス
 
-## ErrorReturnHandler
+Spineは、コントローラーの戻り値からnilではないエラーを先に探します。エラーがある場合、成功値をレスポンスとして処理しません。
 
-Controllerによって返されたエラーをHTTP応答に変換します。
+| 戻り値 | 標準のHTTP処理 |
+| --- | --- |
+| `httpx.Response[T]`、nilエラー | 成功値を処理 |
+| `httpx.Response[T]`、`httperr.NotFound(...)` | 成功値の代わりに404エラーレスポンス |
+| `httpx.Response[T]`、通常の`error` | 成功値の代わりに500エラーレスポンス |
+| `error`だけを返し、値がnil | エラーレスポンスを作成しない |
 
+JSONの成功値は、`httpx.Response[T]`に入れて返してください。リダイレクトとバイナリレスポンスには、それぞれ`httpx.Redirect`、`httpx.Binary`を使用します。任意のDTOを返すことと、HTTPの成功レスポンス型を返すことは異なります。
 
-```go
-// internal/handler/error_return_handler.go
-type ErrorReturnHandler struct{}
+エラーレスポンスの本文は、`{"message":"..."}`形式です。標準処理の違いは次のとおりです。
 
-func (h *ErrorReturnHandler) Supports(returnType reflect.Type) bool {
-    errorType := reflect.TypeFor[error]()
-    return returnType.Implements(errorType)
-}
+| エラーの種類 | ステータスコード | `message` |
+| --- | --- | --- |
+| `*httperr.HTTPError` | `Status`に指定したエラーステータスコード | `Message` |
+| `HTTPError`を`%w`でラップしたエラー | 内部の`HTTPError`のステータスコード | 内部の`HTTPError`の`Message` |
+| 通常の`error` | 500 | `"Internal server error"` |
 
-func (h *ErrorReturnHandler) Handle(value any, ctx core.ExecutionContext) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return fmt.Errorf("ExecutionContext 内で ResponseWriterを 見つかりません.")
-    }
-    
-    rw, ok := rwAny.(core.ResponseWriter)
-    if !ok {
-        return fmt.Errorf("ResponseWriter 型が正しくありません.")
-    }
-    
-    err, ok := value.(error)
-    if !ok {
-        return fmt.Errorf("ErrorReturnHandlerは error 型のみ処理できます: %T", value)
-    }
-    
-    status := 500
-    message := err.Error()
-    
-    // HTTPErrorなら ステータスコードを抽出
-    var httpErr *httperr.HTTPError
-    if errors.As(err, &httpErr) {
-        status = httpErr.Status
-        message = httpErr.Message
-    }
-    
-    return rw.WriteJSON(status, map[string]any{
-        "message": message,
-    })
-}
-```
+通常のエラーの`Error()`文字列は、標準のエラーレスポンスには公開しません。クライアントが知る必要のある失敗条件は`httperr`で明示し、詳細な原因はログで確認してください。
 
-### 動作原理
+## 業務ルールの検証
 
-1. Controllerが`error`を返す
-2. Pipelineが`ErrorReturnHandler.Supports()`を呼び出す→`true`
-3. `ErrorReturnHandler.Handle()`の実行
-4. `errors.As()`で`HTTPError`かどうかを確認する
-5. `HTTPError`の場合、指定されたステータスコードの使用、または500
-
-### HTTPError vs 汎用エラー
-
-
-```go
-// HTTPError → 指定された ステータスコード
-return httperr.NotFound("...")  // → 404
-
-// 通常のerror → 500 Internal Server Error
-return errors.New("something went wrong")  // → 500
-```
-
-
-## 使用例
-
-### デフォルトの使用
-
-
-```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("無効なユーザーIDです")
-    }
-    
-    user, err := c.repo.FindByID(userId.Value)
-    if err != nil {
-        return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
-    }
-    
-    return httpx.Response[User]{Body: user}, nil
-}
-```
-
-
-```bash
-# 不正な ID
-GET /users/-1
-→ 400 {"message": "無効なユーザーIDです"}
-
-# 存在しないは ユーザー
-GET /users/999
-→ 404 {"message": "ユーザーが見つかりません"}
-
-# 正常
-GET /users/123
-→ 200 {"id": 123, "name": "john"}
-```
-
-### 認証処理
-
-
-```go
-func (c *OrderController) GetOrder(orderId path.Int) (httpx.Response[Order], error) {
-    order, err := c.repo.FindByID(orderId.Value)
-    if err != nil {
-        return httpx.Response[Order]{}, httperr.NotFound("注文を 見つかりません")
-    }
-    
-    if !c.auth.CanAccess(order.UserID) {
-        return httpx.Response[Order]{}, httperr.Unauthorized("アクセス 権限が ありません")
-    }
-    
-    return httpx.Response[Order]{Body: order}, nil
-}
-```
-
-### ビジネスルールの検証
-
+リクエスト本文を受け取った後も、金額、上限、残高のようにアプリが定めた条件を検査する必要があります。それぞれの失敗分岐でエラーを返すと、成功レスポンスを作成せずにそのエラーを処理します。
 
 ```go
 func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt], error) {
     if req.Amount <= 0 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("決済金額は0より大きくする必要があります")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("결제 금액은 0보다 커야 합니다")
     }
-    
+
     if req.Amount > 10000000 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("1回の決済上限を超えました")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("1회 결제 한도를 초과했습니다")
     }
-    
+
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return httpx.Response[Receipt]{}, httperr.NotFound("ウォレットを 見つかりません")
+        return httpx.Response[Receipt]{}, httperr.NotFound("지갑을 찾을 수 없습니다")
     }
-    
+
     if balance < req.Amount {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("残高が不足しています")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("잔액이 부족합니다")
     }
-    
+
     receipt, err := c.processPayment(req)
     if err != nil {
         return httpx.Response[Receipt]{}, err
@@ -332,36 +207,37 @@ func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt
 }
 ```
 
-### エラーのみを返す場合
+この例の`PaymentRequest`、`Receipt`、ウォレットの検索と決済処理は、アプリが実装します。ウォレットが見つからない場合と検索システムの障害を区別する責任も、アプリにあります。`c.processPayment`が通常のエラーを返すと、クライアントは標準の500メッセージを受け取ります。
 
-成功時に戻り値がない場合にも使用できます。
+## エラーだけを返すハンドラー
 
+成功レスポンスの本文が不要なメソッドは、`error`だけを返すことができます。
 
 ```go
 func (c *UserController) DeleteUser(userId path.Int) error {
     exists, err := c.repo.Exists(userId.Value)
     if err != nil || !exists {
-        return httperr.NotFound("ユーザーが見つかりません")
+        return httperr.NotFound("사용자를 찾을 수 없습니다")
     }
-    
+
     if err := c.repo.Delete(userId.Value); err != nil {
-        return httperr.BadRequest("削除でき ありません")
+        return httperr.BadRequest("삭제할 수 없습니다")
     }
-    
-    return nil  // 成功 時 nil 返却
+
+    return nil  // 성공 시 nil 반환
 }
 ```
 
+nilを返すと、エラーレスポンスは作成しません。この形式だけでは、特定の成功ステータスコードを指定しません。削除の成功時に204などの明示的なステータスコードが必要な場合は、`httpx`のレスポンス型を使用してください。
 
-## 拡張する
+この例では簡潔に示すため、存在確認のエラーと削除のエラーをそれぞれ404、400として処理しています。実際のリポジトリエラーの種類に応じて、ステータスコードと再試行の方針を区別する必要があります。
 
-### 新しいステータスコードを追加
+## その他のエラーステータスコードを使用する
 
-現在提供されているヘルパーは400、401、404、500です。必要に応じて拡張できます。
-
+標準のヘルパーにないステータスコードは、`HTTPError`を直接作成して使用できます。次の関数はアプリが定義する例であり、`httperr`が提供する関数ではありません。
 
 ```go
-// 直接 HTTPError 生成
+// 직접 HTTPError 생성
 func Forbidden(msg string) error {
     return &httperr.HTTPError{Status: 403, Message: msg}
 }
@@ -379,10 +255,11 @@ func TooManyRequests(msg string) error {
 }
 ```
 
-### Causeの活用
+エラーステータスコードには、400から599までの値を使用してください。レスポンスを書き込む際にステータスコードの有効性も検査するため、成功やリダイレクトのステータスを`HTTPError.Status`に入れてフローを制御しないでください。
 
-原因 エラーを含むデバッグに活用できます。
+## 原因エラーの保持とログの記録
 
+`Cause`を使用すると、クライアントに表示するメッセージと内部の原因を一緒に保持できます。次の`WithCause`は、アプリが定義するヘルパーです。
 
 ```go
 func WithCause(status int, msg string, cause error) error {
@@ -393,253 +270,41 @@ func WithCause(status int, msg string, cause error) error {
     }
 }
 
-// 使用
+// 사용
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, WithCause(404, "ユーザーが見つかりません", err)
+    return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)
 }
 ```
 
-Interceptorの`AfterCompletion`から`Cause`をログに記録できます。次のコードはこのメソッドだけの抜粋であり、実際の実装には`PreHandle`、`PostHandle`、`BeforeResponse`も必要です。
+`HTTPError`には`Unwrap()`メソッドがありません。`Cause`に入れたエラーが自動的にGoのエラーチェーンにつながるわけではないため、原因を確認するには`errors.As`で`HTTPError`を取得してから`Cause`を読み取ってください。
 
+インターセプターの`AfterCompletion`では、リクエスト終了後に原因を記録できます。次のコードは、このメソッドだけを抜粋した例で、`core`、`httperr`、`errors`、`log`パッケージを使用します。登録可能な実装には、`PreHandle`、`PostHandle`、`BeforeResponse`も必要です。
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     if err != nil {
         var httpErr *httperr.HTTPError
         if errors.As(err, &httpErr) && httpErr.Cause != nil {
-            log.Printf("[ERR] %s %s: %s (cause: %v)", 
+            log.Printf("[ERR] %s %s: %s (cause: %v)",
                 ctx.Method(), ctx.Path(), httpErr.Message, httpErr.Cause)
         }
     }
 }
 ```
 
+## 実行中のエラーとレスポンス完了後
 
-## Pipelineでのエラーフロー
+コントローラーが返したエラーのほかにも、ルーティング、引数の変換、コントローラーの呼び出し、レスポンスの処理中にエラーが発生する場合があります。Spineは、HTTPの実行フローでこれらのエラーを最終的なエラーレスポンスに変換します。
 
-### 2段階のエラー処理
+| 状況 | 標準の動作 |
+| --- | --- |
+| 一致するルートがない | 404エラーレスポンス |
+| 実行中に`HTTPError`が発生 | 指定されたエラーステータスコードとメッセージで応答 |
+| 通常の実行エラーが発生 | 500、`"Internal server error"`で応答 |
+| リクエスト本文のサイズ制限を超過 | 413、`"Request entity too large"`で応答 |
+| 実際のレスポンスがすでに書き込まれている | 追加のエラーレスポンスを書かず、二重応答を防ぐ |
 
-Spine Pipelineはエラーを**2つのステップ**で処理します。
+Spine v0.5.1は、レスポンス前の処理を終えてから、準備したレスポンスを実際の転送層に反映します。`BeforeResponse`でエラーが発生すると、準備中の成功レスポンスがエラーレスポンスに変わる場合があります。`AfterCompletion`はレスポンス処理の後に実行されるため、この段階では新たなエラーレスポンスを作成しようとせず、エラーと転送結果を記録してください。
 
-1. **`handleReturn()`**: Controller 戻り値のうち error を `ErrorReturnHandler` として扱う
-2. **`handleExecutionError()`**: Pipeline 実行中に発生したエラーを最終安全網として処理
-
-```
-Controller
-     │
-     │  return (User{}, httperr.NotFound("..."))
-     ▼
-┌─────────────────────────────────────┐
-│         handleReturn()              │
-│                                     │
-│  results = [User{}, *HTTPError]     │
-│                                     │
-│  1. isNilResult() チェック              │
-│  2. error 型 優先 検索             │
-│  3. ErrorReturnHandler.Handle()     │
-│     → rw.WriteJSON(404, {...})      │
-└─────────────────────────────────────┘
-```
-
-### handleReturn - error 優先処理
-
-`Pipeline.handleReturn()`はエラータイプを優先します。 `isNilResult()`でnilかどうかを包括的にチェックします。
-
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) handleReturn(ctx core.ExecutionContext, results []any) error {
-    // errorがあればerrorだけ処理して終了
-    for _, result := range results {
-        if isNilResult(result) {
-            continue
-        }
-        if _, isErr := result.(error); isErr {
-            resultType := reflect.TypeOf(result)
-            for _, h := range p.returnHandlers {
-                if h.Supports(resultType) {
-                    if err := h.Handle(result, ctx); err != nil {
-                        return err
-                    }
-                    // error 返却値は ここで 消費して終了する.
-                    return nil
-                }
-            }
-            return fmt.Errorf(
-                "error 返却値を 処理する ReturnValueHandlerが ありません. (%s)",
-                resultType.String(),
-            )
-        }
-    }
-    
-    // errorが なければ 最初の non-nil 値 処理
-    for _, result := range results {
-        if isNilResult(result) {
-            continue
-        }
-        resultType := reflect.TypeOf(result)
-        // ...ReturnValueHandlerに 処理
-    }
-    return nil
-}
-```
-
-> **`isNilResult`**: `nil` リテラルだけでなく、タイプ情報はあるが値が nil の場合（`interface` に nil が含まれた場合など）まで包括的に処理します。
-
-したがって、`(User, error)`を返すとき：
-- `error`がnon-nil→errorのみ処理、Userを無視
-- `error`がnil→User処理
-
-### handleExecutionError - 最終セーフティネット
-
-パイプラインの実行中にエラーが発生すると、`handleExecutionError`は最終安全ネットワークとして機能します。すでに応答がコミットされている場合は、二重応答を防ぎます。
-
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return
-    }
-    
-    rw, ok := rwAny.(core.ResponseWriter)
-    if !ok {
-        return
-    }
-    
-    // すでに レスポンスがコミットされた 場合 二重 レスポンス 防止
-    if rw.IsCommitted() {
-        return
-    }
-    
-    var httpErr *httperr.HTTPError
-    if errors.As(err, &httpErr) {
-        rw.WriteJSON(httpErr.Status, map[string]any{
-            "message": httpErr.Message,
-        })
-        return
-    }
-    
-    rw.WriteJSON(500, map[string]any{
-        "message": "Internal server error",
-    })
-}
-```
-
-### エラー処理全体の流れ
-
-```
-Pipeline.Execute()
-     │
-     ├── handleReturn() で error 処理 成功
-     │   └── ErrorReturnHandlerが レスポンス 作成 → 終了
-     │
-     ├── handleReturn() 自体が error 返却
-     │   └── handleExecutionError() → セーフティネット レスポンス
-     │
-     ├── Router/Resolver/Invoker で error 発生
-     │   └── handleExecutionError() → セーフティネット レスポンス
-     │
-     └── handleExecutionError() 条件分岐
-         ├── rw.IsCommitted() → スキップ (二重 レスポンス 防止)
-         ├── HTTPError → 指定された ステータスコードに レスポンス
-         └── 通常のerror → 500 "Internal server error"
-```
-
-
-## フレームワーク内部の使用
-
-`httperr`は、Controllerだけでなくフレームワーク内でも使用されます。
-
-### Routerでの使用
-
-一致するハンドラがない場合は`httperr.NotFound`を返します。
-
-
-```go
-// internal/router/router.go
-func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
-    for _, route := range r.routes {
-        // ...マッチングを試行
-    }
-    return core.HandlerMeta{}, httperr.NotFound("ハンドラーが ありません.")
-}
-```
-
-このエラーは`handleExecutionError`によって404応答に変換されます。
-
-
-## 設計原則
-
-### 1. ControllerはHTTPを知らない
-
-
-```go
-// ✓ 意味だけ 表現
-return httperr.NotFound("ユーザーが見つかりません")
-
-// ❌ HTTP 直接 操作
-return ctx.JSON(404, ...)
-```
-
-### 2.ステータスコードは意味タイプ
-
-
-```go
-// ✓ 関数名は 意味を 表現
-httperr.BadRequest(...)
-httperr.Unauthorized(...)
-httperr.NotFound(...)
-httperr.InternalServerError(...)
-
-// ❌ 数値 コード 直接 使用
-return &HTTPError{Status: 404, ...}  // 可能ですがだけ 推奨し しない
-```
-
-### 3. エラーも戻り値
-
-Goの慣例通り、エラーを戻り値として処理します。例外を投げません。
-
-
-```go
-// ✓ 明示的 返却
-func GetUser(id path.Int) (httpx.Response[User], error) {
-    if ... {
-        return httpx.Response[User]{}, httperr.NotFound(...)
-    }
-    return httpx.Response[User]{Body: user}, nil
-}
-
-// ❌ panic (Spineは は 方式を 使用し しない)
-func GetUser(id path.Int) httpx.Response[User] {
-    if ... {
-        panic(httperr.NotFound(...))
-    }
-    return httpx.Response[User]{Body: user}
-}
-```
-
-### 4. 二重応答の防止
-
-Pipelineの`handleExecutionError`は`rw.IsCommitted()`をチェックし、すでに応答が作成されている場合の追加応答を防ぎます。これは、Interceptorが直接応答を作成した後に`ErrAbortPipeline`を返すパターンとも安全に共存します。
-
-
-## まとめ
-
-|機能|ステータスコード|用途|
-|------|----------|------|
-| `BadRequest(msg)` | 400 |間違った要求
-| `Unauthorized(msg)` | 401 |認証が必要/失敗|
-| `NotFound(msg)` | 404 |リソースが見つかりません
-| `InternalServerError(msg)` | 500 |サーバー内部エラー
-
-|コンポーネント役割|
-|----------|------|
-| `HTTPError` |ステータスコードとメッセージを含むエラータイプ|
-| `ErrorReturnHandler` | Controller戻りエラー→HTTP応答変換|
-| `handleExecutionError` |パイプラインエラー最終安全ネットワーク（二重応答防止）|
-| `isNilResult` |包括的なnilチェック（インタフェースnilを含む）|
-
-**核心哲学**: Controllerは「404を返す」ではなく「見つからない」を表現します。 HTTPステータスコードへの変換はパイプラインが担当します。これがSpineの関心の分離原則です。
+エラーはGoの戻り値で伝えてください。`panic`を、通常の入力検証や業務上の失敗を表す手段として使用しないでください。インターセプターによる中断と終了処理は、[インターセプターチュートリアル](/ja/learn/tutorial/4-interceptor)を参照してください。

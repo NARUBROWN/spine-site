@@ -1,63 +1,56 @@
 # spine.App
 
-## CLIプロジェクトでAPIを使う
-
-[最初のアプリ](/ja/learn/getting-started/first-app)でCLIが生成したプロジェクトを使います。登録コードは `internal/application/application.go` の `BuildApplication` に置きます。`Run` の例は、`Validate` のエラーを確認した後、生成された `main.go` で使用します。
-
-```sh
-spine doctor
-spine contract check
-spine verify
-```
-
-
-メインアプリケーションインターフェイスへのAPIリファレンス。
-## 概要
-`App`はSpineアプリケーションのエントリポイントです。コンストラクタの登録、ルート定義、Interceptorの設定、イベントコンシューマの登録、WebSocketハンドラの登録、Custom Transportの登録、サーバーの実行を担当します。
+`App`は、コンストラクタ、HTTPルート、インターセプター、イベントコンシューマー、WebSocketハンドラー、ユーザー定義のトランスポートを登録し、アプリケーションを実行するためのエントリーポイントです。このリファレンスでは、Spine v0.5.1の公開APIと起動オプションを扱います。
 
 ```go
 import "github.com/NARUBROWN/spine"
 ```
 
-## インタフェース定義
+## インターフェース定義
 
 ```go
 type App interface {
-    // コンストラクタの宣言
+    // 생성자 선언
     Constructor(constructors ...any)
-    // ルートの宣言
+    // 라우트 선언
     Route(method string, path string, handler any, opts ...router.RouteOption)
-    // インターセプタの宣言
+    // 인터셉터 선언
     Interceptor(interceptors ...core.Interceptor)
-    // HTTP/WebSocket scopeを指定したグローバルinterceptorの宣言
+    // HTTP/WebSocket 범위를 지정한 전역 인터셉터 선언
     InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
-    // HTTP Transport の拡張（Echo など）
+    // HTTP 서버 확장 (Echo 등)
     Transport(fn func(any))
-    // 独立して実行される Custom Transport の登録
+    // 독립 실행되는 사용자 정의 전송 방식 등록
     RegisterTransport(t core.CustomTransport)
-    // ネットワーク接続なしで設定を検証
+    // 네트워크 연결 없이 설정 검증
     Validate(opts boot.Options) error
-    // 実行
+    // 실행
     Run(opts boot.Options) error
-    // イベントコンシューマのレジストリを返す
+    // 이벤트 소비자 레지스트리 반환
     Consumers() *consumer.Registry
-    // WebSocket レジストリを返す
+    // 웹소켓 레지스트리 반환
     WebSocket() *ws.Registry
 }
 ```
 
-## コンストラクタ
-### New
+`Route`のオプションは、アプリのコードから`pkg/route`の関数で渡します。戻り値の型が内部パッケージにある`Consumers()`と`WebSocket()`も、型を直接宣言せずにメソッドを続けて呼び出せます。
 
+## コンストラクタ
+
+### New
 
 ```go
 func New() App
 ```
 
-新しいSpineアプリケーションインスタンスを作成します。
+新しいSpineアプリケーションのインスタンスを作成します。
+
 **戻り値**
-- `App` - アプリケーションインスタンス
+
+- `App` - アプリケーションのインスタンス
+
 **例**
+
 ```go
 app := spine.New()
 app.Run(boot.Options{
@@ -66,35 +59,40 @@ app.Run(boot.Options{
 })
 ```
 
-
 ## メソッド
-### Constructor
 
+### Constructor
 
 ```go
 Constructor(constructors ...any)
 ```
 
-IoC Container にコンストラクタ関数を登録します。登録されたコンストラクタは依存性注入に使用されます。
-**パラメータ**
-- `constructors` - コンストラクタ関数(可変引数)
-**作成者ルール**
-- 関数でなければなりません
-- 戻り値は正確に1つでなければなりません
-- パラメータは他の登録されたタイプでなければなりません（依存性）
+依存性注入コンテナにコンストラクタ関数を登録します。コンストラクタの引数の型に応じて、登録済みのほかのオブジェクトを注入します。
+
+**引数**
+
+- `constructors` - コンストラクタ関数（可変長引数）
+
+**コンストラクタの規則**
+
+- 関数である必要があります
+- 戻り値は正確に1つである必要があります
+- 引数の型を提供するコンストラクタも登録する必要があります
+
 **例**
+
 ```go
-// 依存性のないコンストラクタ
+// 의존성 없는 생성자
 func NewUserRepository() *UserRepository {
     return &UserRepository{}
 }
 
-// 依存性のあるコンストラクタ
+// 의존성 있는 생성자
 func NewUserController(repo *UserRepository) *UserController {
     return &UserController{repo: repo}
 }
 
-// イベントコンシューマのコンストラクタ
+// 이벤트 소비자 생성자
 func NewOrderConsumer() *OrderConsumer {
     return &OrderConsumer{}
 }
@@ -108,41 +106,46 @@ app.Constructor(
 
 ### Route
 
-
 ```go
 Route(method string, path string, handler any, opts ...router.RouteOption)
 ```
 
-HTTPルートを登録します。 HTTP メソッドは大文字に自動的に変換されます。
-**パラメータ**
-- `method` - HTTPメソッド（`"GET"`、`"POST"`、`"PUT"`、`"DELETE"`など）。大文字と小文字を無視
-- `path` - URLパスパターン。 `:param`形式でパスパラメータを定義する
-- `handler` - Controller メソッド式
-- `opts` - ルートオプション(オプション)
-**パスパターン**
+HTTPルートを登録します。`method`の前後の空白を取り除き、大文字に変換します。
+
+**引数**
+
+- `method` - HTTPメソッド（`"GET"`、`"POST"`、`"PUT"`、`"DELETE"`など）。大文字と小文字は区別しません
+- `path` - URLパスのパターン。`:param`形式でパスパラメータを定義します
+- `handler` - コントローラーのメソッド式
+- `opts` - ルートオプション（省略可能）
+
+**パスのパターン**
 - `/users` - 静的パス
-- `/users/:id` - 単一パラメータ
-- `/users/:userId/posts/:postId` - マルチパラメータ
+- `/users/:id` - 単一のパラメータ
+- `/users/:userId/posts/:postId` - 複数のパラメータ
+
 **例**
+
 ```go
-//デフォルトルート
+// 기본 라우트
 app.Route("GET", "/users", (*UserController).List)
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 app.Route("POST", "/users", (*UserController).CreateUser)
 app.Route("PUT", "/users/:id", (*UserController).UpdateUser)
 app.Route("DELETE", "/users/:id", (*UserController).DeleteUser)
 
-//ネストしたパス
+// 중첩 경로
 app.Route("GET", "/users/:userId/posts/:postId", (*PostController).GetPost)
 ```
 
 #### ルートオプション
-`route.WithInterceptors`を使用して、特定のルートにのみInterceptorを適用できます。
+
+`route.WithInterceptors`で、特定のルートだけにインターセプターを適用します。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/route"
 
-// ルート別インターセプタの適用
+// 라우트별 인터셉터 적용
 app.Route(
     "GET",
     "/users/:id",
@@ -150,7 +153,7 @@ app.Route(
     route.WithInterceptors(&LoggingInterceptor{}),
 )
 
-// nilポインタ→ContainerからResolve
+// 타입이 있는 nil 포인터는 컨테이너에서 조회
 app.Route(
     "POST",
     "/admin/users",
@@ -158,7 +161,7 @@ app.Route(
     route.WithInterceptors((*AuthInterceptor)(nil)),
 )
 
-//複数のInterceptorを適用する
+// 여러 인터셉터 적용
 app.Route(
     "POST",
     "/admin/users",
@@ -172,22 +175,32 @@ app.Route(
 
 ### Interceptor
 
-
 ```go
 Interceptor(interceptors ...core.Interceptor)
 ```
 
-グローバルinterceptorをHTTPとWebSocketへ登録します。`app.Interceptor(...)`は`app.InterceptorFor(boot.InterceptorAll, ...)`と同じです。登録順に`PreHandle`を実行し、逆順に`PostHandle`、`BeforeResponse`、`AfterCompletion`を実行します。
-同じpointer instanceはscopeが統合されて1回実行され、同じ型の異なるinstanceはそれぞれ実行されます。typed-nil pointerはContainer singletonとしてResolveされます。
-**パラメータ**
-- `interceptors` - Interceptor インスタンス(可変引数)
+HTTPリクエストとWebSocketメッセージにグローバルインターセプターを登録します。`app.Interceptor(...)`は`app.InterceptorFor(boot.InterceptorAll, ...)`と同じです。登録順に`PreHandle`を実行し、逆順に`PostHandle`、`BeforeResponse`、`AfterCompletion`を実行します。
+
+同じポインターのインスタンスを複数のスコープに登録すると、スコープをまとめて1回実行します。同じ型でも、異なるインスタンスはそれぞれ実行します。`(*AuthInterceptor)(nil)`のような型付きnilポインターを登録すると、コンテナから共有インスタンスを取得して使用します。
+
+**引数**
+
+- `interceptors`: インターセプターのインスタンスの一覧
+
 **実行順序**
-1. グローバル Interceptor PreHandle (登録順序)2. Router
-3. ルート Interceptor PreHandle (登録順序)
-4. Controllerの実行
-5. ルートインターセプター PostHandle (逆順)
-6. グローバル Interceptor PostHandle (逆順)
+
+1. グローバルインターセプターの`PreHandle`を登録順に実行します。
+2. ルーティング後に入力値を解釈します。
+3. ルートインターセプターの`PreHandle`を登録順に実行します。
+4. コントローラーを実行してレスポンスを準備した後、実行後フックを呼び出します。
+5. ルートインターセプター、グローバルインターセプターの順に`PostHandle`を実行します。それぞれ登録の逆順です。
+6. 同じ逆順で`BeforeResponse`を実行した後、実際のレスポンスを書き込みます。
+7. レスポンス処理後、同じ逆順で`AfterCompletion`を実行します。
+
+エラーや処理中断時の動作は、[インターセプターリファレンス](/ja/reference/api/interceptor)を参照してください。
+
 **例**
+
 ```go
 app.Interceptor(
     cors.New(cors.Config{
@@ -205,7 +218,13 @@ app.Interceptor(
 InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
 ```
 
-グローバルinterceptorを適用する基本transportを選択します。
+グローバルインターセプターを適用するトランスポートを選択します。イベントコンシューマーには適用しません。
+
+| スコープ | 適用対象 |
+| --- | --- |
+| `boot.InterceptorHTTP` | HTTPリクエスト |
+| `boot.InterceptorWebSocket` | WebSocketメッセージと、サポートされる接続前の処理 |
+| `boot.InterceptorAll` | 両方のスコープ |
 
 ```go
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
@@ -215,49 +234,54 @@ app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 
 ### Transport
 
-
 ```go
 Transport(fn func(any))
 ```
 
-HTTP Transport（Echo）拡張フックを登録します。 Echoインスタンスに直接アクセスして、ミドルウェアや設定を追加できます。
-**パラメータ**
-- `fn` - Echo インスタンスを受け取るコールバック関数
+HTTPサーバーのEchoインスタンスを設定するコールバックを登録します。コールバックでミドルウェアや静的ファイルのパスを追加できます。
+
+**引数**
+
+- `fn` - Echoインスタンスを受け取るコールバック関数
+
 **例**
+
 ```go
 import "github.com/labstack/echo/v4"
 import "github.com/labstack/echo/v4/middleware"
 
 app.Transport(func(e any) {
     echo := e.(*echo.Echo)
-    
-// Echoミドルウェアの追加
+
+    // Echo 미들웨어 추가
     echo.Use(middleware.RequestID())
-    
-//静的ファイルサービス
+
+    // 정적 파일 서빙
     echo.Static("/static", "public")
 })
 ```
 
 ### RegisterTransport
 
-
 ```go
 RegisterTransport(t core.CustomTransport)
 ```
 
-Spine HTTPパイプラインの外部で独立して実行されるカスタムトランスポートを登録します。 gRPC、GraphQLなどの別々のプロトコルをSpineアプリケーションに統合するために使用します。
-**パラメータ**
-- `t` - `core.CustomTransport` インタフェース実装
-**CustomTransport インターフェイス**
+HTTPパイプラインと独立して実行するトランスポートを登録します。たとえば、gRPCサーバーをSpineの依存性注入と起動および終了処理に接続するときに使用します。
+
+**引数**
+
+- `t` - `core.CustomTransport`インターフェースの実装
+
+**CustomTransportインターフェース**
 ```go
 // core/transport.go
 type CustomTransport interface {
-    // Init は DI Container の準備後に呼び出されます。
+    // Init은 DI 컨테이너 준비 이후 호출됩니다.
     Init(container Container) error
-    // Start は Init の後、別 goroutine で呼び出されます。
+    // Start는 Init 이후 별도 고루틴에서 호출됩니다.
     Start() error
-    // Stop は Graceful Shutdown 時に呼び出されます。
+    // Stop은 정상 종료 시 호출됩니다.
     Stop(ctx context.Context) error
 }
 
@@ -267,13 +291,14 @@ type Container interface {
 ```
 
 **例**
+
 ```go
 type GRPCTransport struct {
     server *grpc.Server
 }
 
 func (t *GRPCTransport) Init(container core.Container) error {
-// Container でのサービス Resolve
+    // 컨테이너에서 서비스 조회
     svc, err := container.Resolve(reflect.TypeOf((*MyService)(nil)))
     if err != nil {
         return err
@@ -284,7 +309,10 @@ func (t *GRPCTransport) Init(container core.Container) error {
 }
 
 func (t *GRPCTransport) Start() error {
-    lis, _ := net.Listen("tcp", ":9090")
+    lis, err := net.Listen("tcp", ":9090")
+    if err != nil {
+        return err
+    }
     return t.server.Serve(lis)
 }
 
@@ -298,20 +326,23 @@ app.RegisterTransport(&GRPCTransport{})
 
 ### Consumers
 
-
 ```go
 Consumers() *consumer.Registry
 ```
 
-イベントコンシューマレジストリを返します。 Kafka、RabbitMQなどのメッセージブローカーからイベントを受信するハンドラーを登録します。
+イベントコンシューマーを登録するためのレジストリを返します。KafkaやRabbitMQから受信するイベント名とハンドラーを登録します。コンシューマーのコンストラクタも`Constructor`で登録する必要があります。
+
 **戻り値**
+
 - `*consumer.Registry` - コンシューマーレジストリ
+
 **例**
+
 ```go
-// イベントコンシューマの登録
+// 이벤트 소비자 등록
 app.Consumers().Register(
-    "order.created",            // トピック/イベント名
-    (*OrderConsumer).OnCreated, // ハンドラーメソッド
+    "order.created",            // 토픽/이벤트 이름
+    (*OrderConsumer).OnCreated, // 핸들러 메서드
 )
 
 app.Consumers().Register(
@@ -320,8 +351,9 @@ app.Consumers().Register(
 )
 ```
 
-#### コンシューマハンドラ
-コンシューマハンドラはHTTPコントローラと同様のシグネチャを持ちます。
+#### イベントハンドラー
+
+イベントハンドラーは、標準コンテキスト、イベント名、イベントDTOを引数として受け取れます。
 
 ```go
 type OrderConsumer struct{}
@@ -330,18 +362,18 @@ func NewOrderConsumer() *OrderConsumer {
     return &OrderConsumer{}
 }
 
-// イベントハンドラ
+// 이벤트 핸들러
 func (c *OrderConsumer) OnCreated(
     ctx context.Context,
     eventName string,
     event OrderCreated,
 ) error {
-    log.Println("イベント受信:", eventName)
-    log.Println("注文ID:", event.OrderID)
+    log.Println("이벤트 수신:", eventName)
+    log.Println("주문 ID:", event.OrderID)
     return nil
 }
 
-// イベント DTO
+// 이벤트 DTO
 type OrderCreated struct {
     OrderID int64     `json:"order_id"`
     At      time.Time `json:"at"`
@@ -350,23 +382,27 @@ type OrderCreated struct {
 
 ### WebSocket
 
-
 ```go
 WebSocket() *ws.Registry
 ```
 
-WebSocket レジストリを返します。 WebSocketパスとハンドラを登録します。
+WebSocketレジストリを返します。WebSocketのパスとハンドラーを登録します。
+
 **戻り値**
+
 - `*ws.Registry` - WebSocketレジストリ
+
 **例**
+
 ```go
 if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
     log.Fatal(err)
 }
 ```
 
-#### WebSocketハンドラ
-WebSocketハンドラにはHTTPコントローラと同様のシグネチャがあります。 `ws` パッケージのタイプをパラメータとして使用します。
+#### WebSocketハンドラー
+
+WebSocketハンドラーは、`ws`パッケージの接続IDとメッセージDTOを引数として受け取ります。次の例では接続ごとの送信オブジェクトを保存し、メッセージをすべての接続に送信します。`ChatController`のコンストラクタは`Constructor`で登録します。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/ws"
@@ -440,13 +476,7 @@ func (c *ChatController) OnMessage(
 }
 ```
 
-WebSocketはHTTPサーバーなどのEchoインスタンスを共有し、ブートストラップ時にTransport Hookを介してEchoに自動的にマウントされます。
-### Run
-
-
-```go
-Run(opts boot.Options) error
-```
+WebSocketはHTTPサーバーと同じEchoインスタンスにパスを登録するため、`boot.Options.HTTP`が必要です。オリジン、接続数、認証の設定は、[セキュリティ設定](/ja/reference/security-configuration#websocket)を参照してください。
 
 ### Validate
 
@@ -454,7 +484,11 @@ Run(opts boot.Options) error
 Validate(opts boot.Options) error
 ```
 
-listener、broker、Custom Transportを開始せずに全設定を検査します。`Run`もネットワーク接続前に同じ検証を実行します。失敗は`*boot.ConfigError`で、`Issues`に`Path`、`Code`、`Message`、`Hint`が入ります。
+ネットワーク接続を開かず、サーバーやコンシューマーを起動せずに起動オプションを検証します。KafkaとRabbitMQの接続設定、HTTPとWebSocketの制限値、グローバルインターセプターのnilの有無とスコープなどを確認します。`Run`も起動前に同じ検証を行います。
+
+エラーがある場合は`*boot.ConfigError`を返します。`Issues`の各項目には、設定の位置を示す`Path`、エラー分類を示す`Code`、説明の`Message`、修正方法を示す`Hint`があります。有効なオプションの場合は`nil`です。
+
+`Validate`はコンストラクタの依存関係を生成せず、ブローカーにも接続しません。コンストラクタとルートの適合性、DI構成、実際のインフラへの接続まで成功したとは判断できません。
 
 ```go
 options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
@@ -466,12 +500,14 @@ if err := app.Run(options); err != nil {
 }
 ```
 
-アプリケーションを起動します。 HTTPサーバー、WebSocketランタイム、イベントコンシューマーランタイム、カスタムトランスポートを一緒に駆動します。
-**パラメータ**
-- `opts` - ブートオプション(`boot.Options`)
-**戻り値**
-- `error` - サーバーの起動に失敗したときのエラー
-**例**
+### Run
+
+```go
+Run(opts boot.Options) error
+```
+
+登録した構成と`boot.Options`に従い、HTTPサーバー、WebSocket、イベントコンシューマー、ユーザー定義のトランスポートを起動します。実行中は終了シグナルまたはランタイムエラーを待機します。設定、初期化、実行、終了に失敗すると、エラーを返します。
+
 ```go
 if err := app.Run(boot.Options{
     Address: ":8080",
@@ -481,70 +517,81 @@ if err := app.Run(boot.Options{
 }
 ```
 
-
 ## boot.Options
 
-アプリケーションのブートストラップオプションです。
+サーバーの実行と外部インフラの使用有無を指定します。`HTTP`、`Kafka`、`RabbitMQ`が`nil`の場合、その機能を構成しません。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/boot"
 ```
 
-### 構造体の定義
+### 構造体定義
 
 ```go
 type Options struct {
-    // サーバーがバインドするアドレス（例: ":8080"）
-    Address string
-
-    // Graceful Shutdown を有効にするかどうか
+    Address                string
     EnableGracefulShutdown bool
-
-    // Graceful Shutdown 時の最大待機時間
-    ShutdownTimeout time.Duration
-
-    // Kafka イベントインフラの設定
-    // nil の場合、Kafka は構成されません
-    Kafka *KafkaOptions
-
-    // RabbitMQ イベントインフラの設定
-    // nil の場合、RabbitMQ は構成されません
-    RabbitMQ *RabbitMqOptions
-
-    // HTTP Runtime 専用の設定
-    // nil の場合、HTTP サーバーは実行されません
-    HTTP *HTTPOptions
+    ShutdownTimeout        time.Duration
+    Kafka                  *KafkaOptions
+    RabbitMQ               *RabbitMqOptions
+    HTTP                   *HTTPOptions
 }
 
 type HTTPOptions struct {
-    // HTTP API のグローバル Prefix（例: "/api/v1"）
-    // 空の場合、Prefix は適用されません。
-    GlobalPrefix string
-
-    // Recover ミドルウェアを無効にするか（デフォルト: false = 有効）
-    DisableRecover bool
+    GlobalPrefix      string
+    DisableRecover    bool
+    ReadHeaderTimeout time.Duration
+    ReadTimeout       time.Duration
+    WriteTimeout      time.Duration
+    IdleTimeout       time.Duration
+    MaxHeaderBytes    int
+    MaxBodyBytes      int64
+    WebSocket         WebSocketOptions
 }
 ```
 
-### GlobalPrefix検証ルール
-ブートストラップ時に`GlobalPrefix`の検証が行われます。
-- `"/"`で始める必要があります
-- `":"`（Pathパラメータ）を含めることはできません
+| `Options`フィールド | 意味とデフォルトの動作 |
+| --- | --- |
+| `Address` | HTTPサーバーがリッスンするアドレス。例: `":8080"` |
+| `EnableGracefulShutdown` | `true`の場合、HTTPサーバーで`SIGINT`、`SIGTERM`を受け取り、正常終了します。デフォルトは`false` |
+| `ShutdownTimeout` | HTTPとユーザー定義のトランスポートの終了時に使用する待機時間。`0`の場合は10秒。負の値は指定できません |
+| `Kafka` | Kafkaの発行と消費の設定。`nil`の場合は無効 |
+| `RabbitMQ` | RabbitMQの発行と消費の設定。`nil`の場合は無効 |
+| `HTTP` | HTTPとWebSocketの設定。`nil`の場合はHTTPサーバーが無効 |
+
+| `HTTPOptions`フィールド | `0`または省略時 | 制約 |
+| --- | --- | --- |
+| `GlobalPrefix` | プレフィックスなし | 以下のパス規則を適用 |
+| `DisableRecover` | `false`。panicをHTTP 500に変換するリカバリーミドルウェアを使用 | `true`の場合はミドルウェアを無効化 |
+| `ReadHeaderTimeout` | 5秒 | 負の値は指定不可 |
+| `ReadTimeout` | 30秒 | 負の値は指定不可 |
+| `WriteTimeout` | 30秒 | 負の値は指定不可 |
+| `IdleTimeout` | 120秒 | 負の値は指定不可 |
+| `MaxHeaderBytes` | 1 MiB | 負の値は指定不可 |
+| `MaxBodyBytes` | 32 MiB | 負の値の場合は本文サイズの制限を無効化 |
+| `WebSocket` | [WebSocketのデフォルト値](/ja/reference/security-configuration#websocket) | `boot.WebSocketOptions` |
+
+### GlobalPrefixの検証規則
+
+`Validate`と`Run`は、次の規則に従わない値を`HTTP_GLOBAL_PREFIX_INVALID`設定エラーとして返します。空文字列の場合はプレフィックスを適用しません。
+
+- `"/"`で始まる必要があります
+- `":"`（パスパラメータ）を含めることはできません
 - `"*"`（ワイルドカード）を含めることはできません
-- 最後の`"/"`は自動的に削除されます
+- 末尾の`"/"`は自動で取り除かれます
 
 ```go
-// ✓ 有効
+// 유효한 접두사
 HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/v1"}
 HTTP: &boot.HTTPOptions{GlobalPrefix: "/v2"}
 
-// ✗ panic が発生
-HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // '/' で始まらない
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // パスパラメータを含む
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // ワイルドカードを含む
+// Validate와 Run이 설정 오류 반환
+HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // '/'로 시작하지 않음
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // 경로 매개변수 포함
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // 와일드카드 포함
 ```
 
-### デフォルトの使用
+### 基本的な使用方法
 
 ```go
 app.Run(boot.Options{
@@ -553,8 +600,7 @@ app.Run(boot.Options{
 })
 ```
 
-### Graceful Shutdown
-
+### 正常終了
 
 ```go
 app.Run(boot.Options{
@@ -567,59 +613,59 @@ app.Run(boot.Options{
 })
 ```
 
-Graceful Shutdownが有効な場合：
-- `SIGINT`、`SIGTERM`シグナルを受信します
-- 進行中の要求が完了するのを待ちます。
-- WebSocket接続にCloseメッセージを送信する
-- Custom Transportの`Stop()`を呼び出します
-- `ShutdownTimeout`後に強制終了します（デフォルト：10秒）
+HTTPの正常終了を有効にすると、`SIGINT`、`SIGTERM`を受け取って新しいリクエストの受け入れを停止し、処理中のリクエストを待機します。WebSocket接続を閉じ、イベントコンシューマーを停止した後、ユーザー定義のトランスポートの`Stop(ctx)`を呼び出します。
+
+`ShutdownTimeout`は、HTTPとユーザー定義のトランスポートの終了コンテキストに適用します。コンシューマーの`Stop`は、処理、ACK/NACK、リーダーが終了するまで待機するため、この値をプロセス全体の強制終了期限と解釈しないでください。HTTPを使用せず、コンシューマーやユーザー定義のトランスポートだけを実行する場合も終了シグナルを処理します。
+
 ### Recoverミドルウェア
-デフォルトでは、Echoのpanic recoverミドルウェアが有効になっています。パニック発生時に500の応答に変換します。
+
+デフォルトでは、panicをHTTP 500レスポンスに変換するリカバリーミドルウェアが有効です。
 
 ```go
-// Recover を無効化
+// Recover 비활성화
 HTTP: &boot.HTTPOptions{
     DisableRecover: true,
 }
 ```
 
+## Kafka設定
 
-## Kafkaの設定
 ### KafkaOptions
 
+`Read`と`Write`は独立しています。いずれかを有効にすると`Brokers`が必要になり、`Read`を使用する場合は`GroupID`も必要です。個別のトランスポート設定がない場合、TLS 1.2以上を適用します。
 
 ```go
 type KafkaOptions struct {
-    // Kafka ブローカーのアドレス一覧
+    // Kafka 브로커 주소 목록
     Brokers []string
 
-    // カスタムTLS、reader Dialer、writer Transport
+    // 사용자 정의 TLS, 리더 Dialer, 라이터 Transport
     TLS *tls.Config
     Dialer *kafka.Dialer
     Transport *kafka.Transport
 
-    // 隔離されたローカル環境で平文通信を明示的に許可
+    // 격리된 로컬 환경의 평문 연결 명시적 허용
     AllowInsecureTransport bool
 
-    // readerエラーとACK/NACK失敗後の再接続ポリシー
+    // 리더 오류와 ACK/NACK 실패 뒤 재연결 정책
     ConsumerRetry ConsumerRetryOptions
 
-    // イベント消費（Consumer）の設定
-    // nil の場合、Kafka Consumer は有効になりません
+    // 이벤트 소비 설정
+    // nil이면 Kafka 소비자를 활성화하지 않음
     Read *KafkaReadOptions
 
-    // イベント 発行(Producer) 設定
-    // nil の場合、Kafka にイベントを発行しません
+    // 이벤트 발행 설정
+    // nil이면 Kafka로 이벤트를 발행하지 않음
     Write *KafkaWriteOptions
 }
 
 type KafkaReadOptions struct {
-    // Kafka Consumer Group ID
+    // Kafka 소비자 그룹 ID
     GroupID string
 }
 
 type KafkaWriteOptions struct {
-    // イベント名の前に付ける Topic Prefix
+    // 이벤트 이름 앞에 붙일 토픽 접두사
     TopicPrefix string
 }
 ```
@@ -631,7 +677,7 @@ app.Run(boot.Options{
     Address: ":8080",
     Kafka: &boot.KafkaOptions{
         Brokers: []string{"localhost:9092"},
-        AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
+        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
         Read: &boot.KafkaReadOptions{
             GroupID: "my-consumer-group",
         },
@@ -643,48 +689,51 @@ app.Run(boot.Options{
 })
 ```
 
+## RabbitMQ設定
 
-## RabbitMQの設定
 ### RabbitMqOptions
 
+`Read`と`Write`は独立しています。有効にした役割ごとに`Exchange`を指定します。デフォルトでは`amqps://` URLが必須です。平文の`amqp://`は、隔離された開発環境だけで明示的に許可します。
 
 ```go
 type RabbitMqOptions struct {
-    // RabbitMQ AMQP 接続文字列
-    // 例: amqp://guest:guest@localhost:5672/
+    // RabbitMQ AMQP 연결 문자열
+    // 예: amqp://guest:guest@localhost:5672/
     URL string
 
-    // ローカルamqp://通信を明示的に許可
+    // 로컬 amqp:// 연결 명시적 허용
     AllowInsecureTransport bool
 
     ConsumerRetry  ConsumerRetryOptions
     PublisherRetry PublisherRetryOptions
 
-    // イベント消費（Consumer）の設定
-    // nil の場合、RabbitMQ Consumer は有効になりません
+    // 이벤트 소비 설정
+    // nil이면 RabbitMQ 소비자를 활성화하지 않음
     Read *RabbitMqReadOptions
 
-    // イベント 発行(Publisher) 設定
-    // nil の場合、RabbitMQ にイベントを発行しません
+    // 이벤트 발행 설정
+    // nil이면 RabbitMQ로 이벤트를 발행하지 않음
     Write *RabbitMqWriteOptions
 }
 
 type RabbitMqReadOptions struct {
-    // キューがバインドされる Exchange 名
+    // 큐를 바인딩할 교환기 이름
     Exchange string
     PrefetchCount int
     FailurePolicy RabbitMqFailurePolicy
     DeadLetter *RabbitMqDeadLetterOptions
 
-    // Deprecated: FailurePolicyを使用
+    // Deprecated: FailurePolicy 사용 권장
     RequeueOnError bool
 }
 
 type RabbitMqWriteOptions struct {
-    // イベントを発行する Exchange 名
+    // 이벤트를 발행할 교환기 이름
     Exchange string
 }
 ```
+
+失敗ポリシーと再試行のデフォルト値は、[セキュリティ設定](/ja/reference/security-configuration#rabbitmq)を参照してください。`RequeueOnError`は以前のバージョンとの互換性のための設定です。新しいコードでは`FailurePolicy`を使用します。
 
 ### 例
 
@@ -693,7 +742,7 @@ app.Run(boot.Options{
     Address: ":8080",
     RabbitMQ: &boot.RabbitMqOptions{
         URL:                    "amqp://guest:guest@localhost:5672/",
-        AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
+        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
         Read: &boot.RabbitMqReadOptions{
             Exchange: "stock-exchange",
         },
@@ -705,10 +754,11 @@ app.Run(boot.Options{
 })
 ```
 
+## イベント発行 {#event-publishing}
 
-## イベント発行
-Controllerでドメインイベントを発行できます。
-### DomainEvent インターフェイス
+コントローラーでドメインイベントを収集し、登録済みのKafkaやRabbitMQのパブリッシャーに送信できます。
+
+### DomainEventインターフェース
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/event/publish"
@@ -719,7 +769,7 @@ type DomainEvent interface {
 }
 ```
 
-### イベント定義
+### イベントの定義
 
 ```go
 type OrderCreated struct {
@@ -736,27 +786,37 @@ func (e OrderCreated) OccurredAt() time.Time {
 }
 ```
 
-### Controllerから発行
+### コントローラーから発行
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/event/publish"
 
 func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) httpx.Response[Order] {
     order := c.repo.Save(req)
-    
-    // イベント 発行
+
+    // 이벤트 발행
     publish.Event(ctx, OrderCreated{
         OrderID: order.ID,
         At:      time.Now(),
     })
-    
+
     return httpx.Response[Order]{Body: order}
 }
 ```
 
-イベントは、Controller の実行完了後に `PostExecutionHook` から一括発行されます。 `publish.Event()`は`context.Context`に注入された`EventBus`にイベントを収集し、実行がエラーなしで完了すると登録されたPublisher（Kafka / RabbitMQ）を介して送信されます。
+`publish.Event()`は、`context.Context`に接続されたイベントバスにイベントを収集します。コントローラーの実行とレスポンスの準備が成功すると、実行後フックで登録済みのKafkaまたはRabbitMQのパブリッシャーにまとめて送信します。この送信は`BeforeResponse`より前に実行されるため、DBトランザクションのコミットと原子的にまとめられるわけではありません。原子的な処理が必要な場合は、トランザクショナルアウトボックスを構成してください。
 
-## 完全な例
+## CLIプロジェクトでの使用
+
+[最初のアプリを作成する](/ja/learn/getting-started/first-app)で生成したプロジェクトでは、`internal/application/application.go`の`BuildApplication`でアプリを構成し、ルートの`main.go`で`Validate`のエラーを確認した後に`Run`を呼び出します。次のコマンドでプロジェクトを確認できます。
+
+```sh
+spine doctor
+spine contract check
+spine verify
+```
+
+生成される`BuildApplication`の基本形は次のとおりです。
 
 ```go
 package application
@@ -777,7 +837,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
+// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New()
 	app.Constructor(NewHealthController)
@@ -791,38 +851,25 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
+## 起動と終了の順序
 
-## ブートストラップの順序
-`Run()`を呼び出すと、次の順序で初期化されます。
-1. IoC Containerの作成
-2. コンストラクタの登録
-3. イベントインフラストラクチャの設定(設定されている場合)   - Kafka Publisher / Consumer
-   - RabbitMQ Publisher / Consumer
-4. Custom Transport 初期化 (`Init()` 呼び出し)
-5. Custom Transport スタート(`Start()` - 別途goroutine)
-6. HTTP Runtime の構成(設定されている場合)
-   - Routerの設定とHandlerMetaの作成
-   - ルート Interceptor Resolve (nil ポインタ → Container)
-   - 冗長パス検証(`assertNoAmbiguousRoute`)
-   - Controller Warm-up (依存関係の事前解決)
-   - HTTP Pipelineの設定(ArgumentResolver、ReturnValueHandlerの登録)
-   - グローバルインターセプタ登録(重複タイプの削除、nilポインタのResolve)
-7. WebSocket Runtime の構成 (登録済みの場合)
-   - WS専用のPipelineの作成
-   - Echo Transport Hookによる自動マウント
-8. Echo Adapter マウント (Recover ミドルウェアを含む)
-9. Consumer Runtimeの起動(設定されている場合)
-10. HTTPサーバーの起動
-### Graceful Shutdown市
-1. `SIGINT`/`SIGTERM` シグナル受信
-2. WebSocket 接続への Close メッセージの送信
-3. イベントコンシューマランタイムの停止
-4. Custom Transport `Stop()` 呼び出し
-5. HTTP サーバー Shutdown (タイムアウトまで待機)
-6. イベント Publisher リソースのクリーンアップ
-7. 終了
+`Run`はオプションの事前検証後、依存性注入コンテナとイベントパブリッシャーを構成します。ユーザー定義のトランスポートの`Init`を呼び出し、HTTPとWebSocketのルートおよびインターセプターを解釈して、必要なコントローラーを事前に生成します。登録済みのコンシューマーがある場合は、ブローカーのランタイムも検証します。
 
-## 注
-- [Interceptor](/ja/reference/api/interceptor) - Interceptor インターフェイス
-- [実行パイプライン](/ja/learn/core-concepts/pipeline) - リクエスト処理フロー
-- [IoC Container](/ja/learn/getting-started/intro) - 依存性注入
+この準備が終わると、コンシューマーとユーザー定義のトランスポートの`Start`を別のゴルーチンで実行し、最後にHTTPサーバーを起動します。HTTPルートは、同じメソッドでパスが曖昧に重なると起動に失敗します。たとえば、`/users/:id`と`/users/me`は重複するパスとして検出します。
+
+終了時は、WebSocketとHTTPへのリクエストの受け入れを先に停止し、コンシューマーの停止を待ってから、ユーザー定義のトランスポートの`Stop`を初期化の逆順に呼び出します。その後、イベントパブリッシャーのリソースを解放します。具体的な実装は、[v0.5.1の起動および終了コード](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/bootstrap/bootstrap.go)を参照してください。
+
+## 制約とエラー
+
+- コンストラクタの戻り値は正確に1つである必要があります。`(T, error)`を返すコンストラクタは登録できません。
+- HTTP入力DTOはポインターで受け取り、成功レスポンスは`httpx.Response[T]`など、サポートするレスポンス型で返します。[コントローラーの書き方](/ja/learn/tutorial/2-controller)を参照してください。
+- `Validate`が成功しても、`Run`でコンストラクタ、依存関係、ルート、ブローカー接続のエラーが発生する場合があります。両方のメソッドの戻り値のエラーを確認してください。
+- WebSocketのパスを登録して`HTTP`を省略すると、`WEBSOCKET_HTTP_REQUIRED`設定エラーが発生します。
+- `InterceptorFor`のスコープには、`InterceptorHTTP`、`InterceptorWebSocket`、`InterceptorAll`のいずれかを使用します。`0`やサポートされていないビットが含まれる場合は、`INTERCEPTOR_SCOPE_INVALID`設定エラーが発生します。
+- ネットワーク送信、イベント発行、DBコミットは、1つの原子的な操作ではありません。再試行や重複処理への対応が必要かどうかは、アプリで判断する必要があります。
+
+## 関連情報
+
+- [インターセプター](/ja/reference/api/interceptor): 公開インターフェースと実行順序
+- [実行パイプライン](/ja/learn/core-concepts/pipeline) - リクエスト処理の流れ
+- [Spineの紹介](/ja/learn/getting-started/intro): 依存性注入と主要な概念

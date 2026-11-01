@@ -1,19 +1,21 @@
-# First App
+# Your First App
 
-Install Spine CLI, generate a project, and serve `GET /health` in about five minutes. Go 1.25.5 or later is required; the CLI recommends Go 1.27.3. Initial dependency downloads may take longer depending on your environment.
+Create a new project with the Spine CLI and check that `GET /health` returns `{"status":"ok"}`. Read the generated files to see how the app is configured, validated, and run.
 
-## 1. Install and inspect the CLI
+Go 1.25.5 or later is required, and the CLI recommends Go 1.27.3. The time needed to download dependencies for the first time depends on your environment.
+
+## 1. Install the CLI and Check the Command
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
 spine version
 ```
 
-`spine version` prints `spine-cli 0.1.4`. If the command is unavailable, follow the Go executable path instructions in [Installation](/en/learn/getting-started/installation).
+`spine version` prints `spine-cli 0.1.4`. If the command cannot be found, check the Go executable path setup in the [installation guide](/en/learn/getting-started/installation).
 
-## 2. Create a project
+## 2. Create a Project
 
-Run this from the parent directory where you want to create the project.
+Run these commands in the parent directory where you want to place the project. If a `hello-spine` directory already exists, use a different name.
 
 ```bash
 spine new hello-spine --module example.com/hello-spine
@@ -21,9 +23,9 @@ cd hello-spine
 go mod tidy
 ```
 
-The CLI pins Spine `v0.5.1` in `go.mod`. Prepare dependencies with `go mod tidy`.
+The project files are created in the `hello-spine` directory. The CLI specifies Spine `v0.5.1` in `go.mod`, and `go mod tidy` downloads the required dependencies.
 
-## 3. Inspect the generated structure
+## 3. Inspect the Generated Structure
 
 ```text
 hello-spine/
@@ -37,7 +39,7 @@ hello-spine/
     └── application_test.go
 ```
 
-`spine.toml` tells the CLI the module, entrypoint, and location of application registration code.
+The project contains `main.go`, which starts execution, and the `internal/application` directory, which holds the app configuration code. `spine.toml` tells the CLI the module path, execution entry point, location of the app configuration code, and port.
 
 ```toml
 module = "example.com/hello-spine"
@@ -46,9 +48,11 @@ composition = "./internal/application"
 port = 8080
 ```
 
-`BuildApplication()` in `internal/application/application.go` assembles the app and boot options. The generated code registers the `HealthController` constructor and `GET /health`, with explicit `boot.HTTPOptions`. Keep route, constructor, and interceptor registrations in this function or in `Register(app) error` functions called from it.
+`BuildApplication()` in `internal/application/application.go` returns the app and its runtime options. The generated code registers the `HealthController` constructor and `GET /health`, and explicitly sets the HTTP runtime options, `boot.HTTPOptions`.
 
-`main.go` is already generated. You can inspect its execution flow without replacing it:
+When adding a feature, put route, constructor, and interceptor registrations in this function or in a `Register(app) error` function it calls. [Project Structure](/en/learn/tutorial/1-project-structure) covers this in detail.
+
+`main.go` is already generated, so you do not need to modify it. The following code shows the order of app configuration, validation, and execution.
 
 ```go
 func main() {
@@ -65,7 +69,9 @@ func main() {
 }
 ```
 
-## 4. Verify the contract and local code
+## 4. Validate the App Configuration and Code
+
+Run these commands in the root directory of the generated project.
 
 ```bash
 spine doctor
@@ -74,15 +80,17 @@ spine contract check
 spine verify
 ```
 
-`doctor` diagnoses tools and project configuration; `inspect` shows the registered execution contract. `contract check` validates the static contract, and `verify` runs contract, gofmt, vet, and test checks. The generated `application_test.go` also checks `BuildApplication()` and `app.Validate(options)` without starting a server.
+`doctor` diagnoses tools and project settings. `inspect` shows the app configuration registered in code, including routes and dependencies. The CLI calls this information extracted from registration code the execution contract.
 
-## 5. Run and check the response
+`contract check` checks the execution contract. `verify` also runs `gofmt`, `go vet`, and Go tests in addition to the contract check. The generated `application_test.go` also checks `BuildApplication()` and `app.Validate(options)` without starting the server. Once all commands complete without errors, you are ready to run the server.
+
+## 5. Run the App and Check the Response
 
 ```bash
 spine dev
 ```
 
-Send a request from another terminal:
+With the server running, open another terminal and send a request.
 
 ```bash
 curl http://localhost:8080/health
@@ -92,10 +100,10 @@ curl http://localhost:8080/health
 {"status":"ok"}
 ```
 
-Stop the development server with `Ctrl+C`. You now have a CLI-generated project, reusable application assembly, static contract checks, and an observed HTTP response.
+If the server returns the JSON response above, `GET /health` is working. Press `Ctrl+C` in the terminal running the server to stop the development server.
 
-## Next steps
+## Next Steps
 
-- [Project Structure](/en/learn/tutorial/1-project-structure) — Add a feature to the generated project
-- [Controllers](/en/learn/tutorial/2-controller) — Inspect CLI-generated routes and handlers
-- [Database](/en/learn/tutorial/5-database) — Connect a repository to Bun ORM
+- Follow [Project Structure](/en/learn/tutorial/1-project-structure) to add a feature to the generated project.
+- Read [Controllers](/en/learn/tutorial/2-controller) to learn about routes and handlers.
+- Follow [Database](/en/learn/tutorial/5-database) to connect Bun ORM to a repository.

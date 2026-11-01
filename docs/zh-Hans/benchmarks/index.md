@@ -1,6 +1,6 @@
 ---
 title: "Spine 内部实验室测试"
-description: "相同资源预算下的HTTP吞吐量和内存占用。公开与NestJS/Express、Spring MVC、FastAPI/Uvicorn的比较方法和测量数据。"
+description: "在相同资源条件下，比较 Spine、NestJS/Express、Spring MVC 和 FastAPI/Uvicorn 的 HTTP 吞吐量与内存使用量的内部实验室测试。公开测量条件和原始数据。"
 sidebar: false
 outline: false
 ---

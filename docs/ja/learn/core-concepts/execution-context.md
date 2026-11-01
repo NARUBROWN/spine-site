@@ -1,97 +1,62 @@
-# 実行コンテキスト(ExecutionContext)
+# 実行コンテキスト (ExecutionContext)
 
-Spineリクエストの中核。
+Spine はリクエストやメッセージごとに実行コンテキストを作成し、入力情報と実行状態をパイプラインに渡します。インターセプターは `core.ExecutionContext` で実行状態を読み書きし、HTTP コントローラーは意味を表す型と読み取り専用の `spine.Ctx` で必要な値だけを受け取ります。
 
+この区別を理解すると、インターセプターが保存した値をコントローラーに渡し、HTTP、イベントコンシューマー、WebSocket で利用できる入力を判断できます。このドキュメントのインターフェースと動作は、Spine v0.5.1 を基準にしています。
 
-以下のアプリ用ハンドラーは、[CLIプロジェクト](/ja/learn/tutorial/1-project-structure)の `src/user/user_controller.go` に追加する手動拡張例です。応答型は `github.com/NARUBROWN/spine/pkg/httpx` からインポートします。生成された `BuildApplication` と、エラーを確認する `user.Register(app)` は維持します。フレームワーク内部の抜粋をアプリにコピーする必要はありません。
+アプリのハンドラー例は、[CLI で作成したプロジェクト](/ja/learn/tutorial/1-project-structure)に手動で追加する拡張です。生成された `BuildApplication` と、エラーを確認する `user.Register(app)` の呼び出しは維持してください。`core/` のインターフェースは公開契約なので、`internal/` の実装をアプリにコピーする必要はありません。
 
-## 概要
+## コントローラーとインターセプターのアクセス範囲
 
-`ExecutionContext`は、Spineパイプライン全体で共有される要求スコープのコンテキストです。 HTTP要求が到着すると、Transportアダプターは`ExecutionContext`を生成し、このコンテキストはパイプラインのすべてのステップを通過し、要求情報と実行状況を渡します。
+コンテキストは、一つの大きなオブジェクトをすべてのコードに公開するための仕組みではありません。パイプラインを制御するコードとビジネスロジックで、必要なアクセス範囲を分けます。
 
+| 使用箇所 | 受け取る型 | 利用できる機能 |
+| --- | --- | --- |
+| HTTP コントローラー | `context.Context` | キャンセルとタイムアウトの伝達、ドメインイベントの発行 |
+| HTTP コントローラー | `pkg/spine.Ctx` | インターセプターが保存した値の参照 |
+| HTTP コントローラー | `path.Int`、`query.Values`、DTO など | バインドしたリクエスト入力 |
+| インターセプター | `core.ExecutionContext` | リクエスト情報の参照、ストアの読み書き、実行前後の処理 |
+| HTTP 引数リゾルバー | `core.HttpRequestContext` | HTTP 本文、ヘッダー、フォームなどの入力の解釈 |
+| コンシューマー引数リゾルバー | `core.ConsumerRequestContext` | イベント名とペイロードの解釈 |
+| WebSocket 引数リゾルバー | `core.WebSocketContext` | 接続 ID、メッセージの型とペイロードの解釈 |
+
+このドキュメントでの `spine.Ctx` は、ルートのアプリパッケージ `github.com/NARUBROWN/spine` ではなく、`github.com/NARUBROWN/spine/pkg/spine` の型です。同じファイルで両方のパッケージをインポートする場合は、別名で区別してください。
+
+デフォルトの HTTP リゾルバーは、`core.ExecutionContext` や `core.HttpRequestContext` をコントローラーの引数として注入しません。コントローラーでレスポンスライターや本文のバインディングを直接扱う代わりに、入力の型と `httpx.Response[T]` の戻り値で必要な動作を表します。
+
+## コンテキスト契約の関係
+
+`ContextCarrier` と `EventBusCarrier` は共通機能を表します。HTTP とコンシューマーの入力契約は、この二つの契約を直接含み、WebSocket のメッセージ契約は `ExecutionContext` を拡張します。
 
 ```mermaid
 graph TD
-    Request["HTTP Request / Event Message / WebSocket Message"]
-    
-    Transport["Transport Adapter<br>• Echo (HTTP)<br>• Kafka/RabbitMQ (Event)<br>• WebSocket"]
-    
-    Context["ExecutionContext<br>• Method, Path, Headers<br>• Path Parameters<br>• Query Parameters<br>• EventBus<br>• Internal Store"]
-    
-    Router["Router"]
-    Interceptor["Interceptor"]
-    ArgResolver["ArgumentResolver"]
-    Invoker["Invoker"]
-    ReturnHandler["ReturnValueHandler"]
+    Base["ContextCarrier<br>Context()"]
+    Bus["EventBusCarrier<br>EventBus()"]
+    Execution["ExecutionContext<br>メソッドとパス、パラメーター、ストア"]
+    HTTP["HttpRequestContext<br>HTTP 入力の解釈"]
+    Consumer["ConsumerRequestContext<br>イベント名とペイロード"]
+    WS["WebSocketContext<br>接続 ID とメッセージ情報"]
+    View["ControllerContext / spine.Ctx<br>Get() だけを提供する別のビュー"]
 
-    Request --> Transport
-    Transport --> Context
-    
-    Context --> Router
-    Context --> Interceptor
-    Context --> ArgResolver
-    Context --> Invoker
-    Context --> ReturnHandler
+    Base --> Execution
+    Bus --> Execution
+    Base --> HTTP
+    Bus --> HTTP
+    Base --> Consumer
+    Bus --> Consumer
+    Execution --> WS
+    Execution -. 読み取り専用ビュー .-> View
 ```
 
+矢印は、契約の包含関係を表します。`ControllerContext` と `spine.Ctx` は `ExecutionContext` を埋め込みません。同じストアを参照できるように、`Get()` だけを公開する別のインターフェースです。
 
-## Context階層
+実際の HTTP アダプターは、`ExecutionContext` と `HttpRequestContext` の両方を実装します。コンシューマーアダプターも、`ExecutionContext` と `ConsumerRequestContext` の両方を実装します。そのため、リゾルバーは共通コンテキストを受け取った後に、必要なプロトコルの契約を確認できます。
 
-SpineはContextを**階層的に分離**します。これは、HTTP、Event Consumer、WebSocketを同じパイプラインモデルとして処理するための設計です。
-
-
-```mermaid
-graph TB
-    subgraph "基盤 契約"
-        ContextCarrier["ContextCarrier<br>Context() context.Context"]
-        EventBusCarrier["EventBusCarrier<br>EventBus() core.EventBus"]
-    end
-    
-    subgraph "実行 契約"
-        ExecutionContext["ExecutionContext<br>• Method(), Path()<br>• Params(), Queries()<br>• Set(), Get()"]
-    end
-    
-    subgraph "Controller 専用"
-        ControllerContext["ControllerContext<br>• Get()"]
-    end
-    
-    subgraph "プロトコル別拡張"
-        HttpRequestContext["HttpRequestContext<br>• Param(), Query()<br>• Bind(), Headers()<br>• MultipartForm()"]
-        ConsumerRequestContext["ConsumerRequestContext<br>• EventName()<br>• Payload()"]
-        WebSocketContext["WebSocketContext<br>• ConnID()<br>• MessageType()<br>• Payload()"]
-    end
-    
-    ContextCarrier --> ExecutionContext
-    EventBusCarrier --> ExecutionContext
-    ExecutionContext --> ControllerContext
-    ContextCarrier --> HttpRequestContext
-    EventBusCarrier --> HttpRequestContext
-    ExecutionContext --> WebSocketContext
-    ContextCarrier --> ConsumerRequestContext
-    EventBusCarrier --> ConsumerRequestContext
-```
-
-### なぜそう分けるか。
-
-|階層担当|使用場所|
-|------|------|----------|
-| `ContextCarrier` | Go標準コンテキスト配信|どこでも
-| `EventBusCarrier` |ドメインイベント発行（`core.EventBus`）|コントローラー、コンシューマー
-| `ExecutionContext` |実行フロー制御|ルーター、パイプライン、インターセプター|
-| `ControllerContext` | ExecutionContextの読み取り専用Facade |コントローラー（インターセプター注入値を参照）
-| `HttpRequestContext` | HTTP入力の解釈HTTP ArgumentResolver |
-| `ConsumerRequestContext` |イベント入力の解釈Consumer ArgumentResolver |
-| `WebSocketContext` | WebSocket入力解析| WebSocket ArgumentResolver |
-
-**目標**：HTTP、Event Consumer、WebSocketが同じパイプラインモデルを共有しながら、各プロトコルの特性に合った入力解析が可能になります。
-
-
-## ベースのインターフェース
+## 共通の基盤となる契約
 
 ### ContextCarrier
 
-Go 標準 `context.Context` を渡す最小契約です。
-
+Go 標準の `context.Context` を渡します。キャンセル信号と期限をサービス、リポジトリ、外部 API の呼び出しに伝えるときに使います。
 
 ```go
 // core/context.go
@@ -100,10 +65,11 @@ type ContextCarrier interface {
 }
 ```
 
+HTTP では、リクエストの `context.Context` を使います。コントローラーが `context.Context` を引数として宣言すると、標準コンテキストリゾルバーがリクエストコンテキストを渡し、ドメインイベントの発行に必要な EventBus も関連付けます。
+
 ### EventBusCarrier
 
-ドメインイベントを発行するためのEventBusアクセス契約です。戻り型は`core.EventBus`です。
-
+その実行に属する EventBus にアクセスします。
 
 ```go
 // core/context.go
@@ -112,8 +78,7 @@ type EventBusCarrier interface {
 }
 ```
 
-`core.EventBus`は、ドメインイベントを収集して実行後に​​一度に発行するための最小契約です。
-
+`core.EventBus` は、イベントを収集して取り出すための最小限の契約です。`publish.DomainEvent` は `github.com/NARUBROWN/spine/pkg/event/publish` に定義されています。
 
 ```go
 // core/event_bus.go
@@ -123,13 +88,11 @@ type EventBus interface {
 }
 ```
 
-> **注**: `internal/event/publish.EventBus` は `core.EventBus` のタイプ別名 (`type EventBus = core.EventBus`) で、内部実装がこのタイプを満たすように構成されます。
+コントローラーでは、通常は `EventBus()` を直接呼び出さず、受け取った `context.Context` を使って `publish.Event()` を呼び出します。具体的な使い方は、後述の [EventBus とイベント発行](#event-publishing)で説明します。
 
+## ExecutionContext: パイプラインとインターセプターの実行状態
 
-## ExecutionContextインタフェース
-
-パイプライン全体で使用される実行フロー制御用のインタフェースです。
-
+`core.ExecutionContext` は、パイプライン、ルーター、インターセプターが共通して使う契約です。
 
 ```go
 // core/context.go
@@ -137,113 +100,59 @@ type ExecutionContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // HTTP リクエスト 情報 (Consumer/WebSocketでは 意味が 異なる)
-    Method() string                    // HTTP: GET, POST... / Consumer: "EVENT" / WS: "WS"
-    Path() string                      // HTTP: /users/123 / Consumer: EventName / WS: path
-    Header(name string) string         // HTTP ヘッダー (Consumer, WSは 空文字列)
-    
-    // パラメータ アクセス
-    Params() map[string]string         // Path parameters
-    PathKeys() []string                // Path key 順序
-    Queries() map[string][]string      // Query parameters
-    
-    // 内部 保存所
-    Set(key string, value any)         // 値 保存
-    Get(key string) (any, bool)        // 値 参照
+    Method() string
+    Path() string
+    Params() map[string]string
+    Header(name string) string
+    PathKeys() []string
+    Queries() map[string][]string
+    Set(key string, value any)
+    Get(key string) (any, bool)
 }
 ```
 
-### メソッドの詳細
+### リクエストとルーティングの情報
 
-#### Context()
+| メソッド | HTTP での意味 | 注意点 |
+| --- | --- | --- |
+| `Method()` | `GET`、`POST` などのリクエストメソッド | コンシューマーは `EVENT`、WebSocket は `WS` を返す |
+| `Path()` | `/users/123` などの実際のリクエストパス | ルートパターン `/users/:id` と区別する |
+| `Header(name)` | 指定したリクエストヘッダー | ヘッダーがなければ空文字列 |
+| `Params()` | ルーターが抽出したパスの値 | グローバルの `PreHandle` は Spine のルーティング前に実行 |
+| `PathKeys()` | ルートで宣言したパスパラメーターの順序 | `path.*` 型を順序に基づいてバインドする際に使用 |
+| `Queries()` | 複数の値を保持するクエリマップ | 一つのキーに複数の値が含まれる場合がある |
 
-Go 標準 `context.Context` を返します。要求のキャンセル、タイムアウト、値の転送に使用されます。
-
-
-```go
-func (e *echoContext) Context() context.Context {
-    return e.reqCtx  // HTTP リクエストの context
-}
-```
-
-#### EventBus()
-
-リクエストスコープのEventBusを返します。 Controllerがドメインイベントを発行するときに使用されます。
-
+たとえば、`/users/:userId/posts/:postId` ルートに `/users/123/posts/456?tag=go&tag=web` リクエストが届くと、ルーティング後に次の情報を読み取れます。
 
 ```go
-func (c *echoContext) EventBus() publish.EventBus {
-    return c.eventBus
-}
+ctx.Method()   // "GET"
+ctx.Path()     // "/users/123/posts/456"
+ctx.Params()   // {"userId": "123", "postId": "456"}
+ctx.PathKeys() // ["userId", "postId"]
+ctx.Queries()  // {"tag": ["go", "web"]}
 ```
 
-#### Method() / Path()
+上のコードは、インターセプターなどで読み取れる値の例です。HTTP コントローラーがこのコンテキストを直接受け取るわけではありません。
 
-HTTP リクエストのメソッドとパスを返します。 Consumer と WebSocket では異なる意味で使用されます。
+### Set() と Get(): 実行中の値の共有
 
+インターセプターは、`Set()` で認証結果やリクエスト追跡情報を保存できます。コントローラーは、読み取り専用ビューの `Get()` で同じ値を読み取ります。
 
 ```go
-// HTTP
-ctx.Method()  // "GET"
-ctx.Path()    // "/users/123/posts/456"
+// 인터셉터에서 저장
+ctx.Set("auth.user", authInfo)
 
-// Consumer
-ctx.Method()  // "EVENT"
-ctx.Path()    // "order.created" (EventName)
-
-// WebSocket
-ctx.Method()  // "WS"
-ctx.Path()    // WebSocket パス
+// 같은 실행에서 조회
+value, ok := ctx.Get("auth.user")
 ```
 
-#### Params() / PathKeys()
+`Get()` は、値とその有無を併せて返します。キーが存在しても、目的の型とは限らないため、値を使うコードで型も確認してください。ストアはリクエストまたはメッセージの実行に属するもので、グローバルキャッシュとしては使いません。
 
-Path パラメータ情報を提供します。
+通常のマップと同様に、同時アクセスの保証は実装によって異なります。HTTP コンテキストのストアを、複数のゴルーチンから同時に読み書きできると想定しないでください。
 
+## ControllerContext と spine.Ctx: コントローラーの読み取り専用ビュー
 
-```go
-// Route: /users/:userId/posts/:postId
-// Request: /users/123/posts/456
-
-ctx.Params()    // {"userId": "123", "postId": "456"}
-ctx.PathKeys()  // ["userId", "postId"]
-```
-
-`PathKeys()`は、パラメータの**宣言順序**を保証します。 Spineの順序ベースのバインディングに不可欠です。
-
-#### Queries()
-
-クエリパラメータを複数値の形式で返します。
-
-
-```go
-// Request: /users?status=active&tag=go&tag=web
-
-ctx.Queries()  // {"status": ["active"], "tag": ["go", "web"]}
-```
-
-#### Set() / Get()
-
-パイプライン内で値を共有するリポジトリ。
-
-
-```go
-// Routerで path params 保存
-ctx.Set("spine.params", params)
-ctx.Set("spine.pathKeys", keys)
-
-// Adapterで ResponseWriter 保存
-ctx.Set("spine.response_writer", NewEchoResponseWriter(c))
-
-// Interceptorで 参照
-rw, ok := ctx.Get("spine.response_writer")
-```
-
-
-## ControllerContext インタフェース
-
-Controller専用のContext Viewです。 `ExecutionContext`の読み取り専用Facadeで、Interceptorから注入した値をControllerで参照するための公式通路です。
-
+`core.ControllerContext` と `pkg/spine.Ctx` は、同じメソッド集合を提供します。
 
 ```go
 // core/context.go
@@ -252,42 +161,34 @@ type ControllerContext interface {
 }
 ```
 
-### 実装
-
-
 ```go
-// internal/runtime/controller_ctx.go
-type controllerCtxView struct {
-    ec core.ExecutionContext
-}
-
-func NewControllerContext(ec core.ExecutionContext) core.ControllerContext {
-    return controllerCtxView{ec: ec}
-}
-
-func (v controllerCtxView) Get(key string) (any, bool) {
-    return v.ec.Get(key)
+// pkg/spine/types.go
+type Ctx interface {
+    Get(key string) (any, bool)
 }
 ```
 
-### 使用例
+デフォルトの HTTP リゾルバーは、実行コンテキストをこのビューで包んで渡します。コントローラーは `Get()` を呼び出せますが、`Set()`、`Method()`、`EventBus()` は呼び出せません。追加のメソッドを要求する独自のインターフェースに型を拡張しても、自動的にサポートされるわけではありません。
 
+### インターセプターが保存した認証情報の読み取り
+
+次のメソッドは、認証インターセプターが `auth.user` を保存したアプリの `UserController` に追加する例です。`context`、`github.com/NARUBROWN/spine/pkg/spine`、`pkg/path`、`pkg/httpx` をインポートします。実際のアプリでは、認証ポリシーに合わせて `authInfo` の有無と型を検査してください。
 
 ```go
-// Controllerで Interceptorが 注入した 値 参照
-func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) httpx.Response[any] {
+// src/user/user_controller.go
+func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId path.Int) httpx.Response[any] {
     authInfo, _ := cc.Get("auth.user")
     return httpx.Response[any]{Body: authInfo}
 }
 ```
 
-> **注意**: `pkg/spine/types.go`には`Ctx`インタフェース（`Get(key string) (any, bool)`）が定義されており、ユーザーコードから`spine.Ctx`にもアクセス可能です。
+`core.ControllerContext` を宣言した場合も、HTTP では同じ読み取り専用ビューを受け取ります。アプリのコードでは、`spine.Ctx` で必要なアクセス範囲を表せます。認証インターセプターの作成と登録は、[インターセプターのチュートリアル](/ja/learn/tutorial/4-interceptor)を参照してください。
 
+イベントコンシューマーと WebSocket のデフォルトのパイプラインには、`ControllerContextResolver` が登録されていません。HTTP で使える `spine.Ctx` 引数を、ほかのプロトコルのハンドラーにもそのまま宣言しないでください。
 
-## HttpRequestContext インタフェース
+## HttpRequestContext: HTTP 入力の解釈
 
-HTTP 専用拡張インターフェイスです。 HTTP ArgumentResolverで使用されます。
-
+`core.HttpRequestContext` は、HTTP リゾルバーが個々のパラメーター、すべてのヘッダー、本文、マルチパートフォームを読み取るための契約です。`ExecutionContext` を埋め込まず、二つの基盤契約を直接含みます。
 
 ```go
 // core/context.go
@@ -295,91 +196,51 @@ type HttpRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // 個別 パラメータ アクセス
-    Param(name string) string          // 特定の path param
-    Query(name string) string          // 特定の query param (最初の 値)
-    Header(name string) string         // 特定の ヘッダー
-    
-    // 全体 ビュー アクセス
-    Params() map[string]string         // すべて path params
-    Queries() map[string][]string      // すべて query params
-    Headers() map[string][]string      // すべて ヘッダー
-    
-    // Body バインディング
-    Bind(out any) error                // JSON body → struct
-    
-    // Multipart
+    Param(name string) string
+    Query(name string) string
+    Header(name string) string
+
+    Params() map[string]string
+    Queries() map[string][]string
+    Headers() map[string][]string
+
+    Bind(out any) error
     MultipartForm() (*multipart.Form, error)
 }
 ```
 
-> **注**：`HttpRequestContext`には`RequestContext`は含まれていません。 `ContextCarrier`と`EventBusCarrier`を直接埋め込みます。さらに、`Headers() map[string][]string`メソッドが追加され、ヘッダーマップ全体にアクセスできます。
+ここでの `multipart.Form` は、Go 標準の `mime/multipart` の型です。
 
-### メソッドの詳細
+| メソッド | 動作 |
+| --- | --- |
+| `Param(name)` | 指定したパスパラメーターの値を参照 |
+| `Query(name)` | 指定したクエリの最初の値を参照し、なければ空文字列を返す |
+| `Header(name)` | リクエストヘッダーの値を参照 |
+| `Params()` | パスパラメーターのマップを参照 |
+| `Queries()` | 複数の値を保持するクエリマップを参照 |
+| `Headers()` | すべてのリクエストヘッダーのマップを参照 |
+| `Bind(out)` | 渡された DTO にリクエスト入力をバインド |
+| `MultipartForm()` | マルチパートフォームとファイル情報を参照 |
 
-#### Param() / Query()
+### HTTP アダプターの動作
 
-個々のパラメータに便利にアクセスします。
+Spine の HTTP アダプターは Echo を使います。`Param()` は、まず Spine ルーターが保存した値を探し、なければ Echo のパスの値を確認します。`Params()` は、元のパスマップが変更されないようにコピーを返します。
 
+一方、HTTP の `Headers()` はリクエストのヘッダーマップをそのまま返します。参照結果がすべてコピーだと想定せず、読み取り用として使ってください。
 
-```go
-// Route: /users/:id?page=1&size=20
-
-ctx.Param("id")      // "123"
-ctx.Query("page")    // "1"
-ctx.Query("size")    // "20"
-ctx.Query("missing") // "" (なければ 空文字列)
-```
-
-#### Bind()
-
-HTTP bodyを構造体にバインドします。
-
+`Bind()` と `MultipartForm()` は、入力処理を Echo に委譲します。デフォルトの HTTP DTO リゾルバーは、構造体のポインターを作成して `Bind()` に渡します。アプリのコントローラーでも、次のようにポインターを宣言します。
 
 ```go
-// internal/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP リクエスト コンテキストが ではありません")
-    }
-
-    valuePtr := reflect.New(parameterMeta.Type)
-
-    if err := httpCtx.Bind(valuePtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO バインディング 失敗 (%s): %w", parameterMeta.Type.Name(), err)
-    }
-
-    return valuePtr.Elem().Interface(), nil
-}
+func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User], error)
 ```
 
-#### MultipartForm()
+このコードはメソッドシグネチャの例で、`CreateUserRequest` と `User` はアプリで定義する型です。フォーム DTO はフィールドに `form` タグを使い、アップロードファイルは `pkg/multipart.UploadedFiles` で受け取れます。
 
-Multipart form データにアクセスします。ファイルアップロード処理に使用されます。
+本文が不正な JSON の場合や、パスの値の数値変換が失敗した場合は、コントローラーまで到達しません。v0.5.1 では、このようなバインディングエラーが 500 につながる場合があるため、すべての入力エラーが自動的に 400 になると想定しないでください。エラーがレスポンスに変わる順序は、[実行パイプライン](/ja/learn/core-concepts/pipeline#error-responses)で説明します。
 
+## ConsumerRequestContext: イベント入力の解釈
 
-```go
-// internal/resolver/uploaded_files_resolver.go
-func (r *UploadedFilesResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP リクエスト コンテキストが ではありません")
-    }
-
-    form, err := httpCtx.MultipartForm()
-    if err != nil {
-        return nil, err
-    }
-    // ...
-}
-```
-
-
-## ConsumerRequestContext インタフェース
-
-Event Consumer 専用の拡張インタフェースです。
-
+`core.ConsumerRequestContext` は、イベント名と生のペイロードを提供します。
 
 ```go
 // core/context.go
@@ -387,608 +248,154 @@ type ConsumerRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    EventName() string    // イベント 名前 (例: "order.created")
-    Payload() []byte      // イベント ペイロード (JSON など)
+    EventName() string
+    Payload() []byte
 }
 ```
 
-### メソッドの詳細
+コンシューマーアダプターは、この契約と `ExecutionContext` の両方を実装します。HTTP リクエストではないため、共通メソッドは次のように動作します。
 
-#### EventName()
+| メソッド | コンシューマーで返す値 |
+| --- | --- |
+| `Method()` | `EVENT` |
+| `Path()` | イベント名 |
+| `EventName()` | イベント名 |
+| `Payload()` | 受信したメッセージの生のバイト列 |
+| `Header(name)` | 空文字列 |
+| `Params()` | `nil` |
+| `PathKeys()` | `nil` |
+| `Queries()` | `nil` |
 
-受信したイベントの名前を返します。
+デフォルトのコンシューマーリゾルバーは、`context.Context`、文字列のイベント名、`[]byte` のペイロード、構造体 DTO の値をサポートします。DTO は JSON ペイロードをデシリアライズして作成します。HTTP DTO のポインターの規則を、そのままコンシューマーに適用するわけではありません。
 
+リゾルバーが必要とするペイロードがない場合や、JSON のデシリアライズが失敗した場合は、ハンドラーを呼び出しません。この実行失敗をメッセージの確認、再試行、dead-letter 処理にどう反映するかは、コンシューマーランタイムとメッセージ転送設定の責任です。HTTP のエラーレスポンス表をそのまま適用しないでください。
 
-```go
-ctx.EventName()  // "order.created"
-```
+## WebSocketContext: メッセージと接続情報
 
-#### Payload()
-
-イベントの生のペイロードを返します。
-
-
-```go
-payload := ctx.Payload()  // []byte (JSON)
-```
-
-### Consumer Resolverの例
-
-
-```go
-// internal/event/consumer/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    consumerCtx, ok := ctx.(core.ConsumerRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("ConsumerRequestContextが ではありません")
-    }
-
-    payload := consumerCtx.Payload()
-    if payload == nil {
-        return nil, fmt.Errorf("Payloadが 空のため DTOを 生成する ことが ありません")
-    }
-
-    dtoPtr := reflect.New(meta.Type)
-    if err := json.Unmarshal(payload, dtoPtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO デシリアライズに 失敗しました: %w", err)
-    }
-
-    return dtoPtr.Elem().Interface(), nil
-}
-```
-
-
-## WebSocketContext インタフェース
-
-WebSocket 専用の ExecutionContext 拡張です。 `ExecutionContext`を埋め込み、パイプラインの互換性を維持します。
-
+`core.WebSocketContext` は、`ExecutionContext` に WebSocket のメッセージ情報を追加します。
 
 ```go
 // core/context.go
 type WebSocketContext interface {
     ExecutionContext
 
-    ConnID() string       // 接続 ID
-    MessageType() int     // メッセージ 型 (Text, Binary など)
-    Payload() []byte      // メッセージ ペイロード
+    ConnID() string
+    MessageType() int
+    Payload() []byte
 }
 ```
 
-### WebSocket Resolverの例
+WebSocket ランタイムは、受信したメッセージごとに実行コンテキストを作成します。`Method()` は `WS`、`Path()` は接続リクエストの実際のパスを返します。`ConnID()` は接続 ID、`MessageType()` はテキストやバイナリーなどのフレーム型、`Payload()` はそのメッセージのバイト列を返します。
 
+デフォルトのリゾルバーは、`context.Context`、`pkg/ws.ConnectionID`、`[]byte`、構造体 DTO の値をサポートします。DTO はメッセージペイロードを JSON としてデシリアライズします。HTTP と異なり、DTO は構造体の値として受け取ります。
+
+### 元の接続リクエストの情報
+
+WebSocket では、HTTP upgrade 時に受け取ったヘッダー、クエリ、Cookie を、メッセージ処理中にも参照できます。そのために、別のリクエストビューを提供します。
 
 ```go
-// internal/ws/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    wsCtx, ok := ctx.(core.WebSocketContext)
-    if !ok {
-        return nil, fmt.Errorf("WebSocketContextが ではありません")
-    }
+// core/context.go
+type WebSocketRequestContext interface {
+    ContextCarrier
 
-    payload := wsCtx.Payload()
-    if payload == nil {
-        return nil, fmt.Errorf("Payloadが 空のため DTOを 生成する ことが ありません")
-    }
-
-    dtoPtr := reflect.New(meta.Type)
-    if err := json.Unmarshal(payload, dtoPtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO デシリアライズ 失敗: %w", err)
-    }
-
-    return dtoPtr.Elem().Interface(), nil
+    Path() string
+    Header(name string) string
+    Headers() map[string][]string
+    Query(name string) string
+    Queries() map[string][]string
+    Cookie(name string) (string, bool)
+    Cookies() map[string]string
+    RemoteAddr() string
+    Host() string
+    RequestURI() string
 }
 ```
-
-
-## Echoアダプタの実装
-
-Spine は Echo を HTTP Transport レイヤーとして使用します。 `echoContext`は`ExecutionContext`と`HttpRequestContext`の両方を実装します。
-
 
 ```go
-// internal/adapter/echo/context_impl.go
-type echoContext struct {
-    echo     echo.Context           // Echoの 元の コンテキスト
-    reqCtx   context.Context        // リクエスト スコープ コンテキスト
-    store    map[string]any         // 内部 保存所
-    eventBus publish.EventBus       // イベント バス
+type WebSocketHandshakeContext interface {
+    WebSocketRequestContext
 }
 
-func NewContext(c echo.Context) core.ExecutionContext {
-    return &echoContext{
-        echo:     c,
-        reqCtx:   c.Request().Context(),
-        store:    make(map[string]any),
-        eventBus: publish.NewEventBus(),
-    }
+type WebSocketMessageContext interface {
+    WebSocketContext
+    WebSocketRequestContext
 }
 ```
 
-### 主な実装
+デフォルトの WebSocket 実装は、upgrade リクエストの情報をコピーして保持します。`Headers()`、`Queries()`、`Cookies()` もコピーを返すため、参照結果を変更しても、保持しているリクエスト情報は変わりません。これらの値は接続時の情報であり、メッセージごとに新しい HTTP リクエストを受け取るわけではありません。
 
-#### Path Parameters
+| 必要な値 | 使う契約 |
+| --- | --- |
+| メッセージペイロードと接続 ID | `core.WebSocketContext` |
+| upgrade 前のヘッダー、クエリ、Cookie の検査 | `core.WebSocketHandshakeContext` |
+| メッセージ処理と元のリクエスト情報の両方の参照 | `core.WebSocketMessageContext` |
 
-Routerがマッチングした結果を優先し、なければEchoの値を使用します。
-
+デフォルト実装の `Header()` と `Queries()` は、このリクエスト情報を参照します。値がない場合もありますが、WebSocket だからといって常に空の値を返すわけではありません。独自の `WebSocketContext` 実装が追加のリクエストビューもサポートしていると想定せず、型を確認してください。
 
 ```go
-func (e *echoContext) Param(name string) string {
-    // Spine Routerが 保存した 値 優先
-    if raw, ok := e.store["spine.params"]; ok {
-        if m, ok := raw.(map[string]string); ok {
-            if v, ok := m[name]; ok {
-                return v
-            }
-        }
-    }
-    // Fallback to Echo
-    return e.echo.Param(name)
+// WebSocket 메시지를 처리하는 인터셉터 안에서 조회하는 예
+if requestCtx, ok := ctx.(core.WebSocketMessageContext); ok {
+    origin := requestCtx.Header("Origin")
+    _ = origin
 }
 ```
 
-#### Params() - 防御コピー
+このコードは、コントローラーへの引数注入の例ではありません。インターセプターが受け取った `core.ExecutionContext` で、追加機能をサポートしているか確認するコードです。
 
-外部からソースマップを変更しないようにコピーを返します。 `maps.Copy`を使用してください。
+### 接続前の検査とメッセージの前処理
 
+接続前に認証や権限の検査が必要な場合は、任意の契約である `core.WebSocketHandshakeInterceptor` を実装します。
 
 ```go
-func (e *echoContext) Params() map[string]string {
-    if raw, ok := e.store["spine.params"]; ok {
-        if m, ok := raw.(map[string]string); ok {
-            // return a shallow copy to avoid mutation
-            copyMap := make(map[string]string, len(m))
-            maps.Copy(copyMap, m)
-            return copyMap
-        }
-    }
-    // Echoで 直接 構成
-    names := e.echo.ParamNames()
-    values := e.echo.ParamValues()
-    params := make(map[string]string, len(names))
-    for i, name := range names {
-        if i < len(values) {
-            params[name] = values[i]
-        }
-    }
-    return params
+type WebSocketHandshakeInterceptor interface {
+    PreHandshake(ctx WebSocketHandshakeContext, meta HandlerMeta) error
 }
 ```
 
-#### Headers()
+WebSocket に適用するために登録した `core.Interceptor` がこの契約も実装している場合、ランタイムは先に接続スロットを予約し、HTTP upgrade の前に `PreHandshake` を呼び出します。認証待ちの接続も、接続数の上限に含めます。通常の `core.Interceptor.PreHandle` は、接続後にメッセージを処理するたびに呼び出します。接続自体を拒否するための検査と、メッセージごとの前処理を区別して書いてください。
 
-すべてのHTTPヘッダーをマップとして返​​します。
+## プロトコル別の入力比較
 
+同じ実行パイプラインを使っていても、コンテキストの意味とデフォルトの引数型は異なります。
 
-```go
-func (e *echoContext) Headers() map[string][]string {
-    return e.echo.Request().Header
-}
-```
+| 項目 | HTTP | イベントコンシューマー | WebSocket |
+| --- | --- | --- | --- |
+| 実行単位 | HTTP リクエスト一件 | 受信イベント一件 | 受信メッセージ一件 |
+| `Method()` | HTTP メソッド | `EVENT` | `WS` |
+| `Path()` | 実際のリクエストパス | イベント名 | 接続リクエストの実際のパス |
+| `Header()` | リクエストヘッダー | 空文字列 | 保持した upgrade リクエストヘッダー |
+| `Queries()` | リクエストクエリ | `nil` | 保持した upgrade リクエストクエリ |
+| 本文入力 | HTTP の `Bind()` | イベントの `Payload()` | メッセージの `Payload()` |
+| デフォルトの DTO 型 | 構造体のポインター | 構造体の値 | 構造体の値 |
+| `context.Context` 引数 | サポート | サポート | サポート |
+| `spine.Ctx` 引数 | サポート | デフォルトでは未登録 | デフォルトでは未登録 |
 
-#### EventBus
+プロトコル固有の機能は、該当するインターフェースへの型アサーションで対応を確認してから使います。`ExecutionContext` があっても、HTTP の `Bind()` や WebSocket の `ConnID()` をすべて呼び出せるわけではありません。
 
-リクエストスコープのEventBusを返します。
+## ストアのキーと実行タイミング
 
+Spine は内部ストアで次のキーを使います。アプリで同じキーを上書きしないでください。アプリの値には、`auth.user` のように用途が分かる別の名前を使います。
 
-```go
-func (c *echoContext) EventBus() publish.EventBus {
-    return c.eventBus
-}
-```
+| キー | 値の型 | 用途 |
+| --- | --- | --- |
+| `spine.params` | `map[string]string` | ルーターが抽出したパスパラメーター |
+| `spine.pathKeys` | `[]string` | パスパラメーターの宣言順序 |
+| `spine.response_writer` | `core.ResponseWriter` | HTTP レスポンスの書き込みとバッファー処理 |
 
+`spine.response_writer` には、アダプターが提供するレスポンスライターを関連付けます。パイプラインはレスポンスを送信するまで、バッファーを使うライターでこれを包みます。コントローラーでこのキーを取り出してレスポンスを直接書き込む代わりに、`httpx.Response[T]`、`httpx.Redirect`、`httpx.Binary` を返してください。
 
-## Consumerアダプタの実装
+コンテキストから読み取れる値は、実行タイミングにも依存します。グローバルの `PreHandle` はルーティング前、ルートの `PreHandle` はルーティングと引数バインディングの後に実行します。ストアに値が必要になるタイミングと、その値を作成する段階を併せて設計する必要があります。
 
-Event Consumer 用の Context 実装です。
+## EventBus とイベント発行 {#event-publishing}
 
+コントローラーが `context.Context` を宣言すると、標準コンテキストリゾルバーがその実行の EventBus を関連付けて渡します。コントローラーは、このコンテキストでドメインイベントを収集できます。
 
-```go
-// internal/event/consumer/request_context_impl.go
-type ConsumerRequestContextImpl struct {
-    ctx      context.Context
-    msg      *Message
-    eventBus publish.EventBus
-    store    map[string]any
-}
-
-func NewRequestContext(
-    ctx context.Context,
-    msg *Message,
-    eventBus publish.EventBus,
-) core.ExecutionContext {
-    return &ConsumerRequestContextImpl{
-        ctx:      ctx,
-        msg:      msg,
-        eventBus: eventBus,
-        store:    make(map[string]any),
-    }
-}
-```
-
-### Consumer Contextの特殊動作
-
-Consumer は HTTP ではないため、いくつかのメソッドが異なる動作をします。
-
-
-```go
-func (c *ConsumerRequestContextImpl) Method() string {
-    // Consumer 実行は HTTP Methodの概念がなく, ルーティング 区切りを ため "EVENT" 使用
-    return "EVENT"
-}
-
-func (c *ConsumerRequestContextImpl) Path() string {
-    // Consumer ルーティングで Pathは EventNameを そのままに 使用
-    return c.msg.EventName
-}
-
-func (c *ConsumerRequestContextImpl) Header(key string) string {
-    // Consumerには HTTP Header 概念は なし
-    return ""
-}
-
-func (c *ConsumerRequestContextImpl) Params() map[string]string {
-    // Consumerには Path Parameter 概念は なし
-    return map[string]string{}
-}
-
-func (c *ConsumerRequestContextImpl) PathKeys() []string {
-    // Consumerには Path Key 概念は なし
-    return []string{}
-}
-
-func (c *ConsumerRequestContextImpl) Queries() map[string][]string {
-    // Consumerには Query Parameter 概念は なし
-    return map[string][]string{}
-}
-```
-
-
-## WebSocketアダプタの実装
-
-WebSocket用のContext実装です。 `core.WebSocketContext`を実装します。
-
-
-```go
-// internal/ws/context_impl.go
-type WSExecutionContext struct {
-    ctx         context.Context
-    connID      string
-    path        string
-    messageType int
-    payload     []byte
-    eventBus    publish.EventBus
-    store       map[string]any
-}
-
-func NewWSExecutionContext(
-    ctx context.Context,
-    connID string,
-    path string,
-    messageType int,
-    payload []byte,
-    eventBus publish.EventBus,
-    sendFn func(int, []byte) error,
-) core.WebSocketContext {
-    ctx = context.WithValue(ctx, pkgws.SenderKey, &connSender{send: sendFn})
-
-    return &WSExecutionContext{
-        ctx:         ctx,
-        connID:      connID,
-        path:        path,
-        messageType: messageType,
-        payload:     payload,
-        eventBus:    eventBus,
-        store:       make(map[string]any),
-    }
-}
-```
-
-### WebSocket Contextの特殊動作
-
-
-```go
-func (w *WSExecutionContext) Method() string {
-    return "WS"
-}
-
-func (w *WSExecutionContext) ConnID() string {
-    return w.connID
-}
-
-func (w *WSExecutionContext) MessageType() int {
-    return w.messageType
-}
-
-func (w *WSExecutionContext) Payload() []byte {
-    return w.payload
-}
-
-func (w *WSExecutionContext) EventBus() core.EventBus {
-    return w.eventBus
-}
-```
-
-
-## ArgumentResolverとContext
-
-ArgumentResolver は `ExecutionContext` を受け取り、必要に応じてプロトコル固有の Context で型断言します。
-
-
-```go
-// internal/resolver/argument.go
-type ArgumentResolver interface {
-    Supports(parameterMeta ParameterMeta) bool
-    Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error)
-}
-```
-
-### HTTP Resolverの例
-
-
-```go
-// internal/resolver/path_int_resolver.go
-func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    // HttpRequestContextに 型 アサーション
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP リクエスト コンテキストが ではありません")
-    }
-
-    raw, ok := httpCtx.Params()[parameterMeta.PathKey]
-    if !ok {
-        return nil, fmt.Errorf("path paramを 見つかりません. %s", parameterMeta.PathKey)
-    }
-
-    value, err := strconv.ParseInt(raw, 10, 64)
-    if err != nil {
-        return nil, err
-    }
-
-    return path.Int{Value: value}, nil
-}
-```
-
-### Consumer Resolverの例
-
-
-```go
-// internal/event/consumer/resolver/event_name_resolver.go
-func (r *EventNameResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    // ConsumerRequestContextに 型 アサーション
-    consumerCtx, ok := ctx.(core.ConsumerRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("ConsumerRequestContextが ではありません")
-    }
-
-    name := consumerCtx.EventName()
-    if name == "" {
-        return nil, fmt.Errorf("EventNameを RequestContextで 見つかりません")
-    }
-
-    return name, nil
-}
-```
-
-### WebSocket Resolverの例
-
-
-```go
-// internal/ws/resolver/dto_resolver.go
-func (r *DTOResolver) Resolve(ctx core.ExecutionContext, meta resolver.ParameterMeta) (any, error) {
-    wsCtx, ok := ctx.(core.WebSocketContext)
-    if !ok {
-        return nil, fmt.Errorf("WebSocketContextが ではありません")
-    }
-
-    payload := wsCtx.Payload()
-    if payload == nil {
-        return nil, fmt.Errorf("Payloadが 空のため DTOを 生成する ことが ありません")
-    }
-
-    dtoPtr := reflect.New(meta.Type)
-    if err := json.Unmarshal(payload, dtoPtr.Interface()); err != nil {
-        return nil, fmt.Errorf("DTO デシリアライズ 失敗: %w", err)
-    }
-
-    return dtoPtr.Elem().Interface(), nil
-}
-```
-
-### Common Resolverの例
-
-`StdContextResolver`は、HTTP、Consumer、WebSocketの両方で動作します。
-
-
-```go
-// internal/resolver/std_context_resolver.go
-func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    baseCtx := ctx.Context()
-    bus := ctx.EventBus()
-    if bus != nil {
-        return context.WithValue(baseCtx, publish.PublisherKey, bus), nil
-    }
-    return baseCtx, nil
-}
-```
-
-### ControllerContext Resolver
-
-`ControllerContextResolver` は、`ExecutionContext` を読み取り専用 `ControllerContext` でラップします。
-
-
-```go
-// internal/resolver/controller_context_resolver.go
-func (r *ControllerContextResolver) Resolve(ctx core.ExecutionContext, _ ParameterMeta) (any, error) {
-    return runtime.NewControllerContext(ctx), nil
-}
-```
-
-
-## パイプラインでの使用
-
-### Router
-
-
-```go
-// internal/router/router.go
-func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
-    for _, route := range r.routes {
-        if route.Method != ctx.Method() {
-            continue
-        }
-        
-        ok, params, keys := matchPath(route.Path, ctx.Path())
-        if !ok {
-            continue
-        }
-        
-        // マッチした 情報を Contextに 保存
-        ctx.Set("spine.params", params)
-        ctx.Set("spine.pathKeys", keys)
-        
-        return route.Meta, nil
-    }
-    return core.HandlerMeta{}, httperr.NotFound("ハンドラーが ありません.")
-}
-```
-
-### Pipeline - Executeフロー
-
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
-    // 1. グローバル Interceptor PreHandle (ルーティング前)
-    // 2. Routerが 実行 対象を 決定
-    // 3. ルート Interceptor PreHandle
-    // 4. ArgumentResolver チェーン 実行
-    // 5. Controller Method 呼び出し (Invoker)
-    // 6. ReturnValueHandler 処理
-    // 7. PostExecutionHook (イベント 発行 など)
-    // 8. ルート Interceptor PostHandle (逆順)
-    // 9. グローバル Interceptor PostHandle (逆順)
-    // 10. AfterCompletion (成功/失敗 無関係, 逆順)
-}
-```
-
-### Pipeline - ArgumentResolver 呼び出し
-
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) resolveArguments(ctx core.ExecutionContext, paramMetas []resolver.ParameterMeta) ([]any, error) {
-    args := make([]any, 0, len(paramMetas))
-
-    for _, paramMeta := range paramMetas {
-        resolved := false
-
-        for _, r := range p.argumentResolvers {
-            if !r.Supports(paramMeta) {
-                continue
-            }
-
-            // ExecutionContextを 直接 伝達
-            // Resolver 内部で 必要した 型にに アサーション
-            val, err := r.Resolve(ctx, paramMeta)
-            if err != nil {
-                return nil, err
-            }
-
-            args = append(args, val)
-            resolved = true
-            break
-        }
-
-        if !resolved {
-            return nil, fmt.Errorf(
-                "ArgumentResolverに parameterが ありません. %d (%s)",
-                paramMeta.Index,
-                paramMeta.Type.String(),
-            )
-        }
-    }
-    return args, nil
-}
-```
-
-### Interceptor
-
-次のコードは`ExecutionContext`の使用箇所だけを示す`PreHandle`の抜粋です。実際の`core.Interceptor`実装は`PostHandle`、`BeforeResponse`、`AfterCompletion`も実装する必要があります。
-
-
-```go
-// interceptor/cors/cors.go
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // ResponseWriter 取得
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return nil
-    }
-    rw := rwAny.(core.ResponseWriter)
-    
-    // リクエスト 情報 確認
-    origin := ctx.Header("Origin")
-    if origin != "" && i.isAllowedOrigin(origin) {
-        rw.SetHeader("Access-Control-Allow-Origin", origin)
-    }
-    
-    // Preflight 処理
-    if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
-        return core.ErrAbortPipeline
-    }
-    
-    return nil
-}
-```
-
-
-## 内部ストレージ規約
-
-`Set()`/`Get()` で使用するキーには明確な規約があります。
-
-### Spine予約キー
-
-|キー|タイプ|設定位置|用途|
-|----|------|----------|------|
-| `spine.params` | `map[string]string` | Router | Path parameter値|
-| `spine.pathKeys` | `[]string` | Router |パスキーの順序
-| `spine.response_writer` | `core.ResponseWriter` |アダプター|応答出力|
-
-### 使用例
-
-
-```go
-// ReturnValueHandlerで ResponseWriter 使用
-func (h *JSONReturnHandler) Handle(value any, ctx core.ExecutionContext) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return fmt.Errorf("ExecutionContext 内で ResponseWriterを 見つかりません.")
-    }
-    
-    rw, ok := rwAny.(core.ResponseWriter)
-    if !ok {
-        return fmt.Errorf("ResponseWriter 型が正しくありません.")
-    }
-    
-    return rw.WriteJSON(200, value)
-}
-```
-
-
-## EventBus統合
-
-`ExecutionContext`に`core.EventBus`が統合されています。
-
-### Controllerでイベントを発行する
-
-
-この抜粋の `publish` は `github.com/NARUBROWN/spine/pkg/event/publish` からインポートします。`OrderCreated` はアプリで定義し、`Name() string` と `OccurredAt() time.Time` を実装するイベント型です。
+次の抜粋の `publish` は、`github.com/NARUBROWN/spine/pkg/event/publish` からインポートします。`OrderCreated` は、アプリで定義し、`Name() string` と `OccurredAt() time.Time` を実装するイベント型です。
 
 ```go
 // src/user/user_controller.go
 func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    // context.Contextで EventBusを 取り出し イベント 発行
+    // context.Context에 연결된 EventBus로 이벤트를 수집합니다.
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),
@@ -998,124 +405,8 @@ func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) http
 }
 ```
 
-### EventBus 注入フロー
+`publish.Event()` の呼び出しだけで、外部ブローカーへの送信が完了するわけではありません。関連付けられた EventBus にイベントを集め、イベントディスパッチフックが登録されていれば、成功レスポンスのシリアライズと検証の後にイベントを取り出してディスパッチャーに渡します。フックの登録には、イベントパブリッシャーの構成が必要です。
 
+ハンドラーがエラーを返した場合や、成功レスポンスの準備が失敗した場合は、ディスパッチフックを実行しません。ディスパッチが失敗すると、そのエラーをパイプラインの実行エラーとして扱います。ディスパッチフックは `BeforeResponse` と実際の HTTP レスポンス送信より先に実行するため、イベントを収集またはディスパッチしただけで、トランザクションのコミットやレスポンス送信が完了したと判断しないでください。
 
-```go
-// internal/resolver/std_context_resolver.go
-func (r *StdContextResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    baseCtx := ctx.Context()
-    bus := ctx.EventBus()
-    if bus != nil {
-        // EventBusを context.Contextに 注入
-        return context.WithValue(baseCtx, publish.PublisherKey, bus), nil
-    }
-    return baseCtx, nil
-}
-```
-
-### PostExecutionHookからイベントを解放
-
-Pipeline 実行完了後に収集されたイベントを一度に放出します。
-
-
-```go
-// internal/event/hook/post_execution.go
-func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []any, err error) {
-    if err != nil {
-        return
-    }
-
-    events := ctx.EventBus().Drain()
-    if len(events) == 0 {
-        return
-    }
-
-    h.Dispatcher.Dispatch(ctx.Context(), events)
-}
-```
-
-
-## 設計原則
-
-### 1. ControllerはExecutionContextを知らない
-
-コントローラは`ExecutionContext`や`HttpRequestContext`を直接受け取りません。代わりに、意味タイプ（`path.Int`、`query.Values`など）、`context.Context`、および必要に応じて`ControllerContext`として値のみを受け取ります。
-
-
-```go
-// ❌ アンチパターン
-func (c *UserController) GetUser(ctx core.ExecutionContext) httpx.Response[User]
-
-// ✓ Spine 方式
-func (c *UserController) GetUser(ctx context.Context, userId path.Int) httpx.Response[User]
-
-// ✓ Interceptor 注入 値は 必要な場合
-func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) httpx.Response[User]
-```
-
-### 2. ResolverはExecutionContextを受け取り、必要な型に断言する
-
-ArgumentResolverは`ExecutionContext`を受け取ります。プロトコル固有の機能が必要な場合は、`HttpRequestContext`、`ConsumerRequestContext`、または`WebSocketContext`とタイプします。
-
-
-```go
-func (r *PathIntResolver) Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error) {
-    httpCtx, ok := ctx.(core.HttpRequestContext)
-    if !ok {
-        return nil, fmt.Errorf("HTTP リクエスト コンテキストが ではありません")
-    }
-    // ...
-}
-```
-
-### 3. シングルパイプライン、マルチプロトコル
-
-HTTP、Event Consumer、WebSocketは同じパイプライン構造を共有します。コンテキスト層分離により、各プロトコルの特性をサポートしながら、コードの再利用を最大化します。
-
-
-```go
-// HTTP Pipeline
-httpPipeline.AddArgumentResolver(
-    &resolver.StdContextResolver{},           // 共通
-    &resolver.ControllerContextResolver{},    // 共通
-    &resolver.HeaderResolver{},               // HTTP 専用
-    &resolver.PathIntResolver{},              // HTTP 専用
-    &resolver.PathStringResolver{},           // HTTP 専用
-    &resolver.PathBooleanResolver{},          // HTTP 専用
-    &resolver.PaginationResolver{},           // HTTP 専用
-    &resolver.QueryValuesResolver{},          // HTTP 専用
-    &resolver.DTOResolver{},                  // HTTP 専用
-    &resolver.FormDTOResolver{},              // HTTP 専用
-    &resolver.UploadedFilesResolver{},        // HTTP 専用
-)
-
-// Consumer Pipeline
-consumerPipeline.AddArgumentResolver(
-    &resolver.StdContextResolver{},           // 共通
-    &eventResolver.EventNameResolver{},       // Consumer 専用
-    &eventResolver.DTOResolver{},             // Consumer 専用
-)
-
-// WebSocket Pipeline
-wsPipeline.AddArgumentResolver(
-    &resolver.StdContextResolver{},           // 共通
-    &wsResolver.ConnectionIDResolver{},       // WebSocket 専用
-    &wsResolver.DTOResolver{},                // WebSocket 専用
-)
-```
-
-
-## まとめ
-
-|インターフェース|役割|主な方法使用場所|
-|-----------|------|------------|----------|
-| `ContextCarrier` | Go context配信| `Context()` |どこでも
-| `EventBusCarrier` |イベント発行（`core.EventBus`）| `EventBus()` |コントローラー、コンシューマー
-| `ExecutionContext` |実行フロー制御| `Method()`、`Path()`、`Header()`、`Set()`、`Get()` |ルーター、パイプライン、インターセプター|
-| `ControllerContext` | ExecutionContext読み取り専用Facade | `Get()` | Controller |
-| `HttpRequestContext` | HTTP入力の解釈`Param()`、`Query()`、`Header()`、`Headers()`、`Bind()`、`MultipartForm()` | HTTP ArgumentResolver |
-| `ConsumerRequestContext` |イベント入力の解釈`EventName()`、`Payload()` | Consumer ArgumentResolver |
-| `WebSocketContext` | WebSocket入力解析| `ConnID()`、`MessageType()`、`Payload()` | WebSocket ArgumentResolver |
-
-**核心原則**：Context階層分離により、HTTP、Event Consumer、WebSocketは同じパイプラインモデルを共有します。 Controllerは実行モデルをまったく知らず、ビジネスロジックだけに集中しています。
+イベントの発行、トランザクションの終了処理、レスポンスの書き込みの順序は、[実行パイプライン](/ja/learn/core-concepts/pipeline)で確認できます。

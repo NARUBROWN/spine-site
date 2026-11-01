@@ -1,8 +1,29 @@
-# JWTログインの例
+# JWT ログインの例
 
-SpineでJWTベースのログインを実装します。
+ユーザー登録とログインの API を作り、ログイン時に発行した JWT で自分の情報を取得します。認証インターセプターは `/me` にのみ適用するため、ユーザー登録とログインはトークンなしでリクエストできます。
 
-## プロジェクト構造
+## 事前準備
+
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI 0.1.4 は JWT 認証のジェネレーターを提供していません。基本プロジェクトを作成した後、以下の認証コードを手動で追加し、`github.com/golang-jwt/jwt/v5` をインストールします。
+
+この例では、認証フローを学ぶために、メモリ上のストア、平文のパスワード比較、コードに固定した JWT の秘密鍵を使用します。サーバーを終了すると登録情報は失われます。実際のサービスに適用する前に、パスワードハッシュと、環境変数で管理する JWT の秘密鍵を使用する必要があります。
+
+## 1. プロジェクトを作成する
+
+基本アプリと JWT の依存関係を準備します。以降のコマンドは `login-example/` で実行します。
+
+```sh
+spine new login-example --module example.com/login-example
+cd login-example
+go mod tidy
+spine doctor
+go get github.com/golang-jwt/jwt/v5
+```
+
+### ファイル構成
+
+以降の手順で `src/` 以下に 4 つのファイルを追加し、生成された `internal/application/application.go` を置き換えます。ルートの `main.go` と `spine.toml` はそのまま使用します。
+
 ```text
 login-example/
 ├── go.mod
@@ -17,19 +38,11 @@ login-example/
     ├── model/user.go
     └── store/user_store.go
 ```
-## CLIでプロジェクトを作成
 
-先に[CLIをインストール](/ja/learn/getting-started/installation)します。CLI 0.1.4にJWT認証の生成器はありません。基本プロジェクトを生成し、以下の認証ファイルを`src/`に手動で追加します。
+## 2. ユーザーモデルとリクエスト、レスポンスを定義する
 
-```sh
-spine new login-example --module example.com/login-example
-cd login-example
-go mod tidy
-spine doctor
-go get github.com/golang-jwt/jwt/v5
-```
+`src/model/user.go` を新規作成します。`Password` の `json:"-"` タグは、パスワードが JSON レスポンスに含まれることを防ぎます。
 
-## モデル定義
 ```go
 // src/model/user.go
 package model
@@ -37,7 +50,7 @@ package model
 type User struct {
     ID       int64  `json:"id"`
     Email    string `json:"email"`
-    Password string `json:"-"` // JSONレスポンスから除外
+    Password string `json:"-"` // JSON 응답에서 제외
     Name     string `json:"name"`
 }
 
@@ -57,9 +70,11 @@ type SignupRequest struct {
     Name     string `json:"name"`
 }
 ```
-## ユーザーストア
 
-インメモリストアとして簡単に実装します。
+## 3. ユーザーストアを追加する
+
+`src/store/user_store.go` を新規作成します。ユーザーをメモリに保存し、メールアドレスと ID で取得します。同じメールアドレスで再登録するとエラーを返します。
+
 ```go
 // src/store/user_store.go
 package store
@@ -87,7 +102,7 @@ func (s *UserStore) Create(email, password, name string) (*model.User, error) {
     s.mu.Lock()
     defer s.mu.Unlock()
 
-// メールの重複チェック
+    // 이메일 중복 체크
     for _, u := range s.users {
         if u.Email == email {
             return nil, errors.New("email already exists")
@@ -129,9 +144,11 @@ func (s *UserStore) FindByID(id int64) (*model.User, error) {
     return user, nil
 }
 ```
-## 認証インターセプタ
 
-JWT トークンを検証するルートインターセプタです。
+## 4. 認証インターセプターを追加する
+
+`src/interceptor/auth_interceptor.go` を新規作成します。`Authorization: Bearer <token>` ヘッダーから JWT を読み取り、署名と有効期限を検証します。検証した `user_id` は、コントローラーで読み取れるよう実行コンテキストに保存します。
+
 ```go
 // src/interceptor/auth_interceptor.go
 package interceptor
@@ -144,41 +161,41 @@ import (
     "github.com/golang-jwt/jwt/v5"
 )
 
-var JWTSecret = []byte("your-secret-key") // 実際の環境では環境変数を使用
+var JWTSecret = []byte("your-secret-key") // 실제 환경에서는 환경변수 사용
 
 type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // Authorizationヘッダーからトークンを抽出
+    // Authorization 헤더에서 토큰 추출
     authHeader := ctx.Header("Authorization")
     if authHeader == "" {
-        return httperr.Unauthorized("トークンが必要です。")
+        return httperr.Unauthorized("토큰이 필요합니다.")
     }
 
-    // 「Bearer {token}」形式を解析
+    // "Bearer {token}" 형식 파싱
     parts := strings.Split(authHeader, " ")
     if len(parts) != 2 || parts[0] != "Bearer" {
-        return httperr.Unauthorized("不正なトークン形式です。")
+        return httperr.Unauthorized("잘못된 토큰 형식입니다.")
     }
 
     tokenString := parts[1]
 
-    // JWT トークン検証
+    // JWT 토큰 검증
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("署名方式が不正です。")
+            return nil, httperr.Unauthorized("잘못된 서명 방식입니다.")
         }
         return JWTSecret, nil
     }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
     if err != nil || !token.Valid {
-        return httperr.Unauthorized("無効なトークンです。")
+        return httperr.Unauthorized("유효하지 않은 토큰입니다.")
     }
 
-    // トークンからユーザーIDを抽出
+    // 토큰에서 사용자 ID 추출
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return httperr.Unauthorized("トークンクレームを読み取れません。")
+        return httperr.Unauthorized("토큰 클레임을 읽을 수 없습니다.")
     }
 
     rawID, ok := claims["user_id"].(float64)
@@ -186,8 +203,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("Invalid user ID claim.")
     }
     userID := int64(rawID)
-    
-    // ExecutionContextにユーザーIDを保存
+
+    // ExecutionContext에 사용자 ID 저장
     ctx.Set("userID", userID)
 
     return nil
@@ -201,9 +218,11 @@ func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Ha
 
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
-## コントローラ
 
-ログイン、会員登録、個人情報検索機能を実装します。
+## 5. 認証コントローラーを追加する
+
+`src/controller/auth_controller.go` を新規作成します。ユーザー登録ではユーザーを保存し、ログインではメールアドレスとパスワードを確認してから JWT を発行します。自分の情報を取得する処理では、インターセプターが保存したユーザー ID でストアを検索します。
+
 ```go
 // src/controller/auth_controller.go
 package controller
@@ -231,10 +250,10 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
     }
 }
 
-//会員登録 - 認証は不要
+// 회원가입 — 인증 불필요
 func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
-return httpx.Response[model.User]{}, httperr.BadRequest("すべてのフィールドを入力してください。")
+        return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
     }
 
     user, err := c.userStore.Create(req.Email, req.Password, req.Name)
@@ -245,23 +264,23 @@ return httpx.Response[model.User]{}, httperr.BadRequest("すべてのフィー�
     return httpx.Response[model.User]{Body: *user}, nil
 }
 
-//ログイン - 認証は不要
+// 로그인 — 인증 불필요
 func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
-return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("メールとパスワードを入力してください。")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
     }
 
     user, err := c.userStore.FindByEmail(req.Email)
     if err != nil {
-return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールまたはパスワードが一致しません。")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
-//パスワード確認(実際にはbcryptなどでハッシュ比較)
+    // 비밀번호 확인 (실제로는 bcrypt 등으로 해시 비교)
     if user.Password != req.Password {
-return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールまたはパスワードが一致しません。")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
-// JWTトークンの生成
+    // JWT 토큰 생성
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
         "user_id": user.ID,
         "email":   user.Email,
@@ -270,7 +289,7 @@ return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールま
 
     tokenString, err := token.SignedString(interceptor.JWTSecret)
     if err != nil {
-return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("トークンの生成に失敗しました。")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("토큰 생성에 실패했습니다.")
     }
 
     return httpx.Response[model.LoginResponse]{
@@ -281,26 +300,27 @@ return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("トークン�
     }, nil
 }
 
-//私の情報の照会 - 認証が必要
+// 내 정보 조회 — 인증 필요
 func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-// AuthInterceptorによって保存されたuserID照会
+    // AuthInterceptor가 저장한 userID 조회
     userIDValue, ok := ctx.Get("userID")
     if !ok {
-return httpx.Response[model.User]{}, httperr.Unauthorized("認証情報が見つかりません。")
+        return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
     }
 
     userID := userIDValue.(int64)
     user, err := c.userStore.FindByID(userID)
     if err != nil {
-return httpx.Response[model.User]{}, httperr.NotFound("ユーザーが見つかりません。")
+        return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
     }
 
     return httpx.Response[model.User]{Body: *user}, nil
 }
 ```
-## アプリの構成
 
-生成されたルートの`main.go`はそのまま使います。`BuildApplication`、`Validate`、`Run`の順に呼び出します。以下で`internal/application/application.go`を置き換えます。
+## 6. コンストラクタと認証ルートを登録する
+
+`internal/application/application.go` 全体を次のコードに置き換えます。ストアとコントローラーのコンストラクタを登録し、`/me` にのみ認証インターセプターを接続します。生成されたルートの `main.go` は、`BuildApplication`、`Validate`、`Run` を順に実行します。
 
 ```go
 // internal/application/application.go
@@ -347,7 +367,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 検証と実行
+## 7. 検証してサーバーを起動する
+
+プロジェクトルートでコードの書式を整え、依存関係とコードを検査してからサーバーを起動します。
 
 ```sh
 gofmt -w src internal/application
@@ -357,17 +379,22 @@ spine verify
 spine dev
 ```
 
-`contract check`は静的契約、`verify`は契約、gofmt、vet、Goテストを確認します。実際の登録・ログイン・認証リクエストは以下のHTTP例で別に確認します。メモリ保存と平文パスワード比較は学習用です。実際のサービスではパスワードハッシュと環境変数によるJWT秘密鍵を使ってください。
+`contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。実際のユーザー登録、ログイン、認証は、次の HTTP リクエストで確認します。
 
-## APIテスト
+## 8. ユーザー登録と認証リクエストを確認する
 
-### 会員登録
+サーバーを起動した状態で別のターミナルを開き、以下のリクエストを順に送信します。新しく起動したサーバーで最初に登録したユーザーの ID は `1` です。
+
+### ユーザー登録
+
 ```bash
 curl -X POST http://localhost:8080/signup \
   -H "Content-Type: application/json" \
   -d '{"email": "alice@example.com", "password": "1234", "name": "Alice"}'
 ```
-応答：
+
+HTTP 200 と登録したユーザー情報が返されます。パスワードはレスポンスに含まれません。
+
 ```json
 {
   "id": 1,
@@ -375,13 +402,17 @@ curl -X POST http://localhost:8080/signup \
   "name": "Alice"
 }
 ```
+
 ### ログイン
+
 ```bash
 curl -X POST http://localhost:8080/login \
   -H "Content-Type: application/json" \
   -d '{"email": "alice@example.com", "password": "1234"}'
 ```
-応答：
+
+HTTP 200 と JWT が返されます。以下のレスポンスは、トークンを省略して表示した例です。`/me` をリクエストする際は、実際のレスポンスの `token` 値を使用します。
+
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -392,27 +423,35 @@ curl -X POST http://localhost:8080/login \
   }
 }
 ```
-### 私の情報を見る（認証が必要）
 
-トークンなしで要求：
+### トークンなしで自分の情報を取得する
+
+認証ヘッダーを付けずに `/me` をリクエストします。
+
 ```bash
 curl http://localhost:8080/me
 ```
-応答：
+
+HTTP 401 と次のエラーメッセージが返されます。
+
 ```json
 {
-"message": "トークンが必要です。"
+  "message": "토큰이 필요합니다."
 }
 ```
-トークンと一緒にリクエスト：
-ログイン応答の`token`値を省略せずコピーします。以下の`read`を実行したらトークンを貼り付けてEnterを押し、`/me`を呼び出します。
+
+### トークンで自分の情報を取得する
+
+ログインレスポンスの `token` 値を省略せずにコピーします。まず以下の `read` コマンドを実行し、入力待ちの状態でトークンを貼り付けて Enter を押します。続けて `curl` コマンドで `/me` をリクエストします。
 
 ```sh
 read -r TOKEN
 curl http://localhost:8080/me \
   -H "Authorization: Bearer $TOKEN"
 ```
-応答：
+
+トークンが有効であれば、HTTP 200 と該当ユーザーの情報が返されます。
+
 ```json
 {
   "id": 1,
@@ -420,35 +459,44 @@ curl http://localhost:8080/me \
   "name": "Alice"
 }
 ```
-## ルートインターセプタの動作フロー
+
+## 認証インターセプターの実行順序
+
+CORS インターセプターはすべてのルートで実行されます。認証インターセプターは `/me` でトークンを検証し、コントローラーにユーザー ID を渡します。
+
 ```
 POST /signup (公開)
    │
-   ├─→ CORS.PreHandle（グローバル）
+   ├─→ CORS.PreHandle (グローバル)
    ├─→ AuthController.Signup
    └─→ Response 200
 
 POST /login (公開)
    │
-   ├─→ CORS.PreHandle（グローバル）
+   ├─→ CORS.PreHandle (グローバル)
    ├─→ AuthController.Login
-   └─→ Response 200 + JWTトークン
+   └─→ Response 200 + JWT トークン
 
-GET /me（保護対象）
+GET /me (保護対象)
    │
-   ├─→ CORS.PreHandle（グローバル）
+   ├─→ CORS.PreHandle (グローバル)
    ├─→ Auth.PreHandle (ルート) ← トークン検証
    │       │
    │       ├─ トークンなし → 401 Unauthorized
    │       └─ トークン有効 → ctx.Set("userID", ...)
    │
    ├─→ AuthController.GetMe
-   └─→ Response 200 + ユーザー 情報
+   └─→ Response 200 + ユーザー情報
 ```
-## コアクリーンアップ
+
+## ルートごとの認証範囲
 
 | ルート | メソッド | インターセプター | 説明 |
-| --- | --- | --- | --- |
-| `/signup` | POST | グローバルのみ | 会員登録（公開） |
-| `/login` | POST | グローバルのみ | ログイン後JWTを発行（公開） |
-| `/me` | GET | グローバル + Auth | 自分の情報を取得（認証が必要） |
+|--------|--------|----------|------|
+| `/signup` | POST | CORS | トークンなしでユーザー登録 |
+| `/login` | POST | CORS | トークンなしでログインし、JWT を発行 |
+| `/me` | GET | CORS, Auth | JWT を検証して自分の情報を取得 |
+
+## 次のステップ
+
+[インターセプター API](/ja/reference/api/interceptor)で実行順序と各メソッドの役割を確認してください。ユーザー情報を永続的に保存するには、[データベース接続](/ja/learn/tutorial/5-database)を参照してください。

@@ -1,23 +1,27 @@
-# 에러 처리
+# 오류 처리
 
-[첫 번째 앱](/ko/learn/getting-started/first-app)과 [컨트롤러](/ko/learn/tutorial/2-controller)의 CLI 프로젝트를 사용합니다. `spine generate resource user`로 생성한 `src/user`의 GET 핸들러를 직접 확장합니다. 프로젝트 생성·등록은 CLI가 수행하지만 도메인 오류와 HTTP 오류 매핑은 직접 구현합니다.
+사용자 조회가 실패한 원인에 따라 HTTP 400이나 404를 반환하고, 예상하지 못한 오류의 내부 내용을 응답에서 숨깁니다.
+
+[첫 번째 앱](/ko/learn/getting-started/first-app)과 [컨트롤러](/ko/learn/tutorial/2-controller)의 CLI 프로젝트를 사용합니다. `spine generate resource user`로 생성한 `src/user`가 필요합니다. 아래에서는 GET 핸들러를 읽기 전용 메모리 조회로 교체하므로, 데이터베이스 튜토리얼과 별도로 적용하세요. 도메인 오류와 HTTP 상태를 연결하는 코드는 직접 작성합니다.
 
 ## HTTP 오류와 응답
 
-성공 결과는 `httpx.Response[T]`에 담고 오류는 별도 `error`로 반환합니다. 일반 구조체 `(User, error)`를 HTTP 응답으로 반환하지 않습니다. `httperr`의 현재 헬퍼는 다음 네 가지입니다.
+성공 결과는 `httpx.Response[T]`에 담고 오류는 별도의 `error` 반환값으로 전달합니다. 핸들러의 반환 형식은 `(httpx.Response[User], error)`로 작성하며 `(User, error)`를 사용하지 않습니다. `httperr`는 다음 네 함수를 제공합니다.
 
-| Helper | HTTP | |
+| 함수 | HTTP 상태 | 용도 |
 |---|---|---|
 | `httperr.BadRequest(message)` | 400 | 잘못된 입력 |
 | `httperr.Unauthorized(message)` | 401 | 인증 필요 |
 | `httperr.NotFound(message)` | 404 | 리소스 없음 |
-| `httperr.InternalServerError(message)` | 500 | 의도한 공개 오류 메시지 |
+| `httperr.InternalServerError(message)` | 500 | 클라이언트에 공개할 서버 오류 메시지 |
 
-`HTTPError.Message`는 클라이언트에 노출됩니다. 내부 DB 오류나 비밀 값을 그대로 넣지 마세요. 예상하지 못한 일반 오류는 HTTP 500과 `{"message":"Internal server error"}`로 변환됩니다.
+`HTTPError.Message`는 클라이언트에 노출되므로 내부 DB 오류나 비밀 값을 그대로 넣지 마세요. 일반 `error`를 반환하면 HTTP 500과 `{"message":"Internal server error"}`로 변환됩니다.
 
 ## 생성된 리소스에 조회 오류 추가
 
-다음 코드는 설명용 읽기 전용 메모리 조회입니다. CLI가 생성한 repository·controller 파일을 아래 내용으로 교체하고 서비스에 `Find` 메서드를 추가합니다. 파일은 같은 `package user`에 둡니다. 기존 생성자 이름과 `user.Register(app)`·`GET /user/:id` 등록은 그대로 사용합니다. DB 영속 저장이나 전체 CRUD 예제가 아닙니다.
+생성된 `src/user/user_repository.go`와 `src/user/user_controller.go`를 아래 내용으로 교체하고, `src/user/user_service.go`에 `Find` 메서드를 추가합니다. 파일은 모두 `package user`에 둡니다. 기존 생성자 이름, `user.Register(app)`, `GET /user/:id` 등록은 유지합니다.
+
+저장소는 ID가 1인 Alice만 보관합니다. 조회 오류를 재현하기 위한 예제이며 DB에 데이터를 저장하지 않습니다.
 
 ```go
 // src/user/user_repository.go
@@ -103,18 +107,20 @@ func toHTTPError(err error) error {
 
 ## 계층별 책임
 
-저장소는 도메인 오류를 반환하고, 서비스는 이를 전달합니다. 컨트롤러에서 예상한 오류만 HTTP 상태로 매핑합니다. `errors.Is`는 감싼 오류도 판별하며, 알 수 없는 오류를 `BadRequest(err.Error())`로 바꾸면 내부 정보가 노출되므로 그대로 반환해 일반 500 처리를 사용합니다.
+저장소는 도메인 오류를 반환하고 서비스는 이를 컨트롤러로 전달합니다. 컨트롤러는 예상한 오류를 HTTP 상태로 변환합니다. `errors.Is`를 사용하면 다른 오류가 감싸고 있는 도메인 오류도 판별할 수 있습니다.
+
+알 수 없는 오류는 그대로 반환해 일반 HTTP 500 처리를 사용합니다. 이를 `BadRequest(err.Error())`로 바꾸면 내부 오류 메시지가 응답에 노출됩니다. 위의 메모리 저장소는 `ErrUserNotFound`만 반환하며, `ErrEmailAlreadyExists` 분기는 이후 저장 기능을 추가할 때 사용할 매핑 예시입니다.
 
 ```mermaid
 flowchart LR
-    Repository["Repository: domain error"] --> Service["Service"]
-    Service --> Controller["Controller: HTTP error"]
-    Controller --> Response["Response: JSON"]
+    Repository["저장소: 도메인 오류"] --> Service["서비스"]
+    Service --> Controller["컨트롤러: HTTP 오류"]
+    Controller --> Response["응답: JSON"]
 ```
 
 ## HTTPError와 추가 상태
 
-403·409처럼 헬퍼가 없는 상태는 `HTTPError`로 표현합니다. `Cause`는 원인 추적용이고 `Unwrap()`으로 접근할 수 있으며 JSON 응답에는 포함되지 않습니다.
+HTTP 403이나 409처럼 전용 함수가 없는 상태는 `HTTPError`로 표현합니다. `Cause`에는 원인 오류를 보관하며 JSON 응답에는 포함되지 않습니다. v0.5.1의 `HTTPError`는 `Unwrap()`을 구현하지 않으므로, `errors.As`로 `HTTPError`를 찾은 뒤 `Cause` 필드를 읽습니다. 다음은 `HTTPError`의 구조와 메서드입니다. 앱에 다시 정의할 필요는 없습니다.
 
 ```go
 type HTTPError struct {
@@ -124,7 +130,6 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string { return e.Message }
-func (e *HTTPError) Unwrap() error { return e.Cause }
 ```
 
 ```go
@@ -136,7 +141,9 @@ return &httperr.HTTPError{
 
 ## 요청 DTO 검증
 
-다음은 별도로 추가하는 입력 검증 예제입니다. `Validate()`는 자동 호출되지 않으므로 핸들러에서 호출합니다. 요청 DTO는 포인터여야 합니다. 아래 POST는 검증한 입력을 반환하는 예시이며 사용자 저장은 수행하지 않습니다. 사용할 경우 `Register`에 POST 라우트를 직접 추가하세요.
+입력 검증을 추가하려면 다음 `src/user/user_create.go`를 작성합니다. `Validate()`는 자동 호출되지 않으므로 핸들러에서 직접 호출하고, 요청 DTO는 포인터로 받습니다.
+
+이 POST 핸들러는 이름이나 이메일이 비어 있거나 이름이 100자를 넘으면 HTTP 400을 반환합니다. 검증을 통과하면 입력을 HTTP 201로 반환하며 사용자를 저장하지는 않습니다. 사용할 경우 아래 POST 라우트도 `src/user/user_route.go`의 `Register`에 추가하세요.
 
 ```go
 // src/user/user_create.go
@@ -187,7 +194,7 @@ app.Route("POST", "/user", (*UserController).Create)
 
 ## 인터셉터의 오류 처리
 
-`PreHandle`에서 오류를 반환하면 컨트롤러 실행을 중단합니다. 다음은 자체 인증 서비스가 있는 `src/interceptor`의 메서드 발췌입니다. 실제 타입은 `PreHandle`, `PostHandle`, `BeforeResponse`, `AfterCompletion` 네 메서드를 모두 구현하고 `BuildApplication()`에서 HTTP scope로 등록해야 합니다.
+`PreHandle`에서 오류를 반환하면 컨트롤러를 실행하지 않습니다. 다음은 자체 인증 서비스가 있는 인터셉터의 메서드 일부입니다. 이 메서드만 복사해서는 사용할 수 없습니다. `src/interceptor`에 타입과 인증 서비스를 정의하고 `PreHandle`, `PostHandle`, `BeforeResponse`, `AfterCompletion` 네 메서드를 모두 구현해야 합니다. HTTP 요청에 적용하려면 `BuildApplication()`에서 `boot.InterceptorHTTP` 범위로 등록합니다.
 
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
@@ -206,7 +213,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 ## 오류 로깅
 
-`AfterCompletion`은 반환된 실행 오류를 로깅할 수 있습니다. 다음도 완전한 로깅 인터셉터에서 발췌한 메서드입니다. 로그에 인증 토큰이나 요청의 비밀 값을 남기지 마세요.
+`AfterCompletion`에서 최종 실행 오류를 로그로 남길 수 있습니다. 다음도 로깅 인터셉터에서 발췌한 메서드이므로 전체 인터셉터 타입과 등록이 필요합니다. 로그에 인증 토큰이나 요청의 비밀 값을 남기지 마세요.
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
@@ -227,7 +234,7 @@ spine verify
 spine dev
 ```
 
-계약·로컬 검사를 통과한 뒤 다른 터미널에서 실제 응답을 확인합니다. 다음 결과는 위 읽기 전용 메모리 예제를 적용했을 때의 동작입니다.
+계약과 로컬 검사를 통과한 뒤 다른 터미널에서 응답을 확인합니다. 아래 결과는 읽기 전용 메모리 예제를 적용했을 때의 동작입니다.
 
 ```bash
 curl -i http://localhost:8080/user/1
@@ -235,13 +242,15 @@ curl -i http://localhost:8080/user/0
 curl -i http://localhost:8080/user/2
 ```
 
-| Request | HTTP | JSON |
+| 요청 | HTTP 상태 | JSON |
 |---|---|---|
 | `/user/1` | 200 | `{"id":1,"name":"Alice"}` |
 | `/user/0` | 400 | `{"message":"invalid user ID"}` |
 | `/user/2` | 404 | `{"message":"user not found"}` |
 
-실제 DB나 인증 서비스를 연결하면 해당 실패 경로를 별도 E2E로 확인합니다. 정적 계약 검사만으로 외부 서비스의 오류 매핑이 검증되지는 않습니다.
+위 요청은 핸들러까지 전달된 정수 ID에 대한 처리를 확인합니다. 숫자로 해석할 수 없는 경로 값의 오류 처리는 이 예제의 `id.Value <= 0` 검증과 별개입니다.
+
+실제 DB나 인증 서비스를 연결하면 해당 서비스의 실패 경로도 직접 요청해 확인하세요. 정적 계약 검사만으로 외부 서비스의 오류 매핑을 검증할 수는 없습니다.
 
 - [httperr](/ko/learn/core-concepts/httperr)
-- [Interceptors](/ko/learn/tutorial/4-interceptor)
+- [인터셉터](/ko/learn/tutorial/4-interceptor)

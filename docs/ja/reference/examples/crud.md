@@ -1,24 +1,30 @@
-# CRUDの例
+# ユーザー CRUD API を作る
 
-基本的なCRUD実装例。
+ユーザーの作成、一覧取得、個別取得、更新、削除を行う HTTP API を作ります。ORM を使わずメモリ上のストアを使用するため、データベースを用意せずに実行できます。
 
-## 概要
+## 事前準備
 
-ORMなしでインメモリストアを使用するUser CRUD例：Controller→Service→Repositoryレイヤ構造で構成されています。
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。この例では、CLI 0.1.4 で作成した基本アプリに CRUD 全体のコードを手動で追加します。CLI の `resource` は GET のひな形を、`slice --storage memory` は作成と取得のひな形を生成します。更新と削除は以下のコードに含まれています。
+
+保存したユーザーは、サーバープロセスを終了すると失われます。
+
+リクエストはコントローラー、サービス、リポジトリの順に渡されます。各コンポーネントの役割は次のとおりです。
+
 ```mermaid
 graph TD
-    Controller["Controller<br/>• HTTP を知らない<br/>• 意味タイプで入力を受け取る<br/>• Service 呼び出し"]
-    
-    Service["Service<br/>• ビジネスロジック<br/>• トランザクション境界<br/>• Repository 呼び出し"]
-    
-    Repository["Repository<br/>• データアクセス<br/>• インメモリ / DB"]
-    
+    Controller["コントローラー<br/>意味型で入力を受け取る<br/>入力検証とエラー変換<br/>サービスの呼び出し"]
+
+    Service["サービス<br/>業務ルールの適用<br/>リポジトリの呼び出し"]
+
+    Repository["リポジトリ<br/>メモリ上のデータの取得と変更"]
+
     Controller --> Service
     Service --> Repository
 ```
-## CLIでプロジェクトを作成
 
-[CLIのインストール](/ja/learn/getting-started/installation)後に基本アプリを生成します。以下のメモリ保存によるCRUD全体は手動で追加します。CLIのresource生成器はGETの骨組み、`slice --storage memory`は作成・取得の骨組みを提供しますが、以下の更新・削除までは生成しません。
+## 1. プロジェクトを作成する
+
+基本アプリを作成し、依存関係とプロジェクト設定を確認します。以降のコマンドは `crud-example/` で実行します。
 
 ```sh
 spine new crud-example --module example.com/crud-example
@@ -27,7 +33,10 @@ go mod tidy
 spine doctor
 ```
 
-## プロジェクト構造
+### ファイル構成
+
+以降の手順で `src/` 以下に 5 つのファイルを追加し、生成された `internal/application/application.go` を置き換えます。ルートの `main.go` と `spine.toml` はそのまま使用します。
+
 ```text
 crud-example/
 ├── go.mod
@@ -44,8 +53,9 @@ crud-example/
     └── controller/user_controller.go
 ```
 
-## Model
+## 2. ユーザーモデルを追加する
 
+`src/model/user.go` を新規作成します。ユーザー情報と作成日時、更新日時を保存する構造体です。
 
 ```go
 // src/model/user.go
@@ -62,8 +72,9 @@ type User struct {
 }
 ```
 
-## Repository
+## 3. メモリ上のリポジトリを追加する
 
+`src/repository/user_repository.go` を新規作成します。ユーザーの取得、保存、削除を担当し、メールアドレスの重複を確認する関数を提供します。
 
 ```go
 // src/repository/user_repository.go
@@ -170,8 +181,9 @@ func (r *UserRepository) Count() int {
 }
 ```
 
-## DTO
+## 4. リクエストとレスポンスの DTO を追加する
 
+`src/dto/user_dto.go` を新規作成します。リクエストで受け取るフィールドとレスポンスで返すフィールドを定義し、リポジトリのユーザーモデルをレスポンス DTO に変換します。
 
 ```go
 // src/dto/user_dto.go
@@ -183,7 +195,7 @@ import (
     "example.com/crud-example/src/model"
 )
 
-//リクエストDTO
+// 요청 DTO
 
 type CreateUserRequest struct {
     Name  string `json:"name"`
@@ -195,7 +207,7 @@ type UpdateUserRequest struct {
     Email string `json:"email"`
 }
 
-//レスポンスDTO
+// 응답 DTO
 
 type UserResponse struct {
     ID        int64     `json:"id"`
@@ -210,7 +222,7 @@ type UserListResponse struct {
     Total int            `json:"total"`
 }
 
-//変換関数
+// 변환 함수
 
 func ToUserResponse(user *model.User) UserResponse {
     return UserResponse{
@@ -234,8 +246,9 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 }
 ```
 
-## Service
+## 5. ユーザーサービスを追加する
 
+`src/service/user_service.go` を新規作成します。作成と更新の前にメールアドレスの重複を確認し、リポジトリの戻り値をレスポンス DTO に変換します。
 
 ```go
 // src/service/user_service.go
@@ -271,7 +284,7 @@ func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
-// メールの重複チェック
+    // 이메일 중복 체크
     if s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -292,7 +305,7 @@ func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.Use
         return nil, err
     }
 
-// メール変更時の重複チェック
+    // 이메일 변경 시 중복 체크
     if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -310,8 +323,9 @@ func (s *UserService) DeleteUser(id int64) error {
 }
 ```
 
-## Controller
+## 6. ユーザーコントローラーを追加する
 
+`src/controller/user_controller.go` を新規作成します。入力値を検証してからサービスを呼び出し、ユーザーが見つからない場合とメールアドレスが重複する場合を HTTP エラーに変換します。
 
 ```go
 // src/controller/user_controller.go
@@ -345,7 +359,7 @@ func (c *UserController) List() httpx.Response[dto.UserListResponse] {
 // GET /users/:id
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユーザー ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
     user, err := c.service.GetUserByID(id.Value)
@@ -359,10 +373,10 @@ return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユー�
 // POST /users
 func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if req.Name == "" {
-return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("名前は必須")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
     }
     if req.Email == "" {
-return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("メールは必須")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
     user, err := c.service.CreateUser(req)
@@ -376,13 +390,13 @@ return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("メールは必�
 // PUT /users/:id
 func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユーザー ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
     if req.Name == "" {
-return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("名前は必須")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
     }
     if req.Email == "" {
-return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("メールは必須")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
     user, err := c.service.UpdateUser(id.Value, req)
@@ -396,7 +410,7 @@ return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("メールは必�
 // DELETE /users/:id
 func (c *UserController) Delete(id path.Int) error {
     if id.Value <= 0 {
-return httperr.BadRequest("無効なユーザー ID")
+        return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
     err := c.service.DeleteUser(id.Value)
@@ -407,22 +421,22 @@ return httperr.BadRequest("無効なユーザー ID")
     return nil
 }
 
-// RepositoryエラーをHTTPエラーに変換する
+// Repository 에러를 HTTP 에러로 변환
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
-return httperr.NotFound("ユーザーが見つかりません")
+        return httperr.NotFound("사용자를 찾을 수 없습니다")
     case errors.Is(err, repository.ErrEmailAlreadyExists):
-return httperr.BadRequest("既に使用中のメールです")
+        return httperr.BadRequest("이미 사용 중인 이메일입니다")
     default:
         return httperr.BadRequest(err.Error())
     }
 }
 ```
 
-## アプリの構成
+## 7. コンストラクタとルートを登録する
 
-生成されたルートの`main.go`はそのまま使い、`BuildApplication`、`Validate`、`Run`の順に呼び出します。以下で`internal/application/application.go`を置き換え、モデル、リポジトリ、DTO、サービス、コントローラーを`src/`に手動で追加します。
+`internal/application/application.go` 全体を次のコードに置き換えます。リポジトリ、サービス、コントローラーのコンストラクタを登録し、5 つのルートを接続します。生成されたルートの `main.go` は、`BuildApplication`、`Validate`、`Run` を順に実行します。
 
 ```go
 // internal/application/application.go
@@ -472,7 +486,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 検証と実行
+## 8. 検証してサーバーを起動する
+
+プロジェクトルートでコードの書式を整え、依存関係とコードを検査してからサーバーを起動します。
 
 ```sh
 gofmt -w src internal/application
@@ -482,43 +498,46 @@ spine verify
 spine dev
 ```
 
-`contract check`は静的契約、`verify`は契約、gofmt、vet、Goテストを確認します。作成・取得・更新・削除の動作は以下のHTTPリクエストで確認します。プロセス終了時にメモリ内のデータは消えます。永続化は[データベースチュートリアル](/ja/learn/tutorial/5-database)で別に構成します。
+`contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。サーバーが実際にリクエストを処理するかは、次の HTTP リクエストで確認します。
 
-## APIテスト
+## 9. HTTP リクエストで CRUD を確認する
+
+サーバーを起動した状態で別のターミナルを開き、以下のリクエストを順に送信します。新しく起動したサーバーで最初のユーザーの ID は `1` です。レスポンスの日付は例であり、実際の作成日時と更新日時によって異なります。
 
 ### ユーザーの作成
 
+名前とメールアドレスを送信すると、HTTP 200 と作成したユーザー情報が返されます。
 
 ```bash
-curl -X POST http://localhost:8080/users\
+curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "ホン・ギルドン", "email": "hong@example.com"}'
+  -d '{"name": "홍길동", "email": "hong@example.com"}'
 ```
-
 
 ```json
 {
   "id": 1,
-  "name": "ホン・ギルドン",
+  "name": "홍길동",
   "email": "hong@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:00:00Z"
 }
 ```
-### ユーザーリストの照会
 
+### ユーザー一覧の取得
+
+先ほど作成したユーザーが `users` に含まれ、`total` が `1` であることを確認します。
 
 ```bash
 curl http://localhost:8080/users
 ```
-
 
 ```json
 {
   "users": [
     {
       "id": 1,
-"name": "ホン・ギルドン",
+      "name": "홍길동",
       "email": "hong@example.com",
       "created_at": "2025-01-19T10:00:00Z",
       "updated_at": "2025-01-19T10:00:00Z"
@@ -527,106 +546,121 @@ curl http://localhost:8080/users
   "total": 1
 }
 ```
-### ユーザー検索
 
+### ユーザーの取得
+
+ID が `1` のユーザー情報を取得します。
 
 ```bash
 curl http://localhost:8080/users/1
 ```
 
-
 ```json
 {
   "id": 1,
-  "name": "ホン・ギルドン",
+  "name": "홍길동",
   "email": "hong@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:00:00Z"
 }
 ```
-### ユーザーの編集
 
+### ユーザーの更新
+
+名前とメールアドレスを一緒に送信します。レスポンスで 2 つのフィールドと `updated_at` が変更されたことを確認します。
 
 ```bash
 curl -X PUT http://localhost:8080/users/1 \
   -H "Content-Type: application/json" \
-  -d '{"name": "ホン・ギルドン（更新）", "email": "hong2@example.com"}'
+  -d '{"name": "홍길동(수정)", "email": "hong2@example.com"}'
 ```
-
 
 ```json
 {
   "id": 1,
-  "name": "ホン・ギルドン（更新）",
+  "name": "홍길동(수정)",
   "email": "hong2@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:05:00Z"
 }
 ```
+
 ### ユーザーの削除
 
+ID が `1` のユーザーを削除します。削除した ID で再度取得すると、HTTP 404 が返されます。
 
 ```bash
 curl -X DELETE http://localhost:8080/users/1
 ```
-### エラー応答
 
+### 存在しないユーザーと重複するメールアドレス
+
+リポジトリに存在しない ID を取得すると、HTTP 404 と次のエラーメッセージが返されます。
 
 ```bash
-# 存在しないユーザー
+# 존재하지 않는 사용자
 curl http://localhost:8080/users/999
 ```
 
-
 ```json
 {
-  "message": "ユーザーが見つかりません"
+  "message": "사용자를 찾을 수 없습니다"
 }
 ```
 
-
-前の手順でユーザーを削除したため、同じメールアドレスで再作成します（200）。続けて同じメールアドレスで作成すると重複エラーになります（400）。
+前の手順でユーザーを削除したため、まず同じメールアドレスのユーザーを再作成します。最初のリクエストは HTTP 200 で成功し、続けて同じメールアドレスで作成する 2 回目のリクエストは、HTTP 400 と重複エラーを返します。
 
 ```bash
-curl -X POST http://localhost:8080/users\
-  -H "Content-Type: application/json" \
-  -d '{"name": "ホン・ギルドン", "email": "hong@example.com"}'
-# メールアドレスの重複
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "キム・チョルス", "email": "hong@example.com"}'
+  -d '{"name": "홍길동", "email": "hong@example.com"}'
+# 중복 이메일
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "김철수", "email": "hong@example.com"}'
 ```
-
 
 ```json
 {
-  "message": "メールアドレスは既に使用されています"
+  "message": "이미 사용 중인 이메일입니다"
 }
 ```
-## コアポイント
 
-### ControllerはHTTPを知らない
+## 実装で確認する点
+
+### 意味型でリクエストの値を受け取る
+
+コントローラーは HTTP リクエストオブジェクトの代わりに、`path.Int` などの意味型を引数として受け取ります。エラーは `httperr` で表現します。
 
 ```go
-// ✓ 意味タイプで入力を受け取る
+// 의미 타입으로 입력 받음
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
-//✓httperrで意味だけを表現
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("ユーザーが見つかりません")
+// httperr로 의미만 표현
+return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 ```
+
 ### 依存性注入
+
+登録したコンストラクタの引数の型をもとに、リポジトリ、サービス、コントローラーの依存関係を接続します。
+
 ```go
-//コンストラクタ登録だけで依存性を自動解決
+// 생성자 등록만으로 의존성 자동 해결
 app.Constructor(
-repository.NewUserRepository, // 依存関係なし
-service.NewUserService, // Repository 依存
-controller.NewUserController, // Service 依存
+    repository.NewUserRepository,  // 의존성 없음
+    service.NewUserService,        // Repository 의존
+    controller.NewUserController,  // Service 의존
 )
 ```
-### レイヤーの分離
 
-| レイヤー | 責任 | 依存 |
-| --- | --- | --- |
-| Controller | 入力検証、エラー変換 | Service |
-| Service | ビジネスロジック | Repository |
-| Repository | データアクセス | なし |
+### コンポーネントごとの責務
+
+| コンポーネント | 責務 | 使用するコンポーネント |
+|-------|------|------|
+| コントローラー | 入力検証、HTTP エラーへの変換 | サービス |
+| サービス | メールアドレスの重複確認、レスポンス DTO への変換 | リポジトリ |
+| リポジトリ | メモリ上のデータの取得と変更 | なし |
+
+## 次のステップ
+
+データを永続的に保存するには、[データベース接続](/ja/learn/tutorial/5-database)に従ってリポジトリを変更してください。エラー処理を詳しく確認するには、[エラー処理のチュートリアル](/ja/learn/tutorial/7-error-handling)を参照してください。

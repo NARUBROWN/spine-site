@@ -1,17 +1,19 @@
 # トランザクション管理
 
-[データベース](/ja/learn/tutorial/5-database)の CLI プロジェクト `example.com/my-app` を使います。`src/database`、`src/entity`、`src/user` を利用し、以下のトランザクションコードは手動で追加します。CLI は Bun トランザクションや outbox を生成しません。
+1つのHTTPリクエストで実行する複数のINSERTを、1つのトランザクションにまとめます。リクエストが成功したらコミットし、途中で失敗したら先に実行したINSERTもロールバックするインターセプターを作成します。
+
+[データベース](/ja/learn/tutorial/5-database)の `example.com/my-app` の続きです。先に `src/database`、`src/entity`、`src/user` とマイグレーションを準備してください。以下のトランザクションのコードは手動で追加します。CLIにはBunのトランザクションやoutboxの生成機能はありません。
 
 ## 実行順序
 
-Spine v0.5.1 では `PreHandle` で開始し、`BeforeResponse` で commit または rollback します。シリアライズ・ステータス・Cookie 検証・イベント配信など、応答準備の失敗も rollback の対象になります。`AfterCompletion` は完了ログと後片付けに使います。
+Spine v0.5.1では、`PreHandle` でトランザクションを開始し、`BeforeResponse` でコミットまたはロールバックします。レスポンスのシリアライズ、ステータスコードとCookieの検証、イベントの発行など、レスポンスの準備中に発生したエラーもロールバックの条件に含まれます。`AfterCompletion` は、完了後にログを記録したり、リソースを解放したりする際に使用します。
 
 ```text
-PreHandle: begin transaction
-→ Controller → response preparation → PostHandle
-→ BeforeResponse: rollback on error, commit on success
-→ HTTP response flush
-→ AfterCompletion: logging / cleanup
+PreHandle: トランザクション開始
+→ コントローラー → レスポンスの準備 → PostHandle
+→ BeforeResponse: エラーがあればロールバック、なければコミット
+→ HTTPレスポンス送信
+→ AfterCompletion: ログの記録とリソースの解放
 ```
 
 ## インターセプターの実装
@@ -70,11 +72,11 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 }
 ```
 
-commit・rollback のエラーは返し、実行エラーに反映させます。`log` と `errors` を含む import と、4つのメソッドを保ってください。
+`Commit()` と `Rollback()` のエラーを返すことで、最終的な実行エラーに反映されます。`log` と `errors` を含むimportと、インターセプターの4つのメソッドをすべて維持してください。
 
-## 生成されたアプリに登録
+## 生成されたアプリへの登録
 
-`internal/application/application.go` の import に `example.com/my-app/src/interceptor` を追加します。データベースの `database.NewDB` provider と既存の health・user 登録を保ち、既存の Constructor 呼び出しに `interceptor.NewTxInterceptor` だけを追加します。以下は `BuildApplication()` 内の登録部分です。
+`internal/application/application.go` のimportブロックに `example.com/my-app/src/interceptor` を追加します。データベースのチュートリアルで登録した `database.NewDB` とhealth、userの登録を維持し、既存の `app.Constructor` 呼び出しに `interceptor.NewTxInterceptor` を追加してください。次のコードは、`BuildApplication()` 内の登録部分です。
 
 ```go
 app.Constructor(
@@ -85,11 +87,15 @@ app.Constructor(
 app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
 ```
 
-typed-nil の `(*interceptor.TxInterceptor)(nil)` は DI が生成したインスタンスに解決されます。`NewTxInterceptor` は値を1つ返します。HTTP には `boot.InterceptorHTTP` を指定します。`app.Interceptor(...)` は WebSocket メッセージにも適用されます。特定ルートだけに適用する場合はグローバル登録を省き、その `app.Route` に `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` を渡します。
+`(*interceptor.TxInterceptor)(nil)` はインターセプターの型を指定します。Spineはこの型に対応するインスタンスをDIで生成します。`NewTxInterceptor` は値を1つ返す必要があります。
 
-## リクエストのトランザクションを渡す
+HTTPリクエストにだけ適用するには、上のように `boot.InterceptorHTTP` を使用してください。`app.Interceptor(...)` はWebSocketメッセージにも適用されます。特定のルートにだけ適用するには、グローバルな登録を省略し、対象の `app.Route` に `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` オプションを指定します。
 
-以下の POST は `src/user` に手動追加する例です。生成された `UserController.service` と `UserService.repository` を使用します。リクエスト DTO はポインタで受け取ります。`spine.Ctx` は `github.com/NARUBROWN/spine/pkg/spine` から import し、アプリのルートパッケージと衝突する場合は `spinectx` を alias にします。
+## リクエストのトランザクションをリポジトリに渡す
+
+`src/user/user_create.go` を追加し、リクエストのトランザクションでユーザーを保存します。生成された `UserController` の `service` フィールドと `UserService` の `repository` フィールドを使用します。
+
+リクエストDTOはポインタで受け取ります。`spine.Ctx` は `github.com/NARUBROWN/spine/pkg/spine` からインポートします。以下のコードでは、アプリのルートパッケージと名前が重ならないように、`spinectx` というエイリアスを使用します。
 
 ```go
 // src/user/user_create.go
@@ -142,9 +148,9 @@ func (s *UserService) Create(ctx context.Context, db bun.IDB, req *CreateUserReq
 }
 ```
 
-サービスは `bun.IDB` をリポジトリに渡します。`*bun.DB` と `bun.Tx` は両方このインターフェースを実装しますが、リクエストの tx がコンストラクタに再注入されることはありません。`Save(ctx, db, user)` を次の形で追加・調整します。
+サービスはリクエストのトランザクションを `bun.IDB` として受け取り、リポジトリに渡します。`*bun.DB` と `bun.Tx` は同じインターフェースを実装していますが、リクエストのトランザクションがリポジトリのコンストラクタに自動で再注入されるわけではありません。
 
-既存の `Save` メソッドを次の実装に置き換えます。同名のメソッドを追加で宣言しないでください。
+`src/user/user_repository.go` の既存の `Save` メソッドを次の実装に置き換えます。同じ名前のメソッドを追加で宣言しないでください。
 
 ```go
 // src/user/user_repository.go
@@ -154,15 +160,15 @@ func (r *UserRepository) Save(ctx context.Context, db bun.IDB, user *entity.User
 }
 ```
 
-`src/user/user_route.go` の `Register` に POST を手動で追加します。既存の GET 登録は保ちます。
+`src/user/user_route.go` の `Register` にPOSTルートを手動で追加します。既存のGETの登録は維持します。
 
 ```go
 app.Route("POST", "/user", (*UserController).Create)
 ```
 
-## 1つのリクエストで複数の書き込みとrollback
+## 複数の書き込みをまとめてロールバックを確認
 
-単一作成と同じトランザクションで複数ユーザーを保存します。`src/user/user_batch.go` を追加し、`src/user/user_route.go` の `Register` に以下のPOSTを追加します。2回目のINSERTがemailの重複で失敗した場合、最初のINSERTもrollbackされる必要があります。
+今度は1つのリクエストで複数のユーザーを保存します。`src/user/user_batch.go` を作成し、以下のPOSTルートを `src/user/user_route.go` の `Register` に追加してください。2つ目のINSERTがメールアドレスの重複で失敗したら、1つ目のINSERTもロールバックされる必要があります。
 
 ```go
 // src/user/user_batch.go
@@ -211,9 +217,9 @@ func (c *UserController) CreateBatch(ctx context.Context, values spinectx.Ctx, r
 app.Route("POST", "/user/batch", (*UserController).CreateBatch)
 ```
 
-## 読み取りリクエストを除外
+## 読み取りリクエストの除外
 
-読み取りを除外する場合は `PreHandle` の先頭に次の条件を追加します。`BeforeResponse` もトランザクションがない場合を扱う必要があります。tx が必須のハンドラーを除外しないでください。
+読み取りリクエストでトランザクションを開始しない場合は、`PreHandle` の先頭に次の条件を入れます。`BeforeResponse` もトランザクションが存在しない場合を処理する必要があります。上の実装にはこの処理が含まれています。トランザクションを使用するコントローラーは除外しないでください。
 
 ```go
 if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" {
@@ -233,11 +239,13 @@ spine verify
 spine dev
 ```
 
-契約・ローカル検査の成功は、実際の DB commit・rollback の証明ではありません。実行にはデータベースの手順で設定した `DATABASE_URL` とマイグレーションが必要です。実際の DB で成功時の保存、失敗時の rollback、commit・rollback エラーを別に確認します。
+契約検査とローカル検査だけでは、実際のDBのコミットとロールバックを確認できません。アプリを実行するには、データベースのチュートリアルにある `DATABASE_URL` の設定とマイグレーションが必要です。次の手順で、成功したリクエストの保存と、失敗したリクエストのロールバックを確認します。コミットとロールバック自体が失敗した場合のエラー処理は、別途確認する必要があります。
 
 ## 実際のDBで確認
 
-データベースの手順でマイグレーションを実行し、アプリを起動します。以下は空のテストDBを前提とします。最初のリクエストはHTTP 201を返し、応答のIDをGETすると保存済みユーザーを取得できます。batchは2件目のemailが重複するためHTTP 500です。DBエラーを通常のエラーで返すため、内部のSQLエラーは応答に公開されません。
+データベースのチュートリアルに従ってマイグレーションを実行し、アプリを起動した後、別のターミナルから以下のリクエストを送信します。このGETの例では、新しく作成したテスト用DBで最初のユーザーのIDが1であることを前提としています。既存のDBを使用する場合は、POSTレスポンスのIDに合わせてGETのパスを変更してください。
+
+最初のPOSTはHTTP 201で保存され、レスポンスのIDでGETすると同じユーザーが返ります。`/user/batch` リクエストは、2つ目のメールアドレスが重複するためHTTP 500で失敗します。DBエラーを通常のエラーとして返すため、内部のSQLエラーはレスポンスに公開されません。
 
 ```bash
 curl -i -X POST http://localhost:8080/user \
@@ -254,7 +262,7 @@ curl -i -X POST http://localhost:8080/user \
   -d '{"name":"Bob","email":"bob@example.com"}'
 ```
 
-DBクライアントで以下のSELECTがそれぞれ1と0になることを確認します。2つ目の0は、エラーより前のINSERTもrollbackされたことを示します。その後、一意のemailで再度リクエストするとHTTP 201で保存できる必要があります。
+DBクライアントで、次のSELECTの結果がそれぞれ1と0であることを確認してください。2つ目の結果が0なら、失敗する前に実行した1つ目のINSERTもロールバックされています。最後のBobのリクエストは重複しないメールアドレスを使用するため、再びHTTP 201で保存されるはずです。
 
 ```sql
 SELECT COUNT(*) FROM users WHERE email = 'alice@example.com';
@@ -263,7 +271,9 @@ SELECT COUNT(*) FROM users WHERE email = 'rollback@example.com';
 
 ## 原子性の境界
 
-DB commit は broker への発行や実際の socket write と原子的ではありません。イベント発行後に commit が失敗し、commit 後に応答送信が失敗する可能性があります。業務データと outbox を同じ DB トランザクションに保存し、別 relay で発行し、コンシューマーは安定したイベント ID で重複を処理します。
+DBのコミット、ブローカーによるイベントの発行、ソケットによるレスポンス送信は、1つのアトミックなトランザクションにはまとまりません。イベントを発行した後にDBのコミットが失敗することも、コミット後にレスポンスの送信が失敗することもあります。
+
+DBの変更とイベントの記録を一緒に保証する必要がある場合は、同じDBトランザクションでoutboxレコードを保存し、別の配信処理でイベントを発行します。再送時にも同じイベントIDを使用し、コンシューマーはこのIDで重複を判定する必要があります。
 
 - [Interceptor API](/ja/reference/api/interceptor)
-- [Database](/ja/learn/tutorial/5-database)
+- [データベース接続](/ja/learn/tutorial/5-database)

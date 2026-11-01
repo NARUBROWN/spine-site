@@ -1,23 +1,27 @@
 # 错误处理
 
-使用[第一个应用](/zh-Hans/learn/getting-started/first-app)与[控制器](/zh-Hans/learn/tutorial/2-controller)中的 CLI 项目，手动扩展 `spine generate resource user` 生成的 `src/user` GET 处理函数。CLI 负责生成和注册，领域错误与 HTTP 映射由应用实现。
+根据用户查询失败的原因返回 HTTP 400 或 404，并在响应中隐藏意外错误的内部详情。
+
+使用[第一个应用](/zh-Hans/learn/getting-started/first-app)和[控制器](/zh-Hans/learn/tutorial/2-controller)中的 CLI 项目。需要通过 `spine generate resource user` 生成的 `src/user`。以下步骤将 GET 处理器替换为只读的内存查询，请与数据库教程分开应用。将领域错误映射到 HTTP 状态的代码需要手动编写。
 
 ## HTTP 错误与响应
 
-将成功结果放入 `httpx.Response[T]` 并单独返回 `error`，不支持直接将普通结构体 `(User, error)` 作为 HTTP 响应。当前 `httperr` 包提供四个辅助函数。
+将成功结果放入 `httpx.Response[T]`，将错误通过单独的 `error` 返回值传递。处理器的返回类型应为 `(httpx.Response[User], error)`，不要使用 `(User, error)`。`httperr` 提供以下四个函数。
 
-| Helper | HTTP | |
+| 函数 | HTTP 状态 | 用途 |
 |---|---|---|
 | `httperr.BadRequest(message)` | 400 | 无效输入 |
 | `httperr.Unauthorized(message)` | 401 | 需要认证 |
 | `httperr.NotFound(message)` | 404 | 资源不存在 |
-| `httperr.InternalServerError(message)` | 500 | 有意公开的错误消息 |
+| `httperr.InternalServerError(message)` | 500 | 可向客户端公开的服务器错误消息 |
 
-`HTTPError.Message` 会暴露给客户端，不要直接放入数据库内部错误或秘密值。未知的普通错误会转换为 HTTP 500 与 `{"message":"Internal server error"}`。
+`HTTPError.Message` 会暴露给客户端，因此不要直接填入内部数据库错误或秘密值。如果返回普通 `error`，则会转换为 HTTP 500 和 `{"message":"Internal server error"}`。
 
 ## 为生成的资源添加查询错误
 
-以下是教学用的只读内存查询。替换生成的 repository、controller 文件，并为服务添加 `Find`。所有文件放在同一个 `package user`。沿用现有构造函数名、`user.Register(app)` 和 `GET /user/:id` 注册。此示例不提供数据库持久化或完整 CRUD。
+用以下内容替换生成的 `src/user/user_repository.go` 和 `src/user/user_controller.go`，并在 `src/user/user_service.go` 中添加 `Find` 方法。所有文件均放在 `package user` 中。保留现有构造函数名称、`user.Register(app)` 和 `GET /user/:id` 注册。
+
+仓储只保存 ID 为 1 的 Alice。此示例用于复现查询错误，不会向数据库保存数据。
 
 ```go
 // src/user/user_repository.go
@@ -103,18 +107,20 @@ func toHTTPError(err error) error {
 
 ## 各层职责
 
-仓储返回领域错误，服务将其向上传递，控制器只把预期错误映射为 HTTP 状态码。`errors.Is` 也能识别包装过的错误。将未知错误转换成 `BadRequest(err.Error())` 会泄露内部细节，应原样返回以使用通用的脱敏 500 响应。
+仓储返回领域错误，服务将其传递给控制器。控制器将预期的错误转换为 HTTP 状态。使用 `errors.Is` 还可以识别被其他错误包装的领域错误。
+
+未知错误直接返回，由常规的 HTTP 500 处理逻辑处理。如果将其改为 `BadRequest(err.Error())`，内部错误消息就会暴露在响应中。上述内存仓储只返回 `ErrUserNotFound`，`ErrEmailAlreadyExists` 分支是供后续添加保存功能时使用的映射示例。
 
 ```mermaid
 flowchart LR
-    Repository["Repository: domain error"] --> Service["Service"]
-    Service --> Controller["Controller: HTTP error"]
-    Controller --> Response["Response: JSON"]
+    Repository["仓储：领域错误"] --> Service["服务"]
+    Service --> Controller["控制器：HTTP 错误"]
+    Controller --> Response["响应：JSON"]
 ```
 
-## HTTPError 与其他状态码
+## HTTPError 与其他状态
 
-使用 `HTTPError` 表达没有辅助函数的状态，如 403、409。`Cause` 可通过 `Unwrap()` 追踪原因，不会出现在 JSON 响应中。
+HTTP 403 或 409 等没有专用函数的状态，可以用 `HTTPError` 表示。`Cause` 保存导致错误的原因，不会包含在 JSON 响应中。v0.5.1 的 `HTTPError` 未实现 `Unwrap()`，因此需要先用 `errors.As` 找到 `HTTPError`，再读取 `Cause` 字段。以下是 `HTTPError` 的结构和方法，无需在应用中重新定义。
 
 ```go
 type HTTPError struct {
@@ -124,7 +130,6 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string { return e.Message }
-func (e *HTTPError) Unwrap() error { return e.Cause }
 ```
 
 ```go
@@ -136,7 +141,9 @@ return &httperr.HTTPError{
 
 ## 验证请求 DTO
 
-下面是可选的输入验证扩展。Spine 不会自动调用 `Validate()`，需要在处理函数中调用。请求 DTO 必须使用指针。此 POST 只返回验证后的输入，不会保存用户；使用时在 `Register` 中手动添加 POST 路由。
+若要添加输入验证，请编写以下 `src/user/user_create.go`。`Validate()` 不会自动调用，需要在处理器中手动调用，并通过指针接收请求 DTO。
+
+如果名称或邮箱为空，或者名称超过 100 个字符，此 POST 处理器会返回 HTTP 400。验证通过后，将输入数据以 HTTP 201 返回，不会保存用户。使用时还需要将以下 POST 路由添加到 `src/user/user_route.go` 的 `Register` 中。
 
 ```go
 // src/user/user_create.go
@@ -185,9 +192,9 @@ func (c *UserController) Create(req *CreateUserRequest) (httpx.Response[CreateUs
 app.Route("POST", "/user", (*UserController).Create)
 ```
 
-## 拦截器错误处理
+## 拦截器中的错误处理
 
-`PreHandle` 返回错误会停止控制器执行。下面是 `src/interceptor` 中使用自定义认证服务的方法片段。完整类型必须实现 `PreHandle`、`PostHandle`、`BeforeResponse` 和 `AfterCompletion`，并在 `BuildApplication()` 中以 HTTP scope 注册。
+如果在 `PreHandle` 中返回错误，控制器将不会执行。以下代码是具有自有认证服务的拦截器中的方法片段，仅复制此方法无法使用。需要在 `src/interceptor` 中定义类型和认证服务，并完整实现 `PreHandle`、`PostHandle`、`BeforeResponse`、`AfterCompletion` 四个方法。若要应用于 HTTP 请求，请在 `BuildApplication()` 中以 `boot.InterceptorHTTP` 范围注册。
 
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
@@ -204,9 +211,9 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 }
 ```
 
-## 记录错误
+## 错误日志
 
-`AfterCompletion` 可以记录执行错误。以下也是完整日志拦截器中的方法片段。不要记录认证令牌或请求中的秘密值。
+可以在 `AfterCompletion` 中记录最终执行错误。以下代码同样是从日志拦截器中摘录的方法，因此需要完整的拦截器类型和注册。不要在日志中记录认证令牌或请求中的秘密值。
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
@@ -216,7 +223,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 }
 ```
 
-## 验证并检查 HTTP 响应
+## 验证与 HTTP 检查
 
 ```bash
 gofmt -w src/user
@@ -227,7 +234,7 @@ spine verify
 spine dev
 ```
 
-通过契约与本地检查后，在另一个终端确认实际响应。以下结果对应上方只读内存示例。
+通过契约检查和本地检查后，在另一终端中检查响应。以下结果是应用只读内存示例后的行为。
 
 ```bash
 curl -i http://localhost:8080/user/1
@@ -235,13 +242,15 @@ curl -i http://localhost:8080/user/0
 curl -i http://localhost:8080/user/2
 ```
 
-| Request | HTTP | JSON |
+| 请求 | HTTP 状态 | JSON |
 |---|---|---|
 | `/user/1` | 200 | `{"id":1,"name":"Alice"}` |
 | `/user/0` | 400 | `{"message":"invalid user ID"}` |
 | `/user/2` | 404 | `{"message":"user not found"}` |
 
-连接真实数据库或认证服务后，需要单独进行失败路径 E2E 检查。静态契约不能证明外部服务的错误映射正确。
+上述请求检查的是传递到处理器的整数 ID 的处理逻辑。无法解析为数字的路径值所触发的错误处理，与本示例中的 `id.Value <= 0` 验证相互独立。
+
+连接实际数据库或认证服务后，也需要主动请求这些服务的失败路径并检查结果。仅凭静态契约检查无法验证外部服务的错误映射。
 
 - [httperr](/zh-Hans/learn/core-concepts/httperr)
-- [Interceptors](/zh-Hans/learn/tutorial/4-interceptor)
+- [拦截器](/zh-Hans/learn/tutorial/4-interceptor)

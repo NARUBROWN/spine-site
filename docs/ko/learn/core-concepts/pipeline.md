@@ -1,359 +1,178 @@
 # 실행 파이프라인
 
-컨트롤러 예제는 [CLI로 생성한 프로젝트](/ko/learn/tutorial/1-project-structure)의 구성 요소입니다. 성공 응답은 `github.com/NARUBROWN/spine/pkg/httpx`의 `httpx.Response[T]`로 감싸고 요청 DTO는 포인터로 받습니다. 생성자와 라우트는 `BuildApplication`에 등록합니다.
+Spine의 실행 파이프라인은 요청을 받아 핸들러를 선택하고, 인자를 바인딩한 뒤, 반환값을 응답으로 만드는 흐름입니다. 인터셉터를 어느 시점에 실행해야 하는지, 오류가 발생하면 어떤 단계까지 진행하는지 이해할 때 이 흐름을 기준으로 삼습니다.
 
-Spine의 요청 생명주기 이해하기.
+이 문서는 Spine v0.5.1의 HTTP 실행 순서를 설명합니다. HTTP, 이벤트 컨슈머, WebSocket은 같은 파이프라인 구현을 사용하지만, 입력을 해석하는 리졸버와 응답 처리 구성은 다릅니다.
 
+컨트롤러 예제는 [CLI로 생성한 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 코드입니다. 요청 DTO는 포인터로 받고, 일반 성공 응답은 `github.com/NARUBROWN/spine/pkg/httpx`의 `httpx.Response[T]`로 반환합니다. 생성자와 라우트는 `BuildApplication`에서 등록합니다.
 
-## 개요
+## HTTP 요청의 실행 순서
 
-Spine의 핵심 철학은 **실행 흐름의 명시성**입니다. 대부분의 웹 프레임워크가 요청 처리 과정을 내부에 숨기는 반면, Spine은 모든 단계를 코드 구조로 고정하고 명확하게 드러냅니다.
-
-모든 HTTP 요청은 다음 파이프라인을 **반드시** 순서대로 통과합니다:
+정상 요청은 다음 순서로 처리됩니다. 각 인터셉터의 `PreHandle`은 등록 순서로, 후처리 메서드는 역순으로 실행됩니다.
 
 ```mermaid
 graph TD
-    Request["HTTP Request"]
-    
-    ExecutionContext["ExecutionContext<br>(요청 컨텍스트 생성)"]
-    GlobalPre["Global Interceptor.PreHandle<br>(라우팅 전 전처리)"]
-    Router["Router<br>(HandlerMeta 선택)"]
-    ParamMeta["ParameterMeta Builder<br>(파라미터 메타정보 구성)"]
-    ArgResolver["ArgumentResolver Chain<br>(인자 값 생성)"]
-    RoutePre["Route Interceptor.PreHandle<br>(라우트 전처리)"]
-    Invoker["Invoker<br>(Controller 메서드 호출)"]
-    ReturnHandler["ReturnValueHandler<br>(반환값 → 응답 변환)"]
-    PostHook["PostExecutionHook<br>(이벤트 발행 등)"]
-    RoutePost["Route Interceptor.PostHandle ↩<br>(라우트 후처리)"]
-    GlobalPost["Global Interceptor.PostHandle ↩<br>(글로벌 후처리)"]
-    RouteBefore["Route Interceptor.BeforeResponse ↩<br>(응답 전)"]
-    GlobalBefore["Global Interceptor.BeforeResponse ↩<br>(응답 전)"]
-    Flush["Buffered Response Flush"]
-    RouteAfter["Route Interceptor.AfterCompletion ↩<br>(항상 실행)"]
-    GlobalAfter["Global Interceptor.AfterCompletion ↩<br>(항상 실행)"]
-    ErrorHandler["handleExecutionError<br>(에러 안전망)"]
-    Response["HTTP Response"]
+    Request["HTTP 요청"]
+    Context["ExecutionContext 생성"]
+    GlobalPre["전역 PreHandle<br>라우팅 전 전처리"]
+    Router["Router<br>HandlerMeta 선택"]
+    Binding["ParameterMeta 구성<br>ArgumentResolver로 인자 바인딩"]
+    RoutePre["라우트 PreHandle<br>핸들러 호출 전 전처리"]
+    Handler["Invoker<br>컨트롤러 메서드 호출"]
+    Return["ReturnValueHandler<br>성공 응답 준비와 검증"]
+    Hook["PostExecutionHook<br>도메인 이벤트 후처리"]
+    Post["PostHandle<br>라우트, 전역 순서로 역순 실행"]
+    Before["BeforeResponse<br>라우트, 전역 순서로 역순 실행"]
+    Flush["버퍼에 준비한 응답 전송"]
+    After["AfterCompletion<br>라우트, 전역 순서로 역순 실행"]
+    Response["HTTP 응답 완료"]
 
-    Request --> ExecutionContext
-    ExecutionContext --> GlobalPre
+    Request --> Context
+    Context --> GlobalPre
     GlobalPre --> Router
-    Router --> ParamMeta
-    ParamMeta --> ArgResolver
-    ArgResolver --> RoutePre
-    RoutePre --> Invoker
-    Invoker --> ReturnHandler
-    ReturnHandler --> PostHook
-    PostHook --> RoutePost
-    RoutePost --> GlobalPost
-    GlobalPost --> RouteBefore
-    RouteBefore --> GlobalBefore
-    GlobalBefore --> ErrorHandler
-    ErrorHandler --> Flush
-    Flush --> RouteAfter
-    RouteAfter --> GlobalAfter
-    GlobalAfter --> Response
+    Router --> Binding
+    Binding --> RoutePre
+    RoutePre --> Handler
+    Handler --> Return
+    Return --> Hook
+    Hook --> Post
+    Post --> Before
+    Before --> Flush
+    Flush --> After
+    After --> Response
 ```
 
+핸들러가 반환한 성공 응답은 바로 전송되지 않습니다. 파이프라인은 응답을 버퍼에 준비하고, 후처리와 `BeforeResponse`가 끝난 뒤 실제 HTTP 응답에 기록합니다. 중간에 오류가 발생하면 전송할 응답을 오류 응답으로 바꿀 수 있습니다.
 
-## 1. ExecutionContext 생성
+## 요청 컨텍스트 생성
 
-HTTP 요청이 도착하면, Transport 어댑터(Echo)가 요청을 Spine의 `ExecutionContext`로 변환합니다.
+HTTP 어댑터는 요청마다 `core.ExecutionContext`를 만듭니다. 파이프라인은 이 객체로 요청의 메서드와 경로를 읽고, 인터셉터가 저장한 값을 공유하며, 요청에 속한 이벤트를 수집합니다.
 
-```go
-// internal/adapter/echo/adapter.go
-func (s *Server) handle(c echo.Context) error {
-    ctx := NewContext(c)
-    
-    ctx.Set(
-        "spine.response_writer",
-        NewEchoResponseWriter(c),
-    )
-    
-    if err := s.pipeline.Execute(ctx); err != nil {
-        c.Logger().Errorf("pipeline error: %v", err)
-        // 파이프라인 내부에서 이미 응답이 작성되었으므로
-        // Echo 기본 에러 핸들러로 중복 전달하지 않는다.
-        return nil
-    }
-    return nil
-}
-```
+같은 컨텍스트를 사용하더라도 각 구성 요소의 접근 범위는 다릅니다.
 
-`ExecutionContext`는 파이프라인 전체에서 공유되는 요청 스코프 컨텍스트입니다. HTTP 메서드, 경로, 헤더, 쿼리 파라미터 등 요청의 모든 정보에 접근할 수 있습니다.
+| 구성 요소 | 컨텍스트 사용 방식 |
+| --- | --- |
+| 라우터 | 메서드와 경로로 핸들러를 찾고 경로 매개변수 저장 |
+| 인터셉터 | 요청 정보 조회, 실행 상태 저장, 응답 전후 처리 |
+| 인자 리졸버 | 컨텍스트에서 컨트롤러 인자 생성 |
+| 반환값 핸들러 | 컨텍스트에 연결된 응답 작성기로 응답 준비 |
+| 컨트롤러 | 의미 타입, `context.Context`, 읽기 전용 `spine.Ctx`로 필요한 값만 수신 |
 
-> **참고**: WebSocket 요청도 동일한 Pipeline을 사용합니다. `ws.Runtime`이 메시지마다 `WSExecutionContext`를 생성하여 `pipeline.Execute(ctx)`를 호출합니다.
+컨트롤러에는 `core.ExecutionContext`를 직접 주입하지 않습니다. 인터셉터에서 저장한 값을 컨트롤러가 읽어야 한다면 `pkg/spine.Ctx`를 사용합니다. 메서드별 접근 범위는 [실행 컨텍스트](/ko/learn/core-concepts/execution-context)에서 설명합니다.
 
+## 전역 인터셉터: 라우팅 전 처리
 
-## 2. Global Interceptor.PreHandle
+`app.Interceptor()`로 등록한 전역 인터셉터의 `PreHandle`이 가장 먼저 실행됩니다. 아직 핸들러를 선택하지 않았으므로 이 호출에는 빈 `core.HandlerMeta{}`가 전달됩니다.
 
-**라우팅 전에** 글로벌 인터셉터가 먼저 실행됩니다. 이 시점에서는 아직 어떤 핸들러가 실행될지 결정되지 않았으므로, 빈 `HandlerMeta`가 전달됩니다.
+이 단계는 CORS preflight처럼 라우트 선택 전에 처리해야 하는 작업에 사용합니다. 예를 들어 CORS 인터셉터는 허용된 `OPTIONS` 요청의 응답을 준비하고 `core.ErrAbortPipeline`을 반환해 뒤의 실행을 중단할 수 있습니다.
 
-```go
-// internal/pipeline/pipeline.go
-globalMeta := core.HandlerMeta{}
+전역 `PreHandle`에서는 다음 제약을 고려해야 합니다.
 
-for _, it := range p.interceptors {
-    if err := it.PreHandle(ctx, globalMeta); err != nil {
-        if errors.Is(err, core.ErrAbortPipeline) {
-            return nil
-        }
-        return err
-    }
-}
-```
+- 실행할 컨트롤러와 메서드가 아직 정해지지 않았습니다.
+- Spine 라우터가 경로 매개변수를 아직 저장하지 않았습니다.
+- 요청 DTO와 `path.Int` 같은 컨트롤러 인자도 아직 생성하지 않았습니다.
 
-CORS preflight 처리처럼 라우팅 전에 요청을 가로채야 하는 경우에 사용됩니다:
+라우팅에 성공한 뒤 실행하는 `PostHandle`, `BeforeResponse`, `AfterCompletion`에는 선택된 핸들러의 메타데이터가 전달됩니다. 라우팅 전에 중단하거나 실패했다면 빈 메타데이터로 마무리합니다.
 
-```go
-// interceptor/cors/cors.go
-if ctx.Method() == "OPTIONS" {
-    rw.WriteStatus(204)
-    return core.ErrAbortPipeline
-}
-```
+## 라우터: 핸들러와 경로 매개변수 선택
 
+라우터는 `ctx.Method()`와 `ctx.Path()`로 등록된 핸들러를 찾습니다. 일치하는 핸들러가 없으면 404 오류를 반환합니다. 경로에 매개변수가 있으면 값을 컨텍스트에 저장하고, 선언 순서를 메타데이터에 유지합니다.
 
-## 3. Router - HandlerMeta 선택
-
-Router는 요청 경로와 메서드를 기반으로 실행할 Controller 메서드를 결정합니다.
-
-```go
-// internal/router/router.go
-func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
-    for _, route := range r.routes {
-        if route.Method != ctx.Method() {
-            continue
-        }
-        
-        ok, params, keys := matchPath(route.Path, ctx.Path())
-        if !ok {
-            continue
-        }
-        
-        // path param 주입
-        ctx.Set("spine.params", params)
-        ctx.Set("spine.pathKeys", keys)
-        
-        return route.Meta, nil
-    }
-    return core.HandlerMeta{}, httperr.NotFound("핸들러가 없습니다.")
-}
-```
-
-`HandlerMeta`는 실행 대상에 대한 메타데이터를 담고 있습니다:
+`HandlerMeta`는 실행할 대상과 라우트 설정을 담습니다.
 
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    ControllerType reflect.Type    // 컨트롤러 타입
-    Method         reflect.Method  // 호출할 메서드
-    Interceptors   []Interceptor   // 라우트 레벨 인터셉터
+    ControllerType reflect.Type   // 의존성 컨테이너에서 찾을 컨트롤러 타입
+    Method         reflect.Method // 호출할 메서드
+    PathKeys       []string       // 라우트에 선언한 경로 매개변수의 순서
+    Interceptors   []Interceptor  // 해당 핸들러에 적용할 인터셉터
 }
 ```
 
+`HandlerMeta`는 요청마다 컨트롤러를 새로 만드는 지시가 아닙니다. Invoker가 의존성 컨테이너에서 호출 대상을 찾고, 인자를 메서드에 전달하는 데 사용하는 정보입니다. 자세한 필드는 [HandlerMeta](/ko/learn/core-concepts/handler-meta)를 참고하세요.
 
-## 4. ParameterMeta 구성
+## 인자 바인딩: ParameterMeta와 ArgumentResolver
 
-Controller 메서드의 시그니처를 분석하여 각 파라미터에 대한 메타정보를 생성합니다.
+핸들러를 선택하면 파이프라인은 메서드 시그니처를 읽어 각 인자의 타입과 위치를 나타내는 `ParameterMeta`를 구성합니다. 이어서 등록된 리졸버 중 해당 타입을 지원하는 첫 번째 리졸버가 값을 만듭니다.
+
+리졸버가 값을 만들지 못하거나 지원하는 리졸버가 없으면 컨트롤러를 호출하지 않고 오류 처리로 넘어갑니다. **이 단계는 라우트 인터셉터의 `PreHandle`보다 먼저 실행됩니다.** 따라서 라우트 인터셉터에서 본문 바인딩 전 검사를 수행한다고 가정하면 안 됩니다.
+
+### 경로 매개변수는 선언 순서로 연결
+
+`path.Int`, `path.String`, `path.Boolean`은 라우트에 선언한 매개변수 순서대로 바인딩됩니다. Go 인자 이름으로 연결하지 않습니다.
 
 ```go
-// internal/pipeline/pipeline.go
-func buildParameterMeta(method reflect.Method, ctx core.ExecutionContext) []resolver.ParameterMeta {
-    pathKeys := ctx.PathKeys()
-    pathIdx := 0
-    var metas []resolver.ParameterMeta
-    
-    for i := 1; i < method.Type.NumIn(); i++ {
-        pt := method.Type.In(i)
-        
-        pm := resolver.ParameterMeta{
-            Index: i - 1,
-            Type:  pt,
-        }
-        
-        // path.* 타입이면 순서대로 PathKey 할당
-        if isPathType(pt) {
-            if pathIdx >= len(pathKeys) {
-                pm.PathKey = ""
-            } else {
-                pm.PathKey = pathKeys[pathIdx]
-            }
-            pathIdx++
-        }
-        
-        metas = append(metas, pm)
-    }
-    
-    return metas
-}
-
-func isPathType(pt reflect.Type) bool {
-    pathPkg := reflect.TypeFor[path.Int]().PkgPath()
-    return pt.PkgPath() == pathPkg
-}
+// 라우트: /users/:userId/posts/:postId
+// userId에는 첫 번째 경로 값, postId에는 두 번째 경로 값이 들어갑니다.
+func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
 ```
 
-**Path Parameter 바인딩 규칙**: Spine은 순서 기반(order-based) 바인딩을 사용합니다. `path` 패키지에 속한 타입(`path.Int`, `path.String`, `path.Boolean`)만 PathKey가 할당됩니다.
+다른 종류의 인자를 사이에 넣어도 경로 타입끼리의 순서를 맞춰야 합니다. 경로 매개변수의 개수나 타입을 바꿀 때에는 라우트 선언과 메서드 시그니처를 함께 확인하세요.
+
+### HTTP에서 지원하는 인자
+
+| 리졸버 | 컨트롤러 인자 타입 | 전달하는 값 |
+| --- | --- | --- |
+| `StdContextResolver` | `context.Context` | 요청 취소와 타임아웃 정보, 이벤트 발행에 사용할 컨텍스트 |
+| `ControllerContextResolver` | `spine.Ctx`, `core.ControllerContext` | 인터셉터 저장소의 읽기 전용 뷰 |
+| `HeaderResolver` | `header.Values` | HTTP 헤더 뷰 |
+| `PathIntResolver` | `path.Int` | 경로 값을 파싱한 정수 |
+| `PathStringResolver` | `path.String` | 경로의 문자열 |
+| `PathBooleanResolver` | `path.Boolean` | 경로 값을 파싱한 불리언 |
+| `PaginationResolver` | `query.Pagination` | `page`, `size` 쿼리 값 |
+| `QueryValuesResolver` | `query.Values` | 전체 쿼리 값의 뷰 |
+| `DTOResolver` | `*struct` | HTTP 본문을 바인딩한 DTO |
+| `FormDTOResolver` | `form` 태그가 있는 `*struct` | 폼 또는 멀티파트 본문을 바인딩한 DTO |
+| `UploadedFilesResolver` | `multipart.UploadedFiles` | 업로드한 파일 |
+
+`header`, `path`, `query`, `multipart`는 각각 `github.com/NARUBROWN/spine/pkg/` 아래의 패키지입니다. 표의 `multipart.UploadedFiles`는 Go 표준 `mime/multipart` 타입과 구분해야 합니다.
+
+HTTP DTO는 구조체 포인터로 선언합니다. 필드에 `form` 태그가 하나라도 있으면 일반 DTO 리졸버가 건너뛰고 폼 DTO 리졸버가 처리합니다. `query.Pagination`의 `page`와 `size`는 생략하거나 정수로 파싱할 수 없을 때 각각 1과 20을 사용합니다.
+
+### 리졸버의 계약
+
+다음은 내부 리졸버가 따르는 계약입니다. 앱에서 이 인터페이스나 `internal/` 패키지를 복사해 등록할 필요는 없습니다.
 
 ```go
-// Route: /users/:userId/posts/:postId
-// Controller:
-func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error) // ✓ 순서 일치
-```
-
-
-## 5. ArgumentResolver Chain
-
-각 파라미터 타입에 맞는 Resolver가 실제 값을 생성합니다.
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) resolveArguments(ctx core.ExecutionContext, paramMetas []resolver.ParameterMeta) ([]any, error) {
-    args := make([]any, 0, len(paramMetas))
-    
-    for _, paramMeta := range paramMetas {
-        resolved := false
-        
-        for _, r := range p.argumentResolvers {
-            if !r.Supports(paramMeta) {
-                continue
-            }
-            
-            val, err := r.Resolve(ctx, paramMeta)
-            if err != nil {
-                return nil, err
-            }
-            
-            args = append(args, val)
-            resolved = true
-            break
-        }
-        
-        if !resolved {
-            return nil, fmt.Errorf(
-                "ArgumentResolver에 parameter가 없습니다. %d (%s)",
-                paramMeta.Index,
-                paramMeta.Type.String(),
-            )
-        }
-    }
-    return args, nil
-}
-```
-
-### 기본 제공 Resolver
-
-| Resolver | 지원 타입 | 설명 |
-|----------|----------|------|
-| `StdContextResolver` | `context.Context` | 표준 컨텍스트 (EventBus 주입) |
-| `ControllerContextResolver` | `core.ControllerContext` | ExecutionContext 읽기 전용 Facade |
-| `HeaderResolver` | `header.*` | HTTP 헤더 값 |
-| `PathIntResolver` | `path.Int` | 경로에서 정수 추출 |
-| `PathStringResolver` | `path.String` | 경로에서 문자열 추출 |
-| `PathBooleanResolver` | `path.Boolean` | 경로에서 불리언 추출 |
-| `PaginationResolver` | `query.Pagination` | page, size 쿼리 파라미터 |
-| `QueryValuesResolver` | `query.Values` | 전체 쿼리 파라미터 뷰 |
-| `DTOResolver` | `*struct` (포인터) | JSON body 바인딩 |
-| `FormDTOResolver` | `*struct` (form 태그) | Multipart/Form 바인딩 |
-| `UploadedFilesResolver` | `multipart.UploadedFiles` | 파일 업로드 |
-
-### ArgumentResolver 인터페이스
-
-```go
-// internal/resolver/argument.go
 type ArgumentResolver interface {
-    // 이 Resolver가 해당 타입을 처리할 수 있는지 판단
     Supports(parameterMeta ParameterMeta) bool
-    
-    // Context로부터 실제 값 생성
     Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error)
 }
 ```
 
-> **참고**: Resolver는 `core.ExecutionContext`를 받고, 필요에 따라 `core.HttpRequestContext`, `core.ConsumerRequestContext`, `core.WebSocketContext`로 타입 단언합니다.
+리졸버는 공통 `ExecutionContext`를 받은 뒤, HTTP 입력이 필요하면 `core.HttpRequestContext`로 타입을 확인합니다. 컨슈머와 WebSocket 리졸버는 각각 해당 프로토콜의 컨텍스트에서 메시지 본문을 읽습니다.
 
+## 라우트 인터셉터: 핸들러 호출 전 처리
 
-## 6. Route Interceptor.PreHandle
+`route.WithInterceptors()`로 등록한 인터셉터는 특정 핸들러에만 적용됩니다. 라우팅과 인자 바인딩이 끝난 뒤 `PreHandle`을 호출하므로, 선택된 `HandlerMeta`와 경로 매개변수를 사용할 수 있습니다.
 
-라우팅 후, Controller 호출 전에 라우트 레벨 인터셉터가 실행됩니다. 이 인터셉터는 `HandlerMeta.Interceptors`에 포함되어 있으며, 특정 핸들러에만 적용됩니다.
+| 구분 | 등록 방법 | `PreHandle` 실행 시점 | 전달하는 메타데이터 |
+| --- | --- | --- | --- |
+| 전역 | `app.Interceptor()` | 라우팅 전 | 빈 `HandlerMeta{}` |
+| 라우트 | `route.WithInterceptors()` | 인자 바인딩 후, 핸들러 호출 전 | 선택된 `HandlerMeta` |
 
-```go
-routeInterceptors := meta.Interceptors
-
-for _, it := range routeInterceptors {
-    if err := it.PreHandle(ctx, meta); err != nil {
-        if errors.Is(err, core.ErrAbortPipeline) {
-            return nil
-        }
-        return err
-    }
-}
-```
-
-### Interceptor 인터페이스
+두 방식 모두 `core.Interceptor`의 네 메서드를 구현합니다.
 
 ```go
 // core/interceptor.go
 type Interceptor interface {
-    // Controller 호출 전 실행
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    
-    // ReturnValueHandler 처리 후 실행
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
-
-    // 응답을 기록하기 전 실행. transaction 결과 오류도 반환
     BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-    
-    // 응답 처리 후 성공/실패와 관계없이 마지막에 호출
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
 
-### 글로벌 vs 라우트 인터셉터
+`PreHandle`이 일반 오류를 반환하면 오류 처리로 넘어갑니다. `core.ErrAbortPipeline`을 반환하면 의도적으로 요청을 종료한 것으로 처리합니다. 이 경우 인터셉터가 필요한 응답을 직접 준비해야 합니다. 두 경우 모두 뒤에 있는 `PreHandle`과 컨트롤러는 실행하지 않습니다.
 
-| 구분 | 등록 방법 | 실행 시점 | meta 내용 |
-|------|----------|----------|----------|
-| 글로벌 | `app.Interceptor()` | 라우팅 **전** | 빈 `HandlerMeta{}` |
-| 라우트 | `route.WithInterceptors()` | 라우팅 **후**, Controller **전** | 실제 `HandlerMeta` |
+등록 예제는 [인터셉터 튜토리얼](/ko/learn/tutorial/4-interceptor)을 참고하세요.
 
-### 파이프라인 중단
+## Invoker: 컨트롤러 호출
 
-`PreHandle`에서 `core.ErrAbortPipeline`을 반환하면 이후 단계를 건너뜁니다. 단, `AfterCompletion`은 항상 실행됩니다.
+Invoker는 의존성 컨테이너에서 컨트롤러 인스턴스를 구하고, 바인딩한 인자로 메서드를 호출합니다. 컨트롤러는 입력값을 검사하고 서비스를 호출한 뒤 결과나 오류를 반환합니다.
 
-
-## 7. Invoker - Controller 메서드 호출
-
-IoC Container에서 Controller 인스턴스를 가져와 메서드를 호출합니다.
-
-```go
-// internal/invoker/invoker.go
-func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, args []any) ([]any, error) {
-    // Container에서 인스턴스 Resolve
-    controller, err := i.container.Resolve(controllerType)
-    if err != nil {
-        return nil, err
-    }
-    
-    // 리플렉션으로 메서드 호출
-    values := make([]reflect.Value, len(args)+1)
-    values[0] = reflect.ValueOf(controller)
-    for idx, arg := range args {
-        values[idx+1] = reflect.ValueOf(arg)
-    }
-    
-    results := method.Func.Call(values)
-    
-    // 결과 변환
-    out := make([]any, len(results))
-    for i, result := range results {
-        out[i] = result.Interface()
-    }
-    
-    return out, nil
-}
-```
-
-**Controller의 책임**: Controller는 순수하게 비즈니스 로직만 담당합니다. HTTP, 파이프라인, 실행 순서를 전혀 알지 못합니다.
+다음 메서드는 `UserController`, `User`, `c.repo`가 있는 앱에 추가하는 예입니다. `path`, `httpx`, `httperr`는 각각 Spine의 `pkg/` 패키지에서 가져옵니다.
 
 ```go
 func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
@@ -368,367 +187,127 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 }
 ```
 
+`userId`의 숫자 변환은 컨트롤러 호출 전에 끝납니다. 위의 `BadRequest`는 숫자로 변환된 값이 0 이하인 경우에만 실행됩니다. 숫자로 변환할 수 없는 경로 값이 이 검사에 도달한다고 가정하면 안 됩니다.
 
-## 8. ReturnValueHandler
+## ReturnValueHandler: 반환값을 응답으로 변환
 
-Controller의 반환값을 HTTP 응답으로 변환합니다. error 타입을 우선 처리하며, `isNilResult()`로 포괄적 nil 체크를 수행합니다.
+파이프라인은 반환값 중 `nil`이 아닌 `error`를 먼저 찾습니다. 오류가 있으면 성공 값을 처리하지 않고 오류 응답 경로로 넘어갑니다. 오류가 없다면 첫 번째 `nil`이 아닌 성공 값을 지원하는 반환값 핸들러에 전달합니다.
 
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) handleReturn(ctx core.ExecutionContext, results []any) error {
-    // error가 있으면 error만 처리하고 종료
-    for _, result := range results {
-        if isNilResult(result) {
-            continue
-        }
-        if _, isErr := result.(error); isErr {
-            resultType := reflect.TypeOf(result)
-            for _, h := range p.returnHandlers {
-                if h.Supports(resultType) {
-                    if err := h.Handle(result, ctx); err != nil {
-                        return err
-                    }
-                    return nil
-                }
-            }
-            return fmt.Errorf(
-                "error 반환값을 처리할 ReturnValueHandler가 없습니다. (%s)",
-                resultType.String(),
-            )
-        }
-    }
-    
-    // error가 없으면 첫 번째 non-nil 값 처리
-    for _, result := range results {
-        if isNilResult(result) {
-            continue
-        }
-        resultType := reflect.TypeOf(result)
-        handled := false
-        for _, h := range p.returnHandlers {
-            if !h.Supports(resultType) {
-                continue
-            }
-            if err := h.Handle(result, ctx); err != nil {
-                return err
-            }
-            handled = true
-            break
-        }
-        if !handled {
-            return fmt.Errorf(
-                "ReturnValueHandler가 없습니다. (%s)",
-                resultType.String(),
-            )
-        }
-    }
-    return nil
-}
-```
+타입 정보가 있는 포인터나 인터페이스에 `nil`이 들어 있는 경우도 건너뜁니다. 지원하지 않는 성공 타입을 반환하면 오류가 발생합니다. 일반 구조체를 그대로 반환하지 말고 `httpx.Response[T]`로 감싸세요.
 
-### 기본 제공 Handler
+| 반환값 핸들러 | 지원하는 반환 타입 | HTTP 응답 |
+| --- | --- | --- |
+| `RedirectReturnValueHandler` | `httpx.Redirect`, 해당 포인터 | `Location` 헤더와 상태 코드, 기본 302 |
+| `BinaryReturnHandler` | `httpx.Binary`, 해당 포인터 | 바이너리 본문 |
+| `StringReturnHandler` | `httpx.Response[string]`, 해당 포인터 | 텍스트 본문 |
+| `JSONReturnHandler` | 문자열 외 본문의 `httpx.Response[T]`, 해당 포인터 | JSON 본문 |
+| `ErrorReturnHandler` | `error` | 상태 코드와 `message`를 담은 JSON |
 
-| Handler | 지원 타입 | 응답 형식 |
-|---------|----------|----------|
-| `RedirectReturnValueHandler` | `httpx.Redirect` | Location 헤더 + 302 |
-| `BinaryReturnHandler` | `httpx.Binary` | 바이너리 데이터 (파일 등) |
-| `StringReturnHandler` | `httpx.Response[string]` | Plain Text |
-| `JSONReturnHandler` | `httpx.Response[T]` (T ≠ string) | JSON |
-| `ErrorReturnHandler` | `error` | JSON (상태 코드 매핑) |
+`ResponseOptions`로 상태 코드, 헤더, 쿠키를 지정할 수 있습니다. 응답 준비 중 직렬화나 쿠키 검증이 실패하면 성공 응답을 전송하지 않습니다.
 
-### ReturnValueHandler 인터페이스
+내부 반환값 핸들러의 계약은 다음과 같습니다.
 
 ```go
-// internal/handler/return_value.go
 type ReturnValueHandler interface {
     Supports(returnType reflect.Type) bool
     Handle(value any, ctx core.ExecutionContext) error
 }
 ```
 
+## PostExecutionHook: 이벤트 후처리
 
-## 9. PostExecutionHook
+성공 반환값의 직렬화와 응답 검증이 끝나면 등록된 `PostExecutionHook`을 실행합니다. 도메인 이벤트 디스패치 훅은 요청의 EventBus에서 이벤트를 꺼내 디스패처로 전달합니다.
 
-ReturnValueHandler 처리 후, 등록된 후처리 훅이 실행됩니다. 대표적으로 도메인 이벤트 발행이 이 단계에서 수행됩니다.
+핸들러가 오류를 반환했거나 성공 응답 준비가 실패하면 이 단계에 도달하지 않습니다. 훅 자체가 오류를 반환해도 실행 실패로 처리하며, 뒤의 `PostHandle`은 건너뜁니다.
 
-```go
-// PostHooks 실행
-for _, hook := range p.postHooks {
-    hook.AfterExecution(ctx, results, returnError)
-}
-```
+이 단계가 끝났다는 사실이 HTTP 응답 전송 완료를 뜻하지는 않습니다. `BeforeResponse`와 실제 응답 전송은 뒤에서 실행됩니다. 이벤트 수집과 발행 방법은 [실행 컨텍스트의 EventBus](/ko/learn/core-concepts/execution-context#event-publishing)를 참고하세요.
 
-```go
-// internal/event/hook/post_execution.go
-func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []any, err error) {
-    if err != nil {
-        return
-    }
-    events := ctx.EventBus().Drain()
-    if len(events) == 0 {
-        return
-    }
-    h.Dispatcher.Dispatch(ctx.Context(), events)
-}
-```
-
-
-## 10. Interceptor.PostHandle, BeforeResponse, AfterCompletion
+## 응답 전후의 인터셉터 처리
 
 ### PostHandle
 
-ReturnValueHandler 처리 후 역순으로 실행됩니다. 라우트 인터셉터가 먼저, 글로벌 인터셉터가 나중에 실행됩니다.
+핸들러, 성공 응답 준비, 후처리 훅이 모두 성공하면 `PostHandle`을 호출합니다. 라우트 인터셉터를 역순으로 실행한 뒤 전역 인터셉터를 역순으로 실행합니다.
 
-```go
-// 라우트 Interceptor postHandle (역순)
-for i := len(routeInterceptors) - 1; i >= 0; i-- {
-    routeInterceptors[i].PostHandle(ctx, meta)
-}
-
-// 글로벌 Interceptor postHandle (역순)
-for i := len(p.interceptors) - 1; i >= 0; i-- {
-    p.interceptors[i].PostHandle(ctx, meta)
-}
-```
+`PostHandle`은 오류를 반환할 수 없습니다. 트랜잭션 커밋처럼 결과를 최종 응답에 반영해야 하는 작업은 `BeforeResponse`에서 처리합니다.
 
 ### BeforeResponse
 
-`PreHandle`에 성공한 인터셉터만 라우트, 글로벌 순서로 각각 역순 실행됩니다. 이 시점에는 반환값 직렬화, 쿠키, status 검증과 post-execution hook이 끝났지만 실제 응답은 아직 flush되지 않았습니다. transaction commit/rollback 오류를 반환하면 최종 오류에 합쳐집니다.
+`BeforeResponse`는 성공과 실패 경로 모두에서, **`PreHandle`이 성공한 인터셉터만** 호출합니다. 라우트 인터셉터를 역순으로 실행한 뒤 전역 인터셉터를 역순으로 실행합니다.
 
-```go
-finalErr = runBeforeResponse(
-    ctx,
-    meta,
-    routeFinalizers,
-    globalFinalizers,
-    finalErr,
-)
-```
+`executionErr`에는 그 시점까지 발생한 오류가 전달됩니다. `BeforeResponse`에서 새 오류를 반환하면 기존 오류에 합쳐 다음 인터셉터와 최종 오류 처리로 전달합니다. 트랜잭션 인터셉터는 이 시점에 성공 여부를 보고 커밋하거나 롤백할 수 있습니다.
+
+`PreHandle`에서 오류나 `core.ErrAbortPipeline`을 반환한 인터셉터 자신은 `BeforeResponse` 호출 대상에 포함되지 않습니다.
 
 ### AfterCompletion
 
-성공/실패와 관계없이 **항상** 실행됩니다. `defer`로 보장됩니다. 라우트 인터셉터가 먼저, 글로벌 인터셉터가 나중에 정리됩니다.
+응답 처리 뒤에는 `AfterCompletion`을 호출합니다. 라우트를 선택했다면 라우트 인터셉터 전체를 역순으로 호출하고, 이어서 전역 인터셉터 전체를 역순으로 호출합니다. 성공, 오류, 의도적인 중단 모두 이 정리 단계를 거칩니다.
 
-```go
-// 라우트 Interceptor AfterCompletion (defer - 항상 실행)
-defer func() {
-    for i := len(routeInterceptors) - 1; i >= 0; i-- {
-        routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
-    }
-}()
+호출 범위는 `BeforeResponse`와 다릅니다. `PreHandle`을 실행하지 못했거나 `PreHandle`에서 실패한 인터셉터에도 `AfterCompletion`이 호출될 수 있습니다. 리소스가 생성되지 않은 경우에도 정리 코드가 동작하도록 작성하세요. 라우팅 전에 종료했다면 라우트 인터셉터는 아직 선택하지 않았으므로 전역 정리만 실행합니다.
 
-// 글로벌 Interceptor AfterCompletion (defer - 항상 실행)
-defer func() {
-    for i := len(p.interceptors) - 1; i >= 0; i-- {
-        p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
-    }
-}()
+이 단계에서는 로깅, 메트릭 수집, 리소스 정리를 수행합니다. HTTP 응답 기록을 시도한 뒤이므로 `AfterCompletion`에서 발생한 오류로 이미 전송된 응답을 바꿀 수는 없습니다.
+
+## 오류 응답과 응답 전송 {#error-responses}
+
+실행 오류는 `BeforeResponse`가 끝난 뒤 HTTP 오류 응답으로 변환합니다. 준비해 둔 성공 응답이 있으면 이를 되돌리고 오류 응답을 준비합니다. 그다음 버퍼의 응답을 실제 응답 작성기에 기록합니다.
+
+| 오류 조건 | HTTP 처리 |
+| --- | --- |
+| 등록된 핸들러를 찾지 못함 | 404 |
+| 유효한 `httperr.HTTPError` | 지정한 상태 코드와 메시지 |
+| 요청 본문 제한을 넘은 `http.MaxBytesError` | 413 |
+| 별도로 매핑하지 않은 실행 오류 | 500, `Internal server error` |
+| 이미 실제 응답이 커밋됨 | 이중 응답을 쓰지 않음 |
+
+바인딩 오류가 모두 400으로 매핑되지는 않습니다. v0.5.1에서는 잘못된 JSON이나 `path.Int` 숫자 파싱 실패가 500 응답으로 이어질 수 있습니다. 앱에서 입력 오류의 응답을 설계할 때에는 바인딩 실패와 핸들러가 명시적으로 반환하는 `httperr.BadRequest`를 구분하세요.
+
+실제 응답 전송 중 오류가 발생하면 최종 실행 오류에 포함됩니다. 아직 응답을 커밋하지 않았다면 500 응답을 쓰는 처리를 시도합니다. 이미 전송한 응답은 되돌릴 수 없습니다.
+
+## 중단 지점별 실행 범위
+
+다음 예는 전역 인터셉터와 라우트 인터셉터를 각각 하나씩 등록한 경우입니다. `before`는 `BeforeResponse`, `after`는 `AfterCompletion`을 뜻합니다.
+
+### 정상 처리
+
+```text
+pre:global → routing → binding → pre:route → handler
+→ return → hook → post:route → post:global
+→ before:route → before:global → flush → after:route → after:global
 ```
 
-리소스 정리, 로깅, 메트릭 수집 등에 활용합니다.
+### 라우트 PreHandle에서 중단
 
-
-## 11. handleExecutionError - 에러 안전망
-
-Pipeline 실행 중 에러가 발생하면 최종 안전망으로 응답을 작성합니다. 이미 응답이 커밋된 경우 이중 응답을 방지합니다.
-
-```go
-// internal/pipeline/pipeline.go
-defer func() {
-    if finalErr != nil {
-        p.handleExecutionError(ctx, finalErr)
-    }
-}()
-
-func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return
-    }
-    rw, ok := rwAny.(core.ResponseWriter)
-    if !ok {
-        return
-    }
-    
-    // 이미 응답이 커밋된 경우 이중 응답 방지
-    if rw.IsCommitted() {
-        return
-    }
-    
-    var httpErr *httperr.HTTPError
-    if errors.As(err, &httpErr) {
-        rw.WriteJSON(httpErr.Status, map[string]any{
-            "message": httpErr.Message,
-        })
-        return
-    }
-    
-    rw.WriteJSON(500, map[string]any{
-        "message": "Internal server error",
-    })
-}
+```text
+pre:global → routing → binding → pre:route(중단)
+→ before:global → flush → after:route → after:global
 ```
 
+컨트롤러를 호출하지 않습니다. 중단한 라우트 인터셉터의 `BeforeResponse`는 호출하지 않지만, `AfterCompletion`은 호출합니다.
 
-## 인터셉터 실행 순서 상세
+### 전역 PreHandle에서 중단
 
-테스트 코드로 검증된 실제 실행 순서입니다:
-
-### 정상 흐름
-
-```
-pre:global → pre:route → [Controller] → post:route → post:global → before:route → before:global → flush → after:route → after:global
-```
-
-### 라우트 인터셉터에서 중단 (ErrAbortPipeline)
-
-```
-pre:global → pre:route(중단) → before:global → flush → after:route → after:global
-```
-
-Controller는 호출되지 않지만, `AfterCompletion`은 항상 실행됩니다.
-
-### 글로벌 인터셉터에서 중단 (ErrAbortPipeline)
-
-```
+```text
 pre:global(중단) → flush → after:global
 ```
 
-Router도 호출되지 않으므로, 라우트 인터셉터도 실행되지 않습니다.
+라우터와 인자 바인딩을 실행하지 않습니다. 이 예에서는 성공한 `PreHandle`이 없으므로 `BeforeResponse`도 호출하지 않습니다.
 
+### 인자 바인딩에서 실패
 
-## 전체 실행 흐름 코드
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
-    // 에러 안전망: 에러 발생 시 응답 작성
-    defer func() {
-        if finalErr != nil {
-            p.handleExecutionError(ctx, finalErr)
-        }
-    }()
-
-    // 글로벌 Interceptor AfterCompletion (항상 실행)
-    globalMeta := core.HandlerMeta{}
-    defer func() {
-        for i := len(p.interceptors) - 1; i >= 0; i-- {
-            p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
-        }
-    }()
-
-    // 1. 글로벌 Interceptor PreHandle (라우팅 전)
-    for _, it := range p.interceptors {
-        if err := it.PreHandle(ctx, globalMeta); err != nil {
-            if errors.Is(err, core.ErrAbortPipeline) {
-                return nil
-            }
-            return err
-        }
-    }
-
-    // 2. Router가 실행 대상 결정
-    meta, err := p.router.Route(ctx)
-    if err != nil {
-        return err
-    }
-
-    routeInterceptors := meta.Interceptors
-
-    // 라우트 Interceptor AfterCompletion (항상 실행)
-    defer func() {
-        for i := len(routeInterceptors) - 1; i >= 0; i-- {
-            routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
-        }
-    }()
-
-    // 3. ParameterMeta 생성
-    paramMetas := buildParameterMeta(meta.Method, ctx)
-
-    // 4. ArgumentResolver 체인 실행
-    args, err := p.resolveArguments(ctx, paramMetas)
-    if err != nil {
-        return err
-    }
-
-    // 5. 라우트 Interceptor PreHandle
-    for _, it := range routeInterceptors {
-        if err := it.PreHandle(ctx, meta); err != nil {
-            if errors.Is(err, core.ErrAbortPipeline) {
-                return nil
-            }
-            return err
-        }
-    }
-
-    // 6. Controller 메서드 호출
-    results, err := p.invoker.Invoke(meta.ControllerType, meta.Method, args)
-    if err != nil {
-        return err
-    }
-
-    // 7. ReturnValueHandler 처리
-    returnError := p.handleReturn(ctx, results)
-
-    // 8. PostExecutionHook (이벤트 발행 등)
-    for _, hook := range p.postHooks {
-        hook.AfterExecution(ctx, results, returnError)
-    }
-
-    if returnError != nil {
-        return returnError
-    }
-
-    // 9. 라우트 Interceptor PostHandle (역순)
-    for i := len(routeInterceptors) - 1; i >= 0; i-- {
-        routeInterceptors[i].PostHandle(ctx, meta)
-    }
-
-    // 10. 글로벌 Interceptor PostHandle (역순)
-    for i := len(p.interceptors) - 1; i >= 0; i-- {
-        p.interceptors[i].PostHandle(ctx, meta)
-    }
-
-    return nil
-}
+```text
+pre:global → routing → binding(실패)
+→ before:global → 오류 응답 준비 → flush → after:route → after:global
 ```
 
+라우트 인터셉터를 선택한 뒤이므로 `AfterCompletion`은 호출합니다. 다만 해당 인터셉터의 `PreHandle`은 아직 실행하지 않았으므로 라우트 `BeforeResponse`는 호출하지 않습니다.
 
-## Pipeline 구조체
+## HTTP 외의 실행
 
-```go
-// internal/pipeline/pipeline.go
-type Pipeline struct {
-    router            router.Router
-    interceptors      []core.Interceptor
-    argumentResolvers []resolver.ArgumentResolver
-    returnHandlers    []handler.ReturnValueHandler
-    invoker           *invoker.Invoker
-    postHooks         []hook.PostExecutionHook
-}
-```
+이벤트 컨슈머와 WebSocket도 별도의 파이프라인 인스턴스에서 같은 실행 구조를 사용합니다. HTTP용 리졸버와 반환값 핸들러가 그대로 적용되는 것은 아닙니다.
 
-Pipeline은 단일 HTTP 파이프라인뿐 아니라 Consumer Pipeline, WebSocket Pipeline에서도 동일하게 사용됩니다. 각 Transport별로 별도의 Pipeline 인스턴스가 생성되며, Resolver와 Handler 구성만 달라집니다.
+| 실행 종류 | 라우팅 기준 | 기본 인자 | 응답 처리 |
+| --- | --- | --- | --- |
+| HTTP | HTTP 메서드와 요청 경로 | `context.Context`, `spine.Ctx`, 경로와 쿼리 타입, DTO 등 | HTTP 반환값 핸들러로 응답 준비 |
+| 이벤트 컨슈머 | `EVENT`와 이벤트 이름 | `context.Context`, 이벤트 이름, 원시 페이로드, 구조체 DTO | 컨슈머 런타임에서 실행 결과 처리 |
+| WebSocket | `WS`와 연결 요청 경로 | `context.Context`, `ws.ConnectionID`, 원시 페이로드, 구조체 DTO | 메시지 핸들러의 전송 API 사용 |
 
-
-## 요약
-
-| 단계 | 컴포넌트 | 책임 |
-|------|----------|------|
-| 1 | Transport Adapter | HTTP → ExecutionContext 변환 |
-| 2 | Global Interceptor.PreHandle | 라우팅 전 전처리 (CORS 등) |
-| 3 | Router | 요청 경로 → HandlerMeta 매핑 |
-| 4 | ParameterMeta Builder | 메서드 시그니처 분석 |
-| 5 | ArgumentResolver | 파라미터 타입 → 실제 값 생성 |
-| 6 | Route Interceptor.PreHandle | 라우트 전처리 (인증 등) |
-| 7 | Invoker | Controller 메서드 호출 |
-| 8 | ReturnValueHandler | 반환값 → HTTP 응답 변환 |
-| 9 | PostExecutionHook | 도메인 이벤트 발행 등 후처리 |
-| 10 | Route Interceptor.PostHandle ↩ | 라우트 후처리 (역순) |
-| 11 | Global Interceptor.PostHandle ↩ | 글로벌 후처리 (역순) |
-| 12 | BeforeResponse ↩ | 응답 전 transaction 마무리와 오류 결합 |
-| 13 | handleExecutionError | 오류 응답을 staged writer에 준비 |
-| 14 | buffered response flush | 검증이 끝난 응답만 실제 writer에 기록 |
-| 15 | AfterCompletion ↩ | 정리 (라우트 → 글로벌, 항상 실행) |
-
-이 순서는 **숨겨지지 않으며, 암묵적으로 변경되지 않습니다.** 이것이 Spine의 "No Magic" 철학입니다.
+특히 HTTP DTO는 포인터를 받지만, 기본 컨슈머와 WebSocket DTO 리졸버는 구조체 값을 지원합니다. HTTP의 `spine.Ctx` 리졸버도 기본 컨슈머와 WebSocket 파이프라인에는 등록되어 있지 않습니다. 각 프로토콜의 컨텍스트와 입력 차이는 [실행 컨텍스트](/ko/learn/core-concepts/execution-context)를 참고하세요.

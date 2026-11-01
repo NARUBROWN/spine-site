@@ -1,10 +1,11 @@
 import { defineConfig } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
+import { localizeMarkdownUi, themeUi } from './localized-ui'
 
 // https://vitepress.dev/reference/site-config
 export default withMermaid(defineConfig({
     title: "Spine",
-    description: "Spine is a backend framework for explicit request execution. It makes the entire execution flow visible and controllable — from request resolution to completion. No magic. No hidden behavior. Just execution.",
+    description: "Spine is a web framework that lets you register constructors, routes, and interceptors in Go code. Use the CLI to create a project, validate the app configuration, and start HTTP and message processing.",
     head: [
         ['link', { rel: 'icon', href: '/logo.png' }],
         ['meta', { property: 'og:image', content: 'https://spine.na2ru2.me/og-image.png' }],
@@ -20,14 +21,19 @@ export default withMermaid(defineConfig({
         ]
     },
 
+    markdown: {
+        config: localizeMarkdownUi
+    },
+
     locales: {
         en: {
             label: 'English',
             lang: 'en',
             link: '/en/',
+            description: 'Spine is a web framework that lets you register constructors, routes, and interceptors in Go code. Use the CLI to create a project, validate the app configuration, and start HTTP and message processing.',
             themeConfig: {
+                ...themeUi('en'),
                 outlineTitle: 'On this page',
-                sidebarMenuLabel: 'Menu',
                 docFooter: {
                     prev: 'Previous page',
                     next: 'Next page'
@@ -54,16 +60,16 @@ export default withMermaid(defineConfig({
                                 { text: '2. Controller', link: '/en/learn/tutorial/2-controller' },
                                 { text: '3. Dependency Injection', link: '/en/learn/tutorial/3-dependency-injection' },
                                 { text: '4. Interceptor', link: '/en/learn/tutorial/4-interceptor' },
-                                { text: '5. Database', link: '/en/learn/tutorial/5-database' },
-                                { text: '6. Transaction', link: '/en/learn/tutorial/6-transaction' },
+                                { text: '5. Database Connection', link: '/en/learn/tutorial/5-database' },
+                                { text: '6. Transaction Management', link: '/en/learn/tutorial/6-transaction' },
                                 { text: '7. Error Handling', link: '/en/learn/tutorial/7-error-handling' },
-                                { text: '8. Swagger', link: '/en/learn/tutorial/8-swagger' }
+                                { text: '8. Swagger and OpenAPI Documentation', link: '/en/learn/tutorial/8-swagger' }
                             ]
                         },
                         {
                             text: 'Core Concepts',
                             items: [
-                                { text: 'Pipeline', link: '/en/learn/core-concepts/pipeline' },
+                                { text: 'Execution Pipeline', link: '/en/learn/core-concepts/pipeline' },
                                 { text: 'ExecutionContext', link: '/en/learn/core-concepts/execution-context' },
                                 { text: 'HandlerMeta', link: '/en/learn/core-concepts/handler-meta' },
                                 { text: 'query.Values', link: '/en/learn/core-concepts/query-values' },
@@ -84,10 +90,10 @@ export default withMermaid(defineConfig({
                         {
                             text: 'Examples',
                             items: [
-                                { text: 'CRUD', link: '/en/reference/examples/crud' },
-                                { text: 'JWT Login', link: '/en/reference/examples/login' },
-                                { text: 'Kafka MSA', link: '/en/reference/examples/msa' },
-                                { text: 'WebSocket Chat', link: '/en/reference/examples/websocket' }
+                                { text: 'Build a User CRUD API', link: '/en/reference/examples/crud' },
+                                { text: 'JWT Login Example', link: '/en/reference/examples/login' },
+                                { text: 'Connect Order and Inventory Services with Kafka', link: '/en/reference/examples/msa' },
+                                { text: 'Build a WebSocket Chat', link: '/en/reference/examples/websocket' }
                             ]
                         },
                         {
@@ -114,10 +120,11 @@ export default withMermaid(defineConfig({
             label: '한국어',
             lang: 'ko',
             link: '/ko/',
+            description: 'Spine은 생성자, 라우트, 인터셉터를 Go 코드로 등록하는 웹 프레임워크입니다. CLI로 프로젝트를 만들고 앱 구성을 검증한 뒤 HTTP와 메시지 처리를 실행합니다.',
             themeConfig: {
+                ...themeUi('ko'),
                 siteTitle: false,
                 outlineTitle: '이 페이지에서',
-                sidebarMenuLabel: '메뉴',
                 socialLinks: [
                     { icon: 'github', link: 'https://github.com/NARUBROWN/spine' }
                 ],
@@ -147,10 +154,10 @@ export default withMermaid(defineConfig({
                                 { text: '2. 컨트롤러', link: '/ko/learn/tutorial/2-controller' },
                                 { text: '3. 의존성 주입', link: '/ko/learn/tutorial/3-dependency-injection' },
                                 { text: '4. 인터셉터', link: '/ko/learn/tutorial/4-interceptor' },
-                                { text: '5. 데이터베이스', link: '/ko/learn/tutorial/5-database' },
-                                { text: '6. 트랜잭션', link: '/ko/learn/tutorial/6-transaction' },
-                                { text: '7. 에러 처리', link: '/ko/learn/tutorial/7-error-handling' },
-                                { text: '8. 스웨거', link: '/ko/learn/tutorial/8-swagger' }
+                                { text: '5. 데이터베이스 연결', link: '/ko/learn/tutorial/5-database' },
+                                { text: '6. 트랜잭션 관리', link: '/ko/learn/tutorial/6-transaction' },
+                                { text: '7. 오류 처리', link: '/ko/learn/tutorial/7-error-handling' },
+                                { text: '8. Swagger와 OpenAPI 문서', link: '/ko/learn/tutorial/8-swagger' }
                             ]
                         },
                         {
@@ -178,10 +185,10 @@ export default withMermaid(defineConfig({
                         {
                             text: '예제 모음',
                             items: [
-                                { text: 'CRUD 기본', link: '/ko/reference/examples/crud' },
-                                { text: 'JWT 로그인', link: '/ko/reference/examples/login' },
-                                { text: 'Kafka MSA', link: '/ko/reference/examples/msa' },
-                                { text: '웹소켓 채팅', link: '/ko/reference/examples/websocket' }
+                                { text: '사용자 CRUD API 만들기', link: '/ko/reference/examples/crud' },
+                                { text: 'JWT 로그인 예제', link: '/ko/reference/examples/login' },
+                                { text: 'Kafka로 주문 서비스와 재고 서비스 연결하기', link: '/ko/reference/examples/msa' },
+                                { text: 'WebSocket 채팅 만들기', link: '/ko/reference/examples/websocket' }
                             ]
                         },
                         {
@@ -208,10 +215,11 @@ export default withMermaid(defineConfig({
             label: '日本語',
             lang: 'ja',
             link: '/ja/',
+            description: 'Spineは、コンストラクター、ルート、インターセプターをGoコードで登録するWebフレームワークです。CLIでプロジェクトを作成し、アプリの構成を検証してからHTTPとメッセージの処理を実行します。',
             themeConfig: {
+                ...themeUi('ja'),
                 siteTitle: false,
                 outlineTitle: 'このページ',
-                sidebarMenuLabel: 'メニュー',
                 socialLinks: [
                     { icon: 'github', link: 'https://github.com/NARUBROWN/spine' }
                 ],
@@ -241,10 +249,10 @@ export default withMermaid(defineConfig({
                                 { text: '2. コントローラー', link: '/ja/learn/tutorial/2-controller' },
                                 { text: '3. 依存関係の注入', link: '/ja/learn/tutorial/3-dependency-injection' },
                                 { text: '4. インターセプター', link: '/ja/learn/tutorial/4-interceptor' },
-                                { text: '5. データベース', link: '/ja/learn/tutorial/5-database' },
-                                { text: '6. トランザクション', link: '/ja/learn/tutorial/6-transaction' },
+                                { text: '5. データベース接続', link: '/ja/learn/tutorial/5-database' },
+                                { text: '6. トランザクション管理', link: '/ja/learn/tutorial/6-transaction' },
                                 { text: '7. エラーハンドリング', link: '/ja/learn/tutorial/7-error-handling' },
-                                { text: '8. Swagger', link: '/ja/learn/tutorial/8-swagger' }
+                                { text: '8. SwaggerとOpenAPIドキュメント', link: '/ja/learn/tutorial/8-swagger' }
                             ]
                         },
                         {
@@ -271,10 +279,10 @@ export default withMermaid(defineConfig({
                         {
                             text: 'サンプル集',
                             items: [
-                                { text: 'CRUDの基本', link: '/ja/reference/examples/crud' },
-                                { text: 'JWTログイン', link: '/ja/reference/examples/login' },
-                                { text: 'Kafka MSA', link: '/ja/reference/examples/msa' },
-                                { text: 'WebSocketチャット', link: '/ja/reference/examples/websocket' }
+                                { text: 'ユーザーCRUD APIを作る', link: '/ja/reference/examples/crud' },
+                                { text: 'JWTログインの例', link: '/ja/reference/examples/login' },
+                                { text: 'Kafkaで注文サービスと在庫サービスを接続する', link: '/ja/reference/examples/msa' },
+                                { text: 'WebSocketチャットを作る', link: '/ja/reference/examples/websocket' }
                             ]
                         },
                         {
@@ -301,7 +309,9 @@ export default withMermaid(defineConfig({
             label: '简体中文',
             lang: 'zh-CN',
             link: '/zh-Hans/',
+            description: 'Spine 是一个通过 Go 代码注册构造函数、路由和拦截器的 Web 框架。使用 CLI 创建项目、验证应用配置，然后启动 HTTP 和消息处理。',
             themeConfig: {
+                ...themeUi('zh-Hans'),
                 siteTitle: false,
                 outlineTitle: '本页内容',
                 docFooter: { prev: '上一页', next: '下一页' },
@@ -322,10 +332,10 @@ export default withMermaid(defineConfig({
                             { text: '2. 控制器', link: '/zh-Hans/learn/tutorial/2-controller' },
                             { text: '3. 依赖注入', link: '/zh-Hans/learn/tutorial/3-dependency-injection' },
                             { text: '4. 拦截器', link: '/zh-Hans/learn/tutorial/4-interceptor' },
-                            { text: '5. 数据库', link: '/zh-Hans/learn/tutorial/5-database' },
-                            { text: '6. 事务', link: '/zh-Hans/learn/tutorial/6-transaction' },
+                            { text: '5. 数据库连接', link: '/zh-Hans/learn/tutorial/5-database' },
+                            { text: '6. 事务管理', link: '/zh-Hans/learn/tutorial/6-transaction' },
                             { text: '7. 错误处理', link: '/zh-Hans/learn/tutorial/7-error-handling' },
-                            { text: '8. Swagger', link: '/zh-Hans/learn/tutorial/8-swagger' }
+                            { text: '8. Swagger 和 OpenAPI 文档', link: '/zh-Hans/learn/tutorial/8-swagger' }
                         ] },
                         { text: '核心概念', items: [
                             { text: '执行管道', link: '/zh-Hans/learn/core-concepts/pipeline' },
@@ -343,10 +353,10 @@ export default withMermaid(defineConfig({
                             { text: 'query.Values', link: '/zh-Hans/reference/api/query-values' }
                         ] },
                         { text: '示例', items: [
-                            { text: 'CRUD', link: '/zh-Hans/reference/examples/crud' },
-                            { text: 'JWT 登录', link: '/zh-Hans/reference/examples/login' },
-                            { text: 'Kafka MSA', link: '/zh-Hans/reference/examples/msa' },
-                            { text: 'WebSocket 聊天', link: '/zh-Hans/reference/examples/websocket' }
+                            { text: '创建用户 CRUD API', link: '/zh-Hans/reference/examples/crud' },
+                            { text: 'JWT 登录示例', link: '/zh-Hans/reference/examples/login' },
+                            { text: '使用 Kafka 连接订单服务和库存服务', link: '/zh-Hans/reference/examples/msa' },
+                            { text: '创建 WebSocket 聊天应用', link: '/zh-Hans/reference/examples/websocket' }
                         ] },
                         { text: '运维', items: [
                             { text: '安全配置', link: '/zh-Hans/reference/security-configuration' }
@@ -366,7 +376,9 @@ export default withMermaid(defineConfig({
             label: '繁體中文',
             lang: 'zh-TW',
             link: '/zh-Hant/',
+            description: 'Spine 是一個透過 Go 程式碼註冊建構子、路由和攔截器的 Web 框架。使用 CLI 建立專案、驗證應用程式設定，然後啟動 HTTP 和訊息處理。',
             themeConfig: {
+                ...themeUi('zh-Hant'),
                 siteTitle: false,
                 outlineTitle: '本頁內容',
                 docFooter: { prev: '上一頁', next: '下一頁' },
@@ -387,10 +399,10 @@ export default withMermaid(defineConfig({
                             { text: '2. 控制器', link: '/zh-Hant/learn/tutorial/2-controller' },
                             { text: '3. 相依性注入', link: '/zh-Hant/learn/tutorial/3-dependency-injection' },
                             { text: '4. 攔截器', link: '/zh-Hant/learn/tutorial/4-interceptor' },
-                            { text: '5. 資料庫', link: '/zh-Hant/learn/tutorial/5-database' },
-                            { text: '6. 交易', link: '/zh-Hant/learn/tutorial/6-transaction' },
+                            { text: '5. 資料庫連線', link: '/zh-Hant/learn/tutorial/5-database' },
+                            { text: '6. 交易管理', link: '/zh-Hant/learn/tutorial/6-transaction' },
                             { text: '7. 錯誤處理', link: '/zh-Hant/learn/tutorial/7-error-handling' },
-                            { text: '8. Swagger', link: '/zh-Hant/learn/tutorial/8-swagger' }
+                            { text: '8. Swagger 與 OpenAPI 文件', link: '/zh-Hant/learn/tutorial/8-swagger' }
                         ] },
                         { text: '核心概念', items: [
                             { text: '執行管線', link: '/zh-Hant/learn/core-concepts/pipeline' },
@@ -408,10 +420,10 @@ export default withMermaid(defineConfig({
                             { text: 'query.Values', link: '/zh-Hant/reference/api/query-values' }
                         ] },
                         { text: '範例', items: [
-                            { text: 'CRUD', link: '/zh-Hant/reference/examples/crud' },
-                            { text: 'JWT 登入', link: '/zh-Hant/reference/examples/login' },
-                            { text: 'Kafka MSA', link: '/zh-Hant/reference/examples/msa' },
-                            { text: 'WebSocket 聊天', link: '/zh-Hant/reference/examples/websocket' }
+                            { text: '建立使用者 CRUD API', link: '/zh-Hant/reference/examples/crud' },
+                            { text: 'JWT 登入範例', link: '/zh-Hant/reference/examples/login' },
+                            { text: '使用 Kafka 連接訂單服務與庫存服務', link: '/zh-Hant/reference/examples/msa' },
+                            { text: '建立 WebSocket 聊天應用程式', link: '/zh-Hant/reference/examples/websocket' }
                         ] },
                         { text: '維運', items: [
                             { text: '安全性設定', link: '/zh-Hant/reference/security-configuration' }

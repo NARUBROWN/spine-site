@@ -1,37 +1,39 @@
 # インストール
 
-Spine CLIをインストールし、CLIで生成したプロジェクトで開発を始めます。このガイドは Spine CLI **0.1.4**、生成される Spine の依存バージョン **v0.5.1** を対象とします。
+Spine CLIをインストールし、新しいプロジェクトを作成して、開発サーバーのレスポンスを確認します。このページは、Spine CLI 0.1.4と、CLIが生成するSpine v0.5.1のプロジェクトを対象としています。
 
-## 前提条件
+## 要件
 
-- Go **1.25.5 以上**。CLIの推奨・検証済みバージョンは **1.27.3** です。
-- Goの実行ファイルのインストール先を `PATH` に追加してください。`GOBIN` が未設定の場合、既定のパスは `$(go env GOPATH)/bin` です。
+- Go 1.25.5以上が必要です。CLIの推奨バージョンはGo 1.27.3です。
+- Goの実行ファイルのインストール先が`PATH`に含まれている必要があります。`GOBIN`を設定していない場合、既定のパスは`$(go env GOPATH)/bin`です。
 
 ```bash
 go version
 ```
 
+表示されたGoのバージョンが1.25.5以上であることを確認してください。
+
 ## CLIのインストール
 
-このサイトでは `spine` コマンドを使用します。
+次のコマンドでCLIをインストールし、バージョンを確認します。
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
 spine version
 ```
 
-インストール後に `spine` が見つからず、`GOBIN` を設定していない場合は、Bash・Zshの現在のセッションに既定の実行ファイルパスを追加します。継続利用する場合はシェルの起動ファイルにも保存してください。`GOBIN` を設定した場合は、そのディレクトリを追加します。
+`spine version`が`spine-cli 0.1.4`を表示すれば、インストールは完了です。
+
+`spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
 
 ```bash
 export PATH="$(go env GOPATH)/bin:$PATH"
 spine version
 ```
 
-バージョン出力は `spine-cli 0.1.4` です。
+## 新しいプロジェクトの生成
 
-## プロジェクトの生成
-
-プロジェクトを作成する親ディレクトリで実行します。
+プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。
 
 ```bash
 spine new my-app --module example.com/my-app
@@ -39,9 +41,9 @@ cd my-app
 go mod tidy
 ```
 
-CLI は `go.mod` に Spine `v0.5.1` を指定します。`go mod tidy` で依存関係を準備します。
+`my-app`ディレクトリにプロジェクトファイルが生成されます。CLIは`go.mod`にSpine `v0.5.1`を指定し、`go mod tidy`が必要な依存関係をダウンロードします。
 
-生成された `spine.toml` は次のとおりです。
+生成される`spine.toml`は次のとおりです。
 
 ```toml
 module = "example.com/my-app"
@@ -50,7 +52,7 @@ composition = "./internal/application"
 port = 8080
 ```
 
-`internal/application/application.go` の `BuildApplication()` が構成要素と `GET /health` を登録します。生成された `main.go` はこの関数を呼び、`app.Validate(options)` を通過してから `app.Run(options)` を実行します。
+`internal/application/application.go`の`BuildApplication()`が構成要素と`GET /health`を登録します。生成された`main.go`はこの関数を呼び出し、`app.Validate(options)`で構成を検証してから、`app.Run(options)`でサーバーを実行します。
 
 ## 検証と実行
 
@@ -61,9 +63,18 @@ spine contract check
 spine verify
 ```
 
-`doctor` はツールとプロジェクト設定を診断し、`inspect` は登録された実行契約を表示します。`contract check` は静的契約を検証し、`verify` は契約・gofmt・vet・test を検査します。生成された `application_test.go` もサーバーを起動せずに `BuildApplication()` と `app.Validate(options)` を検証します。
+各コマンドがエラーなく終了することを確認してください。
 
-検査が成功したら `spine dev` で実行し、別のターミナルから実際の HTTP 応答を確認します。
+| コマンド | 確認する内容 |
+| --- | --- |
+| `spine doctor` | Goのツールとプロジェクト設定 |
+| `spine inspect` | コードに登録されたルートや依存関係などのアプリ構成 |
+| `spine contract check` | 登録コードから抽出した実行契約の有効性 |
+| `spine verify` | 実行契約と`gofmt`、`go vet`、Goのテスト結果 |
+
+生成された`application_test.go`は、サーバーを起動せずに`BuildApplication()`と`app.Validate(options)`を検査します。この段階ではコードとアプリの構成を検証します。実際のHTTPレスポンスは次の段階で確認します。
+
+検査に合格したら`spine dev`で実行し、別のターミナルで実際のHTTPレスポンスを確認します。
 
 ```bash
 spine dev
@@ -73,8 +84,8 @@ spine dev
 curl http://localhost:8080/health
 ```
 
-応答は `{"status":"ok"}` です。`Ctrl+C` で開発サーバーを終了します。ローカル検証と外部 DB・broker・デプロイ環境の E2E は別に確認します。
+`{"status":"ok"}`が返れば、開発サーバーがリクエストを処理できたことを確認できます。サーバーを実行したターミナルで`Ctrl+C`を押して終了します。外部のデータベースやメッセージブローカーを接続した後、またはデプロイした後は、その環境でも動作を確認する必要があります。
 
 ## 次のステップ
 
-[5分クイックスタート →](/ja/learn/getting-started/first-app)で生成されたプロジェクトと最初のAPIを確認してください。
+[最初のアプリ](/ja/learn/getting-started/first-app)で生成されたファイルの役割を確認するか、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で機能を追加してください。

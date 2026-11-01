@@ -1,8 +1,28 @@
 # JWT 로그인 예제
 
-Spine으로 JWT 기반 로그인을 구현합니다.
+회원가입과 로그인 API를 만들고, 로그인할 때 발급한 JWT로 내 정보를 조회합니다. 인증 인터셉터는 `/me`에만 적용하므로 회원가입과 로그인은 토큰 없이 요청할 수 있습니다.
 
-## 프로젝트 구조
+## 시작 전 준비
+
+[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. CLI 0.1.4는 JWT 인증 생성기를 제공하지 않습니다. 기본 프로젝트를 만든 뒤 아래 인증 코드를 직접 추가하고 `github.com/golang-jwt/jwt/v5`를 설치합니다.
+
+이 예제는 인증 흐름을 익히기 위해 메모리 저장소, 평문 비밀번호 비교, 코드에 고정한 JWT 비밀키를 사용합니다. 서버를 종료하면 가입 정보가 사라집니다. 실제 서비스에 적용하기 전에는 비밀번호 해시와 환경변수로 관리하는 JWT 비밀키를 사용해야 합니다.
+
+## 1. 프로젝트 생성
+
+기본 앱과 JWT 의존성을 준비합니다. 이후 명령은 `login-example/`에서 실행합니다.
+
+```sh
+spine new login-example --module example.com/login-example
+cd login-example
+go mod tidy
+spine doctor
+go get github.com/golang-jwt/jwt/v5
+```
+
+### 파일 배치
+
+다음 단계에서 `src/` 아래에 네 파일을 추가하고, 생성된 `internal/application/application.go`를 교체합니다. 루트의 `main.go`와 `spine.toml`은 그대로 사용합니다.
 
 ```text
 login-example/
@@ -19,20 +39,9 @@ login-example/
     └── store/user_store.go
 ```
 
+## 2. 사용자 모델과 요청 및 응답 정의
 
-## CLI로 프로젝트 생성
-
-[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료합니다. CLI 0.1.4는 JWT 인증 생성기를 제공하지 않으므로, 기본 프로젝트를 생성한 뒤 아래 인증 코드를 `src/`에 직접 추가합니다.
-
-```sh
-spine new login-example --module example.com/login-example
-cd login-example
-go mod tidy
-spine doctor
-go get github.com/golang-jwt/jwt/v5
-```
-
-## 모델 정의
+`src/model/user.go`를 새로 만듭니다. `Password`의 `json:"-"` 태그는 비밀번호가 JSON 응답에 포함되지 않도록 합니다.
 
 ```go
 // src/model/user.go
@@ -62,10 +71,9 @@ type SignupRequest struct {
 }
 ```
 
+## 3. 사용자 저장소 추가
 
-## 유저 저장소
-
-인메모리 저장소로 간단하게 구현합니다.
+`src/store/user_store.go`를 새로 만듭니다. 메모리에 사용자를 저장하고, 이메일과 ID로 조회합니다. 같은 이메일로 다시 가입하면 오류를 반환합니다.
 
 ```go
 // src/store/user_store.go
@@ -137,10 +145,9 @@ func (s *UserStore) FindByID(id int64) (*model.User, error) {
 }
 ```
 
+## 4. 인증 인터셉터 추가
 
-## 인증 인터셉터
-
-JWT 토큰을 검증하는 라우트 인터셉터입니다.
+`src/interceptor/auth_interceptor.go`를 새로 만듭니다. `Authorization: Bearer <token>` 헤더에서 JWT를 읽고 서명과 만료 시각을 검증합니다. 검증한 `user_id`는 컨트롤러에서 읽을 수 있도록 실행 컨텍스트에 저장합니다.
 
 ```go
 // src/interceptor/auth_interceptor.go
@@ -196,7 +203,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("Invalid user ID claim.")
     }
     userID := int64(rawID)
-    
+
     // ExecutionContext에 사용자 ID 저장
     ctx.Set("userID", userID)
 
@@ -212,10 +219,9 @@ func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Ha
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
+## 5. 인증 컨트롤러 추가
 
-## 컨트롤러
-
-로그인, 회원가입, 내 정보 조회 기능을 구현합니다.
+`src/controller/auth_controller.go`를 새로 만듭니다. 회원가입은 사용자를 저장하고, 로그인은 이메일과 비밀번호를 확인한 뒤 JWT를 발급합니다. 내 정보 조회는 인터셉터가 저장한 사용자 ID로 저장소를 조회합니다.
 
 ```go
 // src/controller/auth_controller.go
@@ -312,10 +318,9 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
 }
 ```
 
+## 6. 생성자와 인증 라우트 등록
 
-## 앱 구성
-
-생성된 루트 `main.go`는 그대로 유지합니다. `BuildApplication` → `Validate` → `Run` 순서로 실행하며, 다음 코드는 `internal/application/application.go`를 대체합니다.
+`internal/application/application.go` 전체를 다음 코드로 교체합니다. 저장소와 컨트롤러 생성자를 등록하고 `/me`에만 인증 인터셉터를 연결합니다. 생성된 루트 `main.go`는 `BuildApplication`, `Validate`, `Run`을 순서대로 실행합니다.
 
 ```go
 // internal/application/application.go
@@ -362,7 +367,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 검증과 실행
+## 7. 검증하고 서버 실행
+
+프로젝트 루트에서 형식을 정리하고 의존성과 코드를 검사한 뒤 서버를 실행합니다.
 
 ```sh
 gofmt -w src internal/application
@@ -372,9 +379,11 @@ spine verify
 spine dev
 ```
 
-`contract check`는 정적 계약, `verify`는 계약·gofmt·vet·Go 테스트를 확인합니다. 실제 가입·로그인·인증 요청은 아래 HTTP 테스트로 별도 확인합니다. 메모리 저장소와 평문 비밀번호 비교는 학습용입니다. 실제 서비스에서는 비밀번호 해시와 환경변수 기반 JWT 비밀키를 사용하세요.
+`contract check`는 정적 계약을 검사합니다. `verify`는 정적 계약과 gofmt, go vet, Go 테스트를 검사합니다. 실제 회원가입과 로그인, 인증은 다음 HTTP 요청으로 확인합니다.
 
-## API 테스트
+## 8. 회원가입과 인증 요청 확인
+
+서버를 실행한 상태에서 다른 터미널을 열어 아래 요청을 순서대로 보냅니다. 새 서버에서 첫 가입자의 ID는 `1`입니다.
 
 ### 회원가입
 
@@ -384,7 +393,7 @@ curl -X POST http://localhost:8080/signup \
   -d '{"email": "alice@example.com", "password": "1234", "name": "Alice"}'
 ```
 
-응답:
+HTTP 200과 가입한 사용자 정보가 반환됩니다. 비밀번호는 응답에 포함되지 않습니다.
 
 ```json
 {
@@ -402,7 +411,7 @@ curl -X POST http://localhost:8080/login \
   -d '{"email": "alice@example.com", "password": "1234"}'
 ```
 
-응답:
+HTTP 200과 JWT가 반환됩니다. 아래 응답은 토큰을 줄여 표시한 예시입니다. `/me`를 요청할 때는 실제 응답의 `token` 값을 사용합니다.
 
 ```json
 {
@@ -415,15 +424,15 @@ curl -X POST http://localhost:8080/login \
 }
 ```
 
-### 내 정보 조회 (인증 필요)
+### 토큰 없이 내 정보 조회
 
-토큰 없이 요청:
+인증 헤더 없이 `/me`를 요청합니다.
 
 ```bash
 curl http://localhost:8080/me
 ```
 
-응답:
+HTTP 401과 다음 오류 메시지가 반환됩니다.
 
 ```json
 {
@@ -431,9 +440,9 @@ curl http://localhost:8080/me
 }
 ```
 
-토큰과 함께 요청:
+### 토큰으로 내 정보 조회
 
-로그인 응답의 `token` 값을 생략 없이 복사합니다. 아래 `read` 명령을 실행하면 그 토큰을 붙여넣고 Enter를 누른 뒤 `/me` 요청을 실행합니다.
+로그인 응답의 `token` 값을 생략 없이 복사합니다. 먼저 아래 `read` 명령을 실행하고, 입력을 기다리는 상태에서 토큰을 붙여넣은 뒤 Enter를 누릅니다. 이어 `curl` 명령으로 `/me`를 요청합니다.
 
 ```sh
 read -r TOKEN
@@ -441,7 +450,7 @@ curl http://localhost:8080/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-응답:
+토큰이 유효하면 HTTP 200과 해당 사용자의 정보가 반환됩니다.
 
 ```json
 {
@@ -451,8 +460,9 @@ curl http://localhost:8080/me \
 }
 ```
 
+## 인증 인터셉터가 실행되는 순서
 
-## 라우트 인터셉터 동작 흐름
+CORS 인터셉터는 모든 라우트에서 실행됩니다. 인증 인터셉터는 `/me`에서 토큰을 검증한 뒤 컨트롤러에 사용자 ID를 전달합니다.
 
 ```
 POST /signup (공개)
@@ -479,11 +489,14 @@ GET /me (보호됨)
    └─→ Response 200 + 사용자 정보
 ```
 
-
-## 핵심 정리
+## 라우트별 인증 범위
 
 | 라우트 | 메서드 | 인터셉터 | 설명 |
 |--------|--------|----------|------|
-| `/signup` | POST | 전역만 | 회원가입 (공개) |
-| `/login` | POST | 전역만 | 로그인 후 JWT 발급 (공개) |
-| `/me` | GET | 전역 + Auth | 내 정보 조회 (인증 필요) |
+| `/signup` | POST | CORS | 토큰 없이 회원가입 |
+| `/login` | POST | CORS | 토큰 없이 로그인 후 JWT 발급 |
+| `/me` | GET | CORS, Auth | JWT 검증 후 내 정보 조회 |
+
+## 다음 단계
+
+[인터셉터 API](/ko/reference/api/interceptor)에서 실행 순서와 각 메서드의 역할을 확인하세요. 사용자 정보를 영속적으로 저장하려면 [데이터베이스 연결](/ko/learn/tutorial/5-database)을 참고하세요.

@@ -1,378 +1,183 @@
-# 実行pipeline
+# 実行パイプライン
 
-コントローラー例は[CLIで生成したプロジェクト](/ja/learn/tutorial/1-project-structure)の構成要素です。成功応答は`github.com/NARUBROWN/spine/pkg/httpx`の`httpx.Response[T]`で包み、リクエストDTOはポインターで受け取ります。コンストラクタとルートは`BuildApplication`に登録します。
+Spine の実行パイプラインは、リクエストを受け取ってハンドラーを選び、引数をバインドし、戻り値からレスポンスを作る流れです。インターセプターを実行するタイミングや、エラーが発生したときにどの段階まで処理が進むかを理解するための基準になります。
 
-Spineの要求ライフサイクルを理解する。
+このドキュメントでは、Spine v0.5.1 の HTTP の実行順序を説明します。HTTP、イベントコンシューマー、WebSocket は同じパイプライン実装を使いますが、入力を解釈するリゾルバーとレスポンス処理の構成は異なります。
 
+コントローラーの例は、[CLI で生成したプロジェクト](/ja/learn/tutorial/1-project-structure)に追加するコードです。リクエスト DTO はポインターで受け取り、通常の成功レスポンスは `github.com/NARUBROWN/spine/pkg/httpx` の `httpx.Response[T]` で返します。コンストラクタとルートは `BuildApplication` で登録します。
 
-## 概要
+## HTTP リクエストの実行順序
 
-Spineの中心的な哲学は、**実行フローの明示性**です。ほとんどのWebフレームワークは要求処理プロセスを内部に隠しますが、Spineはすべてのステップをコード構造に固定して明確に明らかにします。
-
-すべてのHTTPリクエストは、次のパイプラインを**必ず**順に渡します。
-
+正常なリクエストは次の順序で処理します。各インターセプターの `PreHandle` は登録順に、後処理メソッドは逆順に実行します。
 
 ```mermaid
 graph TD
-    Request["HTTP Request"]
-    
-    ExecutionContext["ExecutionContext<br>(リクエスト コンテキスト 生成)"]
-    GlobalPre["Global Interceptor.PreHandle<br>(ルーティング前 前処理)"]
-    Router["Router<br>(HandlerMeta 任意)"]
-    ParamMeta["ParameterMeta Builder<br>(パラメータ メタ情報 構成)"]
-    ArgResolver["ArgumentResolver Chain<br>(引数 値 生成)"]
-    RoutePre["Route Interceptor.PreHandle<br>(ルート 前処理)"]
-    Invoker["Invoker<br>(Controller メソッド 呼び出し)"]
-    ReturnHandler["ReturnValueHandler<br>(返却値 → レスポンス 変換)"]
-    PostHook["PostExecutionHook<br>(イベント 発行 など)"]
-    RoutePost["Route Interceptor.PostHandle ↩<br>(ルート 後処理)"]
-    GlobalPost["Global Interceptor.PostHandle ↩<br>(グローバル 後処理)"]
-    RouteBefore["Route Interceptor.BeforeResponse ↩<br>(応答前)"]
-    GlobalBefore["Global Interceptor.BeforeResponse ↩<br>(応答前)"]
-    Flush["Buffered Response Flush"]
-    RouteAfter["Route Interceptor.AfterCompletion ↩<br>(常に 実行)"]
-    GlobalAfter["Global Interceptor.AfterCompletion ↩<br>(常に 実行)"]
-    ErrorHandler["handleExecutionError<br>(エラーセーフティネット)"]
-    Response["HTTP Response"]
+    Request["HTTP リクエスト"]
+    Context["ExecutionContext を生成"]
+    GlobalPre["グローバル PreHandle<br>ルーティング前の前処理"]
+    Router["Router<br>HandlerMeta を選択"]
+    Binding["ParameterMeta を構成<br>ArgumentResolver で引数をバインド"]
+    RoutePre["ルート PreHandle<br>ハンドラー呼び出し前の前処理"]
+    Handler["Invoker<br>コントローラーメソッドを呼び出す"]
+    Return["ReturnValueHandler<br>成功レスポンスの準備と検証"]
+    Hook["PostExecutionHook<br>ドメインイベントの後処理"]
+    Post["PostHandle<br>ルート、グローバルの順でそれぞれ逆順に実行"]
+    Before["BeforeResponse<br>ルート、グローバルの順でそれぞれ逆順に実行"]
+    Flush["バッファーに準備したレスポンスを送信"]
+    After["AfterCompletion<br>ルート、グローバルの順でそれぞれ逆順に実行"]
+    Response["HTTP レスポンス完了"]
 
-    Request --> ExecutionContext
-    ExecutionContext --> GlobalPre
+    Request --> Context
+    Context --> GlobalPre
     GlobalPre --> Router
-    Router --> ParamMeta
-    ParamMeta --> ArgResolver
-    ArgResolver --> RoutePre
-    RoutePre --> Invoker
-    Invoker --> ReturnHandler
-    ReturnHandler --> PostHook
-    PostHook --> RoutePost
-    RoutePost --> GlobalPost
-    GlobalPost --> RouteBefore
-    RouteBefore --> GlobalBefore
-    GlobalBefore --> ErrorHandler
-    ErrorHandler --> Flush
-    Flush --> RouteAfter
-    RouteAfter --> GlobalAfter
-    GlobalAfter --> Response
+    Router --> Binding
+    Binding --> RoutePre
+    RoutePre --> Handler
+    Handler --> Return
+    Return --> Hook
+    Hook --> Post
+    Post --> Before
+    Before --> Flush
+    Flush --> After
+    After --> Response
 ```
 
+ハンドラーが返した成功レスポンスは、すぐには送信しません。パイプラインはバッファーにレスポンスを準備し、後処理と `BeforeResponse` が終わってから実際の HTTP レスポンスに書き込みます。途中でエラーが発生した場合は、送信するレスポンスをエラーレスポンスに変更できます。
 
-## 1. ExecutionContextの生成
+## リクエストコンテキストの生成
 
-HTTP要求が到着すると、Transportアダプター（Echo）は要求をSpineの`ExecutionContext`に変換します。
+HTTP アダプターはリクエストごとに `core.ExecutionContext` を作成します。パイプラインはこのオブジェクトでリクエストのメソッドとパスを読み取り、インターセプターが保存した値を共有し、リクエストに属するイベントを収集します。
 
+同じコンテキストを使っていても、各コンポーネントがアクセスできる範囲は異なります。
 
-```go
-// internal/adapter/echo/adapter.go
-func (s *Server) handle(c echo.Context) error {
-    ctx := NewContext(c)
-    
-    ctx.Set(
-        "spine.response_writer",
-        NewEchoResponseWriter(c),
-    )
-    
-    if err := s.pipeline.Execute(ctx); err != nil {
-        c.Logger().Errorf("pipeline error: %v", err)
-        // パイプラインの内部で すでに レスポンスは 作成されたために
-        // Echo 基本 エラー ハンドラーに 重複 伝達しません.
-        return nil
-    }
-    return nil
-}
-```
+| コンポーネント | コンテキストの使い方 |
+| --- | --- |
+| ルーター | メソッドとパスからハンドラーを探し、パスパラメーターを保存 |
+| インターセプター | リクエスト情報の参照、実行状態の保存、レスポンス前後の処理 |
+| 引数リゾルバー | コンテキストからコントローラーの引数を生成 |
+| 戻り値ハンドラー | コンテキストに関連付けられたレスポンスライターでレスポンスを準備 |
+| コントローラー | 意味を表す型、`context.Context`、読み取り専用の `spine.Ctx` で必要な値だけを受け取る |
 
-`ExecutionContext`は、パイプライン全体で共有される要求スコープのコンテキストです。 HTTPメソッド、パス、ヘッダー、クエリパラメータなど、リクエスト内のすべての情報にアクセスできます。
+コントローラーには `core.ExecutionContext` を直接注入しません。インターセプターが保存した値をコントローラーで読み取る場合は、`pkg/spine.Ctx` を使います。メソッドごとのアクセス範囲は[実行コンテキスト](/ja/learn/core-concepts/execution-context)で説明します。
 
-> **注**：WebSocketリクエストも同じパイプラインを使用します。 `ws.Runtime` このメッセージごとに `WSExecutionContext` を生成して `pipeline.Execute(ctx)` を呼び出します。
+## グローバルインターセプター: ルーティング前の処理
 
+`app.Interceptor()` で登録したグローバルインターセプターの `PreHandle` を最初に実行します。まだハンドラーを選んでいないため、この呼び出しには空の `core.HandlerMeta{}` を渡します。
 
-## 2. Global Interceptor.PreHandle
+この段階は、CORS プリフライトのようにルートを選ぶ前に処理する必要がある作業に使います。たとえば CORS インターセプターは、許可された `OPTIONS` リクエストのレスポンスを準備し、`core.ErrAbortPipeline` を返して後続の実行を中断できます。
 
-**ルーティングの前に**グローバルインターセプタが最初に実行されます。この時点では、まだどのハンドラが実行されるかが決定されていないため、空の`HandlerMeta`が渡されます。
+グローバルの `PreHandle` では、次の制約を考慮する必要があります。
 
+- 実行するコントローラーとメソッドは、まだ決まっていません。
+- Spine ルーターは、まだパスパラメーターを保存していません。
+- リクエスト DTO や `path.Int` などのコントローラー引数も、まだ生成していません。
 
-```go
-// internal/pipeline/pipeline.go
-globalMeta := core.HandlerMeta{}
+ルーティングの成功後に実行する `PostHandle`、`BeforeResponse`、`AfterCompletion` には、選択したハンドラーのメタデータを渡します。ルーティング前に中断または失敗した場合は、空のメタデータで処理を終えます。
 
-for _, it := range p.interceptors {
-    if err := it.PreHandle(ctx, globalMeta); err != nil {
-        if errors.Is(err, core.ErrAbortPipeline) {
-            return nil
-        }
-        return err
-    }
-}
-```
+## ルーター: ハンドラーとパスパラメーターの選択
 
-CORSプリフライト処理のように、ルーティング前に要求を傍受する必要がある場合に使用されます。
+ルーターは `ctx.Method()` と `ctx.Path()` を使って登録済みのハンドラーを探します。一致するハンドラーがなければ 404 エラーを返します。パスにパラメーターがあれば、その値をコンテキストに保存し、宣言順序をメタデータに保持します。
 
-
-```go
-// interceptor/cors/cors.go
-if ctx.Method() == "OPTIONS" {
-    rw.WriteStatus(204)
-    return core.ErrAbortPipeline
-}
-```
-
-
-## 3. Router - HandlerMetaを選択
-
-Router は、要求パスとメソッドに基づいて実行する Controller メソッドを決定します。
-
-
-```go
-// internal/router/router.go
-func (r *DefaultRouter) Route(ctx core.ExecutionContext) (core.HandlerMeta, error) {
-    for _, route := range r.routes {
-        if route.Method != ctx.Method() {
-            continue
-        }
-        
-        ok, params, keys := matchPath(route.Path, ctx.Path())
-        if !ok {
-            continue
-        }
-        
-        // path param注入
-        ctx.Set("spine.params", params)
-        ctx.Set("spine.pathKeys", keys)
-        
-        return route.Meta, nil
-    }
-    return core.HandlerMeta{}, httperr.NotFound("ハンドラーが ありません.")
-}
-```
-
-`HandlerMeta`には、実行先のメタデータが含まれています。
-
+`HandlerMeta` は、実行対象とルート設定を保持します。
 
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    ControllerType reflect.Type    // コントローラ型
-    Method         reflect.Method  // 呼び出すメソッド
-    Interceptors   []Interceptor   // ルート レベル インターセプター
+    ControllerType reflect.Type   // 의존성 컨테이너에서 찾을 컨트롤러 타입
+    Method         reflect.Method // 호출할 메서드
+    PathKeys       []string       // 라우트에 선언한 경로 매개변수의 순서
+    Interceptors   []Interceptor  // 해당 핸들러에 적용할 인터셉터
 }
 ```
 
+`HandlerMeta` は、リクエストごとにコントローラーを新しく作る指示ではありません。Invoker が依存性コンテナーから呼び出し対象を取得し、メソッドに引数を渡すために使う情報です。各フィールドの詳細は [HandlerMeta](/ja/learn/core-concepts/handler-meta) を参照してください。
 
-## 4. ParameterMetaの設定
+## 引数バインディング: ParameterMeta と ArgumentResolver
 
-Controllerメソッドのシグネチャを分析して、各パラメータのメタ情報を生成します。
+ハンドラーを選ぶと、パイプラインはメソッドシグネチャを読み取り、各引数の型と位置を表す `ParameterMeta` を構成します。続いて、登録済みのリゾルバーのうち、その型をサポートする最初のリゾルバーが値を生成します。
 
+リゾルバーが値を生成できない場合や、対応するリゾルバーがない場合は、コントローラーを呼び出さずにエラー処理へ進みます。**この段階は、ルートインターセプターの `PreHandle` より先に実行します。** そのため、ルートインターセプターで本文のバインディング前の検査を実行できると想定しないでください。
+
+### パスパラメーターは宣言順に対応付ける
+
+`path.Int`、`path.String`、`path.Boolean` は、ルートで宣言したパラメーターの順序でバインドします。Go の引数名で対応付けるわけではありません。
 
 ```go
-// internal/pipeline/pipeline.go
-func buildParameterMeta(method reflect.Method, ctx core.ExecutionContext) []resolver.ParameterMeta {
-    pathKeys := ctx.PathKeys()
-    pathIdx := 0
-    var metas []resolver.ParameterMeta
-    
-    for i := 1; i < method.Type.NumIn(); i++ {
-        pt := method.Type.In(i)
-        
-        pm := resolver.ParameterMeta{
-            Index: i - 1,
-            Type:  pt,
-        }
-        
-        // path.* 型なら 順序どおりに PathKey 割り当てる
-        if isPathType(pt) {
-            if pathIdx >= len(pathKeys) {
-                pm.PathKey = ""
-            } else {
-                pm.PathKey = pathKeys[pathIdx]
-            }
-            pathIdx++
-        }
-        
-        metas = append(metas, pm)
-    }
-    
-    return metas
-}
-
-func isPathType(pt reflect.Type) bool {
-    pathPkg := reflect.TypeFor[path.Int]().PkgPath()
-    return pt.PkgPath() == pathPkg
-}
+// 라우트: /users/:userId/posts/:postId
+// userId에는 첫 번째 경로 값, postId에는 두 번째 경로 값이 들어갑니다.
+func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
 ```
 
-**Path Parameterバインディングルール**：Spineはオーダーベースのバインディングを使用します。 `path`パッケージに属するタイプ（`path.Int`、`path.String`、`path.Boolean`）のみPathKeyが割り当てられます。
+間に別の種類の引数を挟んでも、パス型同士の順序を合わせる必要があります。パスパラメーターの数や型を変更するときは、ルート宣言とメソッドシグネチャを併せて確認してください。
 
+### HTTP でサポートする引数
 
-```go
-// Route: /users/:userId/posts/:postId
-// Controller:
-func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error) // ✓ 順序 一致
-```
+| リゾルバー | コントローラーの引数型 | 渡す値 |
+| --- | --- | --- |
+| `StdContextResolver` | `context.Context` | リクエストのキャンセルとタイムアウトの情報、イベント発行に使うコンテキスト |
+| `ControllerContextResolver` | `spine.Ctx`, `core.ControllerContext` | インターセプターのストアの読み取り専用ビュー |
+| `HeaderResolver` | `header.Values` | HTTP ヘッダーのビュー |
+| `PathIntResolver` | `path.Int` | パスの値を解析した整数 |
+| `PathStringResolver` | `path.String` | パスの文字列 |
+| `PathBooleanResolver` | `path.Boolean` | パスの値を解析した真偽値 |
+| `PaginationResolver` | `query.Pagination` | `page`、`size` のクエリ値 |
+| `QueryValuesResolver` | `query.Values` | すべてのクエリ値のビュー |
+| `DTOResolver` | `*struct` | HTTP 本文をバインドした DTO |
+| `FormDTOResolver` | `form` タグがある `*struct` | フォームまたはマルチパート本文をバインドした DTO |
+| `UploadedFilesResolver` | `multipart.UploadedFiles` | アップロードしたファイル |
 
+`header`、`path`、`query`、`multipart` は、それぞれ `github.com/NARUBROWN/spine/pkg/` 配下のパッケージです。表の `multipart.UploadedFiles` は、Go 標準の `mime/multipart` の型と区別してください。
 
-## 5. ArgumentResolver Chain
+HTTP DTO は構造体のポインターとして宣言します。フィールドに `form` タグが一つでもある場合、通常の DTO リゾルバーは処理せず、フォーム DTO リゾルバーが処理します。`query.Pagination` の `page` と `size` は、省略された場合や整数として解析できない場合、それぞれ 1 と 20 を使います。
 
-各パラメータタイプに合ったResolverが実際の値を生成します。
+### リゾルバーの契約
 
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) resolveArguments(ctx core.ExecutionContext, paramMetas []resolver.ParameterMeta) ([]any, error) {
-    args := make([]any, 0, len(paramMetas))
-    
-    for _, paramMeta := range paramMetas {
-        resolved := false
-        
-        for _, r := range p.argumentResolvers {
-            if !r.Supports(paramMeta) {
-                continue
-            }
-            
-            val, err := r.Resolve(ctx, paramMeta)
-            if err != nil {
-                return nil, err
-            }
-            
-            args = append(args, val)
-            resolved = true
-            break
-        }
-        
-        if !resolved {
-            return nil, fmt.Errorf(
-                "ArgumentResolverに parameterが ありません. %d (%s)",
-                paramMeta.Index,
-                paramMeta.Type.String(),
-            )
-        }
-    }
-    return args, nil
-}
-```
-
-### 組み込みResolver
-
-| Resolver |サポートタイプ|説明
-|----------|----------|------|
-| `StdContextResolver` | `context.Context` |標準コンテキスト（EventBus注入）|
-| `ControllerContextResolver` | `core.ControllerContext` | ExecutionContext読み取り専用Facade |
-| `HeaderResolver` | `header.*` | HTTPヘッダー値|
-| `PathIntResolver` | `path.Int` |パスから整数を抽出する
-| `PathStringResolver` | `path.String` |パスから文字列を抽出する
-| `PathBooleanResolver` | `path.Boolean` |パスからブール語を抽出する
-| `PaginationResolver` | `query.Pagination` |ページ、サイズクエリパラメータ|
-| `QueryValuesResolver` | `query.Values` |フルクエリパラメータビュー|
-| `DTOResolver` | `*struct`（ポインター）| JSON bodyバインディング|
-| `FormDTOResolver` | `*struct`（フォームタグ）| Multipart / Formバインディング
-| `UploadedFilesResolver` | `multipart.UploadedFiles` |ファイルアップロード|
-
-### ArgumentResolver インタフェース
-
+内部リゾルバーは次の契約に従います。アプリでこのインターフェースや `internal/` パッケージをコピーして登録する必要はありません。
 
 ```go
-// internal/resolver/argument.go
 type ArgumentResolver interface {
-    // は Resolverが し当 型を 処理する できますかどうかを判断
     Supports(parameterMeta ParameterMeta) bool
-    
-    // Contextから 実際の 値 生成
     Resolve(ctx core.ExecutionContext, parameterMeta ParameterMeta) (any, error)
 }
 ```
 
-> **注意**：Resolverは`core.ExecutionContext`を受け取り、必要に応じて`core.HttpRequestContext`、`core.ConsumerRequestContext`、`core.WebSocketContext`とタイプします。
+リゾルバーは共通の `ExecutionContext` を受け取り、HTTP 入力が必要な場合は `core.HttpRequestContext` への型アサーションで対応を確認します。コンシューマーと WebSocket のリゾルバーは、それぞれのプロトコルのコンテキストからメッセージ本文を読み取ります。
 
+## ルートインターセプター: ハンドラー呼び出し前の処理
 
-## 6. Route Interceptor.PreHandle
+`route.WithInterceptors()` で登録したインターセプターは、特定のハンドラーにだけ適用します。ルーティングと引数バインディングが終わってから `PreHandle` を呼び出すため、選択済みの `HandlerMeta` とパスパラメーターを使えます。
 
-ルーティングの後、コントローラの呼び出し前にルートレベルインターセプタが実行されます。このインターセプタは`HandlerMeta.Interceptors`に含まれており、特定のハンドラにのみ適用されます。
+| 区分 | 登録方法 | `PreHandle` の実行タイミング | 渡すメタデータ |
+| --- | --- | --- | --- |
+| グローバル | `app.Interceptor()` | ルーティング前 | 空の `HandlerMeta{}` |
+| ルート | `route.WithInterceptors()` | 引数バインディング後、ハンドラー呼び出し前 | 選択した `HandlerMeta` |
 
-
-```go
-routeInterceptors := meta.Interceptors
-
-for _, it := range routeInterceptors {
-    if err := it.PreHandle(ctx, meta); err != nil {
-        if errors.Is(err, core.ErrAbortPipeline) {
-            return nil
-        }
-        return err
-    }
-}
-```
-
-### Interceptor インタフェース
-
+どちらも `core.Interceptor` の四つのメソッドを実装します。
 
 ```go
 // core/interceptor.go
 type Interceptor interface {
-    // Controller 呼び出し 前 実行
     PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    
-    // ReturnValueHandler 処理 後 実行
     PostHandle(ctx ExecutionContext, meta HandlerMeta)
-
-    // 応答を書き込む前に実行。transaction処理のエラーも返す
     BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-    
-    // 応答処理後、成功/失敗に関係なく最後に呼び出す
     AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
 }
 ```
 
-### グローバルvsルートインターセプタ
+`PreHandle` が通常のエラーを返すと、エラー処理へ進みます。`core.ErrAbortPipeline` を返すと、意図的にリクエストを終了したものとして扱います。この場合、インターセプター自身が必要なレスポンスを準備する必要があります。どちらの場合も、後続の `PreHandle` とコントローラーは実行しません。
 
-|区分登録方法実行時点| metaコンテンツ|
-|------|----------|----------|----------|
-|グローバル`app.Interceptor()` |ルーティング**前** |空`HandlerMeta{}` |
-|ルート| `route.WithInterceptors()` |ルーティング**後**、Controller**前** |実際の`HandlerMeta` |
+登録例は[インターセプターのチュートリアル](/ja/learn/tutorial/4-interceptor)を参照してください。
 
-### パイプラインの中断
+## Invoker: コントローラーの呼び出し
 
-`PreHandle`から`core.ErrAbortPipeline`を返すと、以降のステップはスキップされます。ただし、`AfterCompletion`は常に実行されます。
+Invoker は依存性コンテナーからコントローラーのインスタンスを取得し、バインドした引数でメソッドを呼び出します。コントローラーは入力値を検査してサービスを呼び出し、結果またはエラーを返します。
 
-
-## 7. Invoker - Controller メソッドの呼び出し
-
-IoC Container から Controller インスタンスを取得し、メソッドを呼び出します。
-
-
-```go
-// internal/invoker/invoker.go
-func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, args []any) ([]any, error) {
-    // Containerで インスタンス Resolve
-    controller, err := i.container.Resolve(controllerType)
-    if err != nil {
-        return nil, err
-    }
-    
-    // リフレクションにに メソッド 呼び出し
-    values := make([]reflect.Value, len(args)+1)
-    values[0] = reflect.ValueOf(controller)
-    for idx, arg := range args {
-        values[idx+1] = reflect.ValueOf(arg)
-    }
-    
-    results := method.Func.Call(values)
-    
-    // 結と 変換
-    out := make([]any, len(results))
-    for i, result := range results {
-        out[i] = result.Interface()
-    }
-    
-    return out, nil
-}
-```
-
-**Controllerの責任**：Controllerは純粋にビジネスロジックのみを担当します。 HTTP、パイプライン、実行順序をまったく知りません。
-
+次のメソッドは、`UserController`、`User`、`c.repo` があるアプリに追加する例です。`path`、`httpx`、`httperr` は、それぞれ Spine の `pkg/` パッケージからインポートします。
 
 ```go
 func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     if userId.Value <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("無効な ユーザー ID")
+        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
     }
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
@@ -382,376 +187,127 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 }
 ```
 
+`userId` の数値変換は、コントローラーを呼び出す前に完了しています。上の `BadRequest` は、数値に変換した値が 0 以下の場合にだけ実行します。数値に変換できないパスの値が、この検査まで到達すると想定しないでください。
 
-## 8. ReturnValueHandler
+## ReturnValueHandler: 戻り値からレスポンスへの変換
 
-Controllerの戻り値をHTTPレスポンスに変換します。 error型を優先処理し、`isNilResult()`で包括的なnilチェックを行います。
+パイプラインは、戻り値の中から `nil` でない `error` を先に探します。エラーがある場合は、成功値を処理せずにエラーレスポンスの経路へ進みます。エラーがなければ、最初の `nil` でない成功値を、対応する戻り値ハンドラーに渡します。
 
+型情報を持つポインターやインターフェースに `nil` が入っている場合もスキップします。サポートしていない成功値の型を返すと、エラーになります。通常の構造体をそのまま返さず、`httpx.Response[T]` で包んでください。
 
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) handleReturn(ctx core.ExecutionContext, results []any) error {
-    // errorがあればerrorだけ処理して終了
-    for _, result := range results {
-        if isNilResult(result) {
-            continue
-        }
-        if _, isErr := result.(error); isErr {
-            resultType := reflect.TypeOf(result)
-            for _, h := range p.returnHandlers {
-                if h.Supports(resultType) {
-                    if err := h.Handle(result, ctx); err != nil {
-                        return err
-                    }
-                    return nil
-                }
-            }
-            return fmt.Errorf(
-                "error 返却値を 処理する ReturnValueHandlerが ありません. (%s)",
-                resultType.String(),
-            )
-        }
-    }
-    
-    // errorが なければ 最初の non-nil 値 処理
-    for _, result := range results {
-        if isNilResult(result) {
-            continue
-        }
-        resultType := reflect.TypeOf(result)
-        handled := false
-        for _, h := range p.returnHandlers {
-            if !h.Supports(resultType) {
-                continue
-            }
-            if err := h.Handle(result, ctx); err != nil {
-                return err
-            }
-            handled = true
-            break
-        }
-        if !handled {
-            return fmt.Errorf(
-                "ReturnValueHandlerが ありません. (%s)",
-                resultType.String(),
-            )
-        }
-    }
-    return nil
-}
-```
+| 戻り値ハンドラー | サポートする戻り値の型 | HTTP レスポンス |
+| --- | --- | --- |
+| `RedirectReturnValueHandler` | `httpx.Redirect` とそのポインター | `Location` ヘッダーとステータスコード、デフォルトは 302 |
+| `BinaryReturnHandler` | `httpx.Binary` とそのポインター | バイナリー本文 |
+| `StringReturnHandler` | `httpx.Response[string]` とそのポインター | テキスト本文 |
+| `JSONReturnHandler` | 本文が文字列以外の `httpx.Response[T]` とそのポインター | JSON 本文 |
+| `ErrorReturnHandler` | `error` | ステータスコードと `message` を含む JSON |
 
-### 組み込みハンドラー
+`ResponseOptions` でステータスコード、ヘッダー、Cookie を指定できます。レスポンスの準備中にシリアライズや Cookie の検証が失敗した場合、成功レスポンスは送信しません。
 
-| Handler |サポートタイプ|応答形式
-|---------|----------|----------|
-| `RedirectReturnValueHandler` | `httpx.Redirect` | Locationヘッダー+ 302 |
-| `BinaryReturnHandler` | `httpx.Binary` |バイナリデータ（ファイルなど）|
-| `StringReturnHandler` | `httpx.Response[string]` | Plain Text |
-| `JSONReturnHandler` | `httpx.Response[T]` (T ≠ string) | JSON |
-| `ErrorReturnHandler` | `error` | JSON（ステータスコードマッピング）|
-
-### ReturnValueHandlerインタフェース
-
+内部の戻り値ハンドラーの契約は次のとおりです。
 
 ```go
-// internal/handler/return_value.go
 type ReturnValueHandler interface {
     Supports(returnType reflect.Type) bool
     Handle(value any, ctx core.ExecutionContext) error
 }
 ```
 
+## PostExecutionHook: イベントの後処理
 
-## 9. PostExecutionHook
+成功値のシリアライズとレスポンスの検証が終わると、登録済みの `PostExecutionHook` を実行します。ドメインイベントのディスパッチフックは、リクエストの EventBus からイベントを取り出してディスパッチャーに渡します。
 
-ReturnValueHandler処理後、登録された後処理フックが実行されます。代表的には、ドメインイベントの発行はこの段階で行われます。
+ハンドラーがエラーを返した場合や、成功レスポンスの準備が失敗した場合は、この段階に到達しません。フック自身がエラーを返した場合も実行失敗として扱い、後続の `PostHandle` をスキップします。
 
+この段階が終わっても、HTTP レスポンスの送信が完了したことにはなりません。`BeforeResponse` と実際のレスポンス送信は、その後に実行します。イベントの収集と発行の方法は、[実行コンテキストの EventBus](/ja/learn/core-concepts/execution-context#event-publishing) を参照してください。
 
-```go
-// PostHooks 実行
-for _, hook := range p.postHooks {
-    hook.AfterExecution(ctx, results, returnError)
-}
-```
-
-
-```go
-// internal/event/hook/post_execution.go
-func (h *EventDispatchHook) AfterExecution(ctx core.ExecutionContext, results []any, err error) {
-    if err != nil {
-        return
-    }
-    events := ctx.EventBus().Drain()
-    if len(events) == 0 {
-        return
-    }
-    h.Dispatcher.Dispatch(ctx.Context(), events)
-}
-```
-
-
-## 10. Interceptor.PostHandle、BeforeResponse、AfterCompletion
+## レスポンス前後のインターセプター処理
 
 ### PostHandle
 
-ReturnValueHandler 処理後、逆の順序で実行されます。ルートインターセプタが最初に、グローバルインターセプタが後で実行されます。
+ハンドラー、成功レスポンスの準備、後処理フックがすべて成功すると、`PostHandle` を呼び出します。ルートインターセプターを逆順に実行した後、グローバルインターセプターを逆順に実行します。
 
-
-```go
-// ルート Interceptor postHandle (逆順)
-for i := len(routeInterceptors) - 1; i >= 0; i-- {
-    routeInterceptors[i].PostHandle(ctx, meta)
-}
-
-// グローバル Interceptor postHandle (逆順)
-for i := len(p.interceptors) - 1; i >= 0; i-- {
-    p.interceptors[i].PostHandle(ctx, meta)
-}
-```
+`PostHandle` はエラーを返せません。トランザクションのコミットなど、結果を最終レスポンスに反映する必要がある処理は `BeforeResponse` で行います。
 
 ### BeforeResponse
 
-`PreHandle`に成功したinterceptorだけをroute、globalの順にそれぞれ逆順で実行します。この時点では戻り値の直列化、Cookie、status検証、post-execution hookが完了していますが、実際の応答はまだflushされていません。transactionのcommit/rollbackエラーを返すと最終エラーに結合されます。
+`BeforeResponse` は成功と失敗の両方の経路で、**`PreHandle` が成功したインターセプターだけ**を呼び出します。ルートインターセプターを逆順に実行した後、グローバルインターセプターを逆順に実行します。
 
-```go
-finalErr = runBeforeResponse(
-    ctx,
-    meta,
-    routeFinalizers,
-    globalFinalizers,
-    finalErr,
-)
-```
+`executionErr` には、その時点までに発生したエラーを渡します。`BeforeResponse` で新しいエラーを返すと、既存のエラーに結合し、次のインターセプターと最終的なエラー処理に渡します。トランザクションインターセプターは、この時点の成功状況に応じてコミットまたはロールバックできます。
+
+`PreHandle` でエラーや `core.ErrAbortPipeline` を返したインターセプター自身は、`BeforeResponse` の呼び出し対象に含まれません。
 
 ### AfterCompletion
 
-成功/失敗に関係なく**常に**実行されます。 `defer`で保証されています。ルートインターセプタが最初に、グローバルインターセプタが後で整理されます。
+レスポンス処理の後に `AfterCompletion` を呼び出します。ルートを選択済みであれば、ルートインターセプター全体を逆順に呼び出し、続いてグローバルインターセプター全体を逆順に呼び出します。成功、エラー、意図的な中断のいずれも、このクリーンアップ段階を通ります。
 
+呼び出す範囲は `BeforeResponse` と異なります。`PreHandle` を実行できなかったインターセプターや、`PreHandle` で失敗したインターセプターにも `AfterCompletion` を呼び出すことがあります。リソースが生成されていなくてもクリーンアップコードが動作するように書いてください。ルーティング前に終了した場合は、まだルートインターセプターを選んでいないため、グローバルのクリーンアップだけを実行します。
 
-```go
-// ルート Interceptor AfterCompletion (defer - 常に 実行)
-defer func() {
-    for i := len(routeInterceptors) - 1; i >= 0; i-- {
-        routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
-    }
-}()
+この段階では、ログ記録、メトリクス収集、リソースのクリーンアップを行います。HTTP レスポンスへの書き込みを試みた後なので、`AfterCompletion` で発生したエラーによって送信済みのレスポンスを変更することはできません。
 
-// グローバル Interceptor AfterCompletion (defer - 常に 実行)
-defer func() {
-    for i := len(p.interceptors) - 1; i >= 0; i-- {
-        p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
-    }
-}()
+## エラーレスポンスとレスポンス送信 {#error-responses}
+
+実行エラーは、`BeforeResponse` が終わってから HTTP エラーレスポンスに変換します。準備済みの成功レスポンスがあれば破棄し、エラーレスポンスを準備します。その後、バッファーのレスポンスを実際のレスポンスライターに書き込みます。
+
+| エラー条件 | HTTP の処理 |
+| --- | --- |
+| 登録済みのハンドラーが見つからない | 404 |
+| 有効な `httperr.HTTPError` | 指定したステータスコードとメッセージ |
+| リクエスト本文の制限を超えた `http.MaxBytesError` | 413 |
+| 個別にマッピングしていない実行エラー | 500、`Internal server error` |
+| 実際のレスポンスがすでにコミット済み | 二重にレスポンスを書き込まない |
+
+バインディングエラーがすべて 400 にマッピングされるわけではありません。v0.5.1 では、不正な JSON や `path.Int` の数値解析の失敗が 500 レスポンスにつながる場合があります。アプリで入力エラーのレスポンスを設計するときは、バインディングの失敗と、ハンドラーが明示的に返す `httperr.BadRequest` を区別してください。
+
+実際のレスポンス送信中に発生したエラーは、最終的な実行エラーに含めます。まだレスポンスをコミットしていなければ、500 レスポンスの書き込みを試みます。送信済みのレスポンスを元に戻すことはできません。
+
+## 中断箇所ごとの実行範囲
+
+次の例は、グローバルインターセプターとルートインターセプターをそれぞれ一つ登録した場合です。`before` は `BeforeResponse`、`after` は `AfterCompletion` を表します。
+
+### 正常処理
+
+```text
+pre:global → routing → binding → pre:route → handler
+→ return → hook → post:route → post:global
+→ before:route → before:global → flush → after:route → after:global
 ```
 
-リソースのクリーンアップ、ロギング、メトリックの収集などに活用します。
+### ルートの PreHandle で中断
 
-
-## 11. handleExecutionError - エラーセーフティネット
-
-Pipelineの実行中にエラーが発生した場合は、最終的な安全ネットワークで応答を作成します。すでに応答がコミットされている場合は、二重応答を防ぎます。
-
-
-```go
-// internal/pipeline/pipeline.go
-defer func() {
-    if finalErr != nil {
-        p.handleExecutionError(ctx, finalErr)
-    }
-}()
-
-func (p *Pipeline) handleExecutionError(ctx core.ExecutionContext, err error) {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
-        return
-    }
-    rw, ok := rwAny.(core.ResponseWriter)
-    if !ok {
-        return
-    }
-    
-    // すでに レスポンスがコミットされた 場合 二重 レスポンス 防止
-    if rw.IsCommitted() {
-        return
-    }
-    
-    var httpErr *httperr.HTTPError
-    if errors.As(err, &httpErr) {
-        rw.WriteJSON(httpErr.Status, map[string]any{
-            "message": httpErr.Message,
-        })
-        return
-    }
-    
-    rw.WriteJSON(500, map[string]any{
-        "message": "Internal server error",
-    })
-}
+```text
+pre:global → routing → binding → pre:route(中断)
+→ before:global → flush → after:route → after:global
 ```
 
+コントローラーは呼び出しません。中断したルートインターセプターの `BeforeResponse` は呼び出しませんが、`AfterCompletion` は呼び出します。
 
-## インターセプタ実行順序の詳細
+### グローバルの PreHandle で中断
 
-テストコードで検証された実際の実行順序です。
-
-### 通常フロー
-
-```
-pre:global → pre:route → [Controller] → post:route → post:global → before:route → before:global → flush → after:route → after:global
-```
-
-### ルートインターセプタで中断 (ErrAbortPipeline)
-
-```
-pre:global → pre:route(中断) → before:global → flush → after:route → after:global
-```
-
-Controllerは呼び出されませんが、`AfterCompletion`は常に実行されます。
-
-### グローバルインターセプタで中断 (ErrAbortPipeline)
-
-```
+```text
 pre:global(中断) → flush → after:global
 ```
 
-Routerも呼び出されないため、ルートインターセプタも実行されません。
+ルーターと引数バインディングは実行しません。この例では成功した `PreHandle` がないため、`BeforeResponse` も呼び出しません。
 
+### 引数バインディングで失敗
 
-## フル実行フローコード
-
-
-```go
-// internal/pipeline/pipeline.go
-func (p *Pipeline) Execute(ctx core.ExecutionContext) (finalErr error) {
-    // エラーセーフティネット: エラー 発生 時 レスポンス 作成
-    defer func() {
-        if finalErr != nil {
-            p.handleExecutionError(ctx, finalErr)
-        }
-    }()
-
-    // グローバル Interceptor AfterCompletion (常に 実行)
-    globalMeta := core.HandlerMeta{}
-    defer func() {
-        for i := len(p.interceptors) - 1; i >= 0; i-- {
-            p.interceptors[i].AfterCompletion(ctx, globalMeta, finalErr)
-        }
-    }()
-
-    // 1. グローバル Interceptor PreHandle (ルーティング前)
-    for _, it := range p.interceptors {
-        if err := it.PreHandle(ctx, globalMeta); err != nil {
-            if errors.Is(err, core.ErrAbortPipeline) {
-                return nil
-            }
-            return err
-        }
-    }
-
-    // 2. Routerが 実行 対象 決定
-    meta, err := p.router.Route(ctx)
-    if err != nil {
-        return err
-    }
-
-    routeInterceptors := meta.Interceptors
-
-    // ルート Interceptor AfterCompletion (常に 実行)
-    defer func() {
-        for i := len(routeInterceptors) - 1; i >= 0; i-- {
-            routeInterceptors[i].AfterCompletion(ctx, meta, finalErr)
-        }
-    }()
-
-    // 3. ParameterMeta 生成
-    paramMetas := buildParameterMeta(meta.Method, ctx)
-
-    // 4. ArgumentResolver チェーン 実行
-    args, err := p.resolveArguments(ctx, paramMetas)
-    if err != nil {
-        return err
-    }
-
-    // 5. ルート Interceptor PreHandle
-    for _, it := range routeInterceptors {
-        if err := it.PreHandle(ctx, meta); err != nil {
-            if errors.Is(err, core.ErrAbortPipeline) {
-                return nil
-            }
-            return err
-        }
-    }
-
-    // 6. Controller メソッド 呼び出し
-    results, err := p.invoker.Invoke(meta.ControllerType, meta.Method, args)
-    if err != nil {
-        return err
-    }
-
-    // 7. ReturnValueHandler 処理
-    returnError := p.handleReturn(ctx, results)
-
-    // 8. PostExecutionHook (イベント 発行 など)
-    for _, hook := range p.postHooks {
-        hook.AfterExecution(ctx, results, returnError)
-    }
-
-    if returnError != nil {
-        return returnError
-    }
-
-    // 9. ルート Interceptor PostHandle (逆順)
-    for i := len(routeInterceptors) - 1; i >= 0; i-- {
-        routeInterceptors[i].PostHandle(ctx, meta)
-    }
-
-    // 10. グローバル Interceptor PostHandle (逆順)
-    for i := len(p.interceptors) - 1; i >= 0; i-- {
-        p.interceptors[i].PostHandle(ctx, meta)
-    }
-
-    return nil
-}
+```text
+pre:global → routing → binding(失敗)
+→ before:global → エラーレスポンスの準備 → flush → after:route → after:global
 ```
 
+ルートインターセプターを選択済みなので、`AfterCompletion` は呼び出します。ただし、そのインターセプターの `PreHandle` はまだ実行していないため、ルートの `BeforeResponse` は呼び出しません。
 
-## Pipeline構造体
+## HTTP 以外の実行
 
+イベントコンシューマーと WebSocket も、別々のパイプラインインスタンスで同じ実行構造を使います。HTTP 用のリゾルバーと戻り値ハンドラーがそのまま適用されるわけではありません。
 
-```go
-// internal/pipeline/pipeline.go
-type Pipeline struct {
-    router            router.Router
-    interceptors      []core.Interceptor
-    argumentResolvers []resolver.ArgumentResolver
-    returnHandlers    []handler.ReturnValueHandler
-    invoker           *invoker.Invoker
-    postHooks         []hook.PostExecutionHook
-}
-```
+| 実行の種類 | ルーティングの基準 | デフォルトの引数 | レスポンス処理 |
+| --- | --- | --- | --- |
+| HTTP | HTTP メソッドとリクエストパス | `context.Context`、`spine.Ctx`、パスとクエリの型、DTO など | HTTP 戻り値ハンドラーでレスポンスを準備 |
+| イベントコンシューマー | `EVENT` とイベント名 | `context.Context`、イベント名、生のペイロード、構造体 DTO | コンシューマーランタイムで実行結果を処理 |
+| WebSocket | `WS` と接続リクエストのパス | `context.Context`、`ws.ConnectionID`、生のペイロード、構造体 DTO | メッセージハンドラーの送信 API を使用 |
 
-Pipelineは、単一のHTTPパイプラインだけでなく、Consumer Pipeline、WebSocket Pipelineでも同じように使用されます。各トランスポートごとに別々の Pipeline インスタンスが作成され、Resolver と Handler の構成のみが異なります。
-
-
-## まとめ
-
-|ステップ|コンポーネント|責任
-|------|----------|------|
-| 1 | Transport Adapter | HTTP→ExecutionContext変換|
-| 2 | Global Interceptor.PreHandle |ルーティング前の前処理（CORSなど）|
-| 3 | Router |リクエストパス→HandlerMetaマッピング|
-| 4 | ParameterMeta Builder |メソッドシグネチャ分析|
-| 5 | ArgumentResolver |パラメータタイプ→実数値生成|
-| 6 | Route Interceptor.PreHandle |ルート前処理（認証など）|
-| 7 | Invoker | Controllerメソッドの呼び出し|
-| 8 | ReturnValueHandler |戻り値→HTTP応答変換|
-| 9 | PostExecutionHook |ドメインイベント発行などの後処理
-| 10 | Route Interceptor.PostHandle↩|ルート後処理（逆順）|
-| 11 | Global Interceptor.PostHandle↩|グローバル後処理（逆順）|
-| 12 | BeforeResponse ↩ |応答前のtransaction完了とエラー結合|
-| 13 | handleExecutionError |エラー応答をstaged writerに準備|
-| 14 | buffered response flush |検証済みの応答だけを実際のwriterへ記録|
-| 15 | AfterCompletion ↩ |cleanup（route→global、常に実行）|
-
-この順序は**隠されておらず、暗黙的に変わりません**これはSpineの「No Magic」哲学です。
+特に、HTTP DTO はポインターで受け取りますが、デフォルトのコンシューマーと WebSocket の DTO リゾルバーは構造体の値をサポートします。HTTP の `spine.Ctx` リゾルバーも、デフォルトのコンシューマーと WebSocket のパイプラインには登録されていません。各プロトコルのコンテキストと入力の違いは、[実行コンテキスト](/ja/learn/core-concepts/execution-context)を参照してください。

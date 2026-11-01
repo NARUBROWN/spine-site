@@ -1,10 +1,16 @@
-# Kafka MSA Example
+# Connect Order and Stock Services with Kafka
 
-Generate an order HTTP service and a stock consumer service with CLI. The order service publishes `order.created`; the stock service handles it without an HTTP listener.
+Create an order HTTP service and a stock consumer service, and pass `order.created` events through Kafka. Send an order request, then check the processing log in the stock service. The stock service runs without an HTTP listener.
 
-## Generate two services with CLI
+## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. Run the following commands from `spine-msa/`. CLI 0.1.4 provides typed consumer skeletons but does not generate Kafka brokers or transport configuration.
+Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.1.4 provides a consumer scaffold with a defined message type. Prepare the Kafka broker and transport configuration separately.
+
+To test message delivery, you need a Kafka broker at `localhost:9092` and an `order.created` topic. This example uses a plaintext connection in an isolated local environment. The stock consumer logs events; it does not change actual stock quantities.
+
+## 1. Create the Two Services
+
+Create a working directory and preview the files to be generated.
 
 ```sh
 mkdir spine-msa
@@ -13,26 +19,30 @@ spine new order-app --module example.com/order-app --dry-run
 spine new stock-app --module example.com/stock-app --dry-run
 ```
 
-Review the generated files and registration changes in the preview, then run the command below to generate them.
+Review the preview, then create both apps. Run subsequent commands from `spine-msa/` unless instructed otherwise.
 
 ```sh
 spine new order-app --module example.com/order-app
 spine new stock-app --module example.com/stock-app
 ```
 
-## Generate the consumer skeleton
+## 2. Generate the Stock Consumer Scaffold
 
-Default automatic registration adds a checked `order.Register(app)` call to `stock-app/internal/application/application.go`. The generated handler returns an unimplemented error until you replace it below, so verification is expected to fail before implementation.
+Generate a consumer in `stock-app` to receive order events. Review the preview first.
 
 ```sh
 spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
+The following command creates the consumer files and adds an `order.Register(app)` call and error handling to `stock-app/internal/application/application.go`. The generated handler returns a not-implemented error, so replace it with the code in step 5 before validation can pass.
+
 ```sh
 spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
-## Final structure
+### File Layout
+
+After adding the shared event and order controller and replacing the generated consumer implementation and app configuration, the file layout is as follows.
 
 ```text
 spine-msa/
@@ -59,9 +69,9 @@ spine-msa/
         └── order_message.go
 ```
 
-## Shared event
+## 3. Define the Shared Event
 
-`order-app/src/events` is the event package reused by both services. This example imports only that package from the order module into the stock module. The `go mod edit` commands below connect the local modules.
+Create `order-app/src/events/order_created.go`. Both services use the event type from this package. In step 6, use `go mod edit` to connect the local modules so that `stock-app` can import the event package from `order-app`.
 
 ```go
 // order-app/src/events/order_created.go
@@ -79,9 +89,11 @@ func (e OrderCreated) Name() string { return "order.created" }
 func (e OrderCreated) OccurredAt() time.Time { return e.At }
 ```
 
-## Order service: publish events
+## 4. Publish Events from the Order Service
 
-Add or replace the following two files manually. Keep the CLI-generated root `main.go` and `spine.toml`. `publish.Event` queues an event in the current request and returns no value; the configured Kafka writer publishes after the handler and response preparation succeed.
+Create `order-app/src/controller/order_controller.go` and replace `order-app/internal/application/application.go` with the code below. Keep the root `main.go` and `spine.toml` as generated.
+
+`publish.Event` adds an event to the current request and has no return value. After the handler succeeds and response preparation finishes, the configured Kafka publisher sends the event.
 
 ```go
 // order-app/src/controller/order_controller.go
@@ -150,9 +162,11 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## Stock service: handle events
+## 5. Handle Events in the Stock Service
 
-Replace generated `order_message.go` with a shared-event alias and implement `order_handler.go`. The memory deduplication works only within one process. Implement real stock changes and durable deduplication in the same database transaction. Replace the assembly file with the complete version below; do not add automatic registration twice.
+Replace each of the following three files with the corresponding code below. Change `order_message.go` to a type alias for the shared event. In `order_handler.go`, replace the not-implemented error with validation, duplicate checking, and logging. Keep the generated `module.go` as is.
+
+The full replacement for `stock-app/internal/application/application.go` already includes `order.Register(app)`. Do not append the registration code added during generation again.
 
 ```go
 // stock-app/src/consumer/order/order_message.go
@@ -227,9 +241,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## Connect modules and verify
+## 6. Connect Local Modules and Validate the Code
 
-Each service has its own `go.mod` and `spine.toml`. Start these commands in `spine-msa/`; the final command returns there. Each generated `main.go` calls `BuildApplication`, `Validate`, then `Run`.
+Each service has its own `go.mod` and `spine.toml`. The following commands start from `spine-msa/`, connect and check the two modules, then return to the same directory. The `main.go` generated in each app calls `BuildApplication`, `Validate`, and `Run` in that order.
 
 ```sh
 cd order-app
@@ -249,34 +263,52 @@ spine verify --root order-app
 spine verify --root stock-app
 ```
 
-Each service is expected to report one `INSECURE_TRANSPORT_ENABLED` warning for this local plaintext setup. Default checks pass; `--warnings-as-errors` fails until the transport configuration is secured.
+Each service uses a local plaintext connection, so each produces one `INSECURE_TRANSPORT_ENABLED` warning. The default checks pass, but they fail with `--warnings-as-errors`.
 
-`contract check` checks the static contract; `verify` checks the contract, gofmt, vet, and Go tests. Neither checks broker connectivity or message delivery.
+`contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. Check broker connectivity and actual message delivery in the next step.
 
-## Run after preparing the broker
+## 7. Run the Services and Test Event Delivery
 
-Prepare Kafka separately at `localhost:9092` and create the `order.created` topic. Use separate terminals, both starting in `spine-msa/`.
+Make sure Kafka is running at `localhost:9092` and the `order.created` topic exists. Set each terminal's working directory to `spine-msa/`.
+
+Run the stock service in the first terminal.
 
 ```sh
 spine run --root stock-app
 ```
 
+Run the order service in the second terminal.
+
 ```sh
 spine run --root order-app
 ```
+
+Send a create-order request in the third terminal.
 
 ```sh
 curl -i -X POST http://localhost:8080/orders/12345
 ```
 
-The POST response is HTTP 202 with body `accepted`. With a working broker, check the stock process for `topic=order.created order_id=12345`. An HTTP response alone does not prove consumption.
+Check that the response returns HTTP 202 with the body `accepted`. Then look for `topic=order.created order_id=12345` in the stock service terminal. The HTTP response shows the result of the order request, and the stock service log shows the result of event consumption. Check both to verify delivery between the services.
 
-## Transport and consistency boundaries
+## Before Using This in Production
 
-`AllowInsecureTransport: true` is for an isolated local plaintext broker. Remove it in production and configure TLS/SASL and broker addresses. Default transport uses TLS 1.2 or later; custom configuration must secure both reads and writes.
+### Transport Security and Topic Names
 
-`TopicPrefix` uses simple string concatenation. If the writer uses `prod.`, explicitly register the consumer under `prod.order.created`. Both services here use unprefixed `order.created`. Use the same settings for inspection and execution.
+Use `AllowInsecureTransport: true` only with an isolated local plaintext broker. In production, remove this option and configure TLS/SASL and the broker addresses. The default transport uses TLS 1.2 or later. If you supply your own transport configuration, protect both reads and writes.
 
-Kafka delivery is at least once. Use stable event IDs and durable deduplication. `ConsumerRetry` controls reader/transport reconstruction, not an application handler retry budget. A permanently failing record can block its partition; Spine does not automatically skip it or select a DLQ.
+`TopicPrefix` prepends the string directly to the topic name. If the publisher configuration uses `prod.`, the consumer's registered topic must also be `prod.order.created`. This example uses `order.created` without a prefix on both sides. Use the same configuration for checks and execution.
 
-Database commit and broker publication are not atomic. Implement a transactional outbox and consumer deduplication when reliable database-plus-event handling is needed. See [security configuration](/en/reference/security-configuration).
+### Duplicate Handling and Failing Messages
+
+Kafka delivers messages at least once, so the same event can arrive again. You need an event ID that stays the same when the event is resent, along with persistent deduplication. This example's deduplication works only within the same process. Implement actual stock changes and persistent deduplication in the same database transaction.
+
+`ConsumerRetry` controls reader and transport reconfiguration; it does not limit retry attempts for the business handler. A message that keeps failing can block a partition. Messages are not automatically skipped or moved to a DLQ.
+
+### Database Changes and Event Publishing
+
+A database commit and a broker publish are not a single atomic operation. If database changes and event delivery must remain consistent, implement a transactional outbox and consumer deduplication separately.
+
+## Next Steps
+
+See [Security Configuration](/en/reference/security-configuration) for Kafka connection settings. When you connect a real stock repository, persist event IDs and commit them together with stock changes.

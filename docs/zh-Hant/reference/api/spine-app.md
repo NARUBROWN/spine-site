@@ -1,8 +1,814 @@
 # spine.App
 
-## 在CLI專案中使用API
+`App` 是註冊建構函式、HTTP 路由、攔截器、事件消費者、WebSocket 處理器與自訂傳輸方式，並執行應用程式的入口。此參考涵蓋 Spine v0.5.1 的公開 API 與啟動選項。
 
-以[第一個應用程式](/zh-Hant/learn/getting-started/first-app)中CLI產生的專案為基礎。將註冊程式碼放在 `internal/application/application.go` 的 `BuildApplication` 中。`Run` 範例用於產生的 `main.go`，先檢查 `Validate` 回傳的錯誤。
+```go
+import "github.com/NARUBROWN/spine"
+```
+
+## 介面定義
+
+```go
+type App interface {
+    // 생성자 선언
+    Constructor(constructors ...any)
+    // 라우트 선언
+    Route(method string, path string, handler any, opts ...router.RouteOption)
+    // 인터셉터 선언
+    Interceptor(interceptors ...core.Interceptor)
+    // HTTP/WebSocket 범위를 지정한 전역 인터셉터 선언
+    InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
+    // HTTP 서버 확장 (Echo 등)
+    Transport(fn func(any))
+    // 독립 실행되는 사용자 정의 전송 방식 등록
+    RegisterTransport(t core.CustomTransport)
+    // 네트워크 연결 없이 설정 검증
+    Validate(opts boot.Options) error
+    // 실행
+    Run(opts boot.Options) error
+    // 이벤트 소비자 레지스트리 반환
+    Consumers() *consumer.Registry
+    // 웹소켓 레지스트리 반환
+    WebSocket() *ws.Registry
+}
+```
+
+在應用程式程式碼中，使用 `pkg/route` 的函式傳入 `Route` 選項。`Consumers()` 與 `WebSocket()` 的回傳型別雖位於內部套件，仍可直接串接呼叫方法，無須自行宣告型別。
+
+## 建構函式
+
+### New
+
+```go
+func New() App
+```
+
+建立新的 Spine 應用程式實例。
+
+**回傳值**
+
+- `App` - 應用程式實例
+
+**範例**
+
+```go
+app := spine.New()
+app.Run(boot.Options{
+    Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
+})
+```
+
+## 方法
+
+### Constructor
+
+```go
+Constructor(constructors ...any)
+```
+
+將建構函式註冊到相依性注入容器。容器會依建構函式的參數型別，注入其他已註冊的物件。
+
+**參數**
+
+- `constructors` - 建構函式（可變參數）
+
+**建構函式規則**
+
+- 必須是函式
+- 必須恰好有一個回傳值
+- 也必須註冊提供參數型別的建構函式
+
+**範例**
+
+```go
+// 의존성 없는 생성자
+func NewUserRepository() *UserRepository {
+    return &UserRepository{}
+}
+
+// 의존성 있는 생성자
+func NewUserController(repo *UserRepository) *UserController {
+    return &UserController{repo: repo}
+}
+
+// 이벤트 소비자 생성자
+func NewOrderConsumer() *OrderConsumer {
+    return &OrderConsumer{}
+}
+
+app.Constructor(
+    NewUserRepository,
+    NewUserController,
+    NewOrderConsumer,
+)
+```
+
+### Route
+
+```go
+Route(method string, path string, handler any, opts ...router.RouteOption)
+```
+
+註冊 HTTP 路由。會移除 `method` 前後的空白，並轉為大寫。
+
+**參數**
+
+- `method` - HTTP 方法（如 `"GET"`、`"POST"`、`"PUT"`、`"DELETE"`），不區分大小寫
+- `path` - URL 路徑模式，以 `:param` 格式定義路徑參數
+- `handler` - 控制器方法運算式
+- `opts` - 路由選項（選用）
+
+**路徑模式**
+- `/users` - 靜態路徑
+- `/users/:id` - 單一參數
+- `/users/:userId/posts/:postId` - 多個參數
+
+**範例**
+
+```go
+// 기본 라우트
+app.Route("GET", "/users", (*UserController).List)
+app.Route("GET", "/users/:id", (*UserController).GetUser)
+app.Route("POST", "/users", (*UserController).CreateUser)
+app.Route("PUT", "/users/:id", (*UserController).UpdateUser)
+app.Route("DELETE", "/users/:id", (*UserController).DeleteUser)
+
+// 중첩 경로
+app.Route("GET", "/users/:userId/posts/:postId", (*PostController).GetPost)
+```
+
+#### 路由選項
+
+使用 `route.WithInterceptors`，只在特定路由套用攔截器。
+
+```go
+import "github.com/NARUBROWN/spine/pkg/route"
+
+// 라우트별 인터셉터 적용
+app.Route(
+    "GET",
+    "/users/:id",
+    (*UserController).GetUser,
+    route.WithInterceptors(&LoggingInterceptor{}),
+)
+
+// 타입이 있는 nil 포인터는 컨테이너에서 조회
+app.Route(
+    "POST",
+    "/admin/users",
+    (*AdminController).CreateUser,
+    route.WithInterceptors((*AuthInterceptor)(nil)),
+)
+
+// 여러 인터셉터 적용
+app.Route(
+    "POST",
+    "/admin/users",
+    (*AdminController).CreateUser,
+    route.WithInterceptors(
+        (*AuthInterceptor)(nil),
+        &AdminRoleInterceptor{},
+    ),
+)
+```
+
+### Interceptor
+
+```go
+Interceptor(interceptors ...core.Interceptor)
+```
+
+為 HTTP 請求與 WebSocket 訊息註冊全域攔截器。`app.Interceptor(...)` 等同於 `app.InterceptorFor(boot.InterceptorAll, ...)`。`PreHandle` 依註冊順序執行，`PostHandle`、`BeforeResponse` 與 `AfterCompletion` 則依反向順序執行。
+
+若將同一個指標實例註冊至多個範圍，會合併範圍並只執行一次。相同型別的不同實例會各自執行。若註冊 `(*AuthInterceptor)(nil)` 這類具有型別的 nil 指標，則會從容器取得共用實例。
+
+**參數**
+
+- `interceptors`：攔截器實例清單
+
+**執行順序**
+
+1. 依註冊順序執行全域攔截器的 `PreHandle`。
+2. 路由比對後解析輸入值。
+3. 依註冊順序執行路由攔截器的 `PreHandle`。
+4. 執行控制器並準備回應，再呼叫執行後掛鉤。
+5. 先執行路由攔截器，再執行全域攔截器的 `PostHandle`，兩者各自依註冊的反向順序執行。
+6. 依相同的反向順序執行 `BeforeResponse`，再實際寫入回應。
+7. 回應處理完成後，依相同的反向順序執行 `AfterCompletion`。
+
+錯誤與中斷時的行為請參閱[攔截器參考](/zh-Hant/reference/api/interceptor)。
+
+**範例**
+
+```go
+app.Interceptor(
+    cors.New(cors.Config{
+        AllowOrigins: []string{"*"},
+        AllowMethods: []string{"GET", "POST", "OPTIONS"},
+        AllowHeaders: []string{"Content-Type"},
+    }),
+    &LoggingInterceptor{},
+)
+```
+
+### InterceptorFor
+
+```go
+InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
+```
+
+選擇要套用全域攔截器的傳輸方式。不套用至事件消費者。
+
+| 範圍 | 套用對象 |
+| --- | --- |
+| `boot.InterceptorHTTP` | HTTP 請求 |
+| `boot.InterceptorWebSocket` | WebSocket 訊息與支援的連線前處理 |
+| `boot.InterceptorAll` | 以上兩個範圍 |
+
+```go
+app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
+app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
+```
+
+### Transport
+
+```go
+Transport(fn func(any))
+```
+
+註冊設定 HTTP 伺服器 Echo 實例的回呼函式。可在回呼中加入中介軟體或靜態檔案路徑。
+
+**參數**
+
+- `fn` - 接收 Echo 實例的回呼函式
+
+**範例**
+
+```go
+import "github.com/labstack/echo/v4"
+import "github.com/labstack/echo/v4/middleware"
+
+app.Transport(func(e any) {
+    echo := e.(*echo.Echo)
+
+    // Echo 미들웨어 추가
+    echo.Use(middleware.RequestID())
+
+    // 정적 파일 서빙
+    echo.Static("/static", "public")
+})
+```
+
+### RegisterTransport
+
+```go
+RegisterTransport(t core.CustomTransport)
+```
+
+註冊獨立於 HTTP 管線執行的傳輸方式。例如，將 gRPC 伺服器接入 Spine 的相依性注入及啟動與關閉流程。
+
+**參數**
+
+- `t` - `core.CustomTransport` 介面的實作
+
+**CustomTransport 介面**
+```go
+// core/transport.go
+type CustomTransport interface {
+    // Init은 DI 컨테이너 준비 이후 호출됩니다.
+    Init(container Container) error
+    // Start는 Init 이후 별도 고루틴에서 호출됩니다.
+    Start() error
+    // Stop은 정상 종료 시 호출됩니다.
+    Stop(ctx context.Context) error
+}
+
+type Container interface {
+    Resolve(t reflect.Type) (any, error)
+}
+```
+
+**範例**
+
+```go
+type GRPCTransport struct {
+    server *grpc.Server
+}
+
+func (t *GRPCTransport) Init(container core.Container) error {
+    // 컨테이너에서 서비스 조회
+    svc, err := container.Resolve(reflect.TypeOf((*MyService)(nil)))
+    if err != nil {
+        return err
+    }
+    t.server = grpc.NewServer()
+    RegisterMyServiceServer(t.server, svc.(*MyService))
+    return nil
+}
+
+func (t *GRPCTransport) Start() error {
+    lis, err := net.Listen("tcp", ":9090")
+    if err != nil {
+        return err
+    }
+    return t.server.Serve(lis)
+}
+
+func (t *GRPCTransport) Stop(ctx context.Context) error {
+    t.server.GracefulStop()
+    return nil
+}
+
+app.RegisterTransport(&GRPCTransport{})
+```
+
+### Consumers
+
+```go
+Consumers() *consumer.Registry
+```
+
+回傳用於註冊事件消費者的登錄表。註冊要從 Kafka 或 RabbitMQ 接收的事件名稱與處理器。消費者的建構函式也必須透過 `Constructor` 註冊。
+
+**回傳值**
+
+- `*consumer.Registry` - 消費者登錄表
+
+**範例**
+
+```go
+// 이벤트 소비자 등록
+app.Consumers().Register(
+    "order.created",            // 토픽/이벤트 이름
+    (*OrderConsumer).OnCreated, // 핸들러 메서드
+)
+
+app.Consumers().Register(
+    "stock.created",
+    (*StockConsumer).OnCreated,
+)
+```
+
+#### 事件處理器
+
+事件處理器可接收標準內容物件、事件名稱與事件 DTO 作為參數。
+
+```go
+type OrderConsumer struct{}
+
+func NewOrderConsumer() *OrderConsumer {
+    return &OrderConsumer{}
+}
+
+// 이벤트 핸들러
+func (c *OrderConsumer) OnCreated(
+    ctx context.Context,
+    eventName string,
+    event OrderCreated,
+) error {
+    log.Println("이벤트 수신:", eventName)
+    log.Println("주문 ID:", event.OrderID)
+    return nil
+}
+
+// 이벤트 DTO
+type OrderCreated struct {
+    OrderID int64     `json:"order_id"`
+    At      time.Time `json:"at"`
+}
+```
+
+### WebSocket
+
+```go
+WebSocket() *ws.Registry
+```
+
+回傳 WebSocket 登錄表，用來註冊 WebSocket 路徑與處理器。
+
+**回傳值**
+
+- `*ws.Registry` - WebSocket 登錄表
+
+**範例**
+
+```go
+if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
+    log.Fatal(err)
+}
+```
+
+#### WebSocket 處理器
+
+WebSocket 處理器接收 `ws` 套件的連線 ID 與訊息 DTO 作為參數。以下範例儲存各連線的傳送物件，並將訊息傳送至所有連線。請透過 `Constructor` 註冊 `ChatController` 的建構函式。
+
+```go
+import "github.com/NARUBROWN/spine/pkg/ws"
+
+type ChatController struct {
+    mu      sync.RWMutex
+    clients map[string]ws.Sender
+}
+
+func NewChatController() *ChatController {
+    return &ChatController{clients: make(map[string]ws.Sender)}
+}
+
+type ChatMessage struct {
+    Message string `json:"message"`
+}
+
+type ChatEvent struct {
+    Type    string `json:"type"`
+    From    string `json:"from"`
+    Message string `json:"message"`
+    At      string `json:"at"`
+}
+
+func (c *ChatController) OnMessage(
+    ctx context.Context,
+    connID ws.ConnectionID,
+    msg ChatMessage,
+) error {
+    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
+    if ok && sender != nil {
+        c.mu.Lock()
+        c.clients[connID.Value] = sender
+        c.mu.Unlock()
+    }
+
+    message := strings.TrimSpace(msg.Message)
+    if message == "" {
+        return nil
+    }
+
+    payload, err := json.Marshal(ChatEvent{
+        Type:    "message",
+        From:    connID.Value,
+        Message: message,
+        At:      time.Now().UTC().Format(time.RFC3339),
+    })
+    if err != nil {
+        return err
+    }
+
+    c.mu.RLock()
+    clients := make(map[string]ws.Sender, len(c.clients))
+    for id, client := range c.clients {
+        clients[id] = client
+    }
+    c.mu.RUnlock()
+
+    var firstErr error
+    for id, client := range clients {
+        if err := client.Send(ws.TextMessage, payload); err != nil {
+            if firstErr == nil {
+                firstErr = err
+            }
+            c.mu.Lock()
+            delete(c.clients, id)
+            c.mu.Unlock()
+        }
+    }
+    return firstErr
+}
+```
+
+WebSocket 會將路徑註冊至與 HTTP 伺服器相同的 Echo 實例，因此需要 `boot.Options.HTTP`。來源、連線數與驗證設定請參閱[安全性設定](/zh-Hant/reference/security-configuration#websocket)。
+
+### Validate
+
+```go
+Validate(opts boot.Options) error
+```
+
+檢查啟動選項，不會開啟網路連線或啟動伺服器與消費者。檢查項目包含 Kafka 與 RabbitMQ 的連線設定、HTTP 與 WebSocket 的限制值，以及全域攔截器是否為 nil 和其套用範圍。`Run` 也會在啟動前執行相同檢查。
+
+若有錯誤，會回傳 `*boot.ConfigError`。`Issues` 的各個項目包含設定位置 `Path`、錯誤分類 `Code`、說明 `Message` 與修正提示 `Hint`。選項有效時回傳 `nil`。
+
+`Validate` 不會建立建構函式的相依物件，也不會連線至訊息代理。因此，通過驗證不代表建構函式與路由適用、DI 組態正確，或已成功連線至實際基礎設施。
+
+```go
+options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
+if err := app.Validate(options); err != nil {
+    log.Fatal(err)
+}
+if err := app.Run(options); err != nil {
+    log.Fatal(err)
+}
+```
+
+### Run
+
+```go
+Run(opts boot.Options) error
+```
+
+依註冊的組態與 `boot.Options` 啟動 HTTP 伺服器、WebSocket、事件消費者與自訂傳輸方式。執行期間等待關閉訊號或執行階段錯誤。若設定、初始化、執行或關閉失敗，會回傳錯誤。
+
+```go
+if err := app.Run(boot.Options{
+    Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
+}); err != nil {
+    log.Fatal(err)
+}
+```
+
+## boot.Options
+
+指定伺服器執行與外部基礎設施的使用方式。`HTTP`、`Kafka` 或 `RabbitMQ` 為 `nil` 時，不會設定對應功能。
+
+```go
+import "github.com/NARUBROWN/spine/pkg/boot"
+```
+
+### 結構定義
+
+```go
+type Options struct {
+    Address                string
+    EnableGracefulShutdown bool
+    ShutdownTimeout        time.Duration
+    Kafka                  *KafkaOptions
+    RabbitMQ               *RabbitMqOptions
+    HTTP                   *HTTPOptions
+}
+
+type HTTPOptions struct {
+    GlobalPrefix      string
+    DisableRecover    bool
+    ReadHeaderTimeout time.Duration
+    ReadTimeout       time.Duration
+    WriteTimeout      time.Duration
+    IdleTimeout       time.Duration
+    MaxHeaderBytes    int
+    MaxBodyBytes      int64
+    WebSocket         WebSocketOptions
+}
+```
+
+| `Options` 欄位 | 意義與預設行為 |
+| --- | --- |
+| `Address` | HTTP 伺服器監聽的位址。例如 `":8080"` |
+| `EnableGracefulShutdown` | 為 `true` 時，HTTP 伺服器收到 `SIGINT`、`SIGTERM` 後正常關閉。預設為 `false` |
+| `ShutdownTimeout` | 關閉 HTTP 與自訂傳輸方式時的等待時間。`0` 表示 10 秒，不得為負數 |
+| `Kafka` | Kafka 發布與消費設定。`nil` 表示停用 |
+| `RabbitMQ` | RabbitMQ 發布與消費設定。`nil` 表示停用 |
+| `HTTP` | HTTP 與 WebSocket 設定。`nil` 表示停用 HTTP 伺服器 |
+
+| `HTTPOptions` 欄位 | 為 `0` 或省略時 | 限制 |
+| --- | --- | --- |
+| `GlobalPrefix` | 無前綴 | 套用下方的路徑規則 |
+| `DisableRecover` | `false`，使用將 panic 轉為 HTTP 500 的復原中介軟體 | `true` 表示停用中介軟體 |
+| `ReadHeaderTimeout` | 5 秒 | 不得為負數 |
+| `ReadTimeout` | 30 秒 | 不得為負數 |
+| `WriteTimeout` | 30 秒 | 不得為負數 |
+| `IdleTimeout` | 120 秒 | 不得為負數 |
+| `MaxHeaderBytes` | 1 MiB | 不得為負數 |
+| `MaxBodyBytes` | 32 MiB | 負數表示停用本文大小限制 |
+| `WebSocket` | [WebSocket 預設值](/zh-Hant/reference/security-configuration#websocket) | `boot.WebSocketOptions` |
+
+### GlobalPrefix 驗證規則
+
+若值不符合以下規則，`Validate` 與 `Run` 會回傳 `HTTP_GLOBAL_PREFIX_INVALID` 設定錯誤。空字串表示不套用前綴。
+
+- 必須以 `"/"` 開頭
+- 不得包含 `":"`（路徑參數）
+- 不得包含 `"*"`（萬用字元）
+- 結尾的 `"/"` 會自動移除
+
+```go
+// 유효한 접두사
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/v1"}
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/v2"}
+
+// Validate와 Run이 설정 오류 반환
+HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // '/'로 시작하지 않음
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // 경로 매개변수 포함
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // 와일드카드 포함
+```
+
+### 基本用法
+
+```go
+app.Run(boot.Options{
+    Address: ":8080",
+    HTTP: &boot.HTTPOptions{},
+})
+```
+
+### 正常關閉
+
+```go
+app.Run(boot.Options{
+    Address:                ":8080",
+    EnableGracefulShutdown: true,
+    ShutdownTimeout:        10 * time.Second,
+    HTTP: &boot.HTTPOptions{
+        GlobalPrefix: "/api/v1",
+    },
+})
+```
+
+啟用 HTTP 正常關閉後，收到 `SIGINT`、`SIGTERM` 時會停止接收新請求，並等待正在處理的請求完成。接著關閉 WebSocket 連線、停止事件消費者，再呼叫自訂傳輸方式的 `Stop(ctx)`。
+
+`ShutdownTimeout` 套用至 HTTP 關閉與自訂傳輸方式的關閉內容物件。消費者的 `Stop` 會等待工作、ACK/NACK 與讀取器結束，因此請勿將此值解讀為整個程序的強制終止期限。只執行消費者或自訂傳輸方式而不使用 HTTP 時，也會處理關閉訊號。
+
+### Recover 中介軟體
+
+預設啟用將 panic 轉為 HTTP 500 回應的復原中介軟體。
+
+```go
+// Recover 비활성화
+HTTP: &boot.HTTPOptions{
+    DisableRecover: true,
+}
+```
+
+## Kafka 設定
+
+### KafkaOptions
+
+`Read` 與 `Write` 彼此獨立。只要啟用其中一項，就需要 `Brokers`；使用 `Read` 時也需要 `GroupID`。若未另行設定傳輸方式，會套用 TLS 1.2 以上版本。
+
+```go
+type KafkaOptions struct {
+    // Kafka 브로커 주소 목록
+    Brokers []string
+
+    // 사용자 정의 TLS, 리더 Dialer, 라이터 Transport
+    TLS *tls.Config
+    Dialer *kafka.Dialer
+    Transport *kafka.Transport
+
+    // 격리된 로컬 환경의 평문 연결 명시적 허용
+    AllowInsecureTransport bool
+
+    // 리더 오류와 ACK/NACK 실패 뒤 재연결 정책
+    ConsumerRetry ConsumerRetryOptions
+
+    // 이벤트 소비 설정
+    // nil이면 Kafka 소비자를 활성화하지 않음
+    Read *KafkaReadOptions
+
+    // 이벤트 발행 설정
+    // nil이면 Kafka로 이벤트를 발행하지 않음
+    Write *KafkaWriteOptions
+}
+
+type KafkaReadOptions struct {
+    // Kafka 소비자 그룹 ID
+    GroupID string
+}
+
+type KafkaWriteOptions struct {
+    // 이벤트 이름 앞에 붙일 토픽 접두사
+    TopicPrefix string
+}
+```
+
+### 範例
+
+```go
+app.Run(boot.Options{
+    Address: ":8080",
+    Kafka: &boot.KafkaOptions{
+        Brokers: []string{"localhost:9092"},
+        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
+        Read: &boot.KafkaReadOptions{
+            GroupID: "my-consumer-group",
+        },
+        Write: &boot.KafkaWriteOptions{
+            TopicPrefix: "myapp.",
+        },
+    },
+    HTTP: &boot.HTTPOptions{},
+})
+```
+
+## RabbitMQ 設定
+
+### RabbitMqOptions
+
+`Read` 與 `Write` 彼此獨立。為每個啟用的角色指定 `Exchange`。預設要求使用 `amqps://` URL；僅在隔離的開發環境中，才明確允許使用明文 `amqp://`。
+
+```go
+type RabbitMqOptions struct {
+    // RabbitMQ AMQP 연결 문자열
+    // 예: amqp://guest:guest@localhost:5672/
+    URL string
+
+    // 로컬 amqp:// 연결 명시적 허용
+    AllowInsecureTransport bool
+
+    ConsumerRetry  ConsumerRetryOptions
+    PublisherRetry PublisherRetryOptions
+
+    // 이벤트 소비 설정
+    // nil이면 RabbitMQ 소비자를 활성화하지 않음
+    Read *RabbitMqReadOptions
+
+    // 이벤트 발행 설정
+    // nil이면 RabbitMQ로 이벤트를 발행하지 않음
+    Write *RabbitMqWriteOptions
+}
+
+type RabbitMqReadOptions struct {
+    // 큐를 바인딩할 교환기 이름
+    Exchange string
+    PrefetchCount int
+    FailurePolicy RabbitMqFailurePolicy
+    DeadLetter *RabbitMqDeadLetterOptions
+
+    // Deprecated: FailurePolicy 사용 권장
+    RequeueOnError bool
+}
+
+type RabbitMqWriteOptions struct {
+    // 이벤트를 발행할 교환기 이름
+    Exchange string
+}
+```
+
+失敗政策與重試預設值請參閱[安全性設定](/zh-Hant/reference/security-configuration#rabbitmq)。`RequeueOnError` 用於相容舊版，新程式碼請使用 `FailurePolicy`。
+
+### 範例
+
+```go
+app.Run(boot.Options{
+    Address: ":8080",
+    RabbitMQ: &boot.RabbitMqOptions{
+        URL:                    "amqp://guest:guest@localhost:5672/",
+        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
+        Read: &boot.RabbitMqReadOptions{
+            Exchange: "stock-exchange",
+        },
+        Write: &boot.RabbitMqWriteOptions{
+            Exchange: "stock-exchange",
+        },
+    },
+    HTTP: &boot.HTTPOptions{},
+})
+```
+
+## 事件發布 {#event-publishing}
+
+可在控制器收集領域事件，並傳送至已註冊的 Kafka 或 RabbitMQ 發布器。
+
+### DomainEvent 介面
+
+```go
+import "github.com/NARUBROWN/spine/pkg/event/publish"
+
+type DomainEvent interface {
+    Name() string
+    OccurredAt() time.Time
+}
+```
+
+### 定義事件
+
+```go
+type OrderCreated struct {
+    OrderID int64     `json:"order_id"`
+    At      time.Time `json:"at"`
+}
+
+func (e OrderCreated) Name() string {
+    return "order.created"
+}
+
+func (e OrderCreated) OccurredAt() time.Time {
+    return e.At
+}
+```
+
+### 在控制器發布
+
+```go
+import "github.com/NARUBROWN/spine/pkg/event/publish"
+
+func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) httpx.Response[Order] {
+    order := c.repo.Save(req)
+
+    // 이벤트 발행
+    publish.Event(ctx, OrderCreated{
+        OrderID: order.ID,
+        At:      time.Now(),
+    })
+
+    return httpx.Response[Order]{Body: order}
+}
+```
+
+`publish.Event()` 將事件收集至與 `context.Context` 關聯的事件匯流排。控制器執行與回應準備成功後，會在執行後掛鉤中，批次傳送至已註冊的 Kafka 或 RabbitMQ 發布器。此傳送發生在 `BeforeResponse` 之前，因此不會與 DB 交易提交構成原子操作。如需原子處理，請設定交易式寄件匣。
+
+## 在 CLI 專案中使用
+
+[建立第一個應用程式](/zh-Hant/learn/getting-started/first-app)產生的專案，會在 `internal/application/application.go` 的 `BuildApplication` 中設定應用程式，並在根目錄的 `main.go` 中確認 `Validate` 錯誤後呼叫 `Run`。可使用以下命令檢查專案。
 
 ```sh
 spine doctor
@@ -10,10 +816,7 @@ spine contract check
 spine verify
 ```
 
-
-## 概覽
-
-`spine.App` 是應用程式入口，負責註冊相依性、HTTP 路由、攔截器、訊息消費者、WebSocket 和自訂傳輸，並在啟動前驗證完整設定。
+以下是產生的 `BuildApplication` 基本形式。
 
 ```go
 package application
@@ -34,7 +837,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
+// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New()
 	app.Constructor(NewHealthController)
@@ -48,36 +851,25 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## 方法
+## 啟動與關閉順序
 
-| 方法 | 用途 |
-|---|---|
-| `New()` | 建立應用程式實例 |
-| `Constructor(constructors...)` | 註冊容器建構函式 |
-| `Route(method, path, handler, options...)` | 註冊 HTTP 路由 |
-| `Interceptor(interceptors...)` | 為 HTTP 與 WebSocket 註冊全域攔截器 |
-| `InterceptorFor(scope, interceptors...)` | 僅為選定傳輸範圍註冊全域攔截器 |
-| `Transport(fn)` | 擴充內建 HTTP 傳輸 |
-| `RegisterTransport(transport)` | 註冊獨立自訂傳輸 |
-| `Validate(options)` | 不開啟網路連線，彙總設定問題 |
-| `Run(options)` | 完成預檢、預熱和傳輸就緒檢查後執行應用程式 |
-| `Consumers()` | 回傳訊息消費者註冊表 |
-| `WebSocket()` | 回傳 WebSocket 註冊表 |
+`Run` 會在選項預先驗證後，設定相依性注入容器與事件發布器。接著呼叫自訂傳輸方式的 `Init`，解析 HTTP 與 WebSocket 的路由和攔截器，並預先建立所需的控制器。若有已註冊的消費者，也會驗證訊息代理執行環境。
 
-## 攔截器範圍
+完成準備後，在各自的 goroutine 中執行消費者與自訂傳輸方式的 `Start`，最後啟動 HTTP 伺服器。若同一個 HTTP 方法的路由路徑存在模糊重疊，啟動會失敗。例如，`/users/:id` 與 `/users/me` 會被判定為重疊路徑。
 
-```go
-app.Interceptor(&MetricsInterceptor{}) // HTTP + WebSocket
-app.InterceptorFor(boot.InterceptorHTTP, &CORSInterceptor{})
-app.InterceptorFor(boot.InterceptorWebSocket, &WSAuthInterceptor{})
-```
+關閉時，先停止接收 WebSocket 與 HTTP 請求，等待消費者停止後，再依初始化的反向順序呼叫自訂傳輸方式的 `Stop`。最後清理事件發布器的資源。具體實作請參閱 [v0.5.1 啟動與關閉程式碼](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/bootstrap/bootstrap.go)。
 
-可用範圍是 `boot.InterceptorHTTP`、`boot.InterceptorWebSocket` 和 `boot.InterceptorAll`。同一指標實例在多個範圍註冊時會合併並只執行一次；不同指標實例即使型別相同也會獨立執行。
+## 限制與錯誤
 
-## 設定驗證與啟動
+- 建構函式必須恰好有一個回傳值，無法註冊回傳 `(T, error)` 的建構函式。
+- HTTP 輸入 DTO 以指標接收，成功回應則以 `httpx.Response[T]` 等支援的回應型別回傳。請參閱[撰寫控制器](/zh-Hant/learn/tutorial/2-controller)。
+- 即使 `Validate` 成功，`Run` 仍可能發生建構函式、相依性、路由或訊息代理連線錯誤。請檢查兩個方法回傳的錯誤。
+- 若註冊 WebSocket 路徑卻省略 `HTTP`，會發生 `WEBSOCKET_HTTP_REQUIRED` 設定錯誤。
+- `InterceptorFor` 的範圍須使用 `InterceptorHTTP`、`InterceptorWebSocket` 或 `InterceptorAll`。若為 `0` 或包含不支援的位元，會發生 `INTERCEPTOR_SCOPE_INVALID` 設定錯誤。
+- 網路傳輸、事件發布與 DB 提交不是單一原子操作。應用程式必須決定是否需要重試與重複處理機制。
 
-`Validate` 回傳的設定錯誤可用 `errors.As(err, *boot.ConfigError)` 檢查，並逐一讀取 `Issues` 的 `Path`、`Code`、`Message` 與 `Hint`。`Code` 適合部署自動化；不要剖析面向人的訊息。
+## 參考
 
-`Run` 會執行同一無網路預檢，接著預熱控制器和消費者、執行 Kafka 協定握手、驗證 RabbitMQ 拓撲連線並初始化自訂傳輸。HTTP listener 只在這些步驟全部成功後啟動。負數 `ShutdownTimeout` 無效；優雅關閉會等待消費者和傳輸完成。
-
-完整選項與安全預設值請參閱[安全設定參考](/zh-Hant/reference/security-configuration)。
+- [攔截器](/zh-Hant/reference/api/interceptor)：公開介面與執行順序
+- [執行管線](/zh-Hant/learn/core-concepts/pipeline) - 請求處理流程
+- [Spine 簡介](/zh-Hant/learn/getting-started/intro)：相依性注入與主要概念

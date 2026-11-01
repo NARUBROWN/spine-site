@@ -1,28 +1,28 @@
 # 소개
 
-## Spine이란 무엇인가요?
+Spine은 생성자, 라우트, 인터셉터를 Go 코드로 등록하는 웹 프레임워크입니다. 요청을 받을 핸들러와 그 전후에 실행할 작업을 등록 코드에서 확인할 수 있습니다.
 
-Spine은 **요청 과정을 숨기지 않는 Go 웹 프레임워크**입니다.
+처음 시작한다면 [첫 번째 앱](/ko/learn/getting-started/first-app)에서 CLI로 프로젝트를 만들고 `GET /health` 응답을 확인하세요. 이 문서는 앱을 구성할 때 사용하는 핵심 개념을 소개합니다.
 
-요청이 어떻게 해석되고, 어떤 순서로 실행되며, 언제 비즈니스 로직이 호출되고, 어떻게 응답으로 완성되는지를 명시적인 실행 파이프라인으로 드러냅니다.
+## 앱 구성과 실행
 
-CLI가 생성한 `internal/application/application.go`에서 앱을 조립합니다. 아래는 사용자 기능을 추가한 등록 예시이며, 생성된 `main.go`는 `BuildApplication` → `Validate` → `Run` 순서를 유지합니다.
+CLI로 생성한 프로젝트에서는 `internal/application/application.go`의 `BuildApplication()`에 앱 구성 코드를 모읍니다. `main.go`는 `BuildApplication` → `Validate` → `Run` 순서로 앱을 구성하고, 검증한 뒤 실행합니다.
 
-아래 코드는 직접 구현한 사용자 타입과 인터셉터를 전제로 한 등록 발췌입니다. CLI의 `resource user`가 생성하는 핸들러는 `src/user`의 `UserController.Get`이며 경로는 `GET /user/:id`입니다. 생성된 프로젝트에서는 `BuildApplication`의 `user.Register(app)` 오류 확인을 유지하고, 같은 생성자·라우트를 다시 등록하지 않습니다. 자세한 생성·수정 절차는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)를 참고하세요.
+다음은 사용자 기능을 직접 구현했을 때의 등록 예시입니다. `UserController`와 인터셉터 구현을 생략한 코드이므로 생성된 파일을 이 예시로 덮어쓰지 마세요.
 
 ```go
 func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-    
-    // 의존성 등록 — 순서 상관없이, 생성자만 등록하면 자동 해결
+
+    // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
-    
-    // 인터셉터 — 실행 순서가 코드에 그대로 보임
+
+    // 인터셉터를 실행할 순서대로 등록합니다.
     app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
-    
-    // 라우트 — 어떤 메서드가 어떤 경로인지 명확
+
+    // HTTP 메서드와 경로에 핸들러를 연결합니다.
     app.Route("GET", "/users", (*UserController).GetUser)
-    
+
     return app, boot.Options{
         Address: ":8080",
         EnableGracefulShutdown: true,
@@ -33,46 +33,13 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```
 
 
-## 왜 Spine인가요?
-
-### 숨겨진 마법이 없습니다
-
-Spring Boot의 `@Autowired`, NestJS의 `@Injectable`.
-편리하지만, 내부에서 무슨 일이 일어나는지 알기 어렵습니다.
-
-Spine은 다릅니다.
-
-- **어노테이션 없음** — 순수한 Go 코드
-- **모듈 정의 없음** — 생성자 등록만으로 DI 해결
-- **프록시 없음** — 스택 트레이스가 직관적
-
-코드를 읽으면 실행 흐름이 보입니다.
-
-
-### 익숙한 구조
-
-Spring이나 NestJS를 써봤다면 바로 시작할 수 있습니다.
-
-```
-Controller → Service → Repository
-```
-
-생성자 주입, 인터셉터 체인, 계층형 아키텍처.
-익숙한 패턴을 Go로 옮겼습니다.
-
-
-### Go의 성능
-
-- JVM 워밍업 없음
-- Node.js 런타임 초기화 없음
-- 컴파일된 바이너리가 즉시 실행
-
-컨테이너와 서버리스 환경에 최적화되어 있습니다.
-
+CLI의 `spine generate resource user`가 만드는 코드는 위 예시와 이름과 경로가 다릅니다. 생성되는 핸들러는 `src/user`의 `UserController.Get`이며, 경로는 `GET /user/:id`입니다. 생성자가 등록된 상태에서 같은 생성자나 라우트를 다시 등록하지 마세요. `BuildApplication`에 추가된 `user.Register(app)` 호출과 오류 처리도 유지해야 합니다. 자세한 절차는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 확인할 수 있습니다.
 
 ## 핵심 개념
 
 ### 1. 생성자 기반 의존성 주입
+
+생성자 매개변수로 필요한 의존성을 선언하고 `app.Constructor`에 생성자를 등록합니다. 아래 예시에서 `UserService`는 `UserRepository`를 전달받습니다.
 
 ```go
 // 생성자 파라미터가 곧 의존성 선언
@@ -86,6 +53,8 @@ app.Constructor(NewUserRepository, NewUserService, NewUserController)
 
 ### 2. 인터셉터 파이프라인
 
+인터셉터는 컨트롤러 호출 전후에 인증, 트랜잭션, 로깅 같은 공통 작업을 실행합니다. 다음 예시는 직접 구현한 세 인터셉터의 등록 순서를 보여줍니다.
+
 ```go
 app.Interceptor(
     &TxInterceptor{},      // 1. 트랜잭션 시작
@@ -95,15 +64,11 @@ app.Interceptor(
 
 ```
 
-**실행 순서:**
-
-```mermaid
-graph LR
-   Request --> Tx.Pre --> Auth.Pre --> Log.Pre --> Controller
-   Controller --> Log.After --> Auth.After --> Tx.After --> Response
-```
+`PreHandle`은 등록 순서대로 실행됩니다. 컨트롤러가 반환한 뒤의 `PostHandle`과 응답 처리 전의 `BeforeResponse`, 응답 처리 후의 `AfterCompletion`은 역순으로 실행됩니다. 오류가 발생했을 때의 호출 조건은 [인터셉터](/ko/learn/tutorial/4-interceptor)에서 설명합니다.
 
 ### 3. 명시적 라우팅
+
+`app.Route`로 HTTP 메서드, 경로, 핸들러를 연결합니다. 기능별 등록 함수를 두면 관련 라우트를 한곳에서 관리할 수 있습니다.
 
 ```go
 // 한 곳에서 모든 라우트를 관리
@@ -116,6 +81,8 @@ func RegisterUserRoutes(app spine.App) {
 ```
 
 ### 4. 타입 안전한 핸들러
+
+핸들러의 매개변수와 반환 타입으로 요청에서 읽을 값과 응답 형태를 표현합니다. 다음 예시의 조회 핸들러는 쿼리 매개변수를 읽고, 생성 핸들러는 JSON 요청 본문을 구조체 포인터로 전달받습니다. 서비스와 요청, 응답 타입은 직접 구현해야 합니다.
 
 ```go
 // 함수 시그니처가 곧 API 스펙
@@ -143,23 +110,11 @@ func (c *UserController) CreateUser(
 }
 ```
 
-## 다른 프레임워크와의 비교
-
-| | Spine | NestJS | Spring Boot |
-|---|:---:|:---:|:---:|
-| **언어** | Go | TypeScript | Java/Kotlin |
-| **런타임** | 네이티브 바이너리 | Node.js | JVM |
-| **IoC 컨테이너** | ✅ | ✅ | ✅ |
-| **어노테이션/데코레이터** | 불필요 | 필수 | 필수 |
-| **모듈 정의** | 불필요 | 필수 | 불필요 |
-| **타입 안전성** | 컴파일 타임 | 런타임 | 컴파일 타임 |
-
-
-## 시작할 준비가 되셨나요?
+## 시작하기
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
 spine version
 ```
 
-CLI를 설치한 뒤 [5분 첫 앱 만들기](/ko/learn/getting-started/first-app)에서 변경 계획을 확인하고 프로젝트를 생성하세요.
+CLI를 설치한 뒤 [첫 번째 앱](/ko/learn/getting-started/first-app)에서 프로젝트를 생성하고 HTTP 응답을 확인하세요. 명령을 찾지 못하면 [설치 안내](/ko/learn/getting-started/installation)의 경로 설정을 참고하세요.

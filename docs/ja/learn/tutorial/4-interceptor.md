@@ -1,58 +1,54 @@
 # インターセプター
 
-インターセプターの作成と使用方法。
+ユーザー取得のリクエストにロギングとデモ用の認証を追加し、リクエストがインターセプターを通過する順序を確認します。インターセプターは、複数のハンドラーで共有する認証、権限チェック、ロギング、トランザクション処理を担当します。
 
-## CLIプロジェクトから始める
+## CLI プロジェクトから始める
 
-[最初のアプリ](/ja/learn/getting-started/first-app)と[プロジェクト構造](/ja/learn/tutorial/1-project-structure)の `example.com/my-app` を使用します。ユーザーリソースがまだなければ、プロジェクトルートで生成します。
+[最初のアプリ](/ja/learn/getting-started/first-app)と[プロジェクト構成](/ja/learn/tutorial/1-project-structure)で作成したプロジェクトを使います。コードのモジュールパスは `example.com/my-app` を基準にしているため、別のモジュールパスで作成した場合は、プロジェクトに合わせて変更してください。
+
+ユーザーリソースがまだなければ、プロジェクトルートで生成します。すでに作成した場合は、生成手順を省略します。
 
 ```sh
 spine generate resource user --dry-run
 ```
 
+プレビューで生成ファイルと登録コードの変更を確認してから、生成します。
+
 ```sh
 spine generate resource user
 ```
 
-テキストのプレビューで生成ファイルを確認してから通常の生成コマンドを実行します。生成済みのリソースは再生成しません。
+CLI は `src/user` のファイルと、`BuildApplication` 内の `user.Register(app)` の呼び出しを生成します。インターセプターのジェネレーターはないため、`src/interceptor` ディレクトリを作成し、以下のロギングと認証のインターセプターファイルを自分で作成してください。
 
-CLIは `src/user` と `BuildApplication` 内の `user.Register(app)` を生成します。インターセプター生成機能はないため、以下の `src/interceptor` ファイルは手動で作成します。ログイン・更新・注文などの追加メソッドはポリシー説明用の手動拡張で、生成結果には含まれません。登録は `internal/application/application.go`、ルートのポリシーは `src/user/user_route.go` に追加し、ルートの `main.go` は構築・検証・実行の役割を維持します。
+アプリ全体への登録は `internal/application/application.go` に、ユーザールートの認証ポリシーは `src/user/user_route.go` に記述します。ルートの `main.go` にある構成、検証、実行の流れは維持します。後半の監査ログと注文トランザクションの例は個別の拡張であり、基本アプリの検証手順には必要ありません。
 
 
-## インターセプターとは？
+## インターセプターのライフサイクル
 
-インターセプターはリクエストの前後に実行されるロジックです。
-
-- トランザクション管理
-- ロギング
-- 認証/認可
-- リクエストの検証
-
-## ライフサイクル
-
-Spine v0.5.1のinterceptorは4段階のlifecycleを持ちます。
-
+Spine v0.5.1 の HTTP リクエストは、グローバルインターセプター、ルーティングと入力バインディング、ルートインターセプター、コントローラーの順に実行されます。インターセプターは、四つのライフサイクルメソッドをすべて実装する必要があります。
 
 ```mermaid
 graph TD
-    Request
-    Request --> Pre["PreHandle<br/>- リクエスト前に実行<br/>- エラーを返した場合はリクエスト中断"]
-    
-    Pre --> Controller["Controller.Method()<br/>- ビジネスロジックの実行"]
-    
-    Controller -- 成功 --> Post["PostHandle<br/>- リクエスト成功時に実行<br/>- エラー発生時はスキップ"]
-    
-    Post --> Before["BeforeResponse<br/>- 応答flush前に逆順で実行<br/>- transactionのcommit/rollback"]
-    
+    Request["リクエスト"] --> GlobalPre["グローバル PreHandle"]
+    GlobalPre --> Bind["ルーティング、入力バインディング"]
+    Bind --> RoutePre["ルート PreHandle"]
+    RoutePre --> Controller["コントローラーメソッド"]
+    Controller -- 成功 --> Prepare["レスポンスのシリアライズと検証"]
+    Prepare --> Post["PostHandle<br/>逆順に実行"]
+    Post --> Before["BeforeResponse<br/>逆順に実行、コミットまたはロールバック"]
+    GlobalPre -- エラー --> Before
+    Bind -- エラー --> Before
+    RoutePre -- エラー --> Before
     Controller -- エラー --> Before
-    Before --> After["AfterCompletion<br/>- 応答後に常に実行<br/>- logging、resource cleanup"]
-    
-    After --> Response
+    Prepare -- エラー --> Before
+    Before --> Response["レスポンスの書き込み"]
+    Response --> After["AfterCompletion<br/>逆順に実行、ロギングとリソースの解放"]
 ```
+
+入力バインディングに失敗すると、ルートの `PreHandle` も実行されません。ボディの形式チェックより先に認証する必要があるポリシーは、グローバルインターセプターで処理してください。
 
 
 ## インターフェース
-
 
 ```go
 type Interceptor interface {
@@ -65,32 +61,33 @@ type Interceptor interface {
 
 | メソッド | 実行タイミング | 戻り値 | 用途 |
 |--------|----------|------|------|
-| `PreHandle` | コントローラー実行前 | `error` | 認証、検証、トランザクション開始 |
-| `PostHandle` | コントローラー成功後 | なし | 応答の加工 |
-| `BeforeResponse` |実際の応答を書き込む前| `error` | transactionのcommit/rollback |
-| `AfterCompletion` |応答処理後に常に実行|なし|logging、resource cleanup|
+| `PreHandle` | グローバルではルーティング前、ルートでは入力バインディング後 | `error` | 認証、検証、トランザクションの開始 |
+| `PostHandle` | コントローラーとレスポンスの準備が成功した後 | なし | 処理完了の記録、後続処理 |
+| `BeforeResponse` | レスポンスを実際に書き込む前 | `error` | トランザクションのコミットまたはロールバック |
+| `AfterCompletion` | レスポンスの書き込みを試みた後 | なし | ロギング、リソースの解放 |
 
-`BeforeResponse`は直列化、Cookie、status検証のエラーを`executionErr`で受け取ります。transaction処理のエラーは必ず返してください。`AfterCompletion`の時点では応答がすでに書き込まれている場合があります。
+`BeforeResponse` は、それまでの実行エラーと、レスポンスのシリアライズ、Cookie、ステータスコードの検証エラーを `executionErr` として受け取ります。`PreHandle` に成功したインターセプターだけがこのメソッドを実行するため、その段階で開始したトランザクションを完了させるのに適しています。コミットやロールバックに失敗した場合は、エラーを返してください。
+
+`AfterCompletion` は、エラーが発生した場合も、グローバルインターセプターと、ルーティングで特定したルートインターセプターに対して呼び出されます。`PreHandle` が実行されていないインターセプターも含まれる場合があるため、解放するリソースがあるかどうかを先に確認する必要があります。この時点ではレスポンスがすでに書き込まれている場合があるため、レスポンスの変更には使いません。
 
 
-## グローバルインターセプター vs ルートインターセプター
+## グローバルインターセプターとルートインターセプター
 
-Spineは2つのレベルのインターセプターをサポートしています。
+アプリ全体のポリシーはグローバルインターセプターに、特定のルートのポリシーはルートインターセプターに登録します。
 
-| 区分 | グローバルインターセプター | ルートインターセプター |
+| 項目 | グローバルインターセプター | ルートインターセプター |
 |------|--------------|----------------|
-| 適用範囲 | すべてのリクエスト | 特定のルートのみ |
+| 適用範囲 | 対象のトランスポートのすべてのリクエスト | 特定のルートのみ |
 | 登録方法 | `app.Interceptor()` | `route.WithInterceptors()` |
-| 用途 | CORS、ロギング、トランザクション | 認証、権限の検査 |
-| 実行順序 | 先に実行される | グローバルの後に実行される |
+| 用途 | CORS、ロギング、トランザクション | 認証、権限チェック |
+| 実行順序 | 先に実行 | グローバルの後に実行 |
 
 
 ## グローバルインターセプター
 
-すべてのリクエストに適用されるインターセプターです。
+以下のロギングインターセプターをグローバルに登録すると、リクエストのメソッドとパスを記録します。成功時には `PostHandle`、失敗時には `AfterCompletion` のログを確認できます。
 
 ### ロギングインターセプターの例
-
 
 ```go
 // src/interceptor/logging_interceptor.go
@@ -130,10 +127,11 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 }
 ```
 
-グローバルHTTPの `PreHandle` はルーティング前に実行されるため、`HandlerMeta` の型やメソッドが空の場合があります。生成済みの `NewHealthController` は維持します。
+グローバル HTTP の `PreHandle` はルーティング前に実行されるため、この段階の `HandlerMeta` にはコントローラーの型とメソッドがありません。この情報が必要な場合は、ルートインターセプターか、後続のライフサイクルで取得してください。
 
-### グローバルインターセプターの登録
+### グローバルインターセプターを登録する
 
+`internal/application/application.go` を次のように修正します。生成されたヘルスチェックのコントローラーと `user.Register(app)` の呼び出しを維持しながら、ロギングインターセプターを追加します。
 
 ```go
 // internal/application/application.go
@@ -178,10 +176,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ## ルートインターセプター
 
-特定のルートにのみ適用されるインターセプターです。
+認証インターセプターを `GET /user/:id` に登録し、トークンのないリクエストを HTTP 401 で拒否します。ヘルスチェック用のルート `/health` には、この認証ポリシーを適用しません。
 
 ### 認証インターセプターの例
-
 
 ```go
 // src/interceptor/auth_interceptor.go
@@ -198,16 +195,16 @@ type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    
+
     if token == "" {
-        return httperr.Unauthorized("認証が必要です。")
+        return httperr.Unauthorized("인증이 필요합니다.")
     }
-    
+
     user, err := validateToken(token)
     if err != nil {
-        return httperr.Unauthorized("無効なトークンです。")
+        return httperr.Unauthorized("유효하지 않은 토큰입니다.")
     }
-    
+
     ctx.Set("currentUser", user)
     return nil
 }
@@ -226,12 +223,11 @@ func validateToken(token string) (map[string]string, error) {
 }
 ```
 
-トークン確認は動作確認用の公開デモです。実際のアプリでは認証サービスに置き換えてください。生成された `GET /user/:id` の登録を以下に変更し、`BuildApplication` の `user.Register(app)` は維持します。
+この例では `Authorization: Bearer demo-token` だけを許可し、それ以外のトークンには HTTP 401 を返します。固定トークンは動作確認用の公開デモであるため、実際のアプリでは認証サービスに置き換えてください。
 
-### ルートインターセプターの登録
+### ルートインターセプターを登録する
 
-`route.WithInterceptors()` を使用します。
-
+生成された `src/user/user_route.go` を次のコードに変更します。`route.WithInterceptors()` で認証ポリシーを追加し、`BuildApplication` 内の `user.Register(app)` の呼び出しは維持します。
 
 ```go
 // src/user/user_route.go
@@ -256,10 +252,11 @@ func Register(app spine.App) error {
 ```
 
 
-## グローバル + ルートインターセプターの組み合わせ
+## ロギング、認証、CORS を一緒に適用する
 
-実際のアプリケーションでは、2つを一緒に使用します。
+前の節の `BuildApplication` を次のコードに置き換えると、ロギングに加えて CORS ポリシーを適用します。ユーザールートの認証インターセプターは `user_route.go` に残します。
 
+CORS は、`https://app.example.com` から送信されたリクエストを許可するように設定します。`cors.NewValidated` の設定エラーを確認し、HTTP 専用のポリシーであるため `InterceptorFor(boot.InterceptorHTTP, ...)` で登録します。
 
 ```go
 // internal/application/application.go
@@ -313,39 +310,52 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```
 
 
+## ロギングと認証の動作を検証する
+
+基本例のロギング、認証、CORS のコードを適用してから、プロジェクトルートで実行します。`spine contract check` は静的な契約を検査し、`spine verify` はローカルコードを検査します。実際のリクエストの認証とレスポンスは、サーバーを起動して別途確認します。
+
+```sh
+gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
+spine contract check
+spine verify
+spine dev
+```
+
+別のターミナルから、次のリクエストを送信します。
+
+- `/health` は、認証なしで HTTP 200 を返すはずです。
+- トークンのない `/user/1` リクエストは、HTTP 401 を返すはずです。
+- デモ用トークンを送った `/user/1` リクエストは、HTTP 200 と `{"id":1}` を返すはずです。
+- 最後のレスポンスには、`Access-Control-Allow-Origin: https://app.example.com` ヘッダーが含まれるはずです。
+
+```bash
+curl -i http://localhost:8080/health
+curl -i http://localhost:8080/user/1
+curl -i http://localhost:8080/user/1 \
+  -H 'Authorization: Bearer demo-token' \
+  -H 'Origin: https://app.example.com'
+```
+
+これらのリクエストで確認できるのは、デモ用の HTTP 認証だけです。実際の認証サービス、WebSocket 認証、データベーストランザクションの動作は、それぞれの環境を構成してから別途検証してください。
+
 ## 実行順序
 
-グローバルインターセプターが先に、ルートインターセプターが後で実行されます。
+`PreHandle` は登録順に実行します。成功後の `PostHandle`、`BeforeResponse`、`AfterCompletion` は、ルートインターセプターを逆順に実行してから、グローバルインターセプターを逆順に実行します。
 
-### 登録例
+### 成功したリクエストの実行フロー
 
+先ほど登録したロギング、CORS、認証のインターセプターがすべて成功すると、次の順序で実行されます。
 
-```go
-// グローバルインターセプター
-app.Interceptor(
-    &interceptor.LoggingInterceptor{},   // グローバル 1
-    &interceptor.CORSInterceptor{},      // グローバル 2
-)
-
-// ルートインターセプター
-app.Route(
-    "GET",
-    "/users/:id",
-    (*UserController).GetUser,
-    route.WithInterceptors(&interceptor.AuthInterceptor{}),  // ルート 1
-)
-```
-
-### 実行フロー
-
-```
-Request (GET /users/1)
+```text
+リクエスト (GET /user/1)
    │
    ├─→ Logging.PreHandle     (グローバル 1)
    ├─→ CORS.PreHandle        (グローバル 2)
+   ├─→ ルーティングと入力バインディング
    ├─→ Auth.PreHandle        (ルート 1)
    │
-   ├─→ UserController.GetUser
+   ├─→ UserController.Get
+   ├─→ レスポンスのシリアライズと検証
    │
    ├─→ Auth.PostHandle       (ルート 1)
    ├─→ CORS.PostHandle       (グローバル 2)
@@ -355,76 +365,82 @@ Request (GET /users/1)
    ├─→ CORS.BeforeResponse       (グローバル 2)
    ├─→ Logging.BeforeResponse    (グローバル 1)
    │
+   ├─→ レスポンスの書き込み
+   │
    ├─→ Auth.AfterCompletion       (ルート 1)
    ├─→ CORS.AfterCompletion       (グローバル 2)
    └─→ Logging.AfterCompletion    (グローバル 1)
-   
-Response
+
+完了
 ```
 
-- `PreHandle`: グローバル → ルートの順序
-- `PostHandle`: ルート → グローバルの逆順
-- `BeforeResponse`: `PreHandle`に成功したinterceptorだけをルート → グローバルの逆順
-- `AfterCompletion`: ルート → グローバルの逆順
+`PostHandle` は、コントローラーが成功しても、レスポンスのシリアライズや検証に失敗した場合は実行しません。`BeforeResponse` は `PreHandle` に成功したインターセプターだけが実行し、`AfterCompletion` はルーティングで特定したインターセプターもリソース解放の対象にします。
 
 
-## エラー処理
+## エラーが発生したリクエストの処理
 
-### PreHandleでエラーを返す
+### PreHandle でエラーを返す
 
-`PreHandle`でエラーを返すと、リクエストが中断されます。
+`PreHandle` でエラーを返すと、後続のインターセプターの `PreHandle` とコントローラーは呼び出しません。すでに `PreHandle` に成功したインターセプターの `BeforeResponse` は実行し、最後に `AfterCompletion` でリソースを解放します。
 
+以下は、認証失敗の分岐だけを抜粋したコードです。先ほど作成した `AuthInterceptor` をこのコードに置き換えると、トークンの有効性チェックがなくなるため、元の実装を維持してください。
 
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     if token == "" {
-        return httperr.Unauthorized("認証が必要です。")
+        return httperr.Unauthorized("인증이 필요합니다.")
     }
     return nil
 }
 ```
 
-```
-Request (GET /users/1, トークンなし)
+```text
+リクエスト (GET /user/1, トークンなし)
    │
-   ├─→ Logging.PreHandle     ✓
-   ├─→ CORS.PreHandle        ✓
-   ├─→ Auth.PreHandle        ✗ (エラーを返す)
+   ├─→ Logging.PreHandle     (成功)
+   ├─→ CORS.PreHandle        (成功)
+   ├─→ ルーティングと入力バインディング
+   ├─→ Auth.PreHandle        (エラーを返す)
    │
    ├─→ CORS.BeforeResponse
    ├─→ Logging.BeforeResponse
    │
+   ├─→ レスポンスの書き込み (401 Unauthorized)
+   │
    ├─→ Auth.AfterCompletion
    ├─→ CORS.AfterCompletion
    └─→ Logging.AfterCompletion
-   
-Response (401 Unauthorized)
+
+完了
 ```
 
 
-## ExecutionContext
+## リクエストの値を共有する: ExecutionContext
 
-リクエストコンテキストに値を保存し、照会します。
+インターセプターは `core.ExecutionContext` からリクエスト情報を読み取り、同じリクエストを処理する他のインターセプターやコントローラーに値を渡します。コントローラーは読み取り専用の `spine.Ctx` で共有値を取得します。
 
 ### メソッド
 
 | メソッド | 説明 |
 |--------|------|
 | `Context()` | `context.Context` を返す |
-| `Method()` | HTTPメソッド (GET、POSTなど) |
-| `Path()` | リクエストパス |
-| `Header(name)` | ヘッダー値の照会 |
-| `Set(key, value)` | 値の保存 |
-| `Get(key)` | 値の照会 |
+| `Method()` | HTTP メソッド（GET、POST など） |
+| `Path()` | リクエストのパス |
+| `Header(name)` | ヘッダーの値を取得 |
+| `Params()` | すべてのパスパラメーターを取得 |
+| `PathKeys()` | ルートで宣言したパスパラメーター名の順序 |
+| `Queries()` | すべてのクエリパラメーターを取得 |
+| `EventBus()` | リクエストのイベントバスを取得 |
+| `Set(key, value)` | 値を保存 |
+| `Get(key)` | 値を取得 |
 
-### インターセプター間のデータ伝達
+### インターセプター間でデータを渡す
 
-次のコードは`PreHandle`でcontextを共有する部分だけを抜粋した例です。新しい型を実際に登録する場合は、4つのlifecycleメソッドをすべて実装してください。
-
+以下は、認証インターセプターが保存した `currentUser` を監査インターセプターが読み取る部分だけを抜粋した例です。監査インターセプターを追加するには、`AuditInterceptor` 型と四つのライフサイクルメソッドを実装し、認証インターセプターの後に登録してください。既存の認証インターセプターの `PreHandle` と重複して宣言しないでください。
 
 ```go
-// AuthInterceptor — ユーザー情報を保存
+// AuthInterceptor — 사용자 정보 저장
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     user, err := validateToken(token)
@@ -436,7 +452,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 }
 
 // 컨트롤러에서는 읽기 전용 spine.Ctx로 조회
-// または別のインターセプターで照会
+// 또는 다른 인터셉터에서 조회
 func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     user, ok := ctx.Get("currentUser")
     if ok {
@@ -447,36 +463,41 @@ func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handle
 ```
 
 
-## HandlerMeta
+## ハンドラー情報: HandlerMeta
 
-実行されるハンドラーのメタ情報です。
+`core.HandlerMeta` は、ルーティングで決定したコントローラーとメソッドの情報を持ちます。グローバルの `PreHandle` はまだルーティング前であるため、型とメソッドは使えません。
 
-| フィールド | タイプ | 説明 |
+| フィールド | 型 | 説明 |
 |------|------|------|
-| `ControllerType` | `reflect.Type` | コントローラーのタイプ |
+| `ControllerType` | `reflect.Type` | コントローラーの型 |
 | `Method` | `reflect.Method` | ハンドラーメソッド |
+| `PathKeys` | `[]string` | ルートで宣言したパスパラメーター名の順序 |
 | `Interceptors` | `[]Interceptor` | ルートにバインドされたインターセプター |
 
 ### 使用例
 
+以下は、メタデータの取得部分を示す独立した例です。ルートインターセプターで実行すると、コントローラーとメソッドを記録できます。既存のロギングインターセプターと同じメソッドを重複して宣言しないでください。
 
 ```go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     if meta.ControllerType != nil {
-        log.Printf("コントローラー: %s", meta.ControllerType.String())
+        log.Printf("컨트롤러: %s", meta.ControllerType.String())
     }
-    log.Printf("メソッド: %s", meta.Method.Name)              // GetUser
+    log.Printf("메서드: %s", meta.Method.Name)              // GetUser
     return nil
 }
 ```
 
 
-## 依存性の注入が必要なインターセプター
+## 依存性注入が必要なインターセプター
 
-コンストラクタを持つインターセプターは、まず `Constructor` に登録します。
+依存性を受け取るインターセプターは、コンストラクタを `app.Constructor` に登録し、インターセプターの登録時には型を表すポインターを渡します。コンテナーがその型のインスタンスを作成して注入します。
 
 ### トランザクションインターセプターの例
 
+以下は、[データベース](/ja/learn/tutorial/5-database)を接続したアプリに追加する、独立した拡張例です。基本的なロギングと認証の例の検証には必要ありません。
+
+`PreHandle` はトランザクションをリクエストコンテキストに保存し、`BeforeResponse` は実行エラーがあればロールバックし、なければコミットします。コントローラーは `spine.Ctx` からトランザクションを読み取り、サービスとリポジトリのメソッドに渡す必要があります。コンストラクタで作成して共有しているサービスやリポジトリに、リクエストごとのトランザクションが自動で再注入されることはありません。
 
 ```go
 // src/interceptor/tx_interceptor.go
@@ -511,7 +532,7 @@ func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Hand
     if !ok {
         return nil
     }
-    
+
     tx, ok := v.(bun.Tx)
     if !ok {
         return nil
@@ -526,8 +547,9 @@ func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Hand
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
-### 登録 (グローバル)
+### グローバルに登録する
 
+次の登録コードは、`BuildApplication` 内に追加する部分です。`NewDB` は `*bun.DB` を一つ返すコンストラクタとして実装する必要があります。
 
 ```go
 app.Constructor(
@@ -536,12 +558,13 @@ app.Constructor(
 )
 
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),  // タイプで参照
+    (*interceptor.TxInterceptor)(nil),  // 타입으로 참조
 )
 ```
 
-### 登録 (ルート)
+### ルートに登録する
 
+注文作成のリクエストにだけ適用するには、グローバルへの登録の代わりに、次のようにルートに登録します。`OrderController` のコンストラクタと `CreateOrder` メソッドは、別途実装して登録する必要があります。
 
 ```go
 app.Constructor(
@@ -553,83 +576,22 @@ app.Route(
     "POST",
     "/orders",
     (*OrderController).CreateOrder,
-    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // タイプで参照
+    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 타입으로 참조
 )
 ```
 
 
-## 登録方法のまとめ
+## 登録方法を選ぶ
 
-### グローバルインターセプター
+グローバルとルートのどちらでも、依存性のないインターセプターはインスタンスを直接渡せます。依存性を受け取るインターセプターは、コンストラクタを登録してから型で参照します。
 
-| 方式 | コード | 使用タイミング |
-|------|------|----------|
-| インスタンスを直接渡す | `&interceptor.LoggingInterceptor{}` | 依存関係なし |
-| タイプで参照 | `(*interceptor.TxInterceptor)(nil)` | 依存関係あり |
+| 方法 | グローバルへの登録 | ルートへの登録 |
+|------|----------|------------|
+| インスタンスを渡す | `app.Interceptor(&interceptor.LoggingInterceptor{})` | `route.WithInterceptors(&interceptor.AuthInterceptor{})` |
+| コンストラクタで解決する型を参照する | `app.Interceptor((*interceptor.TxInterceptor)(nil))` | `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` |
 
-
-```go
-app.Interceptor(
-    &interceptor.LoggingInterceptor{},      // インスタンス
-    (*interceptor.TxInterceptor)(nil),      // タイプ参照
-)
-```
-
-### ルートインターセプター
-
-| 方式 | コード | 使用タイミング |
-|------|------|----------|
-| インスタンスを直接渡す | `&interceptor.AuthInterceptor{}` | 依存関係なし |
-| タイプで参照 | `(*interceptor.TxInterceptor)(nil)` | 依存関係あり |
-
-
-```go
-app.Route(
-    "GET",
-    "/users/:id",
-    (*UserController).GetUser,
-    route.WithInterceptors(
-        &interceptor.AuthInterceptor{},         // インスタンス
-        (*interceptor.TxInterceptor)(nil),      // タイプ参照
-    ),
-)
-```
-
-
-## 要点のまとめ
-
-| 概念 | 説明 |
-|------|------|
-| **グローバルインターセプター** | `app.Interceptor()` — すべてのリクエストに適用 |
-| **ルートインターセプター** | `route.WithInterceptors()` — 特定のルートのみ適用 |
-| **実行順序** | global → route（`PostHandle`/`BeforeResponse`/`AfterCompletion`は逆順）|
-| **4段階lifecycle** | PreHandle → PostHandle → BeforeResponse → AfterCompletion |
-| **エラー時中断** | PreHandleでのエラー → コントローラースキップ |
-| **コンテキスト共有** | `ctx.Set()` / `ctx.Get()` でデータ伝達 |
-
-
-## 検証
-
-プロジェクトルートで実行します。静的契約・ローカルGo検証と、実際のHTTP・WebSocket認証やDBのE2E検証は別です。
-
-```sh
-gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
-spine contract check
-spine verify
-spine dev
-```
-
-別のターミナルで確認します。healthはHTTP 200、トークンなしは401、デモトークン付きは200となり、最後の応答には設定したoriginのCORSヘッダーが含まれます。
-
-```bash
-curl -i http://localhost:8080/health
-curl -i http://localhost:8080/user/1
-curl -i http://localhost:8080/user/1 \
-  -H 'Authorization: Bearer demo-token' \
-  -H 'Origin: https://app.example.com'
-```
 
 ## 次のステップ
 
-- [チュートリアル: データベース](/ja/learn/tutorial/5-database) — Bun ORM接続
+- [チュートリアル: データベース](/ja/learn/tutorial/5-database) — Bun ORM の接続
 - [チュートリアル: エラー処理](/ja/learn/tutorial/7-error-handling) — httperr の使い方

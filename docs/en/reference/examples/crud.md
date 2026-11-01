@@ -1,26 +1,30 @@
-# CRUD Example
+# Build a User CRUD API
 
-A basic CRUD implementation example.
+Build an HTTP API to create, list, retrieve, update, and delete users. The example uses an in-memory repository without an ORM, so you can run it without setting up a database.
 
-## Overview
+## Prerequisites
 
-A User CRUD example using an in-memory storage without an ORM. It is structured in Controller → Service → Repository layers.
+Complete [CLI installation](/en/learn/getting-started/installation) first. This example adds the full CRUD implementation to a basic app created with CLI 0.1.4. The CLI's `resource` command provides a GET scaffold, and `slice --storage memory` provides a scaffold for creating and retrieving records. The code below includes updates and deletions.
+
+Stored users disappear when the server process stops.
+
+Requests pass through the controller, service, and repository in that order. Each component has the following responsibilities.
 
 ```mermaid
 graph TD
-    Controller["Controller<br/>• Does not know HTTP<br/>• Receives input as semantic types<br/>• Calls Service"]
-    
-    Service["Service<br/>• Business Logic<br/>• Transaction Boundaries<br/>• Calls Repository"]
-    
-    Repository["Repository<br/>• Data Access<br/>• In-Memory / DB"]
-    
+    Controller["Controller<br/>Receive input through semantic types<br/>Validate input and convert errors<br/>Call the service"]
+
+    Service["Service<br/>Apply business rules<br/>Call the repository"]
+
+    Repository["Repository<br/>Read and change in-memory data"]
+
     Controller --> Service
     Service --> Repository
 ```
 
-## Create the project with CLI
+## 1. Create the Project
 
-Complete [CLI installation](/en/learn/getting-started/installation), then generate the base application. Add the complete memory-backed CRUD implementation below manually. The CLI resource generator provides a GET skeleton; `slice --storage memory` provides create/read skeletons, so neither generates the complete update/delete implementation shown here.
+Create a basic app and check its dependencies and project configuration. Run subsequent commands from `crud-example/`.
 
 ```sh
 spine new crud-example --module example.com/crud-example
@@ -29,7 +33,9 @@ go mod tidy
 spine doctor
 ```
 
-## Project Structure
+### File Layout
+
+In the next steps, add five files under `src/` and replace the generated `internal/application/application.go`. Keep the root `main.go` and `spine.toml` as generated.
 
 ```text
 crud-example/
@@ -47,7 +53,9 @@ crud-example/
     └── controller/user_controller.go
 ```
 
-## Model
+## 2. Add the User Model
+
+Create `src/model/user.go`. This struct stores user details and the creation and update timestamps.
 
 ```go
 // src/model/user.go
@@ -64,7 +72,9 @@ type User struct {
 }
 ```
 
-## Repository
+## 3. Add an In-Memory Repository
+
+Create `src/repository/user_repository.go`. It retrieves, saves, and deletes users, and provides a function to check for duplicate email addresses.
 
 ```go
 // src/repository/user_repository.go
@@ -171,7 +181,9 @@ func (r *UserRepository) Count() int {
 }
 ```
 
-## DTO
+## 4. Add Request and Response DTOs
+
+Create `src/dto/user_dto.go`. Define the fields accepted in requests and returned in responses, and convert the repository's user model into response DTOs.
 
 ```go
 // src/dto/user_dto.go
@@ -183,7 +195,7 @@ import (
     "example.com/crud-example/src/model"
 )
 
-// Request DTO
+// 요청 DTO
 
 type CreateUserRequest struct {
     Name  string `json:"name"`
@@ -195,7 +207,7 @@ type UpdateUserRequest struct {
     Email string `json:"email"`
 }
 
-// Response DTO
+// 응답 DTO
 
 type UserResponse struct {
     ID        int64     `json:"id"`
@@ -210,7 +222,7 @@ type UserListResponse struct {
     Total int            `json:"total"`
 }
 
-// Conversion Functions
+// 변환 함수
 
 func ToUserResponse(user *model.User) UserResponse {
     return UserResponse{
@@ -234,7 +246,9 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 }
 ```
 
-## Service
+## 5. Add the User Service
+
+Create `src/service/user_service.go`. It checks for duplicate email addresses before creating or updating a user and converts repository return values into response DTOs.
 
 ```go
 // src/service/user_service.go
@@ -270,7 +284,7 @@ func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
-    // Check Email Duplicate
+    // 이메일 중복 체크
     if s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -291,7 +305,7 @@ func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.Use
         return nil, err
     }
 
-    // Check Email Duplicate on Change
+    // 이메일 변경 시 중복 체크
     if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -309,7 +323,9 @@ func (s *UserService) DeleteUser(id int64) error {
 }
 ```
 
-## Controller
+## 6. Add the User Controller
+
+Create `src/controller/user_controller.go`. It validates input, calls the service, and converts missing users and duplicate email addresses into HTTP errors.
 
 ```go
 // src/controller/user_controller.go
@@ -343,7 +359,7 @@ func (c *UserController) List() httpx.Response[dto.UserListResponse] {
 // GET /users/:id
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
     user, err := c.service.GetUserByID(id.Value)
@@ -357,10 +373,10 @@ func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse],
 // POST /users
 func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Name is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
     }
     if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Email is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
     user, err := c.service.CreateUser(req)
@@ -374,13 +390,13 @@ func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.
 // PUT /users/:id
 func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if id.Value <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
     if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Name is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
     }
     if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Email is required")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
     user, err := c.service.UpdateUser(id.Value, req)
@@ -394,7 +410,7 @@ func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.
 // DELETE /users/:id
 func (c *UserController) Delete(id path.Int) error {
     if id.Value <= 0 {
-        return httperr.BadRequest("Invalid user ID")
+        return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
     err := c.service.DeleteUser(id.Value)
@@ -405,22 +421,22 @@ func (c *UserController) Delete(id path.Int) error {
     return nil
 }
 
-// Convert Repository Error to HTTP Error
+// Repository 에러를 HTTP 에러로 변환
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
-        return httperr.NotFound("User not found")
+        return httperr.NotFound("사용자를 찾을 수 없습니다")
     case errors.Is(err, repository.ErrEmailAlreadyExists):
-        return httperr.BadRequest("Email already in use")
+        return httperr.BadRequest("이미 사용 중인 이메일입니다")
     default:
         return httperr.BadRequest(err.Error())
     }
 }
 ```
 
-## Application assembly
+## 7. Register Constructors and Routes
 
-Keep the generated root `main.go`, which calls `BuildApplication`, `Validate`, and `Run` in order. Replace `internal/application/application.go` with the following, and manually add the model, repository, DTO, service, and controller files under `src/`.
+Replace the entire contents of `internal/application/application.go` with the following code. Register the repository, service, and controller constructors, and connect the five routes. The generated root `main.go` calls `BuildApplication`, `Validate`, and `Run` in that order.
 
 ```go
 // internal/application/application.go
@@ -470,7 +486,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 }
 ```
 
-## Verify and run
+## 8. Validate and Start the Server
+
+From the project root, format the code, check dependencies and code, and start the server.
 
 ```sh
 gofmt -w src internal/application
@@ -480,29 +498,35 @@ spine verify
 spine dev
 ```
 
-`contract check` checks the static contract; `verify` checks the contract, gofmt, vet, and Go tests. Check create, read, update, and delete behavior with the HTTP requests below. Memory data disappears when the process stops. Configure persistence separately in the [database tutorial](/en/learn/tutorial/5-database).
+`contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. Use the HTTP requests below to confirm that the server handles actual requests.
 
-## API Test
+## 9. Test CRUD with HTTP Requests
 
-### Create User
+With the server running, open another terminal and send the following requests in order. The first user on a fresh server has the ID `1`. The dates in the responses are examples; actual values depend on when the user is created and updated.
+
+### Create a User
+
+Send a name and email address to receive HTTP 200 and the created user's details.
 
 ```bash
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "Alice", "email": "alice@example.com"}'
+  -d '{"name": "홍길동", "email": "hong@example.com"}'
 ```
 
 ```json
 {
   "id": 1,
-  "name": "Alice",
-  "email": "alice@example.com",
+  "name": "홍길동",
+  "email": "hong@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:00:00Z"
 }
 ```
 
-### Get User List
+### List Users
+
+Check that `users` includes the user you created and that `total` is `1`.
 
 ```bash
 curl http://localhost:8080/users
@@ -513,8 +537,8 @@ curl http://localhost:8080/users
   "users": [
     {
       "id": 1,
-      "name": "Alice",
-      "email": "alice@example.com",
+      "name": "홍길동",
+      "email": "hong@example.com",
       "created_at": "2025-01-19T10:00:00Z",
       "updated_at": "2025-01-19T10:00:00Z"
     }
@@ -523,7 +547,9 @@ curl http://localhost:8080/users
 }
 ```
 
-### Get User
+### Retrieve a User
+
+Retrieve the details of the user with ID `1`.
 
 ```bash
 curl http://localhost:8080/users/1
@@ -532,95 +558,109 @@ curl http://localhost:8080/users/1
 ```json
 {
   "id": 1,
-  "name": "Alice",
-  "email": "alice@example.com",
+  "name": "홍길동",
+  "email": "hong@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:00:00Z"
 }
 ```
 
-### Update User
+### Update a User
+
+Send both the name and email address. Check that both fields and `updated_at` have changed in the response.
 
 ```bash
 curl -X PUT http://localhost:8080/users/1 \
   -H "Content-Type: application/json" \
-  -d '{"name": "Alice(Updated)", "email": "alice.new@example.com"}'
+  -d '{"name": "홍길동(수정)", "email": "hong2@example.com"}'
 ```
 
 ```json
 {
   "id": 1,
-  "name": "Alice(Updated)",
-  "email": "alice.new@example.com",
+  "name": "홍길동(수정)",
+  "email": "hong2@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:05:00Z"
 }
 ```
 
-### Delete User
+### Delete a User
+
+Delete the user with ID `1`. Retrieving the deleted ID again returns HTTP 404.
 
 ```bash
 curl -X DELETE http://localhost:8080/users/1
 ```
 
-### Error Response
+### Missing Users and Duplicate Email Addresses
+
+Retrieving an ID that is absent from the repository returns HTTP 404 and the following error message.
 
 ```bash
-# User Not Found
+# 존재하지 않는 사용자
 curl http://localhost:8080/users/999
 ```
 
 ```json
 {
-  "message": "User not found"
+  "message": "사용자를 찾을 수 없습니다"
 }
 ```
 
-The previous step deleted the user. Recreate a user with the same email first (200), then submit that email again to get the duplicate error (400).
+Since you deleted the user in the previous step, first create a user with the same email address again. The first request succeeds with HTTP 200. The second request to create a user with the same email address returns HTTP 400 and a duplicate error.
 
 ```bash
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "Alice", "email": "alice@example.com"}'
-# Duplicate Email
+  -d '{"name": "홍길동", "email": "hong@example.com"}'
+# 중복 이메일
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "Bob", "email": "alice@example.com"}'
+  -d '{"name": "김철수", "email": "hong@example.com"}'
 ```
 
 ```json
 {
-  "message": "Email already in use"
+  "message": "이미 사용 중인 이메일입니다"
 }
 ```
 
-## Key Points
+## Implementation Details to Review
 
-### Controller does not know Http
+### Receive Request Values Through Semantic Types
+
+The controller accepts semantic types such as `path.Int` as arguments instead of an HTTP request object. It represents errors with `httperr`.
 
 ```go
-// ✓ Receives input as semantic type
+// 의미 타입으로 입력 받음
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
-// ✓ Expresses meaning with httperr
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("User not found")
+// httperr로 의미만 표현
+return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 ```
 
 ### Dependency Injection
 
+Spine connects the repository, service, and controller dependencies based on the argument types of the registered constructors.
+
 ```go
-// Auto-resolves dependencies just by registering constructors
+// 생성자 등록만으로 의존성 자동 해결
 app.Constructor(
-    repository.NewUserRepository,  // No Dependencies
-    service.NewUserService,        // Depends on Repository
-    controller.NewUserController,  // Depends on Service
+    repository.NewUserRepository,  // 의존성 없음
+    service.NewUserService,        // Repository 의존
+    controller.NewUserController,  // Service 의존
 )
 ```
 
-### Layer Separation
+### Component Responsibilities
 
-| Layer | Responsibility | Depends On |
+| Component | Responsibility | Components used |
 |-------|------|------|
-| Controller | Input Validation, Error Conversion | Service |
-| Service | Business Logic | Repository |
-| Repository | Data Access | None |
+| Controller | Validate input, convert HTTP errors | Service |
+| Service | Check for duplicate email addresses, convert response DTOs | Repository |
+| Repository | Read and change in-memory data | None |
+
+## Next Steps
+
+To persist data, follow [Database Connection](/en/learn/tutorial/5-database) and replace the repository. To explore error handling further, see the [Error Handling Tutorial](/en/learn/tutorial/7-error-handling).
