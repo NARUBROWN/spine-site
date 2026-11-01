@@ -1,11 +1,11 @@
 ---
 layout: home
-description: "Spine是提供构造函数注入与请求执行管道的Go后端框架。查看使用示例与内部实验室性能比较，开始构建第一个应用。"
+description: "Same DX, better performance. 在Go中使用熟悉的控制器、服务、构造函数注入与拦截器。查看Spine内部实验室的吞吐量与内存测量结果。"
 
 hero:
   name: "Spine"
-  text: "用Go构建分层后端服务"
-  tagline: "通过构造函数注入连接控制器和服务。注册路由与拦截器后，Spine会管理从参数解析到响应完成的请求执行流程。"
+  text: "Same DX, better performance."
+  tagline: "将NestJS和Spring中熟悉的控制器与服务结构带到Go。使用构造函数注入与拦截器构建应用，再比较相同资源预算下的吞吐量与内存占用。"
   actions:
     - theme: brand
       text: "构建第一个应用"
@@ -15,23 +15,23 @@ hero:
       link: "#benchmarks"
 
 features:
-  - title: "通过构造函数连接依赖"
-    details: "将需要的对象声明为构造函数参数。Spine使用已注册的构造函数创建对象并连接依赖。"
-    link: /zh-Hans/learn/tutorial/3-dependency-injection
-    linkText: "了解依赖注入"
-  - title: "用类型表达输入与输出"
-    details: "通过方法参数接收请求值，通过返回类型表达响应。在控制器中编写要执行的操作。"
+  - title: "熟悉的控制器与服务"
+    details: "控制器接收请求，服务处理业务逻辑。通过Go结构体和方法延续熟悉的职责分离。"
     link: /zh-Hans/learn/tutorial/2-controller
     linkText: "编写控制器"
+  - title: "通过构造函数连接依赖"
+    details: "将需要的服务声明为构造函数参数。Spine使用已注册的构造函数创建对象并连接依赖。"
+    link: /zh-Hans/learn/tutorial/3-dependency-injection
+    linkText: "了解依赖注入"
   - title: "将公共处理放入拦截器"
-    details: "将认证、事务和日志等公共处理与业务逻辑分开，并放在需要的执行时点。"
+    details: "将认证、事务和日志与业务逻辑分离。注册拦截器并指定它们在请求流程中的执行时点。"
     link: /zh-Hans/learn/tutorial/4-interceptor
     linkText: "使用拦截器"
 ---
 
-## 注册构造函数并连接请求
+## 用Go代码延续熟悉的结构
 
-以下摘自用户查询应用，展示构造函数和路由的注册部分。构造函数与控制器方法已在应用代码中定义。
+用户查询应用同样将控制器与服务分离，并通过构造函数连接。以下展示构造函数和路由的注册部分。构造函数与控制器方法已在应用代码中定义。
 
 ```go
 app := spine.New()
@@ -46,7 +46,7 @@ Spine根据`NewUserController`的参数类型传入`UserService`。`GET /users`�
 
 <BenchmarkSection />
 
-## 在构建应用中学习
+## 用熟悉的方式构建第一个应用
 
 <div class="home-next-steps">
 

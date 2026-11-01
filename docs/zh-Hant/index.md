@@ -1,11 +1,11 @@
 ---
 layout: home
-description: "Spine是提供建構函式注入與請求執行管線的Go後端框架。查看使用範例與內部實驗室效能比較，開始建立第一個應用程式。"
+description: "Same DX, better performance. 在Go中使用熟悉的控制器、服務、建構函式注入與攔截器。查看Spine內部實驗室的吞吐量與記憶體量測結果。"
 
 hero:
   name: "Spine"
-  text: "用Go建立分層後端服務"
-  tagline: "透過建構函式注入連接控制器和服務。註冊路由與攔截器後，Spine會管理從參數解析到回應完成的請求執行流程。"
+  text: "Same DX, better performance."
+  tagline: "將NestJS和Spring中熟悉的控制器與服務結構帶到Go。使用建構函式注入與攔截器建立應用程式，再比較相同資源預算下的吞吐量與記憶體用量。"
   actions:
     - theme: brand
       text: "建立第一個應用程式"
@@ -15,23 +15,23 @@ hero:
       link: "#benchmarks"
 
 features:
-  - title: "透過建構函式連接依賴"
-    details: "將需要的物件宣告為建構函式參數。Spine使用已註冊的建構函式建立物件並連接依賴。"
-    link: /zh-Hant/learn/tutorial/3-dependency-injection
-    linkText: "了解依賴注入"
-  - title: "用型別表達輸入與輸出"
-    details: "透過方法參數接收請求值，透過回傳型別表達回應。在控制器中撰寫要執行的操作。"
+  - title: "熟悉的控制器與服務"
+    details: "控制器接收請求，服務處理業務邏輯。透過Go結構體和方法延續熟悉的職責分離。"
     link: /zh-Hant/learn/tutorial/2-controller
     linkText: "撰寫控制器"
+  - title: "透過建構函式連接依賴"
+    details: "將需要的服務宣告為建構函式參數。Spine使用已註冊的建構函式建立物件並連接依賴。"
+    link: /zh-Hant/learn/tutorial/3-dependency-injection
+    linkText: "了解依賴注入"
   - title: "將共用處理放入攔截器"
-    details: "將驗證、交易和記錄等共用處理與業務邏輯分開，並放在需要的執行時點。"
+    details: "將驗證、交易和記錄與業務邏輯分離。註冊攔截器並指定它們在請求流程中的執行時點。"
     link: /zh-Hant/learn/tutorial/4-interceptor
     linkText: "使用攔截器"
 ---
 
-## 註冊建構函式並連接請求
+## 用Go程式碼延續熟悉的結構
 
-以下摘自使用者查詢應用程式，展示建構函式和路由的註冊部分。建構函式與控制器方法已在應用程式碼中定義。
+使用者查詢應用程式同樣將控制器與服務分離，並透過建構函式連接。以下展示建構函式和路由的註冊部分。建構函式與控制器方法已在應用程式碼中定義。
 
 ```go
 app := spine.New()
@@ -46,7 +46,7 @@ Spine根據`NewUserController`的參數型別傳入`UserService`。`GET /users`�
 
 <BenchmarkSection />
 
-## 在建立應用程式中學習
+## 用熟悉的方式建立第一個應用程式
 
 <div class="home-next-steps">
 

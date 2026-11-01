@@ -1,11 +1,11 @@
 ---
 layout: home
-description: "Spine is a Go backend framework with constructor injection and a request execution pipeline. Explore an example, compare internal lab results, and build your first app."
+description: "Same DX, better performance. Bring familiar controllers, services, constructor injection and interceptors to Go. Explore throughput and memory results from the Spine internal lab."
 
 hero:
   name: "Spine"
-  text: "Build structured backends in Go"
-  tagline: "Connect controllers and services through constructor injection. Register routes and interceptors, and let Spine manage request execution from argument resolution to response completion."
+  text: "Same DX, better performance."
+  tagline: "Bring the controller and service structure you know from NestJS and Spring to Go. Build with constructor injection and interceptors, then compare throughput and memory use within the same resource budget."
   actions:
     - theme: brand
       text: "Build your first app"
@@ -15,23 +15,23 @@ hero:
       link: "#benchmarks"
 
 features:
-  - title: "Connect dependencies through constructors"
-    details: "Declare the objects you need as constructor parameters. Spine creates instances from registered constructors and connects their dependencies."
-    link: /en/learn/tutorial/3-dependency-injection
-    linkText: "Explore dependency injection"
-  - title: "Express inputs and outputs with types"
-    details: "Receive request values through method parameters and express responses through return types. Write the operation in your controller."
+  - title: "Familiar controllers and services"
+    details: "Controllers receive requests and services handle business logic. Keep that separation of responsibilities with Go structs and methods."
     link: /en/learn/tutorial/2-controller
     linkText: "Write a controller"
-  - title: "Keep shared work in interceptors"
-    details: "Separate authentication, transactions and logging from business logic, and place them at the required points in request execution."
+  - title: "Dependencies connected through constructors"
+    details: "Declare the services you need as constructor parameters. Spine creates objects from registered constructors and connects their dependencies."
+    link: /en/learn/tutorial/3-dependency-injection
+    linkText: "Explore dependency injection"
+  - title: "Shared work handled by interceptors"
+    details: "Separate authentication, transactions and logging from business logic. Register interceptors and choose where they run in the request flow."
     link: /en/learn/tutorial/4-interceptor
     linkText: "Use interceptors"
 ---
 
-## Register constructors and connect a request
+## Bring familiar structure to Go code
 
-This excerpt registers the constructors and route in a user lookup app. The constructor functions and controller method are defined elsewhere in the app.
+A user lookup app separates controllers from services and connects them through constructors. This excerpt registers the constructors and route. The constructor functions and controller method are defined elsewhere in the app.
 
 ```go
 app := spine.New()
@@ -46,7 +46,7 @@ Spine reads the parameter type of `NewUserController` and supplies `UserService`
 
 <BenchmarkSection />
 
-## Learn by building an app
+## Build your first app with familiar patterns
 
 <div class="home-next-steps">
 

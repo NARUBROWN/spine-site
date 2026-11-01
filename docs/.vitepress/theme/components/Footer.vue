@@ -26,7 +26,7 @@ const localePath = computed(() => {
 
 const locales = {
   ko: {
-    description: '생성자 주입과 요청 실행 파이프라인을 갖춘 Go 백엔드 프레임워크.',
+    description: 'Same DX, better performance. 컨트롤러와 생성자 주입을 갖춘 Go 백엔드 프레임워크.',
     columns: [
       {
         title: '제품',
@@ -55,7 +55,7 @@ const locales = {
     tagline: '세상의 모든 개발자들을 위해 만들었습니다.'
   },
   en: {
-    description: "Constructor injection and request execution pipelines for Go backends.",
+    description: 'Same DX, better performance. A Go backend framework with controllers and constructor injection.',
     columns: [
       {
         title: 'Product',
@@ -84,7 +84,7 @@ const locales = {
     tagline: 'Made for all developers in the world.'
   },
   ja: {
-    description: 'コンストラクタ注入とリクエスト実行パイプラインを備えたGoバックエンドフレームワーク。',
+    description: 'Same DX, better performance. コントローラーとコンストラクタ注入を備えたGoバックエンドフレームワーク。',
     columns: [
       {
         title: '製品',
@@ -113,7 +113,7 @@ const locales = {
     tagline: '世界中のすべての開発者のために作りました。'
   },
   zhHans: {
-    description: '提供构造函数注入与请求执行管道的Go后端框架。',
+    description: 'Same DX, better performance. 提供控制器与构造函数注入的Go后端框架。',
     columns: [
       { title: '产品', items: [{ text: '简介', link: '/zh-Hans/learn/getting-started/intro' }] },
       { title: '资源', items: [
@@ -129,7 +129,7 @@ const locales = {
     tagline: '为世界各地的开发者打造。'
   },
   zhHant: {
-    description: '提供建構函式注入與請求執行管線的Go後端框架。',
+    description: 'Same DX, better performance. 提供控制器與建構函式注入的Go後端框架。',
     columns: [
       { title: '產品', items: [{ text: '簡介', link: '/zh-Hant/learn/getting-started/intro' }] },
       { title: '資源', items: [

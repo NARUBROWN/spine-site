@@ -1,11 +1,11 @@
 ---
 layout: home
-description: "Spine은 생성자 주입과 요청 실행 파이프라인을 제공하는 Go 백엔드 프레임워크입니다. 사용 예시와 내부 랩 성능 비교를 확인하고 첫 앱을 만들어보세요."
+description: "Same DX, better performance. 익숙한 컨트롤러와 서비스 구조, 생성자 주입과 인터셉터를 Go로 이어가세요. 내부 랩에서 확인한 처리량과 메모리 결과를 공개합니다."
 
 hero:
   name: "Spine"
-  text: "익숙한 서버 구조를 Go로 만드세요"
-  tagline: "생성자 주입으로 컨트롤러와 서비스를 연결하세요. 라우트와 인터셉터를 등록하면 Spine이 요청의 해석부터 응답 완료까지 실행 흐름을 관리합니다."
+  text: "Same DX, better performance."
+  tagline: "NestJS와 Spring에서 익숙했던 컨트롤러와 서비스 구조를 Go에서도 이어가세요. 생성자 주입과 인터셉터로 앱을 구성하고, 같은 자원에서 확인한 처리량과 메모리 차이를 살펴보세요."
   actions:
     - theme: brand
       text: "첫 앱 만들기"
@@ -15,23 +15,23 @@ hero:
       link: "#benchmarks"
 
 features:
-  - title: "의존성은 생성자로 연결하세요"
-    details: "필요한 객체를 생성자 파라미터로 선언합니다. Spine이 등록한 생성자로 객체를 만들고 의존성을 연결합니다."
-    link: /ko/learn/tutorial/3-dependency-injection
-    linkText: "의존성 주입 보기"
-  - title: "입출력은 타입으로 표현하세요"
-    details: "메서드 파라미터로 요청 값을 받고 반환 타입으로 응답을 표현합니다. 컨트롤러에는 처리할 작업을 작성합니다."
+  - title: "익숙한 컨트롤러와 서비스"
+    details: "컨트롤러는 요청을 받고 서비스는 업무를 처리합니다. Go의 구조체와 메서드로 익숙한 책임 분리를 이어갑니다."
     link: /ko/learn/tutorial/2-controller
     linkText: "컨트롤러 작성법 보기"
-  - title: "공통 처리는 인터셉터에 모으세요"
-    details: "인증, 트랜잭션, 로깅처럼 여러 요청에서 반복되는 처리를 분리하고 실행할 시점에 배치합니다."
+  - title: "생성자로 연결하는 의존성"
+    details: "필요한 서비스를 생성자 파라미터로 선언합니다. Spine이 등록한 생성자로 객체를 만들고 의존성을 연결합니다."
+    link: /ko/learn/tutorial/3-dependency-injection
+    linkText: "의존성 주입 보기"
+  - title: "인터셉터에 모으는 공통 처리"
+    details: "인증, 트랜잭션, 로깅을 업무 코드에서 분리합니다. 인터셉터를 등록하고 요청 흐름에서 실행할 시점을 정합니다."
     link: /ko/learn/tutorial/4-interceptor
     linkText: "인터셉터 사용법 보기"
 ---
 
-## 생성자를 등록하고 요청을 연결하세요
+## 익숙한 구조를 Go 코드로 이어가세요
 
-다음은 사용자 조회 앱에서 생성자와 라우트를 등록하는 부분입니다. 생성자 함수와 컨트롤러 메서드는 앱 코드에 미리 정의합니다.
+사용자 조회 앱에서도 컨트롤러와 서비스를 나누고 생성자로 연결합니다. 다음은 생성자와 라우트를 등록하는 부분입니다. 생성자 함수와 컨트롤러 메서드는 앱 코드에 미리 정의합니다.
 
 ```go
 app := spine.New()
@@ -46,7 +46,7 @@ Spine은 `NewUserController`의 파라미터 타입을 보고 `UserService`를 �
 
 <BenchmarkSection />
 
-## 앱을 만들며 익히세요
+## 익숙한 방식으로 첫 앱을 만드세요
 
 <div class="home-next-steps">
 
