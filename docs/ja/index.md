@@ -1,10 +1,10 @@
 ---
 layout: home
-description: "使い慣れた設計で、もっと速いサーバーを。 使い慣れたコントローラー、サービス、コンストラクタ注入、インターセプターをGoで。内部ラボの処理量とメモリ測定結果を公開しています。"
+description: "使い慣れた設計で、高速なサーバーを。 使い慣れたコントローラー、サービス、コンストラクタ注入、インターセプターをGoで。内部ラボの処理量とメモリ測定結果を公開しています。"
 
 hero:
   name: "Spine"
-  text: "使い慣れた設計で、<br>もっと速いサーバーを。"
+  text: "使い慣れた設計で、<br>高速なサーバーを。"
   tagline: "NestJSやSpringで使い慣れたコントローラーとサービスの構成をGoでも。コンストラクタ注入とインターセプターでアプリを構築し、同じリソース制約での処理量とメモリ使用量を比較できます。"
   actions:
     - theme: brand
@@ -29,9 +29,19 @@ features:
     linkText: "インターセプターを使う"
 ---
 
+<section class="home-workflow">
+<div class="workflow-copy">
+
 ## 使い慣れた構成をGoのコードで
 
 ユーザー取得アプリでもコントローラーとサービスを分け、コンストラクタで接続します。以下はコンストラクタとルートの登録部分です。コンストラクタ関数とコントローラーメソッドはアプリ側に定義済みです。
+
+Spineは`NewUserController`の引数の型を見て`UserService`を渡します。`GET /users`は`UserController.GetUser`メソッドに接続されます。
+
+[サーバー起動コードとプロジェクト全体は、最初のアプリのガイドで確認できます。](/ja/learn/getting-started/first-app)
+
+</div>
+<div class="workflow-code" data-ui>
 
 ```go
 app := spine.New()
@@ -40,9 +50,8 @@ app.Constructor(NewUserService, NewUserController)
 app.Route("GET", "/users", (*UserController).GetUser)
 ```
 
-Spineは`NewUserController`の引数の型を見て`UserService`を渡します。`GET /users`は`UserController.GetUser`メソッドに接続されます。
-
-[サーバー起動コードとプロジェクト全体は、最初のアプリのガイドで確認できます。](/ja/learn/getting-started/first-app)
+</div>
+</section>
 
 <BenchmarkSection />
 

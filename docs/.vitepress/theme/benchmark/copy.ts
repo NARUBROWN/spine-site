@@ -1,6 +1,6 @@
 const ko = {
   path: 'ko', badge: 'Spine 내부 랩 테스트',
-  title: ["같은 자원에서 더 많이 처리했습니다.", "메모리는 더 적게 사용했습니다."],
+  title: ["같은 자원으로 더 많이.", "메모리는 더 적게."],
   intro: "NestJS/Express, Spring MVC, FastAPI/Uvicorn에 모두 3 vCPU와 3GiB 메모리를 할당해 비교했습니다.",
   throughputStat: 'HTTP 처리량', throughputContext: "포화 부하에서 측정한 중앙값",
   memoryStat: '관측 메모리', memoryContext: "초당 2만 요청일 때의 사용량",
@@ -56,7 +56,7 @@ const ko = {
 
 const en: typeof ko = {
   path: 'en', badge: 'Spine internal lab',
-  title: ["More requests on the same resources.", "Less memory at the same request rate."],
+  title: ["More requests.", "Less memory."],
   intro: "We compared NestJS/Express, Spring MVC and FastAPI/Uvicorn with the same allocation of 3 vCPU and 3 GiB of memory.",
   throughputStat: 'HTTP throughput', throughputContext: "Saturated load, median of 3 starts",
   memoryStat: 'Observed memory', memoryContext: "Whole container at 20k req/s",
@@ -112,7 +112,7 @@ const en: typeof ko = {
 
 const ja: typeof ko = {
   ...en, path: 'ja', badge: 'Spine 内部ラボテスト',
-  title: ["同じリソースでより多くのリクエストを処理しました。", "同じ負荷でメモリを少なく使いました。"],
+  title: ["処理量は多く。", "メモリは少なく。"],
   intro: "NestJS/Express、Spring MVC、FastAPI/Uvicornに同じ3 vCPUと3GiBのメモリを割り当てて比較しました。",
   throughputStat: 'HTTP処理量', throughputContext: "飽和負荷で3回測定した中央値",
   memoryStat: '観測メモリ', memoryContext: "毎秒2万リクエスト時の使用量",
@@ -161,7 +161,7 @@ const ja: typeof ko = {
 
 const zhHans: typeof ko = {
   ...en, path: 'zh-Hans', badge: 'Spine 内部实验室测试',
-  title: ["在相同资源下处理更多请求。", "在相同负载下使用更少内存。"],
+  title: ["处理更多请求。", "使用更少内存。"],
   intro: "为NestJS/Express、Spring MVC和FastAPI/Uvicorn分配相同的3 vCPU与3GiB内存进行比较。",
   throughputStat: 'HTTP吞吐量', throughputContext: "饱和负载下3次启动的中位数", memoryStat: '观测内存', memoryContext: "每秒2万请求时的容器用量",
   latencyStat: 'p99响应延迟', latencyContext: "每秒2万请求时的p99延迟",
@@ -196,7 +196,7 @@ const zhHans: typeof ko = {
 }
 
 const zhHant: typeof ko = {
-  ...zhHans, path: 'zh-Hant', badge: 'Spine 內部實驗室測試', title: ["在相同資源下處理更多請求。", "在相同負載下使用更少記憶體。"],
+  ...zhHans, path: 'zh-Hant', badge: 'Spine 內部實驗室測試', title: ["處理更多請求。", "使用更少記憶體。"],
   intro: "為NestJS/Express、Spring MVC和FastAPI/Uvicorn分配相同的3 vCPU與3GiB記憶體進行比較。",
   throughputStat: 'HTTP吞吐量', throughputContext: "飽和負載下3次啟動的中位數", memoryStat: '觀測記憶體', memoryContext: "每秒2萬請求時的容器用量", latencyStat: 'p99回應延遲', latencyContext: "每秒2萬請求時的p99延遲",
   throughput: '吞吐量', memory: '記憶體', chartLabel: '比較指標', throughputTitle: '相同CPU預算下處理的請求數', memoryTitle: '相同請求速率下觀測的記憶體', throughputDirection: '越高越好', memoryDirection: '越低越好',

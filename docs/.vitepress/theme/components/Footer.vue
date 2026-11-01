@@ -84,7 +84,7 @@ const locales = {
     tagline: 'Made for all developers in the world.'
   },
   ja: {
-    description: '使い慣れた設計で、もっと速いサーバーを。 コントローラーとコンストラクタ注入を備えたGoバックエンドフレームワーク。',
+    description: '使い慣れた設計で、高速なサーバーを。 コントローラーとコンストラクタ注入を備えたGoバックエンドフレームワーク。',
     columns: [
       {
         title: '製品',
@@ -170,7 +170,6 @@ const locales = {
         </div>
       </div>
       
-      <div class="footer-divider"></div>
       
       <div class="footer-bottom">
         <span class="copyright">{{ content.copyright }}</span>
@@ -182,17 +181,17 @@ const locales = {
 
 <style scoped>
 .custom-footer {
-  background-color: #0f0f11;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  color: #a1a1a5;
-  padding: 4rem 2rem 3rem 2rem;
+  background-color: var(--vp-c-bg-soft);
+  border-top: 0;
+  color: var(--vp-c-text-1);
+  padding: 64px clamp(20px, 4vw, 48px) 48px;
   font-family: var(--vp-font-family-base);
   position: relative;
   z-index: 12;
 }
 
 .footer-container {
-  max-width: 1152px;
+  max-width: 1120px;
   margin: 0 auto;
 }
 
@@ -218,11 +217,11 @@ const locales = {
 .footer-logo {
   height: 24px;
   display: block;
-  filter: brightness(0) invert(1);
+  filter: none;
 }
 
 .description {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   max-width: 320px;
 }
@@ -232,9 +231,9 @@ const locales = {
 }
 
 .column-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--vp-c-text-1);
   margin-bottom: 1.2rem;
   letter-spacing: -0.2px;
 }
@@ -250,8 +249,8 @@ const locales = {
 }
 
 .footer-link {
-  font-size: 14px;
-  color: #a1a1a5;
+  font-size: 16px;
+  color: var(--vp-c-text-1);
   text-decoration: none;
   transition: color 0.2s ease;
 }
@@ -260,32 +259,31 @@ const locales = {
   color: var(--vp-c-brand-1);
 }
 
-.footer-divider {
-  height: 1px;
-  background-color: rgba(255, 255, 255, 0.05);
-  margin: 3rem 0 1.5rem 0;
-}
 
 .footer-bottom {
+  margin-top: 48px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #66666a;
+  color: var(--vp-c-text-2);
   flex-wrap: wrap;
   gap: 1rem;
 }
 
 @media (max-width: 768px) {
   .footer-top {
-    grid-template-columns: 1fr;
-    gap: 2.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px;
   }
   
+  .footer-brand { grid-column: 1 / -1; }
+  .footer-column { min-width: 0; }
   .footer-bottom {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
 }
+:global(.dark .custom-footer .footer-logo) { filter: brightness(0) invert(1); }
 </style>

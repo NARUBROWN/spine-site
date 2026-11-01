@@ -29,9 +29,19 @@ features:
     linkText: "使用拦截器"
 ---
 
+<section class="home-workflow">
+<div class="workflow-copy">
+
 ## 用Go代码延续熟悉的结构
 
 用户查询应用同样将控制器与服务分离，并通过构造函数连接。以下展示构造函数和路由的注册部分。构造函数与控制器方法已在应用代码中定义。
+
+Spine根据`NewUserController`的参数类型传入`UserService`。`GET /users`请求会连接到`UserController.GetUser`方法。
+
+[服务器启动代码与完整项目请参阅第一个应用指南。](/zh-Hans/learn/getting-started/first-app)
+
+</div>
+<div class="workflow-code" data-ui>
 
 ```go
 app := spine.New()
@@ -40,9 +50,8 @@ app.Constructor(NewUserService, NewUserController)
 app.Route("GET", "/users", (*UserController).GetUser)
 ```
 
-Spine根据`NewUserController`的参数类型传入`UserService`。`GET /users`请求会连接到`UserController.GetUser`方法。
-
-[服务器启动代码与完整项目请参阅第一个应用指南。](/zh-Hans/learn/getting-started/first-app)
+</div>
+</section>
 
 <BenchmarkSection />
 

@@ -29,9 +29,19 @@ features:
     linkText: "인터셉터 사용법 보기"
 ---
 
+<section class="home-workflow">
+<div class="workflow-copy">
+
 ## 익숙한 구조를 Go 코드로 이어가세요
 
 사용자 조회 앱에서도 컨트롤러와 서비스를 나누고 생성자로 연결합니다. 다음은 생성자와 라우트를 등록하는 부분입니다. 생성자 함수와 컨트롤러 메서드는 앱 코드에 미리 정의합니다.
+
+Spine은 `NewUserController`의 파라미터 타입을 보고 `UserService`를 전달합니다. `GET /users` 요청은 `UserController.GetUser` 메서드로 연결됩니다.
+
+[서버 시작 코드와 전체 프로젝트는 첫 번째 앱 문서에서 확인하세요.](/ko/learn/getting-started/first-app)
+
+</div>
+<div class="workflow-code" data-ui>
 
 ```go
 app := spine.New()
@@ -40,9 +50,8 @@ app.Constructor(NewUserService, NewUserController)
 app.Route("GET", "/users", (*UserController).GetUser)
 ```
 
-Spine은 `NewUserController`의 파라미터 타입을 보고 `UserService`를 전달합니다. `GET /users` 요청은 `UserController.GetUser` 메서드로 연결됩니다.
-
-[서버 시작 코드와 전체 프로젝트는 첫 번째 앱 문서에서 확인하세요.](/ko/learn/getting-started/first-app)
+</div>
+</section>
 
 <BenchmarkSection />
 
