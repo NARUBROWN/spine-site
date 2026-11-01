@@ -166,23 +166,32 @@ function selectWithKeyboard(event: KeyboardEvent) {
   .stat-number span { font-size: 14px; }
 }
 @media (max-width: 640px) {
-  .benchmark-section { margin: 56px 0 0; padding-top: 52px; padding-bottom: 56px; }
-  .benchmark-heading-row { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .benchmark-report-link { margin-top: 12px; }
-  .benchmark-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 20px; margin: 36px 0 44px; }
+  .benchmark-section { margin: 40px 0 0; padding-top: 40px; padding-bottom: 44px; }
+  .benchmark-section .benchmark-heading { font-size: 28px; }
+  .benchmark-heading-row { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .benchmark-section .benchmark-intro { font-size: 15px; line-height: 1.7; }
+  .benchmark-section .benchmark-provenance { margin-top: 12px; font-size: 13px; }
+  .benchmark-report-link { margin-top: 8px; font-size: 14px; }
+  .benchmark-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 20px; margin: 28px 0 32px; }
   .benchmark-stat:first-child { grid-column: 1 / -1; }
-  .benchmark-stat:first-child .stat-number { font-size: 56px; }
-  .benchmark-stat .stat-number { font-size: 36px; gap: 8px; }
-  .benchmark-stat .stat-label { margin-top: 12px; }
-  .benchmark-stat .stat-context { margin-top: 4px; }
-  .benchmark-comparison { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'header' 'chart' 'notes'; gap: 28px; }
-  .comparison-header { gap: 20px; }
-  .benchmark-section .comparison-title { font-size: 20px; }
+  .benchmark-stat:first-child .stat-number { font-size: 50px; }
+  .benchmark-stat .stat-number { font-size: 32px; gap: 8px; }
+  .benchmark-stat .stat-label { margin-top: 10px; font-size: 14px; }
+  .benchmark-stat .stat-context { margin-top: 4px; font-size: 13px; line-height: 1.6; }
+  .benchmark-comparison { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'header' 'chart' 'notes'; gap: 22px; }
+  .comparison-header { gap: 16px; }
+  .benchmark-section .comparison-title { font-size: 19px; }
   .metric-tabs { width: 100%; }
   .metric-tabs button { flex: 1; }
+  .comparison-rows { gap: 22px; }
+  .benchmark-section .capacity-assumption { margin-bottom: 18px; font-size: 13px; }
   .row-name { font-size: 14px; gap: 6px; }
   .row-value { font-size: 16px; }
   .row-unit { font-size: 13px; }
+  .comparison-row .row-comparison { font-size: 13px; line-height: 1.65; }
+  .benchmark-section .chart-condition, .benchmark-section .capacity-note { font-size: 13px; line-height: 1.7; }
+  .benchmark-section .capacity-note { margin-top: 12px; }
+  .benchmark-csv { margin-top: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { .bar-fill, .metric-tabs button, .benchmark-report-link span { transition: none; } }
 /* 고대비 모드에서는 그래프 경계를 선으로 표시합니다. taste-skill-ignore */

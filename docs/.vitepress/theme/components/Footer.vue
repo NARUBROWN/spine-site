@@ -295,4 +295,13 @@ const locales = {
     gap: 0.5rem;
   }
 }
+@media (max-width: 640px) {
+  .custom-footer { padding-top: 36px; padding-bottom: 28px; }
+  .footer-top { gap: 24px; }
+  .logo { margin-bottom: 14px; }
+  .description, .footer-link { font-size: 14px; line-height: 1.7; }
+  .column-title { margin-bottom: 12px; font-size: 14px; }
+  .column-list li { margin-bottom: 8px; }
+  .footer-bottom { margin-top: 32px; }
+}
 </style>

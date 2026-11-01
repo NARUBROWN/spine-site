@@ -97,13 +97,18 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .workbench-bottom a:hover { color: #fff; }
 .spine-workbench a:focus-visible, .spine-workbench button:focus-visible, .workbench-panel:focus-visible { outline: 2px solid #c5b8ff; outline-offset: 3px; }
 @media (max-width: 640px) {
-  .workbench-header { padding: 10px 12px; }
-  .workbench-tabs button { padding-inline: 10px; }
-  .workbench-code { padding: 22px 20px; }
-  .workbench-code code { font-size: 13px; }
-  .workbench-flow { padding-inline: 20px; }
-  .workbench-panel { min-height: 278px; }
-  .workbench-bottom { padding: 18px 20px 20px; }
+  .workbench-header { padding: 8px 12px; }
+  .workbench-tabs button { padding-inline: 10px; font-size: 13px; }
+  .workbench-language { font-size: 13px; }
+  .workbench-code { padding: 16px; }
+  .workbench-code code { font-size: 13px; line-height: 1.6; }
+  .workbench-flow { gap: 18px; padding: 16px; }
+  .flow-label, .flow-step code { font-size: 13px; }
+  .flow-connector { bottom: -19px; }
+  .workbench-panel { min-height: 240px; }
+  .workbench-bottom { padding: 14px 16px; }
+  .workbench-bottom p { min-height: 0; margin-bottom: 8px; font-size: 13px; line-height: 1.6; }
+  .workbench-bottom a { min-height: 44px; font-size: 13px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .code-line { animation: code-arrive .45s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--line) * 30ms); }
