@@ -7,6 +7,8 @@ import Footer from './components/Footer.vue'
 import BenchmarkSection from './components/BenchmarkSection.vue'
 import BenchmarkReport from './components/BenchmarkReport.vue'
 import SpineWorkbench from './components/SpineWorkbench.vue'
+import EnterpriseSupport from './components/EnterpriseSupport.vue'
+import EnterpriseSupportBanner from './components/EnterpriseSupportBanner.vue'
 import './custom.css'
 
 export default {
@@ -14,6 +16,7 @@ export default {
     Layout: () => {
         return h(DefaultTheme.Layout, null, {
             'home-hero-image': () => h(SpineWorkbench),
+            'home-hero-actions-after': () => h(EnterpriseSupportBanner),
             'layout-bottom': () => h(Footer)
         })
     },
@@ -22,5 +25,6 @@ export default {
         app.component('TerminalBoot', TerminalBoot)
         app.component('BenchmarkSection', BenchmarkSection)
         app.component('BenchmarkReport', BenchmarkReport)
+        app.component('EnterpriseSupport', EnterpriseSupport)
     }
 } satisfies Theme

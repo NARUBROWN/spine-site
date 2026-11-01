@@ -41,7 +41,8 @@ export default withMermaid(defineConfig({
                 nav: [
                     { text: 'Learn', link: '/en/learn/getting-started/intro' },
                     { text: 'Reference', link: '/en/reference/api/spine-app' },
-                    { text: 'Community', link: '/en/community/' }
+                    { text: 'Community', link: '/en/community/' },
+                    { text: 'Business support', link: '/en/enterprise-support' }
                 ],
                 sidebar: {
                     '/en/learn/': [
@@ -135,7 +136,8 @@ export default withMermaid(defineConfig({
                 nav: [
                     { text: '배우기', link: '/ko/learn/getting-started/intro' },
                     { text: '참조', link: '/ko/reference/api/spine-app' },
-                    { text: '커뮤니티', link: '/ko/community/' }
+                    { text: '커뮤니티', link: '/ko/community/' },
+                    { text: '기업 지원', link: '/ko/enterprise-support' }
                 ],
                 sidebar: {
                     '/ko/learn/': [
@@ -230,7 +232,8 @@ export default withMermaid(defineConfig({
                 nav: [
                     { text: '学ぶ', link: '/ja/learn/getting-started/intro' },
                     { text: 'リファレンス', link: '/ja/reference/api/spine-app' },
-                    { text: 'コミュニティ', link: '/ja/community/' }
+                    { text: 'コミュニティ', link: '/ja/community/' },
+                    { text: '企業向け支援', link: '/ja/enterprise-support' }
                 ],
                 sidebar: {
                     '/ja/learn/': [
@@ -318,7 +321,8 @@ export default withMermaid(defineConfig({
                 nav: [
                     { text: '学习', link: '/zh-Hans/learn/getting-started/intro' },
                     { text: '参考', link: '/zh-Hans/reference/api/spine-app' },
-                    { text: '社区', link: '/zh-Hans/community/' }
+                    { text: '社区', link: '/zh-Hans/community/' },
+                    { text: '企业支持', link: '/zh-Hans/enterprise-support' }
                 ],
                 sidebar: {
                     '/zh-Hans/learn/': [
@@ -385,7 +389,8 @@ export default withMermaid(defineConfig({
                 nav: [
                     { text: '學習', link: '/zh-Hant/learn/getting-started/intro' },
                     { text: '參考', link: '/zh-Hant/reference/api/spine-app' },
-                    { text: '社群', link: '/zh-Hant/community/' }
+                    { text: '社群', link: '/zh-Hant/community/' },
+                    { text: '企業支援', link: '/zh-Hant/enterprise-support' }
                 ],
                 sidebar: {
                     '/zh-Hant/learn/': [
