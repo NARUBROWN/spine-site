@@ -13,6 +13,7 @@ const costCopy = computed(() => vmCostCopy(copy.value.path))
 
 interface ComparisonRow {
   case: string
+  name: string
   amount: string
   unit: string
   width: number
@@ -27,8 +28,9 @@ const rows = computed<ComparisonRow[]>(() => {
     const maximum = Math.max(...comparisons.map(annualVmSavingKrw))
     return comparisons.map(row => ({
       case: row.case,
+      name: costCopy.value.comparison.replace('{framework}', nameFor(row.case)),
       amount: `₩${number(annualVmSavingKrw(row))}`,
-      unit: `/ ${costCopy.value.year}`,
+      unit: costCopy.value.annualSavingUnit,
       width: annualVmSavingKrw(row) / maximum * 100,
       monthly: costCopy.value.saving.replace('{value}', number(monthlyVmSavingKrw(row))),
       plan: row.selectedPlan
@@ -42,6 +44,7 @@ const rows = computed<ComparisonRow[]>(() => {
   const spine = measured[0]
   return measured.map(row => ({
     case: row.case,
+    name: nameFor(row.case),
     amount: number(value(row), isThroughput ? 0 : 1),
     unit: isThroughput ? 'req/s' : 'MiB',
     width: value(row) / maximum * 100,
@@ -61,7 +64,7 @@ function memoryLabel(memory: number) {
   <TransitionGroup name="benchmark-row" tag="div" class="comparison-rows" :class="{ 'is-cost': metric === 'cost', 'vm-cost-rows': metric === 'cost' }" role="list">
     <div v-for="row in rows" :key="row.case" :data-case="row.case" class="comparison-row" :class="{ 'is-spine': row.case === 'spine', 'vm-cost-row': metric === 'cost' }" role="listitem">
       <div class="row-heading" :class="{ 'vm-cost-heading': metric === 'cost' }">
-        <span class="row-name" :class="{ 'vm-cost-name': metric === 'cost' }">{{ nameFor(row.case) }}<span v-if="row.case === 'spine'" class="spine-version">0.5.2</span></span>
+        <span class="row-name" :class="{ 'vm-cost-name': metric === 'cost' }">{{ row.name }}<span v-if="row.case === 'spine'" class="spine-version">0.5.2</span></span>
         <div class="row-value" :class="{ 'vm-cost-value': metric === 'cost' }">{{ row.amount }}<span class="row-unit">{{ row.unit }}</span></div>
       </div>
       <div v-show="row.monthly" class="vm-cost-saving">{{ row.monthly }}</div>

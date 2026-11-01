@@ -3,7 +3,8 @@ const ko = {
   title: '예상 연간 절감액',
   direction: 'Spine 사용 시 VM 기본요금 절감 예상액이며 높을수록 좋습니다',
   assumption: '초당 2만 요청을 기준으로 계산한 시나리오',
-  year: '년',
+  comparison: '{framework} 대신 Spine을 쓰면',
+  annualSavingUnit: '/ 년 절감 예상',
   annual: '연 ${value} 선결제',
   saving: '월 환산 약 ₩{value} 절감 예상',
   condition: 'vpsGOD의 연간 선결제 요금 차이로 계산했습니다. 월 절감액은 연간 차액을 12로 나눈 값입니다. 비교군에도 저렴한 공개 할인 상품을 적용했습니다.',
@@ -26,7 +27,7 @@ const ko = {
 
 const en: typeof ko = {
   tab: 'VM cost', title: 'Estimated annual savings', direction: 'Estimated VM base-fee savings with Spine; higher is better',
-  assumption: 'A resource-sizing scenario for 20,000 requests per second', year: 'year', annual: '${value}/year, paid upfront',
+  assumption: 'A resource-sizing scenario for 20,000 requests per second', comparison: 'Use Spine instead of {framework}', annualSavingUnit: '/ year saved (est.)', annual: '${value}/year, paid upfront',
   saving: 'Monthly equivalent: about ₩{value} saved',
   condition: 'Based on the difference in vpsGOD annual upfront fees. Monthly savings are the annual difference divided by 12. Cheaper public offer plans are also used for the comparison frameworks.',
   spinePlan: 'Spine uses a {vcpus} vCPU, {memoryMiB} MB plan costing ${annualUsd} per year, paid upfront.',
@@ -46,7 +47,7 @@ const en: typeof ko = {
 
 const ja: typeof ko = {
   tab: '費用予測', title: '年間の削減予測', direction: 'Spine利用時のVM基本料金の削減予測。高いほど良い値です',
-  assumption: '毎秒20,000リクエストを想定した構成例', year: '年', annual: '年${value}を前払い',
+  assumption: '毎秒20,000リクエストを想定した構成例', comparison: '{framework}の代わりにSpineを使うと', annualSavingUnit: '/ 年の削減予測', annual: '年${value}を前払い',
   saving: '月換算で約₩{value}の削減予測',
   condition: 'vpsGODの年額前払い料金の差額で計算しました。月換算額は年間の差額を12で割った値です。比較対象にも安価な公開割引プランを適用しました。',
   spinePlan: 'Spineは{vcpus} vCPU・{memoryMiB}MB、年${annualUsd}を前払いするプランで計算しました。',
@@ -66,7 +67,7 @@ const ja: typeof ko = {
 
 const zhHans: typeof ko = {
   tab: '费用预测', title: '预计每年节省', direction: '使用Spine预计节省的VM基本费用，越高越好',
-  assumption: '以每秒20,000次请求为目标的资源配置示例', year: '年', annual: '每年${value}，预付',
+  assumption: '以每秒20,000次请求为目标的资源配置示例', comparison: '用Spine替代{framework}', annualSavingUnit: '/ 年，预计节省', annual: '每年${value}，预付',
   saving: '折合每月预计节省约₩{value}',
   condition: '根据vpsGOD年度预付费用的差额计算。每月节省额为年度差额除以12。比较框架也采用较便宜的公开优惠套餐。',
   spinePlan: 'Spine按{vcpus} vCPU、{memoryMiB}MB套餐计算，每年${annualUsd}，预付。',
@@ -86,7 +87,7 @@ const zhHans: typeof ko = {
 
 const zhHant: typeof ko = {
   tab: '費用預測', title: '預估每年節省', direction: '使用Spine預估節省的VM基本費用，越高越好',
-  assumption: '以每秒20,000次請求為目標的資源配置範例', year: '年', annual: '每年${value}，預付',
+  assumption: '以每秒20,000次請求為目標的資源配置範例', comparison: '以Spine取代{framework}', annualSavingUnit: '/ 年，預估節省', annual: '每年${value}，預付',
   saving: '折合每月預估節省約₩{value}',
   condition: '依vpsGOD年度預付費用的差額計算。每月節省額為年度差額除以12。比較框架也採用較便宜的公開優惠方案。',
   spinePlan: 'Spine以{vcpus} vCPU、{memoryMiB}MB方案計算，每年${annualUsd}，預付。',
