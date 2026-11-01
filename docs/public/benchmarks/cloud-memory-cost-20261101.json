@@ -1,0 +1,65 @@
+{
+  "schema": "spine.cloud-memory-cost-reference/v1",
+  "checkedOn": "2026-11-01",
+  "monthlyHours": 730,
+  "pricingScope": {
+    "region": "Seoul, South Korea",
+    "operatingSystem": "Linux",
+    "billing": "On-demand, no commitment",
+    "capacityVcpu": 4,
+    "capacityMemoryGiB": 16,
+    "selection": "Lower hourly price among the two listed non-CPU-credit general-purpose reference VMs; not a global cheapest-VM claim",
+    "excluded": [
+      "CPU-credit/burstable VMs",
+      "Spot and preemptible rates",
+      "Free tier",
+      "Reserved, committed-use and sustained-use discounts",
+      "Tax",
+      "Disks",
+      "Public IP",
+      "Network transfer"
+    ]
+  },
+  "candidates": [
+    {
+      "provider": "AWS EC2",
+      "instance": "m6g.xlarge",
+      "region": "ap-northeast-2",
+      "vcpu": 4,
+      "memoryGiB": 16,
+      "architecture": "arm64",
+      "hourlyUsd": 0.188,
+      "source": "https://aws.amazon.com/ec2/pricing/on-demand/",
+      "catalogSource": "https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/ec2-ondemand-without-sec-sel/Asia%20Pacific%20(Seoul)/Linux/index.json",
+      "catalogPublishedAt": "2026-10-29T17:56:34Z",
+      "rateCode": "UT993RDVVNCCZUQ8.JRTCKXETXF.6YS6EN2CT7"
+    },
+    {
+      "provider": "Google Cloud",
+      "instance": "e2-standard-4",
+      "region": "asia-northeast3",
+      "vcpu": 4,
+      "memoryGiB": 16,
+      "architecture": "x86_64",
+      "hourlyUsd": 0.17193144,
+      "source": "https://cloud.google.com/products/compute/pricing/general-purpose#e2_machine_types",
+      "sourceTable": "E2 standard machine types / Seoul (asia-northeast3) / Default (USD) / Hourly"
+    }
+  ],
+  "fx": {
+    "usdKrw": 1335.27,
+    "date": "2026-10-30",
+    "source": "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html",
+    "dataSource": "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml",
+    "eurUsd": 1.1172,
+    "eurKrw": 1491.76,
+    "calculation": "EUR/KRW divided by EUR/USD; rounded to two decimal places before applying"
+  },
+  "allocation": {
+    "basis": "Entire VM price allocated in proportion to observed memory / installed memory; this is not a separate RAM SKU price",
+    "formula": "((comparison_memory_mib - spine_memory_mib) / 1024 / selected_vm_memory_gib) * selected_vm_hourly_usd * monthly_hours * usd_krw",
+    "measurementMode": "fixed-20000",
+    "measurementSource": "/benchmarks/internal-lab-20261101/summary.json",
+    "interpretation": "Monthly price equivalent of observed memory saved for one app; not actual invoice savings, minimum required RAM, validated downsizing or performance on these VMs"
+  }
+}
