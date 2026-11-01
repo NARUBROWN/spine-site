@@ -5,13 +5,17 @@ export const vmCostAsset = '/benchmarks/vpsgod-vm-cost-20261101.json'
 export const vmCostRows = reference.estimates
 export type VmCostRow = typeof vmCostRows[number]
 
-export function monthlyVmCostKrw(row: VmCostRow): number {
-  return row.selectedPlan.annualUsd / reference.billing.termMonths * reference.fx.usdKrw
+export function annualVmCostKrw(row: VmCostRow): number {
+  return row.selectedPlan.annualUsd * reference.fx.usdKrw
 }
 
 // 같은 환율과 선결제 기간으로 비교한 VM 기본요금의 차이입니다.
+export function annualVmSavingKrw(row: VmCostRow): number {
+  return annualVmCostKrw(row) - annualVmCostKrw(vmCostRows[0])
+}
+
 export function monthlyVmSavingKrw(row: VmCostRow): number {
-  return monthlyVmCostKrw(row) - monthlyVmCostKrw(vmCostRows[0])
+  return annualVmSavingKrw(row) / reference.billing.termMonths
 }
 
 export function vmCostText(message: string): string {
