@@ -29,33 +29,12 @@ features:
     linkText: "Use interceptors"
 ---
 
-<section class="home-workflow">
-<div class="workflow-copy">
-
-## Bring familiar structure to Go code
-
-A user lookup app separates controllers from services and connects them through constructors. This excerpt registers the constructors and route. The constructor functions and controller method are defined elsewhere in the app.
-
-Spine reads the parameter type of `NewUserController` and supplies `UserService`. `GET /users` is routed to `UserController.GetUser`.
-
-[Find the server startup code and complete project in the first-app guide.](/en/learn/getting-started/first-app)
-
-</div>
-<div class="workflow-code" data-ui>
-
-```go
-app := spine.New()
-
-app.Constructor(NewUserService, NewUserController)
-app.Route("GET", "/users", (*UserController).GetUser)
-```
-
-</div>
-</section>
 
 <BenchmarkSection />
 
-## Build your first app with familiar patterns
+<section class="home-start">
+
+## Build your first app
 
 <div class="home-next-steps">
 
@@ -75,3 +54,5 @@ app.Route("GET", "/users", (*UserController).GetUser)
 </a>
 
 </div>
+
+</section>

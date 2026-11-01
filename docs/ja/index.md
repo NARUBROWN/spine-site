@@ -29,33 +29,12 @@ features:
     linkText: "インターセプターを使う"
 ---
 
-<section class="home-workflow">
-<div class="workflow-copy">
-
-## 使い慣れた構成をGoのコードで
-
-ユーザー取得アプリでもコントローラーとサービスを分け、コンストラクタで接続します。以下はコンストラクタとルートの登録部分です。コンストラクタ関数とコントローラーメソッドはアプリ側に定義済みです。
-
-Spineは`NewUserController`の引数の型を見て`UserService`を渡します。`GET /users`は`UserController.GetUser`メソッドに接続されます。
-
-[サーバー起動コードとプロジェクト全体は、最初のアプリのガイドで確認できます。](/ja/learn/getting-started/first-app)
-
-</div>
-<div class="workflow-code" data-ui>
-
-```go
-app := spine.New()
-
-app.Constructor(NewUserService, NewUserController)
-app.Route("GET", "/users", (*UserController).GetUser)
-```
-
-</div>
-</section>
 
 <BenchmarkSection />
 
-## 使い慣れた構成で最初のアプリを作る
+<section class="home-start">
+
+## 最初のアプリを作る
 
 <div class="home-next-steps">
 
@@ -75,3 +54,5 @@ app.Route("GET", "/users", (*UserController).GetUser)
 </a>
 
 </div>
+
+</section>

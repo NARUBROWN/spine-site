@@ -35,80 +35,81 @@
   filter: invert(1);
 }
 
-/* 메인은 하나의 폭과 여백을 공유하고, 기능과 성능을 열린 지면으로 연결합니다. */
+/* 실제 코드와 성능 결과를 공유하는 제품 페이지의 레이아웃입니다. */
 .VPHome {
   --home-width: 1120px;
+  --home-gutter: clamp(20px, 4vw, 48px);
+  --home-paper: #faf9fc;
   --vp-c-brand-1: #5750c8;
   --vp-c-brand-2: #4840ad;
   --vp-c-brand-3: #5750c8;
   --vp-code-color: var(--vp-c-brand-1);
   --vp-button-brand-bg: var(--vp-c-brand-3);
-  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
-  --home-gutter: clamp(20px, 4vw, 48px);
-  margin-bottom: 96px !important;
+  --vp-button-brand-hover-bg: #4840ad;
+  background: var(--home-paper);
+  margin-bottom: 0 !important;
 }
-.VPHome .VPHero { padding: calc(var(--vp-nav-height) + 72px) var(--home-gutter) 72px; }
-.VPHome .VPHero .container, .VPHome .VPFeatures .container { max-width: var(--home-width); }
-.VPHome .VPHero .main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px 48px; width: 100%; max-width: none; }
-.VPHome .VPHero .heading { grid-column: 1 / -1; font-size: clamp(30px, 7.2vw, 88px); line-height: 1.18; }
+.VPHome .VPHero { padding: calc(var(--vp-nav-height) + 64px) var(--home-gutter) 64px; }
+.VPHome .VPHero .container { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; gap: 56px; max-width: var(--home-width); text-align: left; }
+.VPHome .VPHero.has-image .container, .VPHome .VPHero.has-image .heading, .VPHome .VPHero.has-image .tagline { text-align: left; }
+.VPHome .VPHero.has-image .main .text, .VPHome .VPHero.has-image .main .tagline { margin: 0; }
+.VPHome .VPHero .main { display: flex; flex-direction: column; align-items: flex-start; gap: 28px; order: 0; min-width: 0; width: 100%; max-width: none; }
+.VPHome .VPHero .heading { font-size: clamp(30px, 4vw, 54px); line-height: 1.25; }
 .VPHome .VPHero .name { display: none; }
-.VPHome .VPHero .text { max-width: none; width: auto; color: var(--vp-c-text-1); font-size: clamp(30px, 7.2vw, 88px); line-height: 1.18; font-weight: 650; letter-spacing: -.055em; }
-.VPHome .VPHero .tagline { padding: 0; max-width: 58ch; color: var(--vp-c-text-1); font-size: 18px; line-height: 1.85; }
-.VPHome .VPHero .actions { align-self: end; justify-content: flex-end; padding: 0; margin: -6px; }
+.VPHome .VPHero .text { max-width: none; width: auto; margin: 0; color: var(--vp-c-text-1); font-size: inherit; line-height: inherit; font-weight: 650; letter-spacing: -.045em; }
+.VPHome .VPHero .tagline { padding: 0; margin: 0; max-width: 50ch; color: var(--vp-c-text-1); font-size: 17px; line-height: 1.85; }
+.VPHome .VPHero.has-image .actions { justify-content: flex-start; padding: 0; margin: -6px; }
 .VPHome .VPHero .action { padding: 6px; }
-.VPHome .VPHero .VPButton { min-height: 48px; border-radius: 4px; padding-inline: 22px; font-size: 16px; }
+.VPHome .VPHero .VPButton { min-height: 48px; border-radius: 4px; padding-inline: 22px; font-size: 16px; transition: background .18s, transform .18s; }
+.VPHome .VPHero .VPButton:active { transform: translateY(1px); }
 .VPHome .VPHero .VPButton.alt { border-color: transparent; background: transparent; color: var(--vp-c-brand-1); }
+.VPHome .VPHero .image { order: 1; min-width: 0; margin: 0; width: 100%; }
+.VPHome .VPHero .image-container { position: static; display: block; width: 100%; height: auto; max-width: none; transform: none; }
+.VPHome .VPHero .image-bg { display: none; }
 .VPHome .VPHomeFeatures { padding: 0 var(--home-gutter); }
-.VPHome .VPFeatures .items { display: grid; gap: 36px; margin: 0; }
-.VPHome .VPFeatures .item { width: 100%; padding: 0; }
+.VPHome .VPFeatures .container { max-width: var(--home-width); }
+.VPHome .VPFeatures .items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; margin: 0; }
+.VPHome .VPFeatures .item { width: auto; padding: 0; }
 .VPHome .VPFeature { border: 0; border-radius: 0; background: transparent; }
-.VPHome .VPFeature .box { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px 64px; padding: 0; }
-.VPHome .VPFeature .title { grid-column: 1; grid-row: 1 / 3; color: var(--vp-c-text-1); font-size: 24px; font-weight: 600; line-height: 1.5; letter-spacing: -.03em; }
-.VPHome .VPFeature .details { grid-column: 2; padding: 0; color: var(--vp-c-text-1); font-size: 16px; line-height: 1.85; font-weight: 400; }
-.VPHome .VPFeature .link-text { grid-column: 2; padding: 0; }
-.VPHome .VPFeature .link-text-value { min-height: 44px; color: var(--vp-c-brand-1); font-size: 16px; }
+.VPHome .VPFeature .box { display: flex; flex-direction: column; padding: 0; gap: 14px; }
+.VPHome .VPFeature .title { color: var(--vp-c-text-1); font-size: 21px; font-weight: 600; line-height: 1.5; letter-spacing: -.03em; }
+.VPHome .VPFeature .details { padding: 0; color: var(--vp-c-text-1); font-size: 16px; line-height: 1.85; font-weight: 400; }
+.VPHome .VPFeature .link-text { padding: 0; }
+.VPHome .VPFeature .link-text-value { min-height: 44px; color: var(--vp-c-brand-1); font-size: 15px; }
 .VPHome .VPFeature:hover .link-text-icon { transform: translateX(3px); }
 .VPHome .VPFeature .link-text-icon { transition: transform .18s ease; }
-.VPHome > .vp-doc.container { width: 100%; max-width: calc(var(--home-width) + 2 * var(--home-gutter)); padding: 0 var(--home-gutter); }
+.VPHome > .vp-doc.container { width: 100%; max-width: none; padding: 0; }
 .VPHome .vp-doc h2 { margin-top: 0; padding-top: 0; border-top: 0; font-size: clamp(28px, 3vw, 40px); line-height: 1.35; letter-spacing: -.04em; }
 .VPHome .vp-doc p { color: var(--vp-c-text-1); font-size: 16px; line-height: 1.85; }
 .VPHome:lang(ko) .VPFeature, .VPHome:lang(ko) .vp-doc { word-break: keep-all; overflow-wrap: break-word; }
-.home-workflow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 64px; margin-top: 112px; }
-.workflow-copy { min-width: 0; }
-.workflow-copy p { max-width: 54ch; }
-.workflow-code { min-width: 0; }
-.VPHome .workflow-code div[class*='language-'] { margin: 0; border-radius: 4px; }
-.VPHome .workflow-code pre { padding: 30px 26px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.VPHome .workflow-code pre code { min-width: 0; width: auto; white-space: pre-wrap; font-size: 16px; line-height: 1.8; }
-.VPHome .workflow-code .lang { font-size: 13px; color: var(--vp-c-text-2); }
-.home-next-steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; margin-top: 32px; }
-.home-next-steps a { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px 64px; align-items: baseline; text-decoration: none; color: var(--vp-c-text-1); }
+.home-start { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 72px; max-width: calc(var(--home-width) + 2 * var(--home-gutter)); margin: 0 auto; padding: 80px var(--home-gutter) 88px; }
+.VPHome .home-start h2 { margin: 0; }
+.home-next-steps { display: grid; gap: 28px; }
+.home-next-steps a { display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--vp-c-text-1); }
 .home-next-steps strong { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 20px; font-weight: 600; line-height: 1.65; letter-spacing: -.025em; }
+.home-next-steps a:first-child strong { color: var(--vp-c-brand-1); }
 .home-next-steps strong span { color: var(--vp-c-brand-1); transition: transform .18s ease; }
 .home-next-steps a:hover strong span { transform: translateX(4px); }
 .home-next-steps a > span { font-size: 16px; line-height: 1.85; color: var(--vp-c-text-1); }
 .VPHome a:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 5px; }
-@media (max-width: 900px) {
-  .VPHome .VPHero .main { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-  .VPHome .VPHero .heading { grid-column: 1; }
-  .VPHome .VPHero .actions { justify-content: flex-start; }
-  .VPHome .VPFeature .box, .home-workflow, .home-next-steps a { gap: 20px 32px; }
+.dark .VPHome { --home-paper: #1b1b1f; --vp-c-brand-1: #b6afff; --vp-c-brand-2: #d0cbff; }
+@media (max-width: 1023px) {
+  .VPHome .VPHero .container { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .VPHome .VPHero .main, .VPHome .VPHero .image { max-width: none; }
+  .VPHome .VPHero .heading { font-size: clamp(30px, 6vw, 52px); }
+  .VPHome .VPFeatures .items { gap: 28px; }
+  .home-start { gap: 40px; }
 }
 @media (max-width: 640px) {
-  .VPHome .VPHero { padding-top: calc(var(--vp-nav-height) + 40px); padding-bottom: 56px; }
+  .VPHome .VPHero { padding-top: calc(var(--vp-nav-height) + 32px); padding-bottom: 44px; }
+  .VPHome .VPHero .main { gap: 24px; }
   .VPHome .VPHero .tagline { font-size: 16px; }
   .VPHome .VPHero .VPButton { font-size: 14px; padding-inline: 18px; }
-  .VPHome .VPFeatures .items { gap: 36px; }
-  .VPHome .VPFeature .box { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .VPHome .VPFeature .title { grid-row: auto; font-size: 20px; }
-  .VPHome .VPFeature .details, .VPHome .VPFeature .link-text { grid-column: 1; }
-  .home-workflow { grid-template-columns: minmax(0, 1fr); gap: 28px; margin-top: 80px; }
-  .VPHome .workflow-code pre { padding: 24px 20px; }
-  .home-next-steps { gap: 32px; }
-  .home-next-steps a { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .VPHome .VPFeatures .items { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .VPHome .VPFeature .box { gap: 10px; }
+  .VPHome .VPFeature .title { font-size: 20px; }
+  .home-start { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-top: 52px; padding-bottom: 56px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .VPHome .link-text-icon, .home-next-steps strong span { transition: none; transform: none; }
+  .VPHome .link-text-icon, .home-next-steps strong span, .VPHome .VPHero .VPButton { transition: none; transform: none; }
 }
-
-.dark .VPHome { --vp-c-brand-1: #b6afff; --vp-c-brand-2: #d0cbff; }

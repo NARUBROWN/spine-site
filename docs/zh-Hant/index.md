@@ -29,33 +29,12 @@ features:
     linkText: "使用攔截器"
 ---
 
-<section class="home-workflow">
-<div class="workflow-copy">
-
-## 用Go程式碼延續熟悉的結構
-
-使用者查詢應用程式同樣將控制器與服務分離，並透過建構函式連接。以下展示建構函式和路由的註冊部分。建構函式與控制器方法已在應用程式碼中定義。
-
-Spine根據`NewUserController`的參數型別傳入`UserService`。`GET /users`請求會連接到`UserController.GetUser`方法。
-
-[伺服器啟動程式碼與完整專案請參閱第一個應用程式指南。](/zh-Hant/learn/getting-started/first-app)
-
-</div>
-<div class="workflow-code" data-ui>
-
-```go
-app := spine.New()
-
-app.Constructor(NewUserService, NewUserController)
-app.Route("GET", "/users", (*UserController).GetUser)
-```
-
-</div>
-</section>
 
 <BenchmarkSection />
 
-## 用熟悉的方式建立第一個應用程式
+<section class="home-start">
+
+## 建立第一個應用程式
 
 <div class="home-next-steps">
 
@@ -75,3 +54,5 @@ app.Route("GET", "/users", (*UserController).GetUser)
 </a>
 
 </div>
+
+</section>

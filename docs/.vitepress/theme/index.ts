@@ -6,12 +6,14 @@ import TerminalBoot from './components/TerminalBoot.vue'
 import Footer from './components/Footer.vue'
 import BenchmarkSection from './components/BenchmarkSection.vue'
 import BenchmarkReport from './components/BenchmarkReport.vue'
+import SpineWorkbench from './components/SpineWorkbench.vue'
 import './custom.css'
 
 export default {
     extends: DefaultTheme,
     Layout: () => {
         return h(DefaultTheme.Layout, null, {
+            'home-hero-image': () => h(SpineWorkbench),
             'layout-bottom': () => h(Footer)
         })
     },

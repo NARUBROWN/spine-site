@@ -31,6 +31,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
 
 <template>
   <section id="benchmarks" class="benchmark-section" aria-labelledby="benchmark-heading">
+    <div class="benchmark-inner">
     <div class="benchmark-heading-row">
       <h2 id="benchmark-heading" class="benchmark-heading">{{ copy.title[0] }}<br>{{ copy.title[1] }}</h2>
       <div class="benchmark-summary">
@@ -89,14 +90,30 @@ function selectWithKeyboard(event: KeyboardEvent) {
       </div>
     </div>
     <a class="benchmark-csv" :href="withBase(`${assetRoot}/measurements.csv`)" download>{{ copy.csv }}<span aria-hidden="true">↓</span></a>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.benchmark-section { margin: 112px 0; padding: 0; scroll-margin-top: 96px; }
+.benchmark-section {
+  --vp-c-text-1: #f3f0f8;
+  --vp-c-text-2: #c0bacd;
+  --vp-c-text-3: #898095;
+  --vp-c-bg-soft: #383241;
+  --vp-c-default-soft: #474050;
+  --vp-c-brand-1: #c6bcff;
+  --vp-c-brand-2: #e2dcff;
+  --vp-c-brand-3: #6655cf;
+  margin: 80px 0 0;
+  padding: 80px var(--home-gutter, 24px) 88px;
+  background: #25212f;
+  color: var(--vp-c-text-1);
+  scroll-margin-top: 64px;
+}
+.benchmark-inner { max-width: var(--home-width, 1120px); margin: 0 auto; }
 .benchmark-section:lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
 .benchmark-section:lang(ko) .row-comparison { text-wrap: balance; }
-:global(.dark .benchmark-section) { --vp-c-brand-1: #a8b1ff; }
+:global(.dark .benchmark-section) { background: #141219; --vp-c-brand-1: #c6bcff; }
 .benchmark-section p { margin: 0; }
 .benchmark-heading-row { display: grid; grid-template-columns: 1.1fr 1fr; align-items: start; gap: 64px; }
 .benchmark-section .benchmark-heading { margin: 0; padding: 0; border: 0; color: var(--vp-c-text-1); font-size: clamp(30px, 3.6vw, 48px); line-height: 1.25; font-weight: 650; letter-spacing: -.045em; word-break: keep-all; }
@@ -111,6 +128,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .benchmark-report-link:hover span { transform: translate(2px, -2px); }
 .benchmark-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; margin: 56px 0 64px; }
 .benchmark-stat { min-width: 0; }
+.benchmark-stat:first-child .stat-number { font-size: clamp(36px, 6vw, 80px); }
 .benchmark-stat .stat-number { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; color: var(--vp-c-text-1); font-size: clamp(36px, 4.6vw, 64px); font-weight: 650; letter-spacing: -.06em; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .stat-number span { color: var(--vp-c-text-2); font-size: 16px; letter-spacing: 0; font-weight: 450; }
 .benchmark-stat .stat-label { margin-top: 16px; color: var(--vp-c-text-1); font-size: 16px; font-weight: 600; }
@@ -148,14 +166,15 @@ function selectWithKeyboard(event: KeyboardEvent) {
   .stat-number span { font-size: 14px; }
 }
 @media (max-width: 640px) {
-  .benchmark-section { margin: 80px 0; }
+  .benchmark-section { margin: 56px 0 0; padding-top: 52px; padding-bottom: 56px; }
   .benchmark-heading-row { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .benchmark-report-link { margin-top: 12px; }
-  .benchmark-stats { grid-template-columns: minmax(0, 1fr); gap: 28px; margin: 36px 0 48px; }
-  .benchmark-stat { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: baseline; }
-  .benchmark-stat .stat-number { grid-column: 2; grid-row: 1; font-size: 36px; }
-  .benchmark-stat .stat-label { grid-column: 1; grid-row: 1; margin: 0; }
-  .benchmark-stat .stat-context { grid-column: 1 / -1; margin-top: 0; }
+  .benchmark-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 20px; margin: 36px 0 44px; }
+  .benchmark-stat:first-child { grid-column: 1 / -1; }
+  .benchmark-stat:first-child .stat-number { font-size: 56px; }
+  .benchmark-stat .stat-number { font-size: 36px; gap: 8px; }
+  .benchmark-stat .stat-label { margin-top: 12px; }
+  .benchmark-stat .stat-context { margin-top: 4px; }
   .benchmark-comparison { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'header' 'chart' 'notes'; gap: 28px; }
   .comparison-header { gap: 20px; }
   .benchmark-section .comparison-title { font-size: 20px; }
