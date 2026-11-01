@@ -42,21 +42,30 @@
   filter: invert(1);
 }
 
-/* 메인 네비게이션은 본문과 다른 배경으로 구분하고 같은 기준선에 맞춥니다. */
-.VPNav:has(.VPNavBar.home) {
+/* 모든 페이지의 네비게이션을 같은 너비와 여백, 배경으로 맞춥니다. */
+.VPNav {
   --vp-nav-bg-color: #f0f0f0;
   --vp-c-brand-1: #5750c8;
   background: var(--vp-nav-bg-color);
 }
 .VPNavBar.home { background: var(--vp-nav-bg-color); }
-.VPNavBar.home .wrapper { padding: 0 clamp(20px, 4vw, 48px); }
-.VPNavBar.home .container { max-width: 1120px; }
-.VPNavBar.home .divider { display: none; }
-.VPNavBar.home.screen-open { border-bottom: 0; }
-.VPNav:has(.VPNavBar.home) .VPNavScreen { background: var(--vp-nav-bg-color); }
-.dark .VPNav:has(.VPNavBar.home) {
+.VPNavBar .wrapper { padding: 0 clamp(20px, 4vw, 48px); }
+.VPNavBar .container { max-width: 1120px; }
+.VPNavBar .divider { display: none; }
+.VPNav .VPNavBar.screen-open { border-bottom: 0; }
+.VPNav .VPNavScreen { background: var(--vp-nav-bg-color); }
+.dark .VPNav {
   --vp-nav-bg-color: #27272a;
   --vp-c-brand-1: #c6bcff;
+}
+
+/* 문서의 사이드바 유무가 상단 로고와 메뉴의 위치를 바꾸지 않도록 합니다. */
+@media (min-width: 960px) {
+  .VPNav .VPNavBar.has-sidebar .wrapper { padding: 0 clamp(20px, 4vw, 48px); }
+  .VPNav .VPNavBar.has-sidebar .container { max-width: 1120px; }
+  .VPNav .VPNavBar.has-sidebar .container > .title { position: static; padding: 0; width: auto; }
+  .VPNav .VPNavBar.has-sidebar .content { padding: 0; }
+  .VPNav .VPNavBarTitle.has-sidebar .title { border-bottom-color: transparent; }
 }
 
 /* 실제 코드와 성능 결과를 공유하는 제품 페이지의 레이아웃입니다. */
@@ -128,7 +137,7 @@
   .home-start { gap: 40px; }
 }
 @media (max-width: 640px) {
-  .Layout:has(.VPHome) { --vp-nav-height: 56px; }
+  :root { --vp-nav-height: 56px; }
   .VPHome .VPHero { padding-top: calc(var(--vp-nav-height) + 20px); padding-bottom: 32px; }
   .VPHome .VPHero .container { gap: 24px; }
   .VPHome .VPHero .main { gap: 18px; }
