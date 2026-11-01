@@ -23,7 +23,7 @@ function memoryLabel(memory: number) {
         <span class="vm-cost-value">₩{{ number(monthlyVmCostKrw(row)) }}<span>/ {{ copy.monthly }}</span></span>
       </div>
       <div class="vm-cost-track" aria-hidden="true"><div :style="{ width: `${monthlyVmCostKrw(row) / maximum * 100}%` }"></div></div>
-      <div class="vm-cost-plan">
+      <div v-if="row.case !== 'spine'" class="vm-cost-plan">
         <span>{{ row.selectedPlan.vcpus }} vCPU / {{ memoryLabel(row.selectedPlan.memoryMiB) }}</span>
         <span>{{ copy.annual.replace('{value}', number(row.selectedPlan.annualUsd)) }}</span>
       </div>

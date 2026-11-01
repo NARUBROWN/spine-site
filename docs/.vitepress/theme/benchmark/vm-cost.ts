@@ -15,7 +15,11 @@ export function monthlyVmSavingKrw(row: VmCostRow): number {
 }
 
 export function vmCostText(message: string): string {
+  const spinePlan = vmCostRows[0].selectedPlan
   const tokens: Record<string, string | number> = {
+    vcpus: spinePlan.vcpus,
+    memoryMiB: spinePlan.memoryMiB,
+    annualUsd: spinePlan.annualUsd,
     date: reference.checkedOn,
     fxDate: reference.fx.date,
     fx: new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(reference.fx.usdKrw)

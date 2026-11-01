@@ -13,6 +13,7 @@ const copy = computed(() => vmCostCopy(benchmarkCopy(lang.value).path))
 <template>
   <div class="vm-cost-notes">
     <p>{{ copy.condition }}</p>
+    <p class="vm-cost-spine-plan">{{ vmCostText(copy.spinePlan) }}</p>
     <p :id="`vm-cost-note-${context}`">{{ copy.note }}</p>
     <details class="vm-cost-details">
       <summary>{{ copy.details }}</summary>
