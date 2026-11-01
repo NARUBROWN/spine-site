@@ -5,3 +5,10 @@ spine/
 # VitePress
 docs/.vitepress/dist
 docs/.vitepress/cache
+
+# 내부 랩 원시 자료와 클라우드 운영 기록
+/benchmark-materials/
+
+# 브라우저 검증 산출물
+/.playwright-cli/
+/output/playwright/

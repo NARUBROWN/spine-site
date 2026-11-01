@@ -21,7 +21,57 @@
     word-break: keep-all;
 }
 
+/* 일본어·중국어는 좁은 화면에서도 자연스럽게 줄을 바꿉니다. */
+:lang(ja) .VPHero .text,
+:lang(ja) .VPHero .tagline,
+:lang(zh) .VPHero .text,
+:lang(zh) .VPHero .tagline {
+    word-break: normal;
+    line-break: strict;
+}
+
 /* Invert main site logo in dark mode */
 .dark .VPNavBar .logo {
   filter: invert(1);
+}
+
+.home-next-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0 64px;
+}
+
+.home-next-steps a {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 14px;
+  background: var(--vp-c-bg-soft);
+  text-decoration: none;
+  color: var(--vp-c-text-1);
+}
+
+.home-next-steps a:hover,
+.home-next-steps a:focus-visible {
+  border-color: var(--vp-c-brand-1);
+}
+
+.home-next-steps strong {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+
+.home-next-steps a > span {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--vp-c-text-2);
+}
+
+@media (max-width: 700px) {
+  .home-next-steps { grid-template-columns: 1fr; }
 }

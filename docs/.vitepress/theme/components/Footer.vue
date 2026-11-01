@@ -26,7 +26,7 @@ const localePath = computed(() => {
 
 const locales = {
   ko: {
-    description: '요청 과정을 숨기지 않는 프레임워크.',
+    description: '생성자 주입과 요청 실행 파이프라인을 갖춘 Go 백엔드 프레임워크.',
     columns: [
       {
         title: '제품',
@@ -55,7 +55,7 @@ const locales = {
     tagline: '세상의 모든 개발자들을 위해 만들었습니다.'
   },
   en: {
-    description: "A framework that doesn't hide the request process.",
+    description: "Constructor injection and request execution pipelines for Go backends.",
     columns: [
       {
         title: 'Product',
@@ -67,7 +67,7 @@ const locales = {
         title: 'Resources',
         items: [
           { text: 'Docs', link: '/en/learn/getting-started/intro' },
-          { text: 'Guides', link: '/en/tutorial/1-project-structure' },
+          { text: 'Guides', link: '/en/learn/tutorial/1-project-structure' },
           { text: 'Changelog', link: '/en/community/changelog' }
         ]
       },
@@ -84,7 +84,7 @@ const locales = {
     tagline: 'Made for all developers in the world.'
   },
   ja: {
-    description: 'リクエストの処理過程を隠さないフレームワーク。',
+    description: 'コンストラクタ注入とリクエスト実行パイプラインを備えたGoバックエンドフレームワーク。',
     columns: [
       {
         title: '製品',
@@ -113,7 +113,7 @@ const locales = {
     tagline: '世界中のすべての開発者のために作りました。'
   },
   zhHans: {
-    description: '不隐藏请求流程的框架。',
+    description: '提供构造函数注入与请求执行管道的Go后端框架。',
     columns: [
       { title: '产品', items: [{ text: '简介', link: '/zh-Hans/learn/getting-started/intro' }] },
       { title: '资源', items: [
@@ -129,7 +129,7 @@ const locales = {
     tagline: '为世界各地的开发者打造。'
   },
   zhHant: {
-    description: '不隱藏請求流程的框架。',
+    description: '提供建構函式注入與請求執行管線的Go後端框架。',
     columns: [
       { title: '產品', items: [{ text: '簡介', link: '/zh-Hant/learn/getting-started/intro' }] },
       { title: '資源', items: [

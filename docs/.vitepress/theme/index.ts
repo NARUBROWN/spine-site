@@ -5,6 +5,8 @@ import FrameworkTabs from '../components/FrameworkTabs.vue'
 import HeroBackground from './components/HeroBackground.vue'
 import TerminalBoot from './components/TerminalBoot.vue'
 import Footer from './components/Footer.vue'
+import BenchmarkSection from './components/BenchmarkSection.vue'
+import BenchmarkReport from './components/BenchmarkReport.vue'
 import './custom.css'
 
 export default {
@@ -18,5 +20,7 @@ export default {
     enhanceApp({ app }) {
         app.component('FrameworkTabs', FrameworkTabs)
         app.component('TerminalBoot', TerminalBoot)
+        app.component('BenchmarkSection', BenchmarkSection)
+        app.component('BenchmarkReport', BenchmarkReport)
     }
 } satisfies Theme
