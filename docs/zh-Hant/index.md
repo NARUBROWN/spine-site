@@ -39,8 +39,8 @@ features:
 <div class="home-next-steps">
 
 <a href="/zh-Hant/learn/getting-started/first-app">
-<strong>建立使用者查詢API <span aria-hidden="true">→</span></strong>
-<span>從建立專案到傳送請求並確認回應。</span>
+<strong>使用CLI建立第一個應用程式 <span aria-hidden="true">→</span></strong>
+<span>安裝CLI，產生專案並確認 /health 回應。</span>
 </a>
 
 <a href="/zh-Hant/reference/examples/login">

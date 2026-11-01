@@ -2,6 +2,23 @@
 
 Interceptors implement cross-cutting policies around HTTP requests and WebSocket messages.
 
+## Start from a CLI project
+
+Use `example.com/my-app` from the [first app](/en/learn/getting-started/first-app) and [project structure](/en/learn/tutorial/1-project-structure) guides. Generate the user resource from the project root if it does not exist:
+
+```sh
+spine generate resource user --dry-run
+```
+
+```sh
+spine generate resource user
+```
+
+Review the generated files in the text preview, then run the normal generation command. Skip generation if the resource already exists.
+
+The CLI creates `src/user` and calls `user.Register(app)` in `BuildApplication`. There is no interceptor generator; write the files under `src/interceptor` yourself. Authentication services and additional controller methods are manual extensions. Add application registrations in `internal/application/application.go` and route policies in `src/user/user_route.go`. Keep the generated root `main.go` for construction, validation, and execution.
+
+
 ## Four-phase lifecycle
 
 ```go
@@ -25,6 +42,15 @@ type Interceptor interface {
 ## A complete logging interceptor
 
 ```go
+// src/interceptor/logging_interceptor.go
+package interceptor
+
+import (
+    "log"
+
+    "github.com/NARUBROWN/spine/core"
+)
+
 type LoggingInterceptor struct{}
 
 func (i *LoggingInterceptor) PreHandle(
@@ -66,7 +92,54 @@ Global HTTP `PreHandle` runs before routing, so do not assume `meta.ControllerTy
 `App.Interceptor` applies to both HTTP and WebSocket:
 
 ```go
-app.Interceptor(&LoggingInterceptor{})
+// internal/application/application.go
+package application
+
+import (
+    "os"
+
+    "example.com/my-app/src/interceptor"
+    "example.com/my-app/src/user"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/interceptor/cors"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+func BuildApplication() (spine.App, boot.Options, error) {
+    app := spine.New()
+    app.Constructor(NewHealthController)
+    app.Route("GET", "/health", (*HealthController).Get)
+    app.Interceptor(&interceptor.LoggingInterceptor{})
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins:     []string{"https://app.example.com"},
+        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders:     []string{"Authorization", "Content-Type"},
+        AllowCredentials: true,
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+
+    if err := user.Register(app); err != nil {
+        return nil, boot.Options{}, err
+    }
+
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
+    }
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+}
 ```
 
 Select a built-in transport explicitly when the policy is protocol-specific:
@@ -80,22 +153,31 @@ The available scopes are `boot.InterceptorHTTP`, `boot.InterceptorWebSocket`, an
 
 ## Route interceptors
 
-Attach a policy to a route with `route.WithInterceptors`:
+Replace the generated `src/user/user_route.go` with this registration. Keep the checked `user.Register(app)` call in `BuildApplication` and do not register the same route twice:
 
 ```go
-app.Route(
-    "GET",
-    "/users/:id",
-    (*UserController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),
+// src/user/user_route.go
+package user
+
+import (
+    "example.com/my-app/src/interceptor"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/route"
 )
+
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
+    app.Route(
+        "GET",
+        "/user/:id",
+        (*UserController).Get,
+        route.WithInterceptors(&interceptor.AuthInterceptor{}),
+    )
+    return nil
+}
 ```
 
-A typed-nil pointer resolves one container singleton, so register its constructor first:
-
-```go
-app.Constructor(NewAuthService, NewAuthInterceptor, NewUserController)
-```
+A typed-nil pointer resolves one DI singleton after its constructor is registered. See the [transaction tutorial](/en/learn/tutorial/6-transaction) for a complete example.
 
 Pass a non-nil instance when it does not need DI.
 
@@ -111,42 +193,38 @@ The same pointer registered for multiple scopes is merged and executes once. Dif
 
 ## Authentication interceptor
 
-```go
-type AuthInterceptor struct {
-    auth *AuthService
-}
+Create `src/interceptor/auth_interceptor.go` below. This public demo token is for the local example; replace its validation with your application authentication policy.
 
-func (i *AuthInterceptor) PreHandle(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-) error {
-    token := ctx.Header("Authorization")
-    user, err := i.auth.Validate(token)
-    if err != nil {
-        return httperr.Unauthorized("invalid credentials")
+```go
+// src/interceptor/auth_interceptor.go
+package interceptor
+
+import (
+    "github.com/NARUBROWN/spine/core"
+    "github.com/NARUBROWN/spine/pkg/httperr"
+)
+
+type AuthInterceptor struct{}
+
+func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    if ctx.Header("Authorization") != "Bearer demo-token" {
+        return httperr.Unauthorized("invalid demo token")
     }
-    ctx.Set("auth.user", user)
+    ctx.Set("currentUser", map[string]string{"id": "1", "name": "Alice"})
     return nil
 }
 
 func (i *AuthInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
 
-func (i *AuthInterceptor) BeforeResponse(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) error {
+func (i *AuthInterceptor) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error {
     return nil
 }
 
-func (i *AuthInterceptor) AfterCompletion(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) {}
+func (i *AuthInterceptor) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error) {}
+
 ```
 
-Controllers can read `auth.user` through the injected read-only `spine.Ctx` facade.
+Controllers can read `currentUser` through the injected read-only `spine.Ctx` facade.
 
 ## WebSocket handshake authentication
 
@@ -161,7 +239,10 @@ func (i *AuthInterceptor) PreHandshake(
     if token == "" {
         return httperr.Unauthorized("missing credentials")
     }
-    return i.auth.Verify(token)
+    if token != "Bearer demo-token" {
+        return httperr.Unauthorized("invalid demo token")
+    }
+    return nil
 }
 ```
 
@@ -197,6 +278,27 @@ See the [transaction tutorial](/en/learn/tutorial/6-transaction) for a complete 
 Return a deliberate `httperr.HTTPError` when the client should receive a specific status and public message. Ordinary errors become a generic 500 response.
 
 `core.ErrAbortPipeline` is for intentional early completion after an interceptor has prepared a response, such as a successful CORS preflight. It is not a replacement for an authentication error.
+
+## Verify the contract
+
+Run from the project root. Static contract and local Go verification are separate from live HTTP/WebSocket authentication and database E2E checks.
+
+```sh
+gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
+spine contract check
+spine verify
+spine dev
+```
+
+Check from another terminal. Health returns HTTP 200, the unauthenticated user request returns 401, and the demo-token request returns 200 with the configured CORS origin header.
+
+```bash
+curl -i http://localhost:8080/health
+curl -i http://localhost:8080/user/1
+curl -i http://localhost:8080/user/1 \
+  -H 'Authorization: Bearer demo-token' \
+  -H 'Origin: https://app.example.com'
+```
 
 ## Next steps
 

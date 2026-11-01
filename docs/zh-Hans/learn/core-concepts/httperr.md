@@ -1,5 +1,7 @@
 # httperr 包
 
+以下控制器片段用于扩展 [CLI 生成的项目](/zh-Hans/learn/tutorial/1-project-structure)。导入 `github.com/NARUBROWN/spine/pkg/httpx`、`github.com/NARUBROWN/spine/pkg/httperr` 和 `github.com/NARUBROWN/spine/pkg/path`，并在 `BuildApplication` 中注册构造函数及路由。HTTP 成功值应使用 `httpx.Response[T]` 包装，请求 DTO 应使用 `*Request` 等指针类型；`User`、仓储等业务类型由应用定义。
+
 ## 概览
 
 `httperr` 让控制器以语义化错误表达 HTTP 失败，而无需直接操作响应写入器。

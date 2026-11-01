@@ -3,33 +3,35 @@
 SpineでJWTベースのログインを実装します。
 
 ## プロジェクト構造
-```
+```text
 login-example/
 ├── go.mod
 ├── main.go
-├── controller/
-│   └── auth_controller.go
-├── interceptor/
-│   └── auth_interceptor.go
-├── model/
-│   └── user.go
-└── store/
-    └── user_store.go
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── controller/auth_controller.go
+    ├── interceptor/auth_interceptor.go
+    ├── model/user.go
+    └── store/user_store.go
 ```
-## プロジェクトの作成
-```bash
-mkdir login-example
+## CLIでプロジェクトを作成
+
+先に[CLIをインストール](/ja/learn/getting-started/installation)します。CLI 0.1.4にJWT認証の生成器はありません。基本プロジェクトを生成し、以下の認証ファイルを`src/`に手動で追加します。
+
+```sh
+spine new login-example --module example.com/login-example
 cd login-example
-go mod init login-example
-```
-## 依存関係のインストール
-```bash
-go get github.com/NARUBROWN/spine
+go mod tidy
+spine doctor
 go get github.com/golang-jwt/jwt/v5
 ```
+
 ## モデル定義
 ```go
-// model/user.go
+// src/model/user.go
 package model
 
 type User struct {
@@ -59,12 +61,12 @@ type SignupRequest struct {
 
 インメモリストアとして簡単に実装します。
 ```go
-// store/user_store.go
+// src/store/user_store.go
 package store
 
 import (
     "errors"
-    "login-example/model"
+    "example.com/login-example/src/model"
     "sync"
 )
 
@@ -131,7 +133,7 @@ func (s *UserStore) FindByID(id int64) (*model.User, error) {
 
 JWT トークンを検証するルートインターセプタです。
 ```go
-// interceptor/auth_interceptor.go
+// src/interceptor/auth_interceptor.go
 package interceptor
 
 import (
@@ -167,7 +169,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
             return nil, httperr.Unauthorized("署名方式が不正です。")
         }
         return JWTSecret, nil
-    })
+    }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
     if err != nil || !token.Valid {
         return httperr.Unauthorized("無効なトークンです。")
@@ -179,7 +181,11 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("トークンクレームを読み取れません。")
     }
 
-    userID := int64(claims["user_id"].(float64))
+    rawID, ok := claims["user_id"].(float64)
+    if !ok || rawID <= 0 || rawID != float64(int64(rawID)) {
+        return httperr.Unauthorized("Invalid user ID claim.")
+    }
+    userID := int64(rawID)
     
     // ExecutionContextにユーザーIDを保存
     ctx.Set("userID", userID)
@@ -199,17 +205,17 @@ func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.H
 
 ログイン、会員登録、個人情報検索機能を実装します。
 ```go
-// controller/auth_controller.go
+// src/controller/auth_controller.go
 package controller
 
 import (
     "time"
 
-    "login-example/interceptor"
-    "login-example/model"
-    "login-example/store"
+    "example.com/login-example/src/interceptor"
+    "example.com/login-example/src/model"
+    "example.com/login-example/src/store"
 
-    "github.com/NARUBROWN/spine/core"
+    spinectx "github.com/NARUBROWN/spine/pkg/spine"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/golang-jwt/jwt/v5"
@@ -226,7 +232,7 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
 }
 
 //会員登録 - 認証は不要
-func (c *AuthController) Signup(req model.SignupRequest) (httpx.Response[model.User], error) {
+func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
 return httpx.Response[model.User]{}, httperr.BadRequest("すべてのフィールドを入力してください。")
     }
@@ -240,7 +246,7 @@ return httpx.Response[model.User]{}, httperr.BadRequest("すべてのフィー�
 }
 
 //ログイン - 認証は不要
-func (c *AuthController) Login(req model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
+func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
 return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("メールとパスワードを入力してください。")
     }
@@ -276,7 +282,7 @@ return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("トークン�
 }
 
 //私の情報の照会 - 認証が必要
-func (c *AuthController) GetMe(ctx core.ExecutionContext) (httpx.Response[model.User], error) {
+func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
 // AuthInterceptorによって保存されたuserID照会
     userIDValue, ok := ctx.Get("userID")
     if !ok {
@@ -292,20 +298,20 @@ return httpx.Response[model.User]{}, httperr.NotFound("ユーザーが見つか�
     return httpx.Response[model.User]{Body: *user}, nil
 }
 ```
-## main.go
+## アプリの構成
 
-ルートを登録してサーバーを起動します。
+生成されたルートの`main.go`はそのまま使います。`BuildApplication`、`Validate`、`Run`の順に呼び出します。以下で`internal/application/application.go`を置き換えます。
+
 ```go
-// main.go
-package main
+// internal/application/application.go
+package application
 
 import (
-    "log"
     "time"
 
-    "login-example/controller"
-    "login-example/interceptor"
-    "login-example/store"
+    "example.com/login-example/src/controller"
+    "example.com/login-example/src/interceptor"
+    "example.com/login-example/src/store"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
@@ -313,51 +319,46 @@ import (
     "github.com/NARUBROWN/spine/pkg/route"
 )
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
+    app.Constructor(store.NewUserStore, controller.NewAuthController)
 
-    // コンストラクタ登録
-    app.Constructor(
-        store.NewUserStore,
-        controller.NewAuthController,
-    )
-
-    // グローバルインターセプタ — CORS
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type", "Authorization"},
-        }),
-    )
-
-    // 公開 ルート — 認証不要
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins: []string{"*"},
+        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders: []string{"Content-Type", "Authorization"},
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
     app.Route("POST", "/signup", (*controller.AuthController).Signup)
     app.Route("POST", "/login", (*controller.AuthController).Login)
-
-    // 保護されたルート — 認証が必要（ルートインターセプタを使用）
-    app.Route(
-        "GET",
-        "/me",
-        (*controller.AuthController).GetMe,
+    app.Route("GET", "/me", (*controller.AuthController).GetMe,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
 
-    log.Println("サーバー起動: http://localhost:8080")
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
-## 実行
-```bash
-go run .
+
+## 検証と実行
+
+```sh
+gofmt -w src internal/application
+go mod tidy
+spine contract check
+spine verify
+spine dev
 ```
+
+`contract check`は静的契約、`verify`は契約、gofmt、vet、Goテストを確認します。実際の登録・ログイン・認証リクエストは以下のHTTP例で別に確認します。メモリ保存と平文パスワード比較は学習用です。実際のサービスではパスワードハッシュと環境変数によるJWT秘密鍵を使ってください。
+
 ## APIテスト
 
 ### 会員登録
@@ -404,9 +405,12 @@ curl http://localhost:8080/me
 }
 ```
 トークンと一緒にリクエスト：
-```bash
+ログイン応答の`token`値を省略せずコピーします。以下の`read`を実行したらトークンを貼り付けてEnterを押し、`/me`を呼び出します。
+
+```sh
+read -r TOKEN
 curl http://localhost:8080/me \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  -H "Authorization: Bearer $TOKEN"
 ```
 応答：
 ```json

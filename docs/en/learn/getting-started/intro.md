@@ -6,8 +6,12 @@ Spine is a **Go web framework that doesn't hide the request process**.
 
 It reveals how a request is interpreted, in what order it executes, when business logic is invoked, and how the response is finalized through an explicit execution pipeline.
 
+Assemble the app in the CLI-generated `internal/application/application.go`. The example below adds a user feature; keep the generated `main.go` flow: `BuildApplication` → `Validate` → `Run`.
+
+This registration excerpt assumes manually implemented user types and interceptors. The CLI's `resource user` generates `UserController.Get` in `src/user` at `GET /user/:id`. In a generated project, keep the checked `user.Register(app)` call in `BuildApplication` and avoid registering those constructors or routes twice. Follow the [project structure guide](/en/learn/tutorial/1-project-structure) for generation and edits.
+
 ```go
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
     
     // Register dependencies — order doesn't matter, just register constructors and it's resolved automatically
@@ -19,14 +23,12 @@ func main() {
     // Routes — clear which method maps to which path
     app.Route("GET", "/users", (*UserController).GetUser)
     
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
 
@@ -152,9 +154,11 @@ func (c *UserController) CreateUser(
 ## Ready to start?
 
 ```bash
-go get github.com/NARUBROWN/spine
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
-[5 Minute Quickstart →](/en/learn/getting-started/first-app)
-
 For production defaults, continue with [Security Configuration](/en/reference/security-configuration).
+
+
+Install the CLI, then follow [Build your first app](/en/learn/getting-started/first-app) to review the plan and create a project.

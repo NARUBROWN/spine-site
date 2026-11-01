@@ -7,30 +7,27 @@ const { lang } = useData()
 const locale = computed(() => benchmarkCopy(lang.value).path)
 const view = ref<'code' | 'flow'>('code')
 const words = {
-  ko: { label: 'Spine 앱 등록 예시', code: '등록 코드', flow: '요청 흐름', note: '생성자와 핸들러는 앱 코드에 정의합니다.', guide: '전체 앱 코드 보기', request: '요청', controller: '컨트롤러', service: '서비스', response: '응답', caption: '첫 앱 예제의 요청 처리 흐름입니다.' },
-  en: { label: 'Spine app registration example', code: 'Registration', flow: 'Request flow', note: 'Constructors and handlers are defined in the app.', guide: 'See the complete app', request: 'Request', controller: 'Controller', service: 'Service', response: 'Response', caption: 'The request flow in the first-app example.' },
-  ja: { label: 'Spineのアプリ登録例', code: '登録コード', flow: '処理の流れ', note: 'コンストラクタとハンドラーはアプリ側で定義します。', guide: 'アプリ全体のコードを見る', request: 'リクエスト', controller: 'コントローラー', service: 'サービス', response: 'レスポンス', caption: '最初のアプリの例におけるリクエスト処理の流れです。' },
-  'zh-Hans': { label: 'Spine应用注册示例', code: '注册代码', flow: '请求流程', note: '构造函数与处理方法在应用代码中定义。', guide: '查看完整应用代码', request: '请求', controller: '控制器', service: '服务', response: '响应', caption: '第一个应用示例中的请求处理流程。' },
-  'zh-Hant': { label: 'Spine應用程式註冊範例', code: '註冊程式碼', flow: '請求流程', note: '建構函式與處理方法在應用程式碼中定義。', guide: '查看完整應用程式碼', request: '請求', controller: '控制器', service: '服務', response: '回應', caption: '第一個應用程式範例中的請求處理流程。' }
+  ko: { label: 'Spine CLI 첫 앱 예시', code: 'CLI로 시작', flow: '실행 흐름', note: 'CLI로 프로젝트를 생성하고 검증한 뒤 실행합니다. 전체 절차는 첫 앱 문서에서 확인하세요.', guide: 'CLI로 첫 앱 만들기', request: '조립', controller: '검증', service: '실행', response: '응답', caption: 'CLI가 생성한 앱은 검증 후 서버를 실행하고 /health 요청에 응답합니다.' },
+  en: { label: 'Spine CLI first app example', code: 'Start with the CLI', flow: 'Execution flow', note: 'Generate, verify and run a project with the CLI. Follow the first-app guide for the full steps.', guide: 'Build your first app with the CLI', request: 'Assemble', controller: 'Validate', service: 'Run', response: 'Response', caption: 'The CLI-generated app validates before starting the server and responding to /health.' },
+  ja: { label: 'Spine CLIの最初のアプリ', code: 'CLIで始める', flow: '実行の流れ', note: 'CLIでプロジェクトを生成し、検証して実行します。全手順は最初のアプリのガイドで確認できます。', guide: 'CLIで最初のアプリを作る', request: '組み立て', controller: '検証', service: '実行', response: '応答', caption: 'CLIが生成したアプリは検証後にサーバーを起動し、/health に応答します。' },
+  'zh-Hans': { label: 'Spine CLI第一个应用示例', code: '从CLI开始', flow: '执行流程', note: '使用CLI生成、验证并运行项目。完整步骤见第一个应用指南。', guide: '使用CLI创建第一个应用', request: '组装', controller: '验证', service: '运行', response: '响应', caption: 'CLI生成的应用先验证，再启动服务器并响应 /health 请求。' },
+  'zh-Hant': { label: 'Spine CLI第一個應用程式範例', code: '從CLI開始', flow: '執行流程', note: '使用CLI產生、驗證並執行專案。完整步驟請見第一個應用程式指南。', guide: '使用CLI建立第一個應用程式', request: '組裝', controller: '驗證', service: '執行', response: '回應', caption: 'CLI產生的應用程式先驗證，再啟動伺服器並回應 /health 請求。' }
 }
 const copy = computed(() => words[locale.value as keyof typeof words] || words.en)
 const lines = [
-  'app := spine.New()',
-  '',
-  'app.Constructor(',
-  '  NewUserService,',
-  '  NewUserController,',
-  ')',
-  '',
-  'app.Route("GET", "/users",',
-  '  (*UserController).GetUser,',
-  ')'
+  'go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4',
+  'spine new hello-spine --module example.com/hello-spine',
+  'cd hello-spine',
+  'go mod tidy',
+  'spine contract check',
+  'spine verify',
+  'spine dev'
 ]
 const steps = computed(() => [
-  { label: copy.value.request, value: 'GET /users?id=1' },
-  { label: copy.value.controller, value: 'UserController.GetUser' },
-  { label: copy.value.service, value: 'UserService.Get' },
-  { label: copy.value.response, value: 'httpx.Response' }
+  { label: copy.value.request, value: 'BuildApplication()' },
+  { label: copy.value.controller, value: 'app.Validate(options)' },
+  { label: copy.value.service, value: 'app.Run(options)' },
+  { label: copy.value.response, value: 'GET /health → {"status":"ok"}' }
 ])
 
 function selectWithKeyboard(event: KeyboardEvent) {
@@ -52,7 +49,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
           {{ copy[tab] }}
         </button>
       </div>
-      <span class="workbench-language">Go</span>
+      <span class="workbench-language">Shell</span>
     </div>
     <div id="workbench-panel" class="workbench-panel" role="tabpanel" :aria-labelledby="`workbench-tab-${view}`" tabindex="0">
       <pre v-if="view === 'code'" class="workbench-code"><code><span v-for="(line, index) in lines" :key="index" class="code-line" :class="{ 'code-call': line.startsWith('app.') }" :style="{ '--line': index }">{{ line || ' ' }}

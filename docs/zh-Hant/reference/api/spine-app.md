@@ -1,21 +1,50 @@
 # spine.App
 
+## 在CLI專案中使用API
+
+以[第一個應用程式](/zh-Hant/learn/getting-started/first-app)中CLI產生的專案為基礎。將註冊程式碼放在 `internal/application/application.go` 的 `BuildApplication` 中。`Run` 範例用於產生的 `main.go`，先檢查 `Validate` 回傳的錯誤。
+
+```sh
+spine doctor
+spine contract check
+spine verify
+```
+
+
 ## 概覽
 
 `spine.App` 是應用程式入口，負責註冊相依性、HTTP 路由、攔截器、訊息消費者、WebSocket 和自訂傳輸，並在啟動前驗證完整設定。
 
 ```go
-app := spine.New()
-app.Constructor(NewUserService, NewUserController)
-app.Interceptor(&LoggingInterceptor{})
-app.Route("GET", "/users", (*UserController).List)
+package application
 
-opts := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
-if err := app.Validate(opts); err != nil {
-	log.Fatal(err)
+import (
+	"os"
+
+	"github.com/NARUBROWN/spine"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
-if err := app.Run(opts); err != nil {
-	log.Fatal(err)
+
+// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New()
+	app.Constructor(NewHealthController)
+	app.Route("GET", "/health", (*HealthController).Get)
+
+	address := ":8080"
+	if port := os.Getenv("SPINE_PORT"); port != "" {
+		address = ":" + port
+	}
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 

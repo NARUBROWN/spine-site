@@ -1,5 +1,7 @@
 # httperr Package
 
+The controller snippets extend a [CLI-generated project](/en/learn/tutorial/1-project-structure). Import `github.com/NARUBROWN/spine/pkg/httpx`, `github.com/NARUBROWN/spine/pkg/httperr`, and `github.com/NARUBROWN/spine/pkg/path`, then register constructors and routes in `BuildApplication`. Wrap successful HTTP results in `httpx.Response[T]` and accept request DTOs as pointers such as `*Request`. Define business types such as `User` and repositories in the application.
+
 Standardized HTTP error handling.
 
 ## Overview
@@ -45,12 +47,12 @@ Problems with this approach:
 
 ```go
 // ✓ Spine way: Doesn't know HTTP but meaning is clear
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("User not found")
+        return httpx.Response[User]{}, httperr.NotFound("User not found")
     }
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 
@@ -89,9 +91,9 @@ func (e *HTTPError) Error() string {
 `HTTPError` implements Go's `error` interface. Thus, it can be returned and handled like a normal error.
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     // httperr.NotFound() returns error type
-    return User{}, httperr.NotFound("User not found")
+    return httpx.Response[User]{}, httperr.NotFound("User not found")
 }
 ```
 
@@ -113,7 +115,7 @@ Used when a resource cannot be found.
 ```go
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return User{}, httperr.NotFound("User not found")
+    return httpx.Response[User]{}, httperr.NotFound("User not found")
 }
 ```
 
@@ -129,7 +131,7 @@ Used when the client request is invalid.
 
 ```go
 if userId.Value <= 0 {
-    return User{}, httperr.BadRequest("Invalid user ID")
+    return httpx.Response[User]{}, httperr.BadRequest("Invalid user ID")
 }
 ```
 
@@ -145,7 +147,7 @@ Used when authentication is required or failed.
 
 ```go
 if !c.auth.IsValid(token) {
-    return User{}, httperr.Unauthorized("Authentication required")
+    return httpx.Response[User]{}, httperr.Unauthorized("Authentication required")
 }
 ```
 
@@ -214,17 +216,17 @@ return errors.New("something went wrong")  // → 500
 ### Basic Usage
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("Invalid user ID")
+        return httpx.Response[User]{}, httperr.BadRequest("Invalid user ID")
     }
     
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("User not found")
+        return httpx.Response[User]{}, httperr.NotFound("User not found")
     }
     
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 
@@ -245,42 +247,46 @@ GET /users/123
 ### Authentication Handling
 
 ```go
-func (c *OrderController) GetOrder(orderId path.Int) (Order, error) {
+func (c *OrderController) GetOrder(orderId path.Int) (httpx.Response[Order], error) {
     order, err := c.repo.FindByID(orderId.Value)
     if err != nil {
-        return Order{}, httperr.NotFound("Order not found")
+        return httpx.Response[Order]{}, httperr.NotFound("Order not found")
     }
     
     if !c.auth.CanAccess(order.UserID) {
-        return Order{}, httperr.Unauthorized("Access denied")
+        return httpx.Response[Order]{}, httperr.Unauthorized("Access denied")
     }
     
-    return order, nil
+    return httpx.Response[Order]{Body: order}, nil
 }
 ```
 
 ### Business Rule Validation
 
 ```go
-func (c *PaymentController) Process(req PaymentRequest) (Receipt, error) {
+func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt], error) {
     if req.Amount <= 0 {
-        return Receipt{}, httperr.BadRequest("Payment amount must be greater than 0")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("Payment amount must be greater than 0")
     }
     
     if req.Amount > 10000000 {
-        return Receipt{}, httperr.BadRequest("Exceeded single payment limit")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("Exceeded single payment limit")
     }
     
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return Receipt{}, httperr.NotFound("Wallet not found")
+        return httpx.Response[Receipt]{}, httperr.NotFound("Wallet not found")
     }
     
     if balance < req.Amount {
-        return Receipt{}, httperr.BadRequest("Insufficient balance")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("Insufficient balance")
     }
     
-    return c.processPayment(req)
+    receipt, err := c.processPayment(req)
+    if err != nil {
+        return httpx.Response[Receipt]{}, err
+    }
+    return httpx.Response[Receipt]{Body: receipt}, nil
 }
 ```
 
@@ -345,7 +351,7 @@ func WithCause(status int, msg string, cause error) error {
 // Usage
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return User{}, WithCause(404, "User not found", err)
+    return httpx.Response[User]{}, WithCause(404, "User not found", err)
 }
 ```
 
@@ -559,19 +565,19 @@ Follows Go convention to treat errors as return values. Does not throw exception
 
 ```go
 // ✓ Explicit return
-func GetUser(id path.Int) (User, error) {
+func GetUser(id path.Int) (httpx.Response[User], error) {
     if ... {
-        return User{}, httperr.NotFound(...)
+        return httpx.Response[User]{}, httperr.NotFound(...)
     }
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 
 // ❌ panic (Spine does not use this way)
-func GetUser(id path.Int) User {
+func GetUser(id path.Int) httpx.Response[User] {
     if ... {
         panic(httperr.NotFound(...))
     }
-    return user
+    return httpx.Response[User]{Body: user}
 }
 ```
 

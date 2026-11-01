@@ -1,5 +1,14 @@
 # query.Values
 
+[첫 번째 앱](/ko/learn/getting-started/first-app)에서 CLI로 프로젝트를 만들고 [컨트롤러](/ko/learn/tutorial/2-controller)에서 `src/user` 리소스를 생성한 뒤 이어갑니다. 앱 핸들러 예제는 `src/user`의 같은 `package user`를 직접 확장합니다. `User`, 검색·페이지 응답 타입과 서비스의 검색 메서드는 예제에 맞게 직접 구현하며 CLI가 생성하지 않습니다. Product·Order 예제도 같은 방식의 기능 확장입니다. 각 핸들러는 독립된 대안이므로 필요한 메서드와 라우트만 추가하세요. 성공 응답은 `httpx.Response[T]`로 감싸며, 아래 핸들러에서는 `httpx`와 `query` 패키지를 import합니다.
+
+```go
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
+```
+
 쿼리 파라미터를 명시적으로 처리하기.
 
 ## 개요
@@ -8,7 +17,7 @@
 
 ```mermaid
 graph TD
-    Request["GET /users?status=active&tag=go&tag=web&page=1"]
+    Request["GET /user?status=active&tag=go&tag=web&page=1"]
     
     Request --> Values
     
@@ -43,13 +52,15 @@ Spine은 이 방식을 채택하지 않습니다.
 
 ```go
 // Spine 방식: 명시적 추출
-func Search(q query.Values) []User {
+func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     status := q.String("status")      // 명확한 출처
     page := q.Int("page", 1)          // 기본값 명시
     
     if q.Has("premium") {             // 조건부 처리
         // ...
     }
+    users := c.service.Search(status, page, q.Has("premium"))
+    return httpx.Response[[]User]{Body: users}
 }
 ```
 
@@ -59,7 +70,7 @@ func Search(q query.Values) []User {
 
 ```go
 // 동적 필터 처리
-func Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
     
     // 어떤 필터가 올지 미리 알 수 없음
@@ -73,7 +84,7 @@ func Search(q query.Values) []Product {
         filters["category"] = q.String("category")
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -101,7 +112,7 @@ func NewValues(values map[string][]string) Values {
 지정한 키의 첫 번째 값을 문자열로 반환합니다. 키가 없으면 빈 문자열을 반환합니다.
 
 ```go
-// GET /users?name=john&status=active
+// GET /user?name=john&status=active
 
 q.Get("name")    // "john"
 q.Get("status")  // "active"
@@ -121,7 +132,7 @@ q.String("name")  // "john"
 지정한 키의 값을 정수로 파싱합니다. 파싱 실패 또는 키가 없으면 기본값을 반환합니다.
 
 ```go
-// GET /users?page=3&size=20
+// GET /user?page=3&size=20
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
@@ -138,7 +149,7 @@ q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
 **false로 인식**: `"false"`, `"0"`, `"no"`, `"n"`, `"off"` (대소문자 무시)
 
 ```go
-// GET /users?active=true&verified=1&premium=yes
+// GET /user?active=true&verified=1&premium=yes
 
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
@@ -152,7 +163,7 @@ q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
 지정한 키가 존재하는지 확인합니다. 값이 비어있어도 키가 있으면 `true`입니다.
 
 ```go
-// GET /users?status=active&empty=
+// GET /user?status=active&empty=
 
 q.Has("status")  // true
 q.Has("empty")   // true (값은 비었지만 키는 존재)
@@ -199,18 +210,18 @@ func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta P
 ### 기본 사용
 
 ```go
-// cmd/demo/controller.go
-func (c *UserController) GetUserQuery(q query.Values) User {
-    return User{
+// src/user/user_controller.go
+func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
+    return httpx.Response[User]{Body: User{
         ID:   q.Int("id", 0),
         Name: q.String("name"),
-    }
+    }}
 }
 ```
 
 ```bash
 # 요청
-GET /users?id=123&name=john
+GET /user?id=123&name=john
 
 # 응답
 {
@@ -222,14 +233,14 @@ GET /users?id=123&name=john
 ### 검색 API
 
 ```go
-func (c *ProductController) Search(q query.Values) SearchResult {
+func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] {
     keyword := q.String("q")
     category := q.String("category")
     minPrice := q.Int("min_price", 0)
     maxPrice := q.Int("max_price", 999999)
     inStock := q.GetBoolByKey("in_stock", true)
     
-    products := c.repo.Search(SearchCriteria{
+    products := c.service.Search(SearchCriteria{
         Keyword:  keyword,
         Category: category,
         MinPrice: minPrice,
@@ -237,16 +248,16 @@ func (c *ProductController) Search(q query.Values) SearchResult {
         InStock:  inStock,
     })
     
-    return SearchResult{
+    return httpx.Response[SearchResult]{Body: SearchResult{
         Query:    keyword,
         Count:    len(products),
         Products: products,
-    }
+    }}
 }
 ```
 
 ```bash
-GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
+GET /product?q=laptop&category=electronics&min_price=500&in_stock=true
 ```
 
 ### 페이지네이션과 함께 사용
@@ -254,30 +265,30 @@ GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
 `query.Values`와 `query.Pagination`을 함께 사용할 수 있습니다.
 
 ```go
-func (c *UserController) List(p query.Pagination, q query.Values) PagedResult {
+func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response[PagedResult] {
     status := q.String("status")
     sortBy := q.String("sort_by")
     
-    users := c.repo.FindAll(status, sortBy, p.Page, p.Size)
-    total := c.repo.Count(status)
+    users := c.service.FindAll(status, sortBy, p.Page, p.Size)
+    total := c.service.Count(status)
     
-    return PagedResult{
+    return httpx.Response[PagedResult]{Body: PagedResult{
         Data:  users,
         Page:  p.Page,
         Size:  p.Size,
         Total: total,
-    }
+    }}
 }
 ```
 
 ```bash
-GET /users?page=2&size=20&status=active&sort_by=created_at
+GET /user?page=2&size=20&status=active&sort_by=created_at
 ```
 
 ### 조건부 필터
 
 ```go
-func (c *OrderController) List(q query.Values) []Order {
+func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
     filters := OrderFilters{}
     
     if q.Has("user_id") {
@@ -296,7 +307,7 @@ func (c *OrderController) List(q query.Values) []Order {
         filters.ToDate = parseDate(q.String("to_date"))
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -306,20 +317,20 @@ func (c *OrderController) List(q query.Values) []Order {
 쿼리 파라미터는 같은 키로 여러 값을 전달할 수 있습니다.
 
 ```
-GET /products?tag=go&tag=web&tag=api
+GET /product?tag=go&tag=web&tag=api
 ```
 
 현재 `query.Values`의 `String()`, `Get()` 메서드는 첫 번째 값만 반환합니다. 다중 값이 필요한 경우 내부 맵에 직접 접근하는 메서드를 추가하거나, 쉼표로 구분된 값을 파싱하는 방식을 사용할 수 있습니다.
 
 ```go
 // 쉼표 구분 방식
-// GET /products?tags=go,web,api
+// GET /product?tags=go,web,api
 
-func (c *ProductController) Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     tagsRaw := q.String("tags")
     tags := strings.Split(tagsRaw, ",")
     
-    return c.repo.FindByTags(tags)
+    return httpx.Response[[]Product]{Body: c.service.FindByTags(tags)}
 }
 ```
 
@@ -337,13 +348,13 @@ func (c *ProductController) Search(q query.Values) []Product {
 
 ```go
 // 고정된 페이지네이션만 필요 → query.Pagination
-func List(p query.Pagination) []User
+func List(p query.Pagination) httpx.Response[[]User]
 
 // 동적 필터 + 페이지네이션 → 둘 다 사용
-func Search(p query.Pagination, q query.Values) []User
+func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
 
 // 완전히 동적인 쿼리 → query.Values만
-func CustomSearch(q query.Values) []User
+func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
 ## 설계 원칙

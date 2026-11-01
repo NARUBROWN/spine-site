@@ -2,6 +2,13 @@
 
 라우트 핸들러에 대한 메타데이터.
 
+## CLI 예제와 연결
+
+[CLI 프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 생성한 `example.com/my-app`을 기준으로, 사용자 라우트는 `src/user/user_route.go`의 `Register(app)`에 선언합니다. `internal/application/application.go`의 `BuildApplication`은 `user.Register(app)` 오류를 확인해 반환하며, 생성된 `main.go`는 검증과 실행을 담당합니다. 생성된 핸들러는 `(*UserController).Get`, 경로는 `GET /user/:id`입니다.
+
+아래 `GetUser`·관리자 핸들러·인증 인터셉터는 메타데이터 설명용 수동 확장 예입니다. 프레임워크 내부 함수의 발췌를 앱에 복사할 필요는 없습니다. 인터셉터 구현과 등록은 [인터셉터 튜토리얼](/ko/learn/tutorial/4-interceptor)을 참고하세요.
+
+
 ## 개요
 
 `HandlerMeta`는 실행할 Controller 메서드에 대한 메타데이터를 담는 구조체입니다. Router가 요청 경로를 매칭하면 `HandlerMeta`를 반환하고, Pipeline은 이 정보를 사용해 실제 메서드를 호출합니다.
@@ -60,7 +67,7 @@ meta.ControllerType  // reflect.Type of *UserController
 
 ```go
 meta.Method.Name           // "GetUser"
-meta.Method.Type           // func(*UserController, path.Int) (User, error)
+meta.Method.Type           // func(*UserController, path.Int) (httpx.Response[User], error)
 meta.Method.Func           // 호출 가능한 reflect.Value
 ```
 
@@ -80,11 +87,11 @@ meta.Interceptors  // []core.Interceptor (라우트 레벨)
 Spine은 **메서드 표현식**(Method Expression)을 사용해 핸들러를 등록합니다.
 
 ```go
-// cmd/demo/main.go
+// src/user/user_route.go의 Register 내부 발췌
 app.Route(
     "GET",
-    "/users/:id",
-    (*UserController).GetUser,  // 메서드 표현식
+    "/user/:id",
+    (*UserController).Get,  // 메서드 표현식
 )
 ```
 
@@ -92,7 +99,7 @@ app.Route(
 
 ```go
 // 메서드 표현식의 실제 타입
-func(*UserController, path.Int) (User, error)
+func(*UserController, path.Int) (httpx.Response[User], error)
 //   ↑ receiver가 첫 번째 인자로 변환됨
 ```
 
@@ -203,7 +210,7 @@ fn.Name()  // "github.com/NARUBROWN/spine-demo.(*UserController).GetUser"
 ```go
 method, _ := reflect.TypeOf(&UserController{}).MethodByName("GetUser")
 // method.Name: "GetUser"
-// method.Type: func(*UserController, path.Int) (User, error)
+// method.Type: func(*UserController, path.Int) (httpx.Response[User], error)
 // method.Func: 호출 가능한 reflect.Value
 ```
 
@@ -425,13 +432,17 @@ Interceptor의 모든 메서드는 `HandlerMeta`를 받아 실행 대상 정보�
 아래 코드는 `HandlerMeta` 접근만 강조한 `PreHandle` 발췌입니다. 등록 가능한 구현체에는 `PostHandle`, `BeforeResponse`, `AfterCompletion`도 필요합니다.
 
 ```go
-// cmd/demo/logging_interceptor.go
+// src/interceptor/logging_interceptor.go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    controllerName := "<unresolved>"
+    if meta.ControllerType != nil {
+        controllerName = meta.ControllerType.String()
+    }
     log.Printf(
         "[REQ] %s %s -> %s.%s",
         ctx.Method(),
         ctx.Path(),
-        meta.ControllerType.Name(),  // "UserController"
+        controllerName,
         meta.Method.Name,            // "GetUser"
     )
     return nil
@@ -444,7 +455,7 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 ### 1. Route 선언
 
 ```go
-// cmd/demo/main.go
+// src/user/user_route.go의 Register 내부 발췌
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
 // 라우트 인터셉터와 함께
@@ -609,7 +620,7 @@ graph TD
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
 // ❌ 일반 함수 (지원 안 함)
-app.Route("GET", "/users/:id", func(id path.Int) User { ... })
+app.Route("GET", "/users/:id", func(id path.Int) httpx.Response[User] { ... })
 
 // ❌ 인스턴스 메서드 (지원 안 함)
 ctrl := &UserController{}
@@ -622,10 +633,10 @@ app.Route("GET", "/users/:id", ctrl.GetUser)
 
 ```go
 // ✓ 포인터 리시버
-func (c *UserController) GetUser(id path.Int) User
+func (c *UserController) GetUser(id path.Int) httpx.Response[User]
 
 // ❌ 값 리시버 (지원 안 함)
-func (c UserController) GetUser(id path.Int) User
+func (c UserController) GetUser(id path.Int) httpx.Response[User]
 ```
 
 ### 3. 부트스트랩 검증

@@ -1,357 +1,282 @@
-# Kafka-based MSA Example
+# Kafka MSA Example
 
-Implement a Kafka event-based microservices architecture with Spine.
+Generate an order HTTP service and a stock consumer service with CLI. The order service publishes `order.created`; the stock service handles it without an HTTP listener.
 
-## Architecture
+## Generate two services with CLI
 
+Complete [CLI installation](/en/learn/getting-started/installation) first. Run the following commands from `spine-msa/`. CLI 0.1.4 provides typed consumer skeletons but does not generate Kafka brokers or transport configuration.
+
+```sh
+mkdir spine-msa
+cd spine-msa
+spine new order-app --module example.com/order-app --dry-run
+spine new stock-app --module example.com/stock-app --dry-run
 ```
-┌─────────────────┐      Kafka Event        ┌─────────────────┐
-│  Order Service  │ ──────────────────────> │  Stock Service  │
-│   (HTTP API)    │   "order.created"       │    (Consumer)   │
-│   Port: 8080    │                         │   Port: 8081    │
-└─────────────────┘                         └─────────────────┘
+
+Review the generated files and registration changes in the preview, then run the command below to generate them.
+
+```sh
+spine new order-app --module example.com/order-app
+spine new stock-app --module example.com/stock-app
 ```
 
-When an order is created in the Order Service, it publishes an event to Kafka, and the Stock Service subscribes to that event to process it.
+## Generate the consumer skeleton
 
+Default automatic registration adds a checked `order.Register(app)` call to `stock-app/internal/application/application.go`. The generated handler returns an unimplemented error until you replace it below, so verification is expected to fail before implementation.
 
-## Project Structure
-
+```sh
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
-spine-simple-msa/
-├── go.mod
+
+```sh
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
+```
+
+## Final structure
+
+```text
+spine-msa/
 ├── order-app/
+│   ├── go.mod
 │   ├── main.go
-│   └── controller/
-│       └── order_controller.go
-├── stock-app/
-│   ├── main.go
-│   └── consumer/
-│       └── order_consumer.go
-└── shared/
-    └── events/
-        └── order_created.go
+│   ├── spine.toml
+│   ├── internal/application/
+│   │   ├── application.go
+│   │   └── application_test.go
+│   └── src/
+│       ├── events/order_created.go
+│       └── controller/order_controller.go
+└── stock-app/
+    ├── go.mod
+    ├── main.go
+    ├── spine.toml
+    ├── internal/application/
+    │   ├── application.go
+    │   └── application_test.go
+    └── src/consumer/order/
+        ├── module.go
+        ├── order_handler.go
+        └── order_message.go
 ```
 
+## Shared event
 
-## Create Project
-
-```bash
-mkdir spine-simple-msa
-cd spine-simple-msa
-go mod init github.com/your-org/spine-simple-msa
-```
-
-## Install Dependencies
-
-```bash
-go get github.com/NARUBROWN/spine
-```
-
-
-## Define Events
-
-Define events shared by both services.
+`order-app/src/events` is the event package reused by both services. This example imports only that package from the order module into the stock module. The `go mod edit` commands below connect the local modules.
 
 ```go
-// shared/events/order_created.go
+// order-app/src/events/order_created.go
 package events
 
 import "time"
 
 type OrderCreated struct {
-    OrderID int64     `json:"order_id"`
-    At      time.Time `json:"at"`
+    EventID string `json:"event_id"`
+    OrderID int64 `json:"order_id"`
+    At time.Time `json:"at"`
 }
 
-func (o OrderCreated) Name() string {
-    return "order.created"
-}
-
-func (o OrderCreated) OccurredAt() time.Time {
-    return o.At
-}
+func (e OrderCreated) Name() string { return "order.created" }
+func (e OrderCreated) OccurredAt() time.Time { return e.At }
 ```
 
-Events must implement the `Name()` and `OccurredAt()` methods.
+## Order service: publish events
 
-
-## Order Service (Event Publishing)
-
-### Controller
+Add or replace the following two files manually. Keep the CLI-generated root `main.go` and `spine.toml`. `publish.Event` queues an event in the current request and returns no value; the configured Kafka writer publishes after the handler and response preparation succeed.
 
 ```go
-// order-app/controller/order_controller.go
+// order-app/src/controller/order_controller.go
 package controller
 
 import (
     "context"
+    "fmt"
     "time"
 
-    "github.com/your-org/spine-simple-msa/shared/events"
+    "example.com/order-app/src/events"
     "github.com/NARUBROWN/spine/pkg/event/publish"
+    "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
 )
 
 type OrderController struct{}
 
-func NewOrderController() *OrderController {
-    return &OrderController{}
-}
+func NewOrderController() *OrderController { return &OrderController{} }
 
-func (c *OrderController) Create(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    // Publish event to Kafka
-    publish.Event(ctx, events.OrderCreated{
-        OrderID: orderId.Value,
-        At:      time.Now(),
-    })
-
-    return httpx.Response[string]{
-        Body:    "accepted",
-        Options: httpx.ResponseOptions{Status: 202},
+func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Response[string], error) {
+    if id.Value <= 0 {
+        return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
     }
+    publish.Event(ctx, events.OrderCreated{
+        EventID: fmt.Sprintf("order.created:%d", id.Value),
+        OrderID: id.Value,
+        At: time.Now().UTC(),
+    })
+    return httpx.Response[string]{
+        Body: "accepted",
+        Options: httpx.ResponseOptions{Status: 202},
+    }, nil
 }
 ```
 
-Calling `publish.Event()` publishes to Kafka using the event's `Name()` as the topic.
-
-### main.go
-
 ```go
-// order-app/main.go
-package main
+// order-app/internal/application/application.go
+package application
 
 import (
-    "log"
     "time"
 
+    "example.com/order-app/src/controller"
     "github.com/NARUBROWN/spine"
-    "github.com/your-org/spine-simple-msa/order-app/controller"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
+    app.Constructor(controller.NewOrderController)
+    app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
 
-    app.Constructor(
-        controller.NewOrderController,
-    )
-
-    app.Route(
-        "POST",
-        "/orders/:order_id",
-        (*controller.OrderController).Create,
-    )
-
-    if err := app.Run(boot.Options{
-        Address:                ":8080",
+    return app, boot.Options{
+        Address: ":8080",
         EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
-        Kafka: &boot.KafkaOptions{
-            Brokers:                []string{"localhost:9092"},
-            AllowInsecureTransport: true, // Isolated local development only
-            Write: &boot.KafkaWriteOptions{
-                TopicPrefix: "",
-            },
-        },
+        ShutdownTimeout: 10 * time.Second,
         HTTP: &boot.HTTPOptions{},
-    }); err != nil {
-        log.Fatal(err)
-    }
+        Kafka: &boot.KafkaOptions{
+            Brokers: []string{"localhost:9092"},
+            AllowInsecureTransport: true,
+            Write: &boot.KafkaWriteOptions{TopicPrefix: ""},
+        },
+    }, nil
 }
 ```
 
+## Stock service: handle events
 
-## Stock Service (Event Consumption)
-
-### Consumer
+Replace generated `order_message.go` with a shared-event alias and implement `order_handler.go`. The memory deduplication works only within one process. Implement real stock changes and durable deduplication in the same database transaction. Replace the assembly file with the complete version below; do not add automatic registration twice.
 
 ```go
-// stock-app/consumer/order_consumer.go
-package consumer
+// stock-app/src/consumer/order/order_message.go
+package order
+
+import "example.com/order-app/src/events"
+
+type OrderEvent = events.OrderCreated
+```
+
+```go
+// stock-app/src/consumer/order/order_handler.go
+package order
 
 import (
     "context"
+    "fmt"
     "log"
-
-    "github.com/your-org/spine-simple-msa/shared/events"
+    "sync"
 )
 
-type OrderConsumer struct{}
-
-func NewOrderConsumer() *OrderConsumer {
-    return &OrderConsumer{}
+type OrderConsumer struct {
+    mu sync.Mutex
+    processed map[string]struct{}
 }
 
-func (c *OrderConsumer) OnCreated(ctx context.Context, eventName string, event events.OrderCreated) error {
-    log.Println("Kafka Event:", eventName)
-    log.Println("OrderID:", event.OrderID)
-    
-    // Add stock processing logic
-    
+func NewOrderConsumer() *OrderConsumer {
+    return &OrderConsumer{processed: make(map[string]struct{})}
+}
+
+func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event OrderEvent) error {
+    if event.EventID == "" || event.OrderID <= 0 {
+        return fmt.Errorf("invalid order event")
+    }
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    if _, exists := c.processed[event.EventID]; exists {
+        return nil
+    }
+    log.Printf("topic=%s order_id=%d", eventName, event.OrderID)
+    c.processed[event.EventID] = struct{}{}
     return nil
 }
 ```
 
-Consumer method signature:
-- `ctx context.Context` — Request context
-- `eventName string` — Event name (topic)
-- `event T` — Event payload
-
-### main.go
-
 ```go
-// stock-app/main.go
-package main
+// stock-app/internal/application/application.go
+package application
 
 import (
-    "log"
     "time"
 
+    "example.com/stock-app/src/consumer/order"
     "github.com/NARUBROWN/spine"
-    "github.com/your-org/spine-simple-msa/stock-app/consumer"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-
-    app.Constructor(
-        consumer.NewOrderConsumer,
-    )
-
-    // Register Consumer
-    if err := app.Consumers().Register(
-        "order.created",
-        (*consumer.OrderConsumer).OnCreated,
-    ); err != nil {
-        log.Fatal(err)
+    if err := order.Register(app); err != nil {
+        return nil, boot.Options{}, err
     }
-
-    if err := app.Run(boot.Options{
-        Address:                ":8081",
+    return app, boot.Options{
         EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
+        ShutdownTimeout: 10 * time.Second,
         Kafka: &boot.KafkaOptions{
-            Brokers:                []string{"localhost:9092"},
-            AllowInsecureTransport: true, // Isolated local development only
-            Read: &boot.KafkaReadOptions{
-                GroupID: "stock-service",
-            },
+            Brokers: []string{"localhost:9092"},
+            AllowInsecureTransport: true,
+            Read: &boot.KafkaReadOptions{GroupID: "stock-service"},
         },
-        HTTP: &boot.HTTPOptions{},
-    }); err != nil {
-        log.Fatal(err)
-    }
+    }, nil
 }
 ```
 
+## Connect modules and verify
 
-## Run
+Each service has its own `go.mod` and `spine.toml`. Start these commands in `spine-msa/`; the final command returns there. Each generated `main.go` calls `BuildApplication`, `Validate`, then `Run`.
 
-### 1. Run Stock Service
-
-```bash
-cd stock-app
-go run main.go
-```
-
-### 2. Run Order Service
-
-Open a new terminal and:
-
-```bash
+```sh
 cd order-app
-go run main.go
+gofmt -w src internal/application
+go mod tidy
+cd ../stock-app
+go mod edit -require=example.com/order-app@v0.0.0
+go mod edit -replace=example.com/order-app=../order-app
+gofmt -w src internal/application
+go mod tidy
+cd ..
+spine doctor --root order-app
+spine doctor --root stock-app
+spine contract check --root order-app
+spine contract check --root stock-app
+spine verify --root order-app
+spine verify --root stock-app
 ```
 
+Each service is expected to report one `INSECURE_TRANSPORT_ENABLED` warning for this local plaintext setup. Default checks pass; `--warnings-as-errors` fails until the transport configuration is secured.
 
-## API Test
+`contract check` checks the static contract; `verify` checks the contract, gofmt, vet, and Go tests. Neither checks broker connectivity or message delivery.
 
-### Create Order
+## Run after preparing the broker
 
-```bash
-curl -X POST http://localhost:8080/orders/12345
+Prepare Kafka separately at `localhost:9092` and create the `order.created` topic. Use separate terminals, both starting in `spine-msa/`.
+
+```sh
+spine run --root stock-app
 ```
 
-Response:
-
-```
-OK
+```sh
+spine run --root order-app
 ```
 
-You can check the following log in the Stock Service console:
-
-```
-Kafka Event: order.created
-OrderID: 12345
+```sh
+curl -i -X POST http://localhost:8080/orders/12345
 ```
 
+The POST response is HTTP 202 with body `accepted`. With a working broker, check the stock process for `topic=order.created order_id=12345`. An HTTP response alone does not prove consumption.
 
-## Event Flow
+## Transport and consistency boundaries
 
-```
-POST /orders/12345
-   │
-   ├─→ OrderController.Create
-   │       │
-   │       └─→ publish.Event(&OrderCreated{...})
-   │               │
-   │               └─→ Kafka Topic: "order.created"
-   │
-   └─→ Response "OK"
+`AllowInsecureTransport: true` is for an isolated local plaintext broker. Remove it in production and configure TLS/SASL and broker addresses. Default transport uses TLS 1.2 or later; custom configuration must secure both reads and writes.
 
-              ↓ Kafka ↓
+`TopicPrefix` uses simple string concatenation. If the writer uses `prod.`, explicitly register the consumer under `prod.order.created`. Both services here use unprefixed `order.created`. Use the same settings for inspection and execution.
 
-Stock Service (Consumer)
-   │
-   └─→ OrderConsumer.OnCreated
-           │
-           ├─→ log: "Kafka Event: order.created"
-           └─→ log: "OrderID: 12345"
-```
+Kafka delivery is at least once. Use stable event IDs and durable deduplication. `ConsumerRetry` controls reader/transport reconstruction, not an application handler retry budget. A permanently failing record can block its partition; Spine does not automatically skip it or select a DLQ.
 
-
-## Kafka Configuration Options
-
-### Event Publishing (Write)
-
-```go
-Kafka: &boot.KafkaOptions{
-    Brokers:                []string{"localhost:9092"},
-    AllowInsecureTransport: true, // Isolated local development only
-    Write: &boot.KafkaWriteOptions{
-        TopicPrefix: "prod.",  // Topic prefix (e.g., prod.order.created)
-    },
-},
-```
-
-### Event Consumption (Read)
-
-```go
-Kafka: &boot.KafkaOptions{
-    Brokers:                []string{"localhost:9092"},
-    AllowInsecureTransport: true, // Isolated local development only
-    Read: &boot.KafkaReadOptions{
-        GroupID: "stock-service",  // Consumer Group ID
-    },
-},
-```
-
-Kafka uses implicit TLS 1.2+ by default. The explicit insecure option above is only for the local plaintext broker in this tutorial. Production should use the default TLS or a custom `TLS`, `Dialer`, or `Transport`. Consumer handlers must be idempotent because reconnects and ACK/commit failures can cause redelivery; a permanently failing Kafka record can block its partition.
-
-
-## Key Takeaways
-
-| Service | Role | Port | Kafka Config |
-|--------|------|------|-----------|
-| order-app | HTTP API + Event Publishing | 8080 | Write |
-| stock-app | Event Consumption | 8081 | Read (GroupID) |
-
-| Component | Description |
-|-----------|------|
-| `publish.Event()` | Publishes event to Kafka |
-| `app.Consumers().Register()` | Connects topic and handler method |
-| `Event.Name()` | Used as Kafka topic name |
-| `boot.KafkaOptions` | Sets Kafka brokers and options |
+Database commit and broker publication are not atomic. Implement a transactional outbox and consumer deduplication when reliable database-plus-event handling is needed. See [security configuration](/en/reference/security-configuration).

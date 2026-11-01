@@ -1,5 +1,7 @@
 # Execution Pipeline
 
+Controller examples extend a [CLI-generated project](/en/learn/tutorial/1-project-structure). Wrap successful responses with `httpx.Response[T]` from `github.com/NARUBROWN/spine/pkg/httpx`, accept request DTOs as pointers, and register constructors and routes in `BuildApplication`.
+
 Understanding Spine's request lifecycle.
 
 ## Overview
@@ -45,7 +47,7 @@ Path parameters bind to `path.*` handler arguments in declaration order:
 
 ```go
 // Route: /users/:userId/posts/:postId
-func (c *PostController) Get(userID path.Int, postID path.Int) (Post, error)
+func (c *PostController) Get(userID path.Int, postID path.Int) (httpx.Response[Post], error)
 ```
 
 `HandlerMeta` also contains route interceptors and the path-key ordering used to construct parameter metadata.
@@ -59,13 +61,13 @@ Each handler argument is resolved by the first compatible resolver. Built-in sup
 | `path.Int`, `path.String`, `path.Boolean` | ordered path value |
 | `query.Pagination`, `query.Values` | query string |
 | `header.Values` | request headers |
-| DTO struct or pointer | JSON/form binding |
+| Pointer to a DTO struct | JSON/form binding |
 | `context.Context` | cancellation and deadline context |
-| `spine.Ctx` / extended `ControllerContext` | read-only request store |
+| `pkg/spine.Ctx` / `core.ControllerContext` | read-only request store |
 | consumer event-name and payload types | consumer message |
 | WebSocket message types | connection ID, message type, payload |
 
-Named `string`/`[]byte` types and extended controller-context interfaces use safe assignability and conversion checks. Unsupported inputs return an error instead of causing a reflection panic.
+HTTP request DTOs must be pointers to structs. Use the documented handler input types; controller-context interfaces with extra methods are unsupported.
 
 ## 4. Route interceptors and invocation
 
@@ -77,7 +79,7 @@ Constructor and provider failures are caught during bootstrap warm-up. Nil const
 
 Controller results are inspected for a non-nil `error` before success values. On success, the selected return-value handler performs serialization, status validation, and cookie validation against a staged writer.
 
-Built-in handlers include JSON, string, bytes/binary, redirect, and error handling. Pointer and named compatible forms are supported where documented by the handler.
+HTTP success values use `httpx.Response[T]`, `httpx.Binary`, or `httpx.Redirect`, including their supported pointer forms. Error returns use `error`.
 
 No staged success response is flushed yet. If serialization, a cookie, or a status is invalid, that failure becomes the pipeline error and reaches `BeforeResponse`.
 

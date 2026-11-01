@@ -39,8 +39,8 @@ features:
 <div class="home-next-steps">
 
 <a href="/ko/learn/getting-started/first-app">
-<strong>사용자 조회 API 만들기 <span aria-hidden="true">→</span></strong>
-<span>프로젝트 생성부터 요청을 보내고 응답을 확인하는 과정까지 따라갑니다.</span>
+<strong>CLI로 첫 앱 만들기 <span aria-hidden="true">→</span></strong>
+<span>CLI 설치와 프로젝트 생성부터 /health 응답 확인까지 따라갑니다.</span>
 </a>
 
 <a href="/ko/reference/examples/login">

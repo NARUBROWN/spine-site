@@ -1,309 +1,247 @@
 # Error Handling
 
-How to handle errors gracefully.
+Use the CLI project from [First App](/en/learn/getting-started/first-app) and [Controllers](/en/learn/tutorial/2-controller). Manually extend the GET handler under `src/user`, created by `spine generate resource user`. The CLI generates and registers the resource; you implement domain errors and HTTP mappings.
 
-## Overview
+## HTTP errors and responses
 
-Spine uses the `httperr` package to represent HTTP errors. Controllers do not handle HTTP directly, but express only the **meaning** of the error with `httperr`. The actual HTTP response conversion is handled by `ErrorReturnHandler`.
+Wrap success results in `httpx.Response[T]` and return a separate `error`. A raw `(User, error)` is not a supported HTTP response. The current `httperr` package has four helpers.
 
-```go
-import "github.com/NARUBROWN/spine/pkg/httperr"
+| Helper | HTTP | |
+|---|---|---|
+| `httperr.BadRequest(message)` | 400 | Invalid input |
+| `httperr.Unauthorized(message)` | 401 | Authentication required |
+| `httperr.NotFound(message)` | 404 | Missing resource |
+| `httperr.InternalServerError(message)` | 500 | Deliberate public error message |
 
-func (c *UserController) GetUser(userId path.Int) (User, error) {
-    if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("Invalid user ID")
-    }
-    
-    user, err := c.repo.FindByID(userId.Value)
-    if err != nil {
-        return User{}, httperr.NotFound("User not found")
-    }
-    
-    return user, nil
-}
-```
+`HTTPError.Message` is exposed to clients. Do not put raw database errors or secrets in it. Unexpected general errors become HTTP 500 with `{"message":"Internal server error"}`.
 
-## httperr Functions
+## Add lookup errors to the generated resource
 
-| Function | Status Code | Purpose |
-|----------|----------|---------|
-| `httperr.BadRequest(msg)` | 400 | Invalid request, validation failure |
-| `httperr.Unauthorized(msg)` | 401 | Auth required, Invalid token |
-| `httperr.NotFound(msg)` | 404 | Resource missing |
-
-## HTTPError Struct
+This is an educational, read-only in-memory lookup. Replace the generated repository/controller files with the following and add `Find` to the service. Keep all files in `package user`. Reuse the existing constructor names, `user.Register(app)`, and `GET /user/:id` registration. This example does not provide database persistence or full CRUD.
 
 ```go
-type HTTPError struct {
-    Status  int    // HTTP status code
-    Message string // Error message
-    Cause   error  // Cause error (optional)
-}
+// src/user/user_repository.go
+package user
 
-func (e *HTTPError) Error() string {
-    return e.Message
-}
-```
-
-## Usage Examples
-
-### Resource Not Found (404)
-
-```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
-    user, err := c.repo.FindByID(userId.Value)
-    if err != nil {
-        return User{}, httperr.NotFound("User not found")
-    }
-    return user, nil
-}
-```
-
-Response:
-```json
-{"message": "User not found"}
-```
-```
-HTTP/1.1 404 Not Found
-```
-
-### Invalid Request (400)
-
-```go
-func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
-    if req.Name == "" {
-        return User{}, httperr.BadRequest("Name is required")
-    }
-    if req.Email == "" {
-        return User{}, httperr.BadRequest("Email is required")
-    }
-    
-    return c.service.Create(req)
-}
-```
-
-### Authorization Required (401)
-
-This example includes the complete interceptor lifecycle; only `PreHandle` performs work.
-
-```go
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    token := ctx.Header("Authorization")
-    
-    if token == "" {
-        return httperr.Unauthorized("Authentication required")
-    }
-    
-    if !isValidToken(token) {
-        return httperr.Unauthorized("Invalid token")
-    }
-    
-    return nil
-}
-
-func (i *AuthInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
-
-func (i *AuthInterceptor) BeforeResponse(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) error {
-    return nil
-}
-
-func (i *AuthInterceptor) AfterCompletion(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) {}
-```
-
-## Using Other Status Codes
-
-If you need status codes not provided, create `HTTPError` directly.
-
-```go
-// 403 Forbidden
-func Forbidden(msg string) error {
-    return &httperr.HTTPError{Status: 403, Message: msg}
-}
-
-// 409 Conflict
-func Conflict(msg string) error {
-    return &httperr.HTTPError{Status: 409, Message: msg}
-}
-
-// 500 Internal Server Error
-func InternalServerError(msg string) error {
-    return &httperr.HTTPError{Status: 500, Message: msg}
-}
-```
-
-## Layered Error Handling
-
-```mermaid
-flowchart LR
-    A[Repository<br/>Original Error] --> B[Service<br/>Business Error]
-    B --> C[Controller<br/>HTTP Error]
-    C --> D[Response<br/>JSON]
-```
-
-### Repository
-
-Returns the original error as is.
-
-```go
-func (r *UserRepository) FindByID(id int64) (*User, error) {
-    user, ok := r.users[id]
-    if !ok {
-        return nil, ErrUserNotFound  // Original Error
-    }
-    return user, nil
-}
+import "errors"
 
 var ErrUserNotFound = errors.New("user not found")
-```
+var ErrEmailAlreadyExists = errors.New("email already exists")
 
-### Service
+type User struct {
+    ID int64 `json:"id"`
+    Name string `json:"name"`
+}
 
-Handles business logic and propagates Repository errors.
+type UserRepository struct{ users map[int64]User }
 
-```go
-func (s *UserService) GetUser(id int64) (*User, error) {
-    user, err := s.repo.FindByID(id)
-    if err != nil {
-        return nil, err  // Propagate Error
+func NewUserRepository() *UserRepository {
+    return &UserRepository{users: map[int64]User{1: {ID: 1, Name: "Alice"}}}
+}
+
+func (r *UserRepository) FindByID(id int64) (User, error) {
+    user, ok := r.users[id]
+    if !ok {
+        return User{}, ErrUserNotFound
     }
     return user, nil
 }
 ```
 
-### Controller
-
-Converts business errors to HTTP errors.
+```go
+// src/user/user_service.go
+func (s *UserService) Find(id int64) (User, error) {
+    return s.repository.FindByID(id)
+}
+```
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
-    user, err := c.service.GetUser(userId.Value)
-    if err != nil {
-        return User{}, toHTTPError(err)
+// src/user/user_controller.go
+package user
+
+import (
+    "errors"
+    "net/http"
+
+    "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/path"
+)
+
+type UserController struct{ service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
+
+func (c *UserController) Get(id path.Int) (httpx.Response[User], error) {
+    if id.Value <= 0 {
+        return httpx.Response[User]{}, httperr.BadRequest("invalid user ID")
     }
-    return *user, nil
+    user, err := c.service.Find(id.Value)
+    if err != nil {
+        return httpx.Response[User]{}, toHTTPError(err)
+    }
+    return httpx.Response[User]{Body: user}, nil
 }
 
 func toHTTPError(err error) error {
     switch {
-    case errors.Is(err, repository.ErrUserNotFound):
-        return httperr.NotFound("User not found")
-    case errors.Is(err, repository.ErrEmailAlreadyExists):
-        return httperr.BadRequest("Email already in use")
+    case errors.Is(err, ErrUserNotFound):
+        return httperr.NotFound("user not found")
+    case errors.Is(err, ErrEmailAlreadyExists):
+        return &httperr.HTTPError{
+            Status: http.StatusConflict,
+            Message: "email already exists",
+            Cause: err,
+        }
     default:
-        return httperr.BadRequest(err.Error())
+        return err
     }
 }
 ```
 
-## Input Validation
+## Responsibilities by layer
 
-### Defining Validation Method in DTO
+The repository returns domain errors; the service forwards them. The controller maps only expected errors to HTTP status codes. `errors.Is` also recognizes wrapped errors. Converting unknown errors to `BadRequest(err.Error())` would expose internal details; return them unchanged for the sanitized general 500 response.
+
+```mermaid
+flowchart LR
+    Repository["Repository: domain error"] --> Service["Service"]
+    Service --> Controller["Controller: HTTP error"]
+    Controller --> Response["Response: JSON"]
+```
+
+## HTTPError and other status codes
+
+Use `HTTPError` for statuses without helpers, such as 403 and 409. `Cause` supports error tracing through `Unwrap()` and is not included in the JSON response.
 
 ```go
+type HTTPError struct {
+    Status int
+    Message string
+    Cause error
+}
+
+func (e *HTTPError) Error() string { return e.Message }
+func (e *HTTPError) Unwrap() error { return e.Cause }
+```
+
+```go
+return &httperr.HTTPError{
+    Status: http.StatusForbidden,
+    Message: "permission denied",
+}
+```
+
+## Validate request DTOs
+
+This is an optional input-validation extension. Call `Validate()` from the handler; Spine does not invoke it automatically. Request DTOs must be pointers. The POST example echoes validated input and does not save a user. Add its POST route inside `Register` if you use it.
+
+```go
+// src/user/user_create.go
+package user
+
+import (
+    "errors"
+    "net/http"
+    "unicode/utf8"
+
+    "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+)
+
 type CreateUserRequest struct {
-    Name  string `json:"name"`
+    Name string `json:"name"`
     Email string `json:"email"`
 }
 
 func (r *CreateUserRequest) Validate() error {
-    if r.Name == "" {
-        return errors.New("Name is required")
+    if r == nil || r.Name == "" {
+        return errors.New("name is required")
     }
-    if len(r.Name) > 100 {
-        return errors.New("Name must be 100 characters or less")
+    if utf8.RuneCountInString(r.Name) > 100 {
+        return errors.New("name must be at most 100 characters")
     }
     if r.Email == "" {
-        return errors.New("Email is required")
+        return errors.New("email is required")
     }
     return nil
 }
-```
 
-### Calling Validation in Controller
-
-```go
-func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
+func (c *UserController) Create(req *CreateUserRequest) (httpx.Response[CreateUserRequest], error) {
     if err := req.Validate(); err != nil {
-        return User{}, httperr.BadRequest(err.Error())
+        return httpx.Response[CreateUserRequest]{}, httperr.BadRequest(err.Error())
     }
-    
-    return c.service.Create(req)
+    return httpx.Response[CreateUserRequest]{
+        Body: *req,
+        Options: httpx.ResponseOptions{Status: http.StatusCreated},
+    }, nil
 }
 ```
 
-## Error Handling in Interceptor
+```go
+// src/user/user_route.go: Register
+app.Route("POST", "/user", (*UserController).Create)
+```
 
-If `PreHandle` returns an error, the Controller is not executed. The snippet below intentionally shows only the error-producing method; use the complete no-op lifecycle shown in the earlier authentication example for the remaining methods.
+## Errors in interceptors
+
+Returning an error from `PreHandle` stops controller execution. The following method excerpt belongs to an interceptor in `src/interceptor` with its own authentication service. The complete type must implement all four methods: `PreHandle`, `PostHandle`, `BeforeResponse`, and `AfterCompletion`. Register it with HTTP scope in `BuildApplication()`.
 
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    
     if token == "" {
-        return httperr.Unauthorized("Auth token is required")
+        return httperr.Unauthorized("authentication required")
     }
-    
     user, err := i.auth.Validate(token)
     if err != nil {
-        return httperr.Unauthorized("Invalid token")
+        return httperr.Unauthorized("invalid token")
     }
-    
     ctx.Set("auth.user", user)
     return nil
 }
 ```
 
-```mermaid
-flowchart TD
-    A[Request] --> B[AuthInterceptor.PreHandle]
-    B -->|No token| C[401 Unauthorized]
-    B -->|Valid token| D[Execute Controller]
-    D --> E[Response]
-```
+## Log errors
 
-## Error Logging
-
-You can log errors in `AfterCompletion`. This is intentionally a single-method excerpt; a concrete interceptor must also implement `PreHandle`, `PostHandle`, and `BeforeResponse` as shown above.
+`AfterCompletion` can log execution errors. This is also an excerpt from a complete logging interceptor. Keep authentication tokens and request secrets out of logs.
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
+        log.Printf("[ERR] %s %s: %v", ctx.Method(), ctx.Path(), err)
     }
 }
 ```
 
-## General Error Handling
+## Verify and check HTTP responses
 
-Errors that are not `httperr.HTTPError` are treated as 500 status codes.
-
-```go
-// httperr.HTTPError → Specified status code
-return httperr.NotFound("...")  // → 404
-
-// General error → 500
-return errors.New("something went wrong")  // → 500
+```bash
+gofmt -w src/user
+go mod tidy
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
-## Key Takeaways
+After contract and local checks, verify actual responses from another terminal. The results below apply to the read-only memory example above.
 
-| Layer | Role |
-|------|------|
-| Repository | Return Original Error |
-| Service | Business Logic, Propagate Error |
-| Controller | Convert to HTTP Error |
-| Interceptor | Common Error Handling (Auth, Logging) |
+```bash
+curl -i http://localhost:8080/user/1
+curl -i http://localhost:8080/user/0
+curl -i http://localhost:8080/user/2
+```
 
-| httperr Function | Status Code |
-|--------------|----------|
-| `BadRequest` | 400 |
-| `Unauthorized` | 401 |
-| `NotFound` | 404 |
+| Request | HTTP | JSON |
+|---|---|---|
+| `/user/1` | 200 | `{"id":1,"name":"Alice"}` |
+| `/user/0` | 400 | `{"message":"invalid user ID"}` |
+| `/user/2` | 404 | `{"message":"user not found"}` |
+
+When integrating a real database or authentication service, test its failure paths separately with E2E checks. Static contract analysis does not establish correct external-service error mapping.
+
+- [httperr](/en/learn/core-concepts/httperr)
+- [Interceptors](/en/learn/tutorial/4-interceptor)

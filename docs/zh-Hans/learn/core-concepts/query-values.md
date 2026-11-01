@@ -1,5 +1,14 @@
 # 查询.值
 
+先按[第一个应用](/zh-Hans/learn/getting-started/first-app)使用 CLI 创建项目，再按[控制器](/zh-Hans/learn/tutorial/2-controller)生成 `src/user`。应用处理函数示例手动扩展 `src/user` 中的同一个 `package user`。`User`、搜索和分页响应类型、服务的搜索方法都需自行实现，CLI 不会生成。Product、Order 示例也是同样的功能扩展。各处理函数是独立替代方案，只添加需要的方法和路由。成功结果用 `httpx.Response[T]` 包装，并导入 `httpx` 与 `query`。
+
+```go
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
+```
+
 显式处理查询参数。
 
 ## 大纲
@@ -8,7 +17,7 @@
 
 ```mermaid
 graph TD
-    Request["GET /users?status=active&tag=go&tag=web&page=1"]
+    Request["GET /user?status=active&tag=go&tag=web&page=1"]
     
     Request --> Values
     
@@ -42,13 +51,15 @@ Spine没有采用这种方式。
 
 ```go
 // Spine 方法：显式提取
-func Search(q query.Values) []User {
+func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     status := q.String("status")      // 来源清晰
     page := q.Int("page", 1)          // 默认值明确
     
     if q.Has("premium") {             // 条件处理
         // ...
     }
+    users := c.service.Search(status, page, q.Has("premium"))
+    return httpx.Response[[]User]{Body: users}
 }
 ```
 
@@ -58,7 +69,7 @@ func Search(q query.Values) []User {
 
 ```go
 // 动态滤波处理
-func Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
     
     // 无法提前知道哪些过滤器会出现
@@ -72,7 +83,7 @@ func Search(q query.Values) []Product {
         filters["category"] = q.String("category")
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -98,7 +109,7 @@ func NewValues(values map[string][]string) Values {
 以字符串形式返回指定键的第一个值。如果键不存在，则返回空字符串。
 
 ```go
-// GET /users?name=john&status=active
+// GET /user?name=john&status=active
 
 q.Get("name")    // "john"
 q.Get("status")  // "active"
@@ -118,7 +129,7 @@ q.String("name")  // "john"
 将指定键的值解析为整数。如果解析失败或密钥丢失，则返回默认值。
 
 ```go
-// 获取 /users?page=3&size=20
+// 获取 /user?page=3&size=20
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
@@ -135,7 +146,7 @@ q.Int("page", 1)    // 1（如果 page=abc → 默认值）
 **识别为 false**：`"false"`、`"0"`、`"no"`、`"n"`、`"off"`（忽略大小写）
 
 ```go
-// GET /users?active=true&verified=1&premium=yes
+// GET /user?active=true&verified=1&premium=yes
 
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
@@ -149,7 +160,7 @@ q.GetBoolByKey("active", false)    // false（如果 active=maybe → 默认值�
 检查指定的键是否存在。即使值为空，如果键存在，它也是 `true`。
 
 ```go
-// GET /users?status=active&empty=
+// GET /user?status=active&empty=
 
 q.Has("status")  // true
 q.Has("empty")   // true（值为空，但键存在）
@@ -194,18 +205,18 @@ func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta P
 ### 默认启用
 
 ```go
-// cmd/demo/controller.go
-func (c *UserController) GetUserQuery(q query.Values) User {
-    return User{
+// src/user/user_controller.go
+func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
+    return httpx.Response[User]{Body: User{
         ID:   q.Int("id", 0),
         Name: q.String("name"),
-    }
+    }}
 }
 ```
 
 ```bash
 # 要求
-GET /users?id=123&name=john
+GET /user?id=123&name=john
 
 # 回复
 {
@@ -217,14 +228,14 @@ GET /users?id=123&name=john
 ### 搜索API
 
 ```go
-func (c *ProductController) Search(q query.Values) SearchResult {
+func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] {
     keyword := q.String("q")
     category := q.String("category")
     minPrice := q.Int("min_price", 0)
     maxPrice := q.Int("max_price", 999999)
     inStock := q.GetBoolByKey("in_stock", true)
     
-    products := c.repo.Search(SearchCriteria{
+    products := c.service.Search(SearchCriteria{
         Keyword:  keyword,
         Category: category,
         MinPrice: minPrice,
@@ -232,16 +243,16 @@ func (c *ProductController) Search(q query.Values) SearchResult {
         InStock:  inStock,
     })
     
-    return SearchResult{
+    return httpx.Response[SearchResult]{Body: SearchResult{
         Query:    keyword,
         Count:    len(products),
         Products: products,
-    }
+    }}
 }
 ```
 
 ```bash
-GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
+GET /product?q=laptop&category=electronics&min_price=500&in_stock=true
 ```
 
 ### 与分页一起使用
@@ -249,30 +260,30 @@ GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
 `query.Values` 和 `query.Pagination` 可以一起使用。
 
 ```go
-func (c *UserController) List(p query.Pagination, q query.Values) PagedResult {
+func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response[PagedResult] {
     status := q.String("status")
     sortBy := q.String("sort_by")
     
-    users := c.repo.FindAll(status, sortBy, p.Page, p.Size)
-    total := c.repo.Count(status)
+    users := c.service.FindAll(status, sortBy, p.Page, p.Size)
+    total := c.service.Count(status)
     
-    return PagedResult{
+    return httpx.Response[PagedResult]{Body: PagedResult{
         Data:  users,
         Page:  p.Page,
         Size:  p.Size,
         Total: total,
-    }
+    }}
 }
 ```
 
 ```bash
-GET /users?page=2&size=20&status=active&sort_by=created_at
+GET /user?page=2&size=20&status=active&sort_by=created_at
 ```
 
 ### 条件过滤器
 
 ```go
-func (c *OrderController) List(q query.Values) []Order {
+func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
     filters := OrderFilters{}
     
     if q.Has("user_id") {
@@ -291,7 +302,7 @@ func (c *OrderController) List(q query.Values) []Order {
         filters.ToDate = parseDate(q.String("to_date"))
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -300,20 +311,20 @@ func (c *OrderController) List(q query.Values) []Order {
 查询参数可以传递具有相同键的多个值。
 
 ```
-GET /products?tag=go&tag=web&tag=api
+GET /product?tag=go&tag=web&tag=api
 ```
 
 目前，`query.Values` 的 `String()`、`Get()` 方法仅返回第一个值。如果需要多个值，可以添加直接访问内部map的方法，或者使用解析逗号分隔值的方法。
 
 ```go
 // 逗号分隔法
-// 获取 /products?tags=go,web,api
+// 获取 /product?tags=go,web,api
 
-func (c *ProductController) Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     tagsRaw := q.String("tags")
     tags := strings.Split(tagsRaw, ",")
     
-    return c.repo.FindByTags(tags)
+    return httpx.Response[[]Product]{Body: c.service.FindByTags(tags)}
 }
 ```
 
@@ -330,13 +341,13 @@ func (c *ProductController) Search(q query.Values) []Product {
 
 ```go
 // 只需要固定分页→query.Pagination
-func List(p query.Pagination) []User
+func List(p query.Pagination) httpx.Response[[]User]
 
 // 动态过滤+分页→同时使用
-func Search(p query.Pagination, q query.Values) []User
+func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
 
 // 完全动态查询→query.Values only
-func CustomSearch(q query.Values) []User
+func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
 ## 设计原则

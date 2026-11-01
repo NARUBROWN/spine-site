@@ -1,5 +1,14 @@
 # query.Values
 
+Continue after creating a project with the CLI in [First App](/en/learn/getting-started/first-app) and generating `src/user` in [Controllers](/en/learn/tutorial/2-controller). Application handler examples manually extend the same `package user` under `src/user`. Implement `User`, search/page response types, and service search methods for your application; the CLI does not generate them. Product and Order snippets illustrate additional features following the same pattern. Handlers are independent alternatives, so add only the methods and routes you need. Wrap success results in `httpx.Response[T]` and import `httpx` and `query` for these handlers.
+
+```go
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
+```
+
 Handling query parameters explicitly.
 
 ## Overview
@@ -8,7 +17,7 @@ Handling query parameters explicitly.
 
 ```mermaid
 graph TD
-    Request["GET /users?status=active&tag=go&tag=web&page=1"]
+    Request["GET /user?status=active&tag=go&tag=web&page=1"]
     
     Request --> Values
     
@@ -43,13 +52,15 @@ Query parameters are mutable and optional. Automatic mapping hides "where a para
 
 ```go
 // Spine way: Explicit extraction
-func Search(q query.Values) []User {
+func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     status := q.String("status")      // Clear source
     page := q.Int("page", 1)          // Explicit default
     
     if q.Has("premium") {             // Conditional processing
         // ...
     }
+    users := c.service.Search(status, page, q.Has("premium"))
+    return httpx.Response[[]User]{Body: users}
 }
 ```
 
@@ -59,7 +70,7 @@ Struct-based binding becomes a constraint when handling dynamic queries like sea
 
 ```go
 // Dynamic filter handling
-func Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
     
     // Cannot know beforehand which filters will come
@@ -73,7 +84,7 @@ func Search(q query.Values) []Product {
         filters["category"] = q.String("category")
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -101,7 +112,7 @@ func NewValues(values map[string][]string) Values {
 Returns the first value of the specified key as a string. Returns empty string if the key does not exist.
 
 ```go
-// GET /users?name=john&status=active
+// GET /user?name=john&status=active
 
 q.Get("name")    // "john"
 q.Get("status")  // "active"
@@ -121,7 +132,7 @@ q.String("name")  // "john"
 Parses the value of the specified key as an integer. Returns the default value if parsing fails or key does not exist.
 
 ```go
-// GET /users?page=3&size=20
+// GET /user?page=3&size=20
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
@@ -138,7 +149,7 @@ Parses the value of the specified key as a boolean. It transforms the value to l
 **Recognized as false**: `"false"`, `"0"`, `"no"`, `"n"`, `"off"` (case insensitive)
 
 ```go
-// GET /users?active=true&verified=1&premium=yes
+// GET /user?active=true&verified=1&premium=yes
 
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
@@ -152,7 +163,7 @@ q.GetBoolByKey("active", false)    // false (if active=maybe → default)
 Checks if the specified key exists. Returns `true` if the key exists even if the value is empty.
 
 ```go
-// GET /users?status=active&empty=
+// GET /user?status=active&empty=
 
 q.Has("status")  // true
 q.Has("empty")   // true (value empty but key exists)
@@ -199,18 +210,18 @@ func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta P
 ### Basic Usage
 
 ```go
-// cmd/demo/controller.go
-func (c *UserController) GetUserQuery(q query.Values) User {
-    return User{
+// src/user/user_controller.go
+func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
+    return httpx.Response[User]{Body: User{
         ID:   q.Int("id", 0),
         Name: q.String("name"),
-    }
+    }}
 }
 ```
 
 ```bash
 # Request
-GET /users?id=123&name=john
+GET /user?id=123&name=john
 
 # Response
 {
@@ -222,14 +233,14 @@ GET /users?id=123&name=john
 ### Search API
 
 ```go
-func (c *ProductController) Search(q query.Values) SearchResult {
+func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] {
     keyword := q.String("q")
     category := q.String("category")
     minPrice := q.Int("min_price", 0)
     maxPrice := q.Int("max_price", 999999)
     inStock := q.GetBoolByKey("in_stock", true)
     
-    products := c.repo.Search(SearchCriteria{
+    products := c.service.Search(SearchCriteria{
         Keyword:  keyword,
         Category: category,
         MinPrice: minPrice,
@@ -237,16 +248,16 @@ func (c *ProductController) Search(q query.Values) SearchResult {
         InStock:  inStock,
     })
     
-    return SearchResult{
+    return httpx.Response[SearchResult]{Body: SearchResult{
         Query:    keyword,
         Count:    len(products),
         Products: products,
-    }
+    }}
 }
 ```
 
 ```bash
-GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
+GET /product?q=laptop&category=electronics&min_price=500&in_stock=true
 ```
 
 ### With Pagination
@@ -254,30 +265,30 @@ GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
 You can use `query.Values` and `query.Pagination` together.
 
 ```go
-func (c *UserController) List(p query.Pagination, q query.Values) PagedResult {
+func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response[PagedResult] {
     status := q.String("status")
     sortBy := q.String("sort_by")
     
-    users := c.repo.FindAll(status, sortBy, p.Page, p.Size)
-    total := c.repo.Count(status)
+    users := c.service.FindAll(status, sortBy, p.Page, p.Size)
+    total := c.service.Count(status)
     
-    return PagedResult{
+    return httpx.Response[PagedResult]{Body: PagedResult{
         Data:  users,
         Page:  p.Page,
         Size:  p.Size,
         Total: total,
-    }
+    }}
 }
 ```
 
 ```bash
-GET /users?page=2&size=20&status=active&sort_by=created_at
+GET /user?page=2&size=20&status=active&sort_by=created_at
 ```
 
 ### Conditional Filter
 
 ```go
-func (c *OrderController) List(q query.Values) []Order {
+func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
     filters := OrderFilters{}
     
     if q.Has("user_id") {
@@ -296,7 +307,7 @@ func (c *OrderController) List(q query.Values) []Order {
         filters.ToDate = parseDate(q.String("to_date"))
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -306,20 +317,20 @@ func (c *OrderController) List(q query.Values) []Order {
 Query parameters can have multiple values for the same key.
 
 ```
-GET /products?tag=go&tag=web&tag=api
+GET /product?tag=go&tag=web&tag=api
 ```
 
 Currently, `String()` and `Get()` methods of `query.Values` return only the first value. If you need multiple values, you can add a method to access the internal map directly, or use comma-separated values parsing.
 
 ```go
 // Comma separated way
-// GET /products?tags=go,web,api
+// GET /product?tags=go,web,api
 
-func (c *ProductController) Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     tagsRaw := q.String("tags")
     tags := strings.Split(tagsRaw, ",")
     
-    return c.repo.FindByTags(tags)
+    return httpx.Response[[]Product]{Body: c.service.FindByTags(tags)}
 }
 ```
 
@@ -337,13 +348,13 @@ func (c *ProductController) Search(q query.Values) []Product {
 
 ```go
 // Only fixed pagination needed → query.Pagination
-func List(p query.Pagination) []User
+func List(p query.Pagination) httpx.Response[[]User]
 
 // Dynamic filter + pagination → Use both
-func Search(p query.Pagination, q query.Values) []User
+func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
 
 // Completely dynamic query → query.Values only
-func CustomSearch(q query.Values) []User
+func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
 ## Design Principles

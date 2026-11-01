@@ -1,214 +1,125 @@
-# Swagger Documentation
+# Swagger and OpenAPI Documentation
 
-Generating API documentation.
+Use the CLI-generated project from [First App](/en/learn/getting-started/first-app). Generate `src/user` with `spine generate resource user` as described in [Controllers](/en/learn/tutorial/2-controller). CLI static OpenAPI export and Swaggo/Swagger UI integration are separate features.
 
-## Overview
+## Export OpenAPI with the CLI
 
-Spine uses [Swaggo](https://github.com/swaggo/swag) to automatically generate Swagger documentation.
-
-- Extract API specs from code comments
-- Provide documentation via Swagger UI
-- API testing capabilities
-
-## Installation
+The CLI generates OpenAPI 3.1 from registered routes and handler signatures. Swaggo annotations are not required.
 
 ```bash
-# Install Swag CLI
-go install github.com/swaggo/swag/cmd/swag@latest
-
-# Install required packages
-go get github.com/swaggo/swag
-go get github.com/swaggo/http-swagger
+spine doctor
+spine contract check
+spine contract export --format openapi --output openapi.json
 ```
 
-## Project Configuration
+The output includes `/health`, `/user/{id}`, and `x-spine-*` analysis evidence. Spine `/user/:id` becomes OpenAPI `/user/{id}`. Runtime-selected status codes and other limits remain explicit. Exporting does not install Swagger UI or mount an HTTP endpoint. Review an existing output before replacing it with `--force`.
 
-### Adding Comments to main.go
+## Optional: Swaggo and Swagger UI
+
+The following creates a separate Swagger 2.0 document with Swaggo and manually mounts its UI on the Echo transport. The CLI does not configure this integration. CLI `openapi.json` and Swaggo `docs/swagger.json` are different outputs.
+
+### 1. Install tools
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@v1.16.6
+go get github.com/swaggo/swag@v1.16.6 github.com/swaggo/http-swagger@v1.3.4
+```
+
+### 2. Add general annotations
+
+Add these immediately above `BuildApplication()` in `internal/application/application.go`. Keep the generated main and `composition = "./internal/application"` in `spine.toml`.
 
 ```go
-// main.go
-package main
-
-import (
-    "log"
-    "time"
-
-    "myapp/controller"
-    "myapp/routes"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/labstack/echo/v4"
-    httpSwagger "github.com/swaggo/http-swagger"
-
-    _ "myapp/docs"  // Import generated docs package
-)
-
-// @title My App API
+// @title Hello Spine API
 // @version 1.0.0
-// @description REST API based on Spine
-
+// @description Spine HTTP API
 // @host localhost:8080
 // @BasePath /
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    routes.RegisterUserRoutes(app)
-
-    // Register Swagger UI
-    app.Transport(func(t any) {
-        e := t.(*echo.Echo)
-        e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-    })
-
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+func BuildApplication() (spine.App, boot.Options, error) {
+    // ...
 }
 ```
 
-### main.go Annotation Tags
+### 3. Document the actual lookup handler
 
-| Tag | Description | Example |
-|------|------|------|
-| `@title` | API Title | `My App API` |
-| `@version` | API Version | `1.0.0` |
-| `@description` | API Description | `REST API based on Spine` |
-| `@host` | Host Address | `localhost:8080` |
-| `@BasePath` | Base Path | `/` |
-
-
-## Controller Documentation
-
-### Basic Format
+Manually extend the generated `src/user/user_controller.go` as follows. `UserIDResponse` is an added documentation type; the response JSON remains `{"id":1}`. This does not implement database lookup or full CRUD.
 
 ```go
-// controller/user_controller.go
-package controller
+package user
 
 import (
-    "context"
-
-    "myapp/dto"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
+    "github.com/NARUBROWN/spine/pkg/path"
 )
 
-type UserController struct {
-    svc *service.UserService
+type UserController struct{ service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
 }
 
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
+type UserIDResponse struct {
+    ID int64 `json:"id" example:"1"`
 }
 
-// GetUser godoc
-// @Summary Get User
-// @Description key words: Get user info by ID
+// Get godoc
+// @Summary Get user ID
 // @Tags users
-// @Param id query int true "User ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} ErrorResponse
-// @Router /users [get]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    id := int(q.Int("id", 0))
-
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, httperr.NotFound("User not found.")
-    }
-
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} UserIDResponse
+// @Router /user/{id} [get]
+func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
+    return httpx.Response[UserIDResponse]{Body: UserIDResponse{ID: id.Value}}
 }
 ```
 
-### CRUD Complete Example
+### 4. Generate the docs package first
+
+Run from the project root. Do not import `example.com/hello-spine/docs` before it exists. `--parseInternal` includes the internal package containing the general annotations.
+
+```bash
+swag init -g internal/application/application.go --parseInternal
+```
+
+This generates `docs/docs.go`, `docs/swagger.json`, and `docs/swagger.yaml`. The init function in `docs.go` registers the specification, so add its blank import after generation. Do not edit generated files manually.
+
+### 5. Mount the UI
+
+Add these imports to `internal/application/application.go`.
 
 ```go
-// GetUser godoc
-// @Summary Get User
-// @Description Get user info by ID
-// @Tags users
-// @Param id query int true "User ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} ErrorResponse
-// @Router /users [get]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// CreateUser godoc
-// @Summary Create User
-// @Description Create a new user
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param body body dto.CreateUserRequest true "User creation request"
-// @Success 200 {object} dto.UserResponse
-// @Failure 400 {object} ErrorResponse
-// @Router /users [post]
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// UpdateUser godoc
-// @Summary Update User
-// @Description Update user info
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param id query int true "User ID"
-// @Param body body dto.UpdateUserRequest true "User update request"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} ErrorResponse
-// @Router /users [put]
-func (c *UserController) UpdateUser(
-    ctx context.Context,
-    q query.Values,
-    req *dto.UpdateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// DeleteUser godoc
-// @Summary Delete User
-// @Description Delete a user
-// @Tags users
-// @Param id query int true "User ID"
-// @Success 200
-// @Failure 404 {object} ErrorResponse
-// @Router /users [delete]
-func (c *UserController) DeleteUser(
-    ctx context.Context,
-    q query.Values,
-) error {
-    // ...
-}
+import (
+    _ "example.com/hello-spine/docs"
+    "github.com/labstack/echo/v4"
+    httpSwagger "github.com/swaggo/http-swagger"
+)
 ```
 
+Add this inside `BuildApplication()`, after `app := spine.New()` and before its return. Keep the existing health and user registrations.
+
+```go
+app.Transport(func(transport any) {
+    e := transport.(*echo.Echo)
+    e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
+})
+```
+
+### 6. Verify and run
+
+```bash
+gofmt -w internal/application/application.go src/user/user_controller.go
+go mod tidy
+spine contract check
+spine verify
+spine dev
+```
+
+In another terminal, check `http://localhost:8080/swagger/index.html` and `/swagger/doc.json`. Try it out must also reach the real `/user/1` endpoint. Echo routes added directly through `app.Transport` are outside the CLI static Spine route contract, so verify the UI endpoint separately.
+
+## Annotations and DTOs for manual CRUD extensions
+
+The tags and DTOs below are reference examples for additional features you implement. The `resource` generator does not create these request/response types or POST, PUT, and DELETE handlers. Put them in the same `package user` under `src/user` and match annotations to real routes and response status codes. Receive request DTOs as pointers. Tags such as `example`, `enums`, and `minimum` describe documentation; they do not execute input validation.
 
 ## Annotation Tag Reference
 
@@ -219,7 +130,7 @@ func (c *UserController) DeleteUser(
 | `@Summary` | Summary (One line) | `Get User` |
 | `@Description` | Detailed Description | `Get user info by ID` |
 | `@Tags` | Group Tag | `users` |
-| `@Router` | Path and Method | `/users [get]` |
+| `@Router` | Path and Method | `/user [get]` |
 
 ### Request Tags
 
@@ -233,7 +144,7 @@ func (c *UserController) DeleteUser(
 
 | Tag | Description | Example |
 |------|------|------|
-| `@Success` | Success Response | `200 {object} dto.UserResponse` |
+| `@Success` | Success Response | `200 {object} UserResponse` |
 | `@Failure` | Failure Response | `404 {object} ErrorResponse` |
 
 
@@ -247,8 +158,8 @@ func (c *UserController) DeleteUser(
 
 | Location | Description | Example |
 |------|------|------|
-| `query` | Query String | `/users?id=1` |
-| `path` | URL Path | `/users/{id}` |
+| `query` | Query String | `/user?id=1` |
+| `path` | URL Path | `/user/{id}` |
 | `body` | Request Body | JSON body |
 | `header` | Header | `Authorization` |
 | `formData` | Form Data | File Upload |
@@ -273,7 +184,7 @@ func (c *UserController) DeleteUser(
 // @Param active query bool false "Active status"
 
 // Request Body
-// @Param body body dto.CreateUserRequest true "User creation request"
+// @Param body body CreateUserRequest true "User creation request"
 
 // Header
 // @Param Authorization header string true "Bearer Token"
@@ -285,8 +196,8 @@ func (c *UserController) DeleteUser(
 ### Request DTO
 
 ```go
-// dto/user_request.go
-package dto
+// src/user/user_request.go
+package user
 
 // CreateUserRequest User creation request
 type CreateUserRequest struct {
@@ -304,8 +215,8 @@ type UpdateUserRequest struct {
 ### Response DTO
 
 ```go
-// dto/user_response.go
-package dto
+// src/user/user_response.go
+package user
 
 // UserResponse User response
 type UserResponse struct {
@@ -316,7 +227,7 @@ type UserResponse struct {
 
 // ErrorResponse Error response
 type ErrorResponse struct {
-    Error string `json:"error" example:"User not found."`
+    Message string `json:"message" example:"User not found."`
 }
 ```
 
@@ -331,267 +242,23 @@ type ErrorResponse struct {
 | `default` | Default Value | `default:"10"` |
 
 
-## Generating Documentation
 
-### Running Command
+## Regenerate documentation
 
-```bash
-// Run at project root
-swag init
-
-// Or specify main.go path
-swag init -g main.go
-```
-
-### Generated Result
-
-```
-myapp/
-├── docs/
-├── docs.go       # Go Code
-├── swagger.json  # JSON Spec
-└── swagger.yaml  # YAML Spec
-├── main.go
-└── ...
-```
-
-### Generated docs/docs.go
-
-```go
-// Package docs Code generated by swaggo/swag. DO NOT EDIT
-package docs
-
-import "github.com/swaggo/swag"
-
-const docTemplate = `{
-    "swagger": "2.0",
-    "info": {
-        "title": "My App API",
-        "version": "1.0.0"
-    },
-    ...
-}`
-
-var SwaggerInfo = &swag.Spec{
-    Version:     "1.0.0",
-    Title:       "My App API",
-    Description: "REST API based on Spine",
-    // ...
-}
-
-func init() {
-    swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
-}
-```
-
-## Accessing Swagger UI
-
-### Running Server
-
-```bash
-go run main.go
-```
-
-### Browsing
-
-```
-http://localhost:8080/swagger/index.html
-```
-
-## Auto Regeneration
-
-To auto-regenerate docs on code change:
-
-### Using Makefile
+Regenerate Swaggo output after changing annotations or DTOs. `spine dev` does not run Swaggo automatically. Refresh the CLI specification separately with `contract export`.
 
 ```makefile
-# Makefile
-
 .PHONY: swagger run
 
 swagger:
-	swag init -g main.go
+	swag init -g internal/application/application.go --parseInternal
 
 run: swagger
-	go run main.go
+	spine dev
 ```
 
-```bash
-make run
-```
+## Next steps
 
-### Using Script
-
-```bash
-#!/bin/bash
-# run.sh
-
-swag init -g main.go
-go run main.go
-```
-
-```bash
-chmod +x run.sh
-./run.sh
-```
-
-## Complete Example
-
-### Project Structure
-
-```
-myapp/
-├── main.go
-├── docs/
-│   ├── docs.go
-│   ├── swagger.json
-│   └── swagger.yaml
-├── controller/
-│   └── user_controller.go
-├── dto/
-│   ├── user_request.go
-│   └── user_response.go
-├── service/
-│   └── user_service.go
-└── routes/
-    └── routes.go
-```
-
-### main.go
-
-```go
-package main
-
-import (
-    "log"
-    "time"
-
-    "myapp/controller"
-    "myapp/routes"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/labstack/echo/v4"
-    httpSwagger "github.com/swaggo/http-swagger"
-
-    _ "myapp/docs"
-)
-
-// @title My App API
-// @version 1.0.0
-// @description REST API based on Spine
-
-// @host localhost:8080
-// @BasePath /
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    routes.RegisterUserRoutes(app)
-
-    // Register Swagger UI
-    app.Transport(func(t any) {
-        e := t.(*echo.Echo)
-        e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-    })
-
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-### controller/user_controller.go
-
-```go
-package controller
-
-import (
-    "context"
-
-    "myapp/dto"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GetUser godoc
-// @Summary Get User
-// @Description Get user info by ID
-// @Tags users
-// @Param id query int true "User ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} dto.ErrorResponse
-// @Router /users [get]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    id := int(q.Int("id", 0))
-
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, httperr.NotFound("User not found.")
-    }
-
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
-}
-
-// CreateUser godoc
-// @Summary Create User
-// @Description Create a new user
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param body body dto.CreateUserRequest true "User creation request"
-// @Success 200 {object} dto.UserResponse
-// @Failure 400 {object} dto.ErrorResponse
-// @Router /users [post]
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    user, err := c.svc.Create(ctx, req.Name, req.Email)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, err
-    }
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
-}
-```
-
-
-## Key Takeaways
-
-| Step | Command/Action |
-|------|----------|
-| 1. Install | `go install github.com/swaggo/swag/cmd/swag@latest` |
-| 2. Add Comments | `// @Summary`, `// @Param`, `// @Router` etc. |
-| 3. Generate Docs | `swag init` |
-| 4. Register UI | `e.GET("/swagger/*", ...)` |
-| 5. Access | `http://localhost:8080/swagger/index.html` |
-
-
-## Next Steps
-
-- [Reference: API](/en/reference/api/spine-app) — Spine API Docs
-- [Reference: Examples](/en/reference/examples/crud) — Complete Example Project
+- [Spine API](/en/reference/api/spine-app)
+- [Swaggo v1.16.6](https://github.com/swaggo/swag/tree/v1.16.6)
+- [http-swagger v1.3.4](https://pkg.go.dev/github.com/swaggo/http-swagger@v1.3.4)

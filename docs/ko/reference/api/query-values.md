@@ -1,5 +1,14 @@
 # query.Values
 
+[첫 번째 앱](/ko/learn/getting-started/first-app)에서 CLI로 프로젝트를 만들고 [컨트롤러](/ko/learn/tutorial/2-controller)에서 `src/user` 리소스를 생성한 뒤 이어갑니다. 앱 핸들러 예제는 `src/user`의 같은 `package user`를 직접 확장합니다. `User`, 검색·페이지 응답 타입과 서비스의 검색 메서드는 예제에 맞게 직접 구현하며 CLI가 생성하지 않습니다. Product·Order 예제도 같은 방식의 기능 확장입니다. 각 핸들러는 독립된 대안이므로 필요한 메서드와 라우트만 추가하세요. 성공 응답은 `httpx.Response[T]`로 감싸며, 아래 핸들러에서는 `httpx`와 `query` 패키지를 import합니다.
+
+```go
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
+```
+
 query.Values 헬퍼에 대한 API 참조.
 
 ## 개요
@@ -52,7 +61,7 @@ func (q Values) Get(key string) string
 
 **예시**
 ```go
-// GET /users?name=john
+// GET /user?name=john
 q.Get("name")     // "john"
 q.Get("missing")  // ""
 ```
@@ -73,7 +82,7 @@ func (q Values) String(key string) string
 
 **예시**
 ```go
-// GET /users?status=active&name=john
+// GET /user?status=active&name=john
 q.String("status")  // "active"
 q.String("name")    // "john"
 q.String("missing") // ""
@@ -96,12 +105,12 @@ func (q Values) Int(key string, def int64) int64
 
 **예시**
 ```go
-// GET /users?page=3&size=20
+// GET /user?page=3&size=20
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
 q.Int("offset", 0)  // 0 (키 없음)
 
-// GET /users?page=abc
+// GET /user?page=abc
 q.Int("page", 1)    // 1 (파싱 실패)
 ```
 
@@ -130,13 +139,13 @@ func (q Values) GetBoolByKey(key string, def bool) bool
 
 **예시**
 ```go
-// GET /users?active=true&verified=1&premium=yes
+// GET /user?active=true&verified=1&premium=yes
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
 q.GetBoolByKey("deleted", false)   // false (키 없음)
 
-// GET /users?active=maybe
+// GET /user?active=maybe
 q.GetBoolByKey("active", false)    // false (인식 불가)
 ```
 
@@ -156,7 +165,7 @@ func (q Values) Has(key string) bool
 
 **예시**
 ```go
-// GET /users?status=active&empty=
+// GET /user?status=active&empty=
 q.Has("status")  // true
 q.Has("empty")   // true (값이 비어도 키는 존재)
 q.Has("missing") // false
@@ -190,18 +199,18 @@ Resolver는 `core.ExecutionContext`를 `core.HttpRequestContext`로 타입 단�
 ## Controller에서 사용
 
 ```go
-func (c *UserController) Search(q query.Values) []User {
+func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     status := q.String("status")
     page := q.Int("page", 1)
     size := q.Int("size", 20)
     active := q.GetBoolByKey("active", true)
     
-    return c.repo.Search(status, page, size, active)
+    return httpx.Response[[]User]{Body: c.service.Search(status, page, size, active)}
 }
 ```
 
 ```go
-func (c *ProductController) Filter(q query.Values) []Product {
+func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
     
     if q.Has("category") {
@@ -211,7 +220,7 @@ func (c *ProductController) Filter(q query.Values) []Product {
         filters["min_price"] = q.String("min_price")
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 

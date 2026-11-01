@@ -1,218 +1,126 @@
-# Swaggerドキュメント
+# Swagger と OpenAPI のドキュメント
 
-APIドキュメントを生成する。
+[最初のアプリ](/ja/learn/getting-started/first-app)で CLI が生成したプロジェクトを使います。`src/user` は[コントローラー](/ja/learn/tutorial/2-controller)の `spine generate resource user` で生成します。CLI の静的 OpenAPI 出力と Swaggo・Swagger UI の統合は別の機能です。
 
+## CLI で OpenAPI を出力
 
-## 概要
-
-Spineは[Swaggo]（https://github.com/swaggo/swag）を使用してSwagger文書を自動的に生成します。
-
-- コードコメントからAPI仕様を抽出する
-- Swagger UIで文書を提供する
-- APIテスト可能
-
-
-## インストール
-
+CLI は登録されたルートとハンドラーのシグネチャから OpenAPI 3.1 を生成します。Swaggo のアノテーションは不要です。
 
 ```bash
-# Swag CLIをインストール
-go install github.com/swaggo/swag/cmd/swag@latest
-
-# 必要なパッケージをインストール
-go get github.com/swaggo/swag
-go get github.com/swaggo/http-swagger
+spine doctor
+spine contract check
+spine contract export --format openapi --output openapi.json
 ```
 
+出力には `/health`、`/user/{id}` と `x-spine-*` の分析根拠が含まれます。Spine の `/user/:id` は OpenAPI では `/user/{id}` になります。実行時に決まるステータスなどは分析の限界として明示します。出力だけでは Swagger UI のインストールや HTTP エンドポイントの登録は行いません。既存ファイルを確認して置き換える場合だけ `--force` を使います。
 
-## プロジェクト設定
+## 任意: Swaggo と Swagger UI
 
-### main.go コメントを追加
+以下は Swaggo で別の Swagger 2.0 文書を生成し、Echo transport に UI を手動登録する例です。CLI は自動設定しません。CLI の `openapi.json` と Swaggo の `docs/swagger.json` は別の生成物です。
 
+### 1. ツールのインストール
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@v1.16.6
+go get github.com/swaggo/swag@v1.16.6 github.com/swaggo/http-swagger@v1.3.4
+```
+
+### 2. 一般アノテーションの追加
+
+`internal/application/application.go` の `BuildApplication()` の直前に追加します。生成された main と `spine.toml` の `composition = "./internal/application"` は保ちます。
 
 ```go
-// main.go
-package main
-
-import (
-    "log"
-    "time"
-
-    "myapp/controller"
-    "myapp/routes"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/labstack/echo/v4"
-    httpSwagger "github.com/swaggo/http-swagger"
-
-    _ "myapp/docs"  // 生成されたdocsパッケージをimport
-)
-
-// @title My App API
+// @title Hello Spine API
 // @version 1.0.0
-// @description SpineベースのREST API
-
+// @description Spine HTTP API
 // @host localhost:8080
 // @BasePath /
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    routes.RegisterUserRoutes(app)
-
-    // Swagger UI登録
-    app.Transport(func(t any) {
-        e := t.(*echo.Echo)
-        e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-    })
-
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+func BuildApplication() (spine.App, boot.Options, error) {
+    // ...
 }
 ```
-### main.go コメントタグ
 
-| タグ | 説明 | 例 |
-|------|------|------|
-| `@title` | APIタイトル| `My App API` |
-| `@version` | APIバージョン| `1.0.0` |
-| `@description` | APIの説明 | `SpineベースのREST API` |
-| `@host` |ホストアドレス| `localhost:8080` |
-| `@BasePath` |基本パス| `/` |
+### 3. 実際の照会ハンドラーを文書化
 
+生成された `src/user/user_controller.go` を次のように手動で拡張します。`UserIDResponse` は文書化のために追加する型で、JSON 応答は従来の `{"id":1}` と同じです。DB 照会や CRUD 全体は実装しません。
 
-## コントローラの文書化
-
-### 基本フォーマット
 ```go
-// controller/user_controller.go
-package controller
+package user
 
 import (
-    "context"
-
-    "myapp/dto"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
+    "github.com/NARUBROWN/spine/pkg/path"
 )
 
-type UserController struct {
-    svc *service.UserService
+type UserController struct{ service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
 }
 
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
+type UserIDResponse struct {
+    ID int64 `json:"id" example:"1"`
 }
 
-// GetUser godoc
-// @Summary ユーザー 参照
-// @Description IDでユーザー情報を参照します
+// Get godoc
+// @Summary Get user ID
 // @Tags users
-// @Param id query int true "User ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} ErrorResponse
-// @Router /users [get]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    id := int(q.Int("id", 0))
-
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, httperr.NotFound("ユーザーが見つかりません")
-    }
-
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} UserIDResponse
+// @Router /user/{id} [get]
+func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
+    return httpx.Response[UserIDResponse]{Body: UserIDResponse{ID: id.Value}}
 }
 ```
 
+### 4. docs パッケージを先に生成
 
-### CRUDの完全な例
+プロジェクトのルートで実行します。この段階より前に、まだ存在しない `example.com/hello-spine/docs` を import しないでください。`--parseInternal` で一般アノテーションのある internal パッケージを解析します。
 
+```bash
+swag init -g internal/application/application.go --parseInternal
+```
+
+`docs/docs.go`、`docs/swagger.json`、`docs/swagger.yaml` が生成されます。`docs.go` の init 関数が仕様を登録するため、生成後に blank import を追加します。生成ファイルを手動で編集しないでください。
+
+### 5. UI の登録
+
+`internal/application/application.go` の import に追加します。
 
 ```go
-// GetUser godoc
-// @Summary ユーザー 参照
-// @Description IDでユーザー情報を参照します
-// @Tags users
-// @Param id query int true "User ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} ErrorResponse
-// @Router /users [get]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// CreateUser godoc
-// @Summary ユーザー 生成
-// @Description 新しいユーザーを作成します
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param body body dto.CreateUserRequest true "ユーザー 生成 リクエスト"
-// @Success 200 {object} dto.UserResponse
-// @Failure 400 {object} ErrorResponse
-// @Router /users [post]
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// UpdateUser godoc
-// @Summary ユーザー更新
-// @Description ユーザー情報を更新します
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param id query int true "User ID"
-// @Param body body dto.UpdateUserRequest true "ユーザー更新リクエスト"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} ErrorResponse
-// @Router /users [put]
-func (c *UserController) UpdateUser(
-    ctx context.Context,
-    q query.Values,
-    req *dto.UpdateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// DeleteUser godoc
-// @Summary ユーザー削除
-// @Description ユーザーを削除します
-// @Tags users
-// @Param id query int true "User ID"
-// @Success 200
-// @Failure 404 {object} ErrorResponse
-// @Router /users [delete]
-func (c *UserController) DeleteUser(
-    ctx context.Context,
-    q query.Values,
-) error {
-    // ...
-}
+import (
+    _ "example.com/hello-spine/docs"
+    "github.com/labstack/echo/v4"
+    httpSwagger "github.com/swaggo/http-swagger"
+)
 ```
+
+同じファイルの `BuildApplication()` で、`app := spine.New()` より後、return より前に追加します。既存の health・user 登録を保ちます。
+
+```go
+app.Transport(func(transport any) {
+    e := transport.(*echo.Echo)
+    e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
+})
+```
+
+### 6. 検証と実行
+
+```bash
+gofmt -w internal/application/application.go src/user/user_controller.go
+go mod tidy
+spine contract check
+spine verify
+spine dev
+```
+
+別のターミナルで `http://localhost:8080/swagger/index.html` と `/swagger/doc.json` を確認します。Try it out も実際の `/user/1` にリクエストします。`app.Transport` で直接追加した Echo ルートは CLI の静的 Spine ルート契約に含まれないため、UI のパスは別に確認してください。
+
+## 手動 CRUD 拡張のアノテーション・DTO
+
+以下は追加機能を実装するときの参考例です。`resource` はこれらの DTO や POST・PUT・DELETE ハンドラーを生成しません。`src/user` の同じ `package user` に置き、実際のルート・応答ステータスとアノテーションを一致させます。リクエスト DTO はポインタで受け取ります。`example`・`enums`・`minimum` などは文書のメタデータであり、入力検証を自動実行しません。
+
 ## コメントタグリファレンス
 
 ### デフォルトタグ
@@ -222,7 +130,7 @@ func (c *UserController) DeleteUser(
 | `@Summary` | まとめ（1行） | `ユーザー参照` |
 | `@Description` | 詳細な説明 | `IDでユーザー情報を参照します` |
 | `@Tags` | グループタグ | `users` |
-| `@Router` | パスとメソッド | `/users [get]` |
+| `@Router` | パスとメソッド | `/user [get]` |
 
 ### リクエストタグ
 
@@ -236,7 +144,7 @@ func (c *UserController) DeleteUser(
 
 | タグ | 説明 | 例 |
 |------|------|------|
-| `@Success` | 成功応答 | `200 {object} dto.UserResponse` |
+| `@Success` | 成功応答 | `200 {object} UserResponse` |
 | `@Failure` | 失敗応答 | `404 {object} ErrorResponse` |
 
 
@@ -249,8 +157,8 @@ func (c *UserController) DeleteUser(
 
 | 場所 | 説明 | 例 |
 |------|------|------|
-| `query` | クエリ文字列 | `/users?id=1` |
-| `path` | URLパス | `/users/{id}` |
+| `query` | クエリ文字列 | `/user?id=1` |
+| `path` | URLパス | `/user/{id}` |
 | `body` | リクエスト本文 | `JSON body` |
 | `header` | ヘッダー | `Authorization` |
 | `formData` | フォームデータ | ファイルアップロード |
@@ -276,7 +184,7 @@ func (c *UserController) DeleteUser(
 // @Param active query bool false "Active status"
 
 // リクエストボディ
-// @Param body body dto.CreateUserRequest true "ユーザー 生成 リクエスト"
+// @Param body body CreateUserRequest true "ユーザー 生成 リクエスト"
 
 // ヘッダー
 // @Param Authorization header string true "Bearerトークン"
@@ -289,8 +197,8 @@ func (c *UserController) DeleteUser(
 
 
 ```go
-// dto/user_request.go
-package dto
+// src/user/user_request.go
+package user
 
 // CreateUserRequest ユーザー 生成 リクエスト
 type CreateUserRequest struct {
@@ -309,8 +217,8 @@ type UpdateUserRequest struct {
 
 
 ```go
-// dto/user_response.go
-package dto
+// src/user/user_response.go
+package user
 
 // UserResponse ユーザー レスポンス
 type UserResponse struct {
@@ -321,7 +229,7 @@ type UserResponse struct {
 
 // ErrorResponse エラー レスポンス
 type ErrorResponse struct {
-    Error string `json:"error" example:"ユーザーが見つかりません"`
+    Message string `json:"message" example:"ユーザーが見つかりません"`
 }
 ```
 
@@ -336,273 +244,23 @@ type ErrorResponse struct {
 | `default` |デフォルト| `default:"10"` |
 
 
-## ドキュメントの生成
 
-### 命令の実行
+## ドキュメントの再生成
 
+アノテーションや DTO を変更したら Swaggo を再実行します。`spine dev` は Swaggo を自動実行しません。CLI の仕様は `contract export` で別に更新します。
 
-```bash
-# プロジェクトルートで実行
-swag init
-
-# またはmain.goのパスを指定
-swag init -g main.go
-```
-
-### 生成結果
-
-```
-myapp/
-├── docs/
-│   ├── docs.go       # Goコード
-│   ├── swagger.json  # JSON仕様
-│   └── swagger.yaml  # YAML仕様
-├── main.go
-└── ...
-```
-
-### 生成された docs/docs.go
-
-
-```go
-// Package docs Code generated by swaggo/swag. DO NOT EDIT
-package docs
-
-import "github.com/swaggo/swag"
-
-const docTemplate = `{
-    "swagger": "2.0",
-    "info": {
-        "title": "My App API",
-        "version": "1.0.0"
-    },
-    ...
-}`
-
-var SwaggerInfo = &swag.Spec{
-    Version:     "1.0.0",
-    Title:       "My App API",
-    Description: "SpineベースのREST API",
-    // ...
-}
-
-func init() {
-    swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
-}
-```
-
-## Swagger UIへの接続
-
-### サーバーの実行
-
-
-```bash
-go run main.go
-```
-
-### ブラウザからアクセス
-
-```
-http://localhost:8080/swagger/index.html
-```
-
-## 自動再生
-
-コードを変更したときに文書を自動的に再生成するには：
-
-### Makefileの使用
-
-
-```
-makefile
-# Makefile
-
+```makefile
 .PHONY: swagger run
 
 swagger:
-	swag init -g main.go
+	swag init -g internal/application/application.go --parseInternal
 
 run: swagger
-	go run main.go
+	spine dev
 ```
-
-
-```bash
-make run
-```
-
-### スクリプトの使用
-
-
-```bash
-# !/bin/bash
-# run.sh
-
-swag init -g main.go
-go run main.go
-```
-
-
-```bash
-chmod +x run.sh
-./run.sh
-```
-
-## 完全な例
-
-### プロジェクト構造
-
-```
-myapp/
-├── main.go
-├── docs/
-│   ├── docs.go
-│   ├── swagger.json
-│   └── swagger.yaml
-├── controller/
-│   └── user_controller.go
-├── dto/
-│   ├── user_request.go
-│   └── user_response.go
-├── service/
-│   └── user_service.go
-└── routes/
-    └── routes.go
-```
-
-### main.go
-
-
-```go
-package main
-
-import (
-    "log"
-    "time"
-
-    "myapp/controller"
-    "myapp/routes"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/labstack/echo/v4"
-    httpSwagger "github.com/swaggo/http-swagger"
-
-    _ "myapp/docs"
-)
-
-// @title My App API
-// @version 1.0.0
-// @description SpineベースのREST API
-
-// @host localhost:8080
-// @BasePath /
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    routes.RegisterUserRoutes(app)
-
-    // Swagger UI登録
-    app.Transport(func(t any) {
-        e := t.(*echo.Echo)
-        e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-    })
-
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-### controller/user_controller.go
-
-
-```go
-package controller
-
-import (
-    "context"
-
-    "myapp/dto"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GetUser godoc
-// @Summary ユーザー 参照
-// @Description IDでユーザー情報を参照します
-// @Tags users
-// @Param id query int true "User ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} dto.ErrorResponse
-// @Router /users [get]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (dto.UserResponse, error) {
-    id := int(q.Int("id", 0))
-
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return dto.UserResponse{}, httperr.NotFound("ユーザーが見つかりません")
-    }
-
-    return user, nil
-}
-
-// CreateUser godoc
-// @Summary ユーザー 生成
-// @Description 新しいユーザーを作成します
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param body body dto.CreateUserRequest true "ユーザー 生成 リクエスト"
-// @Success 200 {object} dto.UserResponse
-// @Failure 400 {object} dto.ErrorResponse
-// @Router /users [post]
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req dto.CreateUserRequest,
-) (dto.UserResponse, error) {
-    return c.svc.Create(ctx, req.Name, req.Email)
-}
-```
-
-
-## コアクリーンアップ
-
-|ステップ|コマンド/タスク|
-|------|----------|
-| 1.インストール| `go install github.com/swaggo/swag/cmd/swag@latest` |
-| 2.コメントを書く| `// @Summary`、`// @Param`、`// @Router`など
-| 3.文書の作成`swag init` |
-| 4. UI登録| `e.GET("/swagger/*", ...)` |
-| 5.接続| `http://localhost:8080/swagger/index.html` |
-
 
 ## 次のステップ
 
-- [リファレンス: API](/ja/reference/api/spine-app) — Spine API ドキュメント
-- [リファレンス: 例](/ja/reference/examples/crud) — 完全なサンプルプロジェクト
+- [Spine API](/ja/reference/api/spine-app)
+- [Swaggo v1.16.6](https://github.com/swaggo/swag/tree/v1.16.6)
+- [http-swagger v1.3.4](https://pkg.go.dev/github.com/swaggo/http-swagger@v1.3.4)

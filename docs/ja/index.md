@@ -39,8 +39,8 @@ features:
 <div class="home-next-steps">
 
 <a href="/ja/learn/getting-started/first-app">
-<strong>ユーザー取得APIを作る <span aria-hidden="true">→</span></strong>
-<span>プロジェクトを作成し、リクエストを送り、レスポンスを確認します。</span>
+<strong>CLIで最初のアプリを作る <span aria-hidden="true">→</span></strong>
+<span>CLIのインストール、プロジェクトの生成、/health の応答確認まで進めます。</span>
 </a>
 
 <a href="/ja/reference/examples/login">

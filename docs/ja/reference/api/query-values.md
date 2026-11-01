@@ -1,5 +1,14 @@
 # query.Values
 
+[最初のアプリ](/ja/learn/getting-started/first-app)で CLI プロジェクトを作成し、[コントローラー](/ja/learn/tutorial/2-controller)で `src/user` を生成してから進めます。ハンドラー例は `src/user` の同じ `package user` を手動で拡張します。`User`、検索・ページ応答型、サービスの検索メソッドは例に合わせて実装し、CLI は生成しません。Product・Order も同じ方式の追加機能です。各ハンドラーは独立した代替例なので必要なメソッドとルートだけを追加します。成功応答は `httpx.Response[T]` で包み、`httpx` と `query` を import してください。
+
+```go
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
+```
+
 query.Values ヘルパーの API 参照。
 ## 概要
 `query.Values` は、HTTP クエリーパラメータ全体の読み取り専用ビューを提供します。 Controllerシグネチャでパラメータとして宣言すると、`QueryValuesResolver`は自動的に値を注入します。
@@ -44,7 +53,7 @@ func (q Values) Get(key string) string
 - `string` - 値。キーがない場合は空の文字列
 **例**
 ```go
-// GET /users?name=john
+// GET /user?name=john
 q.Get("name")     // "john"
 q.Get("missing")  // ""
 ```
@@ -63,7 +72,7 @@ func (q Values) String(key string) string
 - `string` - 値。キーがない場合は空の文字列
 **例**
 ```go
-// GET /users?status=active&name=john
+// GET /user?status=active&name=john
 q.String("status")  // "active"
 q.String("name")    // "john"
 q.String("missing") // ""
@@ -84,12 +93,12 @@ func (q Values) Int(key string, def int64) int64
 - `int64` - 解析された整数またはデフォルト値
 **例**
 ```go
-// GET /users?page=3&size=20
+// GET /user?page=3&size=20
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
 q.Int("offset", 0) // 0 (キーなし)
 
-// GET /users?page=abc
+// GET /user?page=abc
 q.Int("page", 1) // 1 (解析失敗)
 ```
 
@@ -113,13 +122,13 @@ func (q Values) GetBoolByKey(key string, def bool) bool
 - `bool` - 解析されたブールまたはデフォルト値
 **例**
 ```go
-// GET /users?active=true&verified=1&premium=yes
+// GET /user?active=true&verified=1&premium=yes
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
 q.GetBoolByKey("deleted", false)   // false (キーなし)
 
-// GET /users?active=maybe
+// GET /user?active=maybe
 q.GetBoolByKey("active", false)    // false（認識できない値）
 ```
 
@@ -137,7 +146,7 @@ func (q Values) Has(key string) bool
 - `bool` - キーが存在するかどうか
 **例**
 ```go
-// GET /users?status=active&empty=
+// GET /user?status=active&empty=
 q.Has("status")  // true
 q.Has("empty") // true (値が空でもキーは存在)
 q.Has("missing") // false
@@ -170,19 +179,19 @@ Resolver は、`core.ExecutionContext` を `core.HttpRequestContext` にタイ�
 ## Controllerで使用
 
 ```go
-func (c *UserController) Search(q query.Values) []User {
+func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     status := q.String("status")
     page := q.Int("page", 1)
     size := q.Int("size", 20)
     active := q.GetBoolByKey("active", true)
     
-    return c.repo.Search(status, page, size, active)
+    return httpx.Response[[]User]{Body: c.service.Search(status, page, size, active)}
 }
 ```
 
 
 ```go
-func (c *ProductController) Filter(q query.Values) []Product {
+func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
     
     if q.Has("category") {
@@ -192,7 +201,7 @@ func (c *ProductController) Filter(q query.Values) []Product {
         filters["min_price"] = q.String("min_price")
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 

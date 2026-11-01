@@ -1,235 +1,101 @@
 # First App
 
-Create a user lookup API in 5 minutes.
+Install Spine CLI, generate a project, and serve `GET /health` in about five minutes. Go 1.25.5 or later is required; the CLI recommends Go 1.27.3. Initial dependency downloads may take longer depending on your environment.
 
-## Completed Result
-
-```bash
-curl "http://localhost:8080/users?id=1"
-```
-
-```json
-{
-  "id": 1,
-  "name": "Alice",
-  "email": "alice@example.com"
-}
-```
-
-
-## 1. Create Project
+## 1. Install and inspect the CLI
 
 ```bash
-mkdir hello-spine && cd hello-spine
-go mod init hello-spine
-go get github.com/NARUBROWN/spine
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
+`spine version` prints `spine-cli 0.1.4`. If the command is unavailable, follow the Go executable path instructions in [Installation](/en/learn/getting-started/installation).
 
-## 2. Project Structure
+## 2. Create a project
 
+Run this from the parent directory where you want to create the project.
+
+```bash
+spine new hello-spine --module example.com/hello-spine
+cd hello-spine
+go mod tidy
 ```
+
+The CLI pins Spine `v0.5.1` in `go.mod`. Prepare dependencies with `go mod tidy`.
+
+## 3. Inspect the generated structure
+
+```text
 hello-spine/
+├── .gitignore
+├── README.md
+├── go.mod
 ├── main.go
-├── controller/
-│   └── user_controller.go
-├── service/
-│   └── user_service.go
-└── routes/
-    └── routes.go
+├── spine.toml
+└── internal/application/
+    ├── application.go
+    └── application_test.go
 ```
 
-## 3. Writing Code
+`spine.toml` tells the CLI the module, entrypoint, and location of application registration code.
 
-### main.go
+```toml
+module = "example.com/hello-spine"
+entrypoint = "."
+composition = "./internal/application"
+port = 8080
+```
+
+`BuildApplication()` in `internal/application/application.go` assembles the app and boot options. The generated code registers the `HealthController` constructor and `GET /health`, with explicit `boot.HTTPOptions`. Keep route, constructor, and interceptor registrations in this function or in `Register(app) error` functions called from it.
+
+`main.go` is already generated. You can inspect its execution flow without replacing it:
 
 ```go
-package main
-
-import (
-    "log"
-    "time"
-
-    "hello-spine/controller"
-    "hello-spine/routes"
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-)
-
 func main() {
-    app := spine.New()
-
-    // Register constructors — order doesn't matter
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    // Register routes
-    routes.RegisterRoutes(app)
-
-    // Start server
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-### service/user_service.go
-
-```go
-package service
-
-// UserResponse struct
-type UserResponse struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-
-// UserService
-type UserService struct {
-    // Usually inject Repository, but simplified here
-}
-
-func NewUserService() *UserService {
-    return &UserService{}
-}
-
-// Get user (hardcoded data)
-func (s *UserService) Get(id int) (UserResponse, error) {
-    // usually select from DB
-    users := map[int]UserResponse{
-        1: {ID: 1, Name: "Alice", Email: "alice@example.com"},
-        2: {ID: 2, Name: "Bob", Email: "bob@example.com"},
-    }
-
-    if user, ok := users[id]; ok {
-        return user, nil
-    }
-
-    return UserResponse{}, nil
-}
-```
-
-### controller/user_controller.go
-
-```go
-package controller
-
-import (
-    "context"
-
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-// NewUserController — parameters are dependencies
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GetUser handler
-// Function signature is the API spec
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[service.UserResponse], error) {
-    id := int(q.Int("id", 0))
-    user, err := c.svc.Get(id)
+    app, options, err := application.BuildApplication()
     if err != nil {
-        return httpx.Response[service.UserResponse]{}, err
+        log.Fatal(err)
     }
-    return httpx.Response[service.UserResponse]{Body: user}, nil
+    if err := app.Validate(options); err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-### routes/routes.go
-
-```go
-package routes
-
-import (
-    "hello-spine/controller"
-
-    "github.com/NARUBROWN/spine"
-)
-
-func RegisterRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).GetUser)
-}
-```
-
-## 4. Run
+## 4. Verify the contract and local code
 
 ```bash
-go run main.go
+spine doctor
+spine inspect
+spine contract check
+spine verify
 ```
 
-```
-________       _____             
-__  ___/__________(_)___________ 
-_____ \___  __ \_  /__  __ \  _ \
-____/ /__  /_/ /  / _  / / /  __/
-/____/ _  .___//_/  /_/ /_/\___/ 
-       /_/        
-2026/07/26 14:37:59 [Bootstrap] Spine version: v0.5.1
-```
+`doctor` diagnoses tools and project configuration; `inspect` shows the registered execution contract. `contract check` validates the static contract, and `verify` runs contract, gofmt, vet, and test checks. The generated `application_test.go` also checks `BuildApplication()` and `app.Validate(options)` without starting a server.
 
-## 5. Test
+## 5. Run and check the response
 
 ```bash
-# Get Alice
-curl "http://localhost:8080/users?id=1"
+spine dev
+```
+
+Send a request from another terminal:
+
+```bash
+curl http://localhost:8080/health
 ```
 
 ```json
-{"id":1,"name":"Alice","email":"alice@example.com"}
+{"status":"ok"}
 ```
 
-```bash
-# Get Bob
-curl "http://localhost:8080/users?id=2"
-```
+Stop the development server with `Ctrl+C`. You now have a CLI-generated project, reusable application assembly, static contract checks, and an observed HTTP response.
 
-```json
-{"id":2,"name":"Bob","email":"bob@example.com"}
-```
+## Next steps
 
-## 🎉 Done!
-
-You built your first Spine app in 5 minutes.
-
-### What we learned
-
-| Concept | Code |
-|------|------|
-| Create App | `spine.New()` |
-| Register Dependency | `app.Constructor(...)` |
-| Register Route | `app.Route("GET", "/users", ...)` |
-| Start Server | `app.Run(boot.Options{...})` |
-
-### Key Points
-
-- **Constructor Parameter = Dependency Declaration** — No annotations needed
-- **Function Signature = API Spec** — Clear input/output
-- **Routes Managed in One Place** — Visible flow
-
-## Next Steps
-
-- [Tutorial: Project Structure](/en/learn/tutorial/1-project-structure) — Setup real project structure
-- [Tutorial: Interceptor](/en/learn/tutorial/4-interceptor) — Add transaction, logging
-- [Tutorial: Database](/en/learn/tutorial/5-database) — Connect Bun ORM
+- [Project Structure](/en/learn/tutorial/1-project-structure) — Add a feature to the generated project
+- [Controllers](/en/learn/tutorial/2-controller) — Inspect CLI-generated routes and handlers
+- [Database](/en/learn/tutorial/5-database) — Connect a repository to Bun ORM

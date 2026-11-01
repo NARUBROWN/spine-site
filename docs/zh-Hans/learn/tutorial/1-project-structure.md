@@ -1,348 +1,149 @@
 # 项目结构
 
-如何构建 Spine 项目。
+以 Spine CLI 生成的项目为基础，将应用组装与功能代码分开。请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。
 
-## 推荐结构
+## 使用 CLI 创建项目
 
+在准备存放项目的父目录中运行：
+
+```sh
+spine version
+spine new my-app --module example.com/my-app
+cd my-app
+go mod tidy
+spine doctor
+spine inspect
 ```
+
+## 生成的结构
+
+`spine new` 生成以下文件，随后执行 `go mod tidy` 才会创建 `go.sum`。
+
+```text
 my-app/
-├── main.go                  # 应用入口
+├── .gitignore
+├── README.md
 ├── go.mod
-├── go.sum
-│
-├── controller/              # 控制器层
-│   └── user_controller.go
-│
-├── service/                 # 服务层（业务逻辑）
-│   └── user_service.go
-│
-├── repository/              # 仓储层（数据访问）
-│   └── user_repository.go
-│
-├── entity/                  # 数据库实体
-│   └── user.go
-│
-├── dto/                     # 请求/响应对象
-│   ├── user_request.go
-│   └── user_response.go
-│
-├── routes/                  # 路由定义
-│   └── user_routes.go
-│
-├── interceptor/             # 拦截器
-│   ├── tx_interceptor.go
-│   └── logging_interceptor.go
-│
-└── migrations/              # 数据库迁移
-    ├── 001_create_users.up.sql
-    └── 001_create_users.down.sql
+├── main.go
+├── spine.toml
+└── internal/
+    └── application/
+        ├── application.go
+        └── application_test.go
 ```
 
-## 各层的作用
+## CLI 配置
 
-### main.go
+`module` 必须与 `go.mod` 一致。`entrypoint` 指定运行和构建的包，`composition` 指定契约检查与自动注册的目标。只支持以下四个配置键；数据库连接等应用配置需单独管理。
 
-这是应用程序的入口点。注册构造函数，设置拦截器，并注册路由。
+```toml
+module = "example.com/my-app"
+entrypoint = "."
+composition = "./internal/application"
+port = 8080
+```
+
+## 分离启动与应用组装
+
+`main.go` 负责组装、验证和运行应用。构造函数、路由和拦截器均注册在 `internal/application/application.go` 的 `BuildApplication` 中。
 
 ```go
 package main
 
 import (
     "log"
-    "time"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
+    "example.com/my-app/internal/application"
 )
 
 func main() {
-    app := spine.New()
-
-    // 1. 注册一个构造函数
-    app.Constructor(
-        NewDB,
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-        interceptor.NewTxInterceptor,
-    )
-
-    // 2.注册拦截器
-    app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),
-        &interceptor.LoggingInterceptor{},
-    )
-
-    // 3. 路线注册
-    routes.RegisterUserRoutes(app)
-
-    // 4.启动服务器
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    app, options, err := application.BuildApplication()
+    if err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Validate(options); err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-### 控制器/
-
-接收 HTTP 请求并将其委托给服务。不包含任何业务逻辑。
+生成的组装函数返回应用和运行选项，不会启动监听器。默认 HTTP 路由为 `GET /health`。
 
 ```go
-// 控制器/user_controller.go
-package controller
+package application
 
 import (
-    "context"
+    "os"
 
-    "dto"
-    "service"
-
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
 )
 
-type UserController struct {
-    svc *service.UserService  // 服务依赖
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
+func BuildApplication() (spine.App, boot.Options, error) {
+    app := spine.New()
+    app.Constructor(NewHealthController)
+    app.Route("GET", "/health", (*HealthController).Get)
 
-// 函数签名是API规范
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    id := int(q.Int("id", 0))
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, err
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
     }
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
-}
-
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    user, err := c.svc.Create(ctx, req.Name, req.Email)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, err
-    }
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
-### 服务/
+## 使用 CLI 添加功能
 
-负责业务逻辑。通过存储库访问数据。
+在项目根目录生成用户资源。资源已经存在时请跳过此命令。
+
+```sh
+spine generate resource user
+```
+
+```text
+src/user/
+├── user_route.go
+├── user_repository.go
+├── user_service.go
+└── user_controller.go
+```
+
+默认自动注册会向 `BuildApplication` 添加以下代码。请检查生成结果，避免手动重复注册。
 
 ```go
-// 服务/user_service.go
-package service
-
-type UserService struct {
-    repo *repository.UserRepository  // 仓储依赖
-}
-
-func NewUserService(repo *repository.UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-func (s *UserService) Get(ctx context.Context, id int) (dto.UserResponse, error) {
-    user, err := s.repo.FindByID(ctx, id)
-    if err != nil {
-        return dto.UserResponse{}, err
-    }
-
-    return dto.UserResponse{
-        ID:    int(user.ID),
-        Name:  user.Name,
-        Email: user.Email,
-    }, nil
-}
-
-func (s *UserService) Create(ctx context.Context, name, email string) (dto.UserResponse, error) {
-    user := &entity.User{Name: name, Email: email}
-
-    if err := s.repo.Save(ctx, user); err != nil {
-        return dto.UserResponse{}, err
-    }
-
-    return dto.UserResponse{
-        ID:    int(user.ID),
-        Name:  user.Name,
-        Email: user.Email,
-    }, nil
+if err := user.Register(app); err != nil {
+    return nil, boot.Options{}, err
 }
 ```
 
-### 存储库/
+`user_route.go` 注册构造函数和 `GET /user/:id`。控制器处理 HTTP 输入输出，服务处理业务逻辑，仓储处理数据访问。资源生成器只创建返回 ID 的 GET 骨架，不实现数据库模型或持久化。如需带类型的创建与查询示例，可使用不同名称：`spine generate slice order --storage memory --field name:string`。内存存储仅供开发，进程停止后数据即丢失。
 
-负责数据库访问。 SQL 查询或 ORM 调用位于此处。
+## 注册规则与验证
 
-```go
-// 存储库/user_repository.go
-package repository
+在 `BuildApplication() (spine.App, boot.Options, error)` 的顶层保留 `app := spine.New()`。直接编写注册语句，不要将其隐藏在条件、循环或任意辅助函数中，并检查和返回 `Register(app)` 的错误。
 
-type UserRepository struct {
-    db bun.IDB  // 可接受 bun.DB 或 bun.Tx
-}
-
-func NewUserRepository(db bun.IDB) *UserRepository {
-    return &UserRepository{db: db}
-}
-
-func (r *UserRepository) FindByID(ctx context.Context, id int) (*entity.User, error) {
-    user := new(entity.User)
-    err := r.db.NewSelect().
-        Model(user).
-        Where("id = ?", id).
-        Scan(ctx)
-    return user, err
-}
-
-func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewInsert().
-        Model(user).
-        Exec(ctx)
-    return err
-}
+```sh
+spine contract check
+spine verify
+spine dev
 ```
 
-### 实体/
+`contract check` 检查静态契约；`verify` 检查契约、gofmt、vet 和 Go 测试。数据库、消息代理连接及实际 HTTP 行为需单独验证。
 
-这是映射到数据库表的结构。
+## 下一步
 
-```go
-// 实体/用户.go
-package entity
-
-type User struct {
-    ID        int64     `bun:",pk,autoincrement"`
-    Name      string    `bun:",notnull"`
-    Email     string    `bun:",unique,notnull"`
-    CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
-    UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
-}
-```
-
-### dto/
-
-请求/响应对象。定义 API 合约。
-
-```go
-// dto/user_request.go
-package dto
-
-type CreateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-
-type UpdateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-```
-
-```go
-// dto/user_response.go
-package dto
-
-type UserResponse struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-```
-
-### 路线/
-
-在一处管理您的路线。您一眼就能看出哪条路径连接到哪条处理程序。
-
-```go
-// 路线/user_routes.go
-package routes
-
-func RegisterUserRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).GetUser)
-    app.Route("POST", "/users", (*controller.UserController).CreateUser)
-    app.Route("PUT", "/users", (*controller.UserController).UpdateUser)
-    app.Route("DELETE", "/users", (*controller.UserController).DeleteUser)
-}
-```
-
-### 拦截器/
-
-这是请求前/后的处理逻辑。负责事务、日志、身份验证等。
-
-```go
-// 拦截器/logging_interceptor.go
-package interceptor
-
-type LoggingInterceptor struct{}
-
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
-    return nil
-}
-
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
-}
-
-func (i *LoggingInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    return nil
-}
-
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
-    }
-}
-```
-
-## 依赖流
-
-```mermaid
-graph TD
-    Main[main.go]
-
-    subgraph Constructor [注册 Constructor]
-        Flow1["Controller → Service → Repository → DB"]
-    end
-
-    subgraph Interceptor [注册 Interceptor]
-        Flow2["Tx → Logging → ..."]
-    end
-
-    subgraph Routes [注册 Routes]
-        Flow3["GET /users → UserController.GetUser<br/>POST /users → UserController.CreateUser"]
-    end
-
-    Main --> Constructor --> Flow1
-    Main --> Interceptor --> Flow2
-    Main --> Routes --> Flow3
-```
-
-## 核心原则
-
-|原理|描述 |
-|------|------|
-| **单向依赖** |控制器→服务→存储库（禁止反向）|
-| **关注点分离** |每一层只执行自己的角色|
-| **构造函数注入** |所有依赖项均通过构造函数注入 |
-| **接口使用** |存储库接受带有 `bun.IDB` 的 DB/Tx |
-
-## 后续步骤
-
-- [教程：控制器](/zh-Hans/learn/tutorial/2-controller) — 如何编写控制器
-- [教程：依赖注入](/zh-Hans/learn/tutorial/3-dependency-injection) — 深化 DI
-- [教程：拦截器](/zh-Hans/learn/tutorial/4-interceptor) — 事务、日志记录实现
+- [控制器](/zh-Hans/learn/tutorial/2-controller)
+- [依赖注入](/zh-Hans/learn/tutorial/3-dependency-injection)
+- [拦截器](/zh-Hans/learn/tutorial/4-interceptor)

@@ -18,27 +18,39 @@ graph TD
     Service --> Repository
 ```
 
+## CLI로 프로젝트 생성
+
+[CLI 설치](/ko/learn/getting-started/installation)를 완료한 뒤 기본 앱을 생성합니다. 아래 전체 CRUD는 생성된 앱에 직접 추가하는 메모리 저장소 예제입니다. CLI의 `resource`는 GET 골격, `slice --storage memory`는 생성·조회 골격만 제공하므로 수정·삭제까지 자동 생성한다고 해석하지 않습니다.
+
+```sh
+spine new crud-example --module example.com/crud-example
+cd crud-example
+go mod tidy
+spine doctor
+```
+
 ## 프로젝트 구조
 
-```
-spine-user-demo/
+```text
+crud-example/
+├── go.mod
 ├── main.go
-├── model/
-│   └── user.go
-├── repository/
-│   └── user_repository.go
-├── service/
-│   └── user_service.go
-├── controller/
-│   └── user_controller.go
-└── dto/
-    └── user_dto.go
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── model/user.go
+    ├── repository/user_repository.go
+    ├── dto/user_dto.go
+    ├── service/user_service.go
+    └── controller/user_controller.go
 ```
 
 ## Model
 
 ```go
-// model/user.go
+// src/model/user.go
 package model
 
 import "time"
@@ -55,7 +67,7 @@ type User struct {
 ## Repository
 
 ```go
-// repository/user_repository.go
+// src/repository/user_repository.go
 package repository
 
 import (
@@ -63,7 +75,7 @@ import (
     "sync"
     "time"
 
-    "spine-user-demo/model"
+    "example.com/crud-example/src/model"
 )
 
 var (
@@ -162,13 +174,13 @@ func (r *UserRepository) Count() int {
 ## DTO
 
 ```go
-// dto/user_dto.go
+// src/dto/user_dto.go
 package dto
 
 import (
     "time"
 
-    "spine-user-demo/model"
+    "example.com/crud-example/src/model"
 )
 
 // 요청 DTO
@@ -225,13 +237,13 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 ## Service
 
 ```go
-// service/user_service.go
+// src/service/user_service.go
 package service
 
 import (
-    "spine-user-demo/dto"
-    "spine-user-demo/model"
-    "spine-user-demo/repository"
+    "example.com/crud-example/src/dto"
+    "example.com/crud-example/src/model"
+    "example.com/crud-example/src/repository"
 )
 
 type UserService struct {
@@ -300,7 +312,7 @@ func (s *UserService) DeleteUser(id int64) error {
 ## Controller
 
 ```go
-// controller/user_controller.go
+// src/controller/user_controller.go
 package controller
 
 import (
@@ -310,9 +322,9 @@ import (
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
 
-    "spine-user-demo/dto"
-    "spine-user-demo/repository"
-    "spine-user-demo/service"
+    "example.com/crud-example/src/dto"
+    "example.com/crud-example/src/repository"
+    "example.com/crud-example/src/service"
 )
 
 type UserController struct {
@@ -406,62 +418,69 @@ func toHTTPError(err error) error {
 }
 ```
 
-## Main
+## 앱 구성
+
+생성된 루트 `main.go`는 유지합니다. `BuildApplication` → `Validate` → `Run` 순서로 실행하며, 다음 코드로 `internal/application/application.go`를 대체합니다. 모델·저장소·DTO·서비스·컨트롤러 파일은 `src/` 아래에 직접 추가합니다.
 
 ```go
-// main.go
-package main
+// internal/application/application.go
+package application
 
 import (
-    "log"
     "time"
+
+    "example.com/crud-example/src/controller"
+    "example.com/crud-example/src/repository"
+    "example.com/crud-example/src/service"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
-
-    "spine-user-demo/controller"
-    "spine-user-demo/repository"
-    "spine-user-demo/service"
 )
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-
-    // 생성자 등록
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
         controller.NewUserController,
     )
-
-    // 라우트 등록
     app.Route("GET", "/users", (*controller.UserController).List)
     app.Route("GET", "/users/:id", (*controller.UserController).GetByID)
     app.Route("POST", "/users", (*controller.UserController).Create)
     app.Route("PUT", "/users/:id", (*controller.UserController).Update)
     app.Route("DELETE", "/users/:id", (*controller.UserController).Delete)
 
-    // Interceptor 등록
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type"},
-        }),
-    )
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins: []string{"*"},
+        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders: []string{"Content-Type"},
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
-    // 앱 시작
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
+
+## 검증과 실행
+
+```sh
+gofmt -w src internal/application
+go mod tidy
+spine contract check
+spine verify
+spine dev
+```
+
+`contract check`는 정적 계약, `verify`는 계약·gofmt·vet·Go 테스트를 확인합니다. 실제 생성·조회·수정·삭제는 아래 HTTP 요청으로 확인합니다. 이 저장소는 프로세스를 종료하면 데이터가 사라집니다. DB 영속화는 [데이터베이스 튜토리얼](/ko/learn/tutorial/5-database)에서 별도로 구성합니다.
 
 ## API 테스트
 
@@ -557,7 +576,12 @@ curl http://localhost:8080/users/999
 }
 ```
 
+앞 단계에서 사용자를 삭제했으므로 동일 이메일의 사용자를 먼저 다시 생성합니다(200). 이어 같은 이메일로 생성하면 중복 오류가 납니다(400).
+
 ```bash
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "홍길동", "email": "hong@example.com"}'
 # 중복 이메일
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
@@ -576,10 +600,10 @@ curl -X POST http://localhost:8080/users \
 
 ```go
 // ✓ 의미 타입으로 입력 받음
-func (c *UserController) GetByID(id path.Int) (dto.UserResponse, error)
+func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
 // ✓ httperr로 의미만 표현
-return dto.UserResponse{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 ```
 
 ### 의존성 주입

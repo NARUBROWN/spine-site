@@ -1,5 +1,7 @@
 # 依赖注入
 
+查看[控制器](/zh-Hans/learn/tutorial/2-controller)中 CLI 生成的 `src/user` 资源的依赖关系。安装和生成项目请参考[第一个应用](/zh-Hans/learn/getting-started/first-app)。
+
 了解 Spine 的 DI。
 
 ## 关键概念
@@ -12,126 +14,79 @@ Spine 的依赖注入是**基于构造函数的**。
 
 ```go
 // 通过查看参数类型自动注入依赖项
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
-## 基本用法
+## CLI 生成的依赖
 
-### 1. 编写构造函数
+尚未生成资源时，在 `hello-spine` 根目录运行以下命令。已经存在时请跳过。
 
-每个组件都有一个构造函数。
+```bash
+spine generate resource user --dry-run
+```
+
+在预览中检查生成文件与注册代码的变更，然后执行下方命令生成。
+
+```bash
+spine generate resource user
+```
+
+CLI 在 `src/user` 的同一个 `package user` 中生成以下构造函数。
 
 ```go
-// 存储库.go
-type UserRepository struct {
-    db *bun.DB
-}
+// src/user/user_repository.go
+package user
 
-func NewUserRepository(db *bun.DB) *UserRepository {
-    return &UserRepository{db: db}
-}
+type UserRepository struct{}
 
-// 服务.go
-type UserService struct {
-    repo *UserRepository
-}
-
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// 控制器.go
-type UserController struct {
-    svc *UserService
-}
-
-func NewUserController(svc *UserService) *UserController {
-    return &UserController{svc: svc}
-}
+func NewUserRepository() *UserRepository { return &UserRepository{} }
 ```
-
-### 2.构造函数注册
-
-在 `app.Constructor()` 中注册一个构造函数。
 
 ```go
-func main() {
-    app := spine.New()
+// src/user/user_service.go
+package user
 
-    app.Constructor(
-        NewDB,              // 返回 *bun.DB
-        NewUserRepository,  // 需要 *bun.DB → 返回 *UserRepository
-        NewUserService,     // 需要 *UserRepository → 返回 *UserService
-        NewUserController,  // 需要 *UserService → 返回 *UserController
-    )
+type UserService struct{ repository *UserRepository }
 
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
-### 3.自动解析
+```go
+// src/user/user_controller.go
+package user
 
-Spine 分析依赖图并以正确的顺序创建实例。
+type UserController struct{ service *UserService }
 
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
 ```
-注册顺序：任意
-执行顺序：DB → Repository → Service → Controller
-```
 
-## 任意订单
-
-注册顺序并不重要。 Spine 分析依赖关系并自动对它们进行排序。
+`src/user/user_route.go` 的 `Register` 注册这些构造函数和 `GET /user/:id`。CLI 在 `internal/application/application.go` 的 `BuildApplication()` 中添加检查错误的 `user.Register(app)`。请勿重复注册相同构造函数。
 
 ```go
-// 即使你这样注册
-app.Constructor(
-    NewUserController,  // 需要 UserService
-    NewUserService,     // 需要 UserRepository
-    NewUserRepository,  // 需要 bun.DB
-    NewDB,
-)
-
-// 实际的创建顺序是
-// 1.NewDB()
-// 2.新建用户存储库(db)
-// 3.NewUserService（回购）
-// 4.新建用户控制器(svc)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository, NewUserService, NewUserController)
+app.Route("GET", "/user/:id", (*UserController).Get)
 ```
 
-## 依赖关系图
+## 注册与解析顺序
 
-### 可视化
+无论注册顺序如何，都会先解析所需的依赖。容器共享已创建的实例，不会为每个请求重新创建。
+
+```go
+// 此示例替换 user_route.go 中现有的 Constructor 调用。
+app.Constructor(NewUserController, NewUserService, NewUserRepository)
+```
 
 ```mermaid
-graph TD
-    subgraph Step1 [main.go]
-        Code["app.Constructor(<br/>NewDB,<br/>NewUserRepository,<br/>NewUserService,<br/>NewUserController<br/>)"]
-    end
-
-    subgraph Step2 [分析依赖图]
-        D1[NewDB] --> D2["NewUserRepository(db)"]
-        D2 --> D3["NewUserService(repo)"]
-        D3 --> D4["NewUserController(svc)"]
-    end
-
-    subgraph Step3 [实例创建完成]
-        R1["*bun.DB"]
-        R2["*UserRepository"]
-        R3["*UserService"]
-        R4["*UserController"]
-    end
-
-    Step1 --> Step2
-    Step2 --> Step3
+graph LR
+    Repository["NewUserRepository()"] --> Service["NewUserService(repository)"]
+    Service --> Controller["NewUserController(service)"]
 ```
 
 ## 构造函数规则
@@ -153,25 +108,24 @@ func NewLogger() *Logger
 
 ### 返回类型
 
-构造函数返回**单个值**或**（值，错误）**。
+构造函数必须只返回一个值，不支持返回 `(值, error)`。返回类型确定提供的类型；返回 nil 也会报错。
 
 ```go
-// ✅ 返回单个值
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// ✅ 可能返回错误
-func NewDB() (*bun.DB, error) {
-    db, err := sql.Open("mysql", "...")
-    if err != nil {
-        return nil, err
-    }
-    return bun.NewDB(db, mysqldialect.New()), nil
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
+数据库provider也应像[数据库示例](/zh-Hans/learn/tutorial/5-database)中的 `database.NewDB() *bun.DB` 一样只返回一个值，并注册构造函数。`BuildApplication` 只负责注册，因此生成的验证测试不会连接数据库。连接错误在应用启动、执行provider时处理；实际连接需要单独验证。
+
+```go
+// internal/application/application.go: BuildApplication
+app.Constructor(database.NewDB)
+```
+
 ## 使用接口
+
+本节是[数据库](/zh-Hans/learn/tutorial/5-database)中的手动扩展；`resource` 不生成 Bun 配置。优先使用类型精确匹配的接口 provider，否则只能有一个实现该接口的 provider。多个候选会产生错误。请求中的 `bun.Tx` 不会自动重新注入应用级构造函数。应从请求上下文读取事务，经控制器和服务传给接受 `bun.IDB` 的仓储方法。
 
 ### 问题情况
 
@@ -235,53 +189,28 @@ func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Hand
 func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 ```
 
-## 注册多个组件
+## 按功能注册
 
-### 按域分隔
+使用 CLI 生成另一个功能后，它会注册到同一个组装入口。以下生成独立的 `order` 资源。CLI 会添加 `user.Register` 和 `order.Register` 调用，请勿手动重复添加。
 
-```go
-func main() {
-    app := spine.New()
-
-    // 基础设施
-    app.Constructor(
-        NewDB,
-        NewRedisClient,
-        NewLogger,
-    )
-
-    // 用户域
-    app.Constructor(
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    // 订购域名
-    app.Constructor(
-        repository.NewOrderRepository,
-        service.NewOrderService,
-        controller.NewOrderController,
-    )
-
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
+```bash
+spine generate resource order --dry-run
 ```
 
-### 可以多次调用
+在预览中检查生成文件与注册代码的变更，然后执行下方命令生成。
 
-`app.Constructor()` 可以被多次调用。
+```bash
+spine generate resource order
+```
+
+### 多次调用 Constructor
+
+可以在同一个 `Register` 中分多次调用注册。每个类型只注册一次。
 
 ```go
-app.Constructor(NewDB)
-app.Constructor(NewUserRepository, NewUserService)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository)
+app.Constructor(NewUserService)
 app.Constructor(NewUserController)
 ```
 
@@ -323,7 +252,7 @@ func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
 // 启动时出现错误
-// 恐慌：检测到循环依赖：*A
+// circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
 ### 缺少依赖项
@@ -336,8 +265,18 @@ app.Constructor(
 )
 
 // 启动时出现错误
-// 恐慌：没有注册构造函数：*repository.UserRepository
+// no constructor registered for *user.UserRepository
 ```
+
+## 验证范围
+
+```bash
+spine doctor
+spine contract check
+spine verify
+```
+
+`contract check` 检查静态 DI 契约，`verify` 还执行本地代码检查。仅调用 `app.Validate(options)` 不能证明构造函数执行或 DI warm-up 成功。实际初始化、数据库连接和请求需要运行应用并单独进行 E2E 验证。循环或缺少依赖会在解析时返回错误，生成的 main 会检查 Run 错误。
 
 ## 主要摘要
 

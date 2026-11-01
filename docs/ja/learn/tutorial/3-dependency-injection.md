@@ -1,5 +1,7 @@
 # 依存性の注入
 
+[コントローラー](/ja/learn/tutorial/2-controller)で CLI が生成した `src/user` の依存関係を確認します。インストールとプロジェクト生成は[最初のアプリ](/ja/learn/getting-started/first-app)を参照してください。
+
 SpineのDI（依存性の注入）を理解する。
 
 
@@ -8,140 +10,86 @@ SpineのDI（依存性の注入）を理解する。
 Spineの依存性注入は**コンストラクタベース**です。
 
 - アノテーションなし (`@Autowired`、`@Injectable` 不要)
-- 設定ファイルなし
+- DI 用の別設定は不要（`spine.toml` は CLI のプロジェクト設定）
 - コンストラクタパラメータがそのまま依存関係の宣言になります
 
 
 ```go
 // パラメータタイプを見て自動的に依存関係を注入
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
+## CLI が生成した依存関係
 
-## 基本的な使い方
+まだ生成していない場合は `hello-spine` のルートで実行します。すでに存在する場合は再生成しないでください。
 
-### 1. コンストラクタの作成
+```bash
+spine generate resource user --dry-run
+```
 
-各コンポーネントはコンストラクタ関数を持ちます。
+プレビューで生成ファイルと登録コードの変更を確認し、以下のコマンドで生成します。
 
+```bash
+spine generate resource user
+```
+
+CLI は `src/user` の同じ `package user` に次のコンストラクタを生成します。
 
 ```go
-// repository.go
-type UserRepository struct {
-    db *bun.DB
-}
+// src/user/user_repository.go
+package user
 
-func NewUserRepository(db *bun.DB) *UserRepository {
-    return &UserRepository{db: db}
-}
+type UserRepository struct{}
 
-// service.go
-type UserService struct {
-    repo *UserRepository
-}
-
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// controller.go
-type UserController struct {
-    svc *UserService
-}
-
-func NewUserController(svc *UserService) *UserController {
-    return &UserController{svc: svc}
-}
+func NewUserRepository() *UserRepository { return &UserRepository{} }
 ```
-
-### 2. コンストラクタの登録
-
-`app.Constructor()` にコンストラクタを登録します。
-
 
 ```go
-func main() {
-    app := spine.New()
-    
-    app.Constructor(
-        NewDB,              // *bun.DB を返す
-        NewUserRepository,  // *bun.DB が必要 → *UserRepository を返す
-        NewUserService,     // *UserRepository が必要 → *UserService を返す
-        NewUserController,  // *UserService が必要 → *UserController を返す
-    )
-    
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+// src/user/user_service.go
+package user
+
+type UserService struct{ repository *UserRepository }
+
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
-### 3. 自動解決
+```go
+// src/user/user_controller.go
+package user
 
-Spineが依存関係グラフを分析し、正しい順序でインスタンスを作成します。
+type UserController struct{ service *UserService }
 
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
 ```
-登録順序: 任意
-実行順序: DB → Repository → Service → Controller
-```
 
-## 順序に依存しない
-
-登録順序は関係ありません。Spineが依存関係を分析して自動的にソートします。
-
+`src/user/user_route.go` の `Register` がコンストラクタと `GET /user/:id` を登録します。CLI は `internal/application/application.go` の `BuildApplication()` にエラーを確認する `user.Register(app)` を追加します。同じコンストラクタを再登録しないでください。
 
 ```go
-// このように登録しても
-app.Constructor(
-    NewUserController,  // UserService が必要
-    NewUserService,     // UserRepository が必要
-    NewUserRepository,  // bun.DB が必要
-    NewDB,
-)
-
-// 実際の作成順序は
-// 1. NewDB()
-// 2. NewUserRepository(db)
-// 3. NewUserService(repo)
-// 4. NewUserController(svc)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository, NewUserService, NewUserController)
+app.Route("GET", "/user/:id", (*UserController).Get)
 ```
 
+## 登録と解決の順序
 
-## 依存関係グラフ
+登録順に関係なく、必要な依存関係から解決します。解決したインスタンスはコンテナで共有し、リクエストごとには生成しません。
 
-### 視覚化
-
+```go
+// user_route.go の既存の Constructor 呼び出しを置き換える例です。
+app.Constructor(NewUserController, NewUserService, NewUserRepository)
+```
 
 ```mermaid
-graph TD
-    subgraph Step1 [main.go]
-        Code["app.Constructor(<br/>NewDB,<br/>NewUserRepository,<br/>NewUserService,<br/>NewUserController<br/>)"]
-    end
-
-    subgraph Step2 [依存関係グラフの分析]
-        D1[NewDB] --> D2["NewUserRepository(db)"]
-        D2 --> D3["NewUserService(repo)"]
-        D3 --> D4["NewUserController(svc)"]
-    end
-
-    subgraph Step3 [インスタンス作成完了]
-        R1["*bun.DB"]
-        R2["*UserRepository"]
-        R3["*UserService"]
-        R4["*UserController"]
-    end
-
-    Step1 --> Step2
-    Step2 --> Step3
+graph LR
+    Repository["NewUserRepository()"] --> Service["NewUserService(repository)"]
+    Service --> Controller["NewUserController(service)"]
 ```
-
 
 ## コンストラクタのルール
 
@@ -163,26 +111,24 @@ func NewLogger() *Logger
 
 ### 戻り値のタイプ
 
-コンストラクタは**単一の値**または**(値, error)**を返します。
-
+コンストラクタは値を1つだけ返す必要があります。`(値, error)` を返すコンストラクタはサポートしません。戻り値の型が提供する型になり、nil の返却もエラーです。
 
 ```go
-// ✅ 単一の値を返す
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// ✅ エラーを返すことも可能
-func NewDB() (*bun.DB, error) {
-    db, err := sql.Open("mysql", "...")
-    if err != nil {
-        return nil, err
-    }
-    return bun.NewDB(db, mysqldialect.New()), nil
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
+[データベースの例](/ja/learn/tutorial/5-database)の `database.NewDB() *bun.DB` のように、DBのproviderも単一の値を返すコンストラクタとして登録します。`BuildApplication` は登録だけを行うため、生成された検証テストはDB接続を開きません。接続エラーはアプリ起動時のprovider実行段階で処理されます。実際の接続は別途確認してください。
+
+```go
+// internal/application/application.go: BuildApplication
+app.Constructor(database.NewDB)
+```
+
 ## インターフェースの活用
+
+この節は[データベース](/ja/learn/tutorial/5-database)の手動拡張です。`resource` は Bun の設定を生成しません。インターフェースと完全一致する provider を優先し、それがなければ実装する provider が1つの場合に注入します。候補が複数ある場合はエラーです。リクエストの `bun.Tx` がアプリ全体で共有するコンストラクタに再注入されることはありません。リクエストコンテキストから読み、サービスを経由して `bun.IDB` を受け取るリポジトリのメソッドに渡します。
 
 ### 問題状況
 
@@ -216,7 +162,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 
 
 ```go
-// interceptor/tx_interceptor.go
+// src/interceptor/tx_interceptor.go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     tx, err := i.db.BeginTx(ctx.Context(), nil)
     if err != nil {
@@ -237,7 +183,7 @@ func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Hand
 
     tx, ok := v.(bun.Tx)
     if !ok {
-        return nil
+        return errors.New("invalid transaction type")
     }
     
     if executionErr != nil {
@@ -251,55 +197,28 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 ```
 
 
-## 複数のコンポーネントの登録
+## 機能ごとの登録
 
-### ドメイン別の分離
+別の機能も CLI で生成すると、同じ composition root に登録されます。以下は独立した `order` リソースの生成例です。`user.Register` と `order.Register` の呼び出しは CLI が追加するため、重複追加しないでください。
 
-
-```go
-func main() {
-    app := spine.New()
-    
-    // インフラ
-    app.Constructor(
-        NewDB,
-        NewRedisClient,
-        NewLogger,
-    )
-    
-    // Userドメイン
-    app.Constructor(
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-    )
-    
-    // Orderドメイン
-    app.Constructor(
-        repository.NewOrderRepository,
-        service.NewOrderService,
-        controller.NewOrderController,
-    )
-    
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
+```bash
+spine generate resource order --dry-run
 ```
 
-### 複数回の呼び出しが可能
+プレビューで生成ファイルと登録コードの変更を確認し、以下のコマンドで生成します。
 
-`app.Constructor()` は複数回呼び出すことができます。
+```bash
+spine generate resource order
+```
 
+### 複数回の Constructor 呼び出し
+
+同じ `Register` 内で登録を複数の呼び出しに分けることもできます。各型は1回ずつ登録してください。
 
 ```go
-app.Constructor(NewDB)
-app.Constructor(NewUserRepository, NewUserService)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository)
+app.Constructor(NewUserService)
 app.Constructor(NewUserController)
 ```
 
@@ -342,7 +261,7 @@ func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
 // 起動時にエラー発生
-// panic: 循環依存関係の検出: *A
+// circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
 ### 依存関係の欠落
@@ -356,8 +275,18 @@ app.Constructor(
 )
 
 // 起動時にエラー発生
-// panic: 登録されたコンストラクタがありません: *repository.UserRepository
+// no constructor registered for *user.UserRepository
 ```
+
+## 検証の範囲
+
+```bash
+spine doctor
+spine contract check
+spine verify
+```
+
+`contract check` は静的 DI 契約を検査し、`verify` はローカルコードも検査します。`app.Validate(options)` だけではコンストラクタの実行や DI warm-up を検証できません。実際の初期化・DB 接続・リクエストはアプリ実行と別の E2E で確認します。循環・欠落依存関係は解決時にエラーとなり、生成された main は Run のエラーを確認します。
 
 ## 要点のまとめ
 

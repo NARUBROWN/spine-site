@@ -4,41 +4,38 @@ Spine으로 JWT 기반 로그인을 구현합니다.
 
 ## 프로젝트 구조
 
-```
+```text
 login-example/
 ├── go.mod
 ├── main.go
-├── controller/
-│   └── auth_controller.go
-├── interceptor/
-│   └── auth_interceptor.go
-├── model/
-│   └── user.go
-└── store/
-    └── user_store.go
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── controller/auth_controller.go
+    ├── interceptor/auth_interceptor.go
+    ├── model/user.go
+    └── store/user_store.go
 ```
 
 
-## 프로젝트 생성
+## CLI로 프로젝트 생성
 
-```bash
-mkdir login-example
+[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료합니다. CLI 0.1.4는 JWT 인증 생성기를 제공하지 않으므로, 기본 프로젝트를 생성한 뒤 아래 인증 코드를 `src/`에 직접 추가합니다.
+
+```sh
+spine new login-example --module example.com/login-example
 cd login-example
-go mod init login-example
-```
-
-## 의존성 설치
-
-```bash
-go get github.com/NARUBROWN/spine
+go mod tidy
+spine doctor
 go get github.com/golang-jwt/jwt/v5
 ```
-
 
 ## 모델 정의
 
 ```go
-// model/user.go
+// src/model/user.go
 package model
 
 type User struct {
@@ -71,12 +68,12 @@ type SignupRequest struct {
 인메모리 저장소로 간단하게 구현합니다.
 
 ```go
-// store/user_store.go
+// src/store/user_store.go
 package store
 
 import (
     "errors"
-    "login-example/model"
+    "example.com/login-example/src/model"
     "sync"
 )
 
@@ -146,7 +143,7 @@ func (s *UserStore) FindByID(id int64) (*model.User, error) {
 JWT 토큰을 검증하는 라우트 인터셉터입니다.
 
 ```go
-// interceptor/auth_interceptor.go
+// src/interceptor/auth_interceptor.go
 package interceptor
 
 import (
@@ -182,7 +179,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
             return nil, httperr.Unauthorized("잘못된 서명 방식입니다.")
         }
         return JWTSecret, nil
-    })
+    }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
     if err != nil || !token.Valid {
         return httperr.Unauthorized("유효하지 않은 토큰입니다.")
@@ -194,7 +191,11 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("토큰 클레임을 읽을 수 없습니다.")
     }
 
-    userID := int64(claims["user_id"].(float64))
+    rawID, ok := claims["user_id"].(float64)
+    if !ok || rawID <= 0 || rawID != float64(int64(rawID)) {
+        return httperr.Unauthorized("Invalid user ID claim.")
+    }
+    userID := int64(rawID)
     
     // ExecutionContext에 사용자 ID 저장
     ctx.Set("userID", userID)
@@ -217,17 +218,17 @@ func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.H
 로그인, 회원가입, 내 정보 조회 기능을 구현합니다.
 
 ```go
-// controller/auth_controller.go
+// src/controller/auth_controller.go
 package controller
 
 import (
     "time"
 
-    "login-example/interceptor"
-    "login-example/model"
-    "login-example/store"
+    "example.com/login-example/src/interceptor"
+    "example.com/login-example/src/model"
+    "example.com/login-example/src/store"
 
-    "github.com/NARUBROWN/spine/core"
+    spinectx "github.com/NARUBROWN/spine/pkg/spine"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/golang-jwt/jwt/v5"
@@ -244,7 +245,7 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
 }
 
 // 회원가입 — 인증 불필요
-func (c *AuthController) Signup(req model.SignupRequest) (httpx.Response[model.User], error) {
+func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
         return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
     }
@@ -258,7 +259,7 @@ func (c *AuthController) Signup(req model.SignupRequest) (httpx.Response[model.U
 }
 
 // 로그인 — 인증 불필요
-func (c *AuthController) Login(req model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
+func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
         return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
     }
@@ -294,7 +295,7 @@ func (c *AuthController) Login(req model.LoginRequest) (httpx.Response[model.Log
 }
 
 // 내 정보 조회 — 인증 필요
-func (c *AuthController) GetMe(ctx core.ExecutionContext) (httpx.Response[model.User], error) {
+func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
     // AuthInterceptor가 저장한 userID 조회
     userIDValue, ok := ctx.Get("userID")
     if !ok {
@@ -312,21 +313,20 @@ func (c *AuthController) GetMe(ctx core.ExecutionContext) (httpx.Response[model.
 ```
 
 
-## main.go
+## 앱 구성
 
-라우트를 등록하고 서버를 시작합니다.
+생성된 루트 `main.go`는 그대로 유지합니다. `BuildApplication` → `Validate` → `Run` 순서로 실행하며, 다음 코드는 `internal/application/application.go`를 대체합니다.
 
 ```go
-// main.go
-package main
+// internal/application/application.go
+package application
 
 import (
-    "log"
     "time"
 
-    "login-example/controller"
-    "login-example/interceptor"
-    "login-example/store"
+    "example.com/login-example/src/controller"
+    "example.com/login-example/src/interceptor"
+    "example.com/login-example/src/store"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
@@ -334,55 +334,45 @@ import (
     "github.com/NARUBROWN/spine/pkg/route"
 )
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
+    app.Constructor(store.NewUserStore, controller.NewAuthController)
 
-    // 생성자 등록
-    app.Constructor(
-        store.NewUserStore,
-        controller.NewAuthController,
-    )
-
-    // 전역 인터셉터 — CORS
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type", "Authorization"},
-        }),
-    )
-
-    // 공개 라우트 — 인증 불필요
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins: []string{"*"},
+        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders: []string{"Content-Type", "Authorization"},
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
     app.Route("POST", "/signup", (*controller.AuthController).Signup)
     app.Route("POST", "/login", (*controller.AuthController).Login)
-
-    // 보호된 라우트 — 인증 필요 (라우트 인터셉터 사용)
-    app.Route(
-        "GET",
-        "/me",
-        (*controller.AuthController).GetMe,
+    app.Route("GET", "/me", (*controller.AuthController).GetMe,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
 
-    log.Println("서버 시작: http://localhost:8080")
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
 
+## 검증과 실행
 
-## 실행
-
-```bash
-go run .
+```sh
+gofmt -w src internal/application
+go mod tidy
+spine contract check
+spine verify
+spine dev
 ```
 
+`contract check`는 정적 계약, `verify`는 계약·gofmt·vet·Go 테스트를 확인합니다. 실제 가입·로그인·인증 요청은 아래 HTTP 테스트로 별도 확인합니다. 메모리 저장소와 평문 비밀번호 비교는 학습용입니다. 실제 서비스에서는 비밀번호 해시와 환경변수 기반 JWT 비밀키를 사용하세요.
 
 ## API 테스트
 
@@ -443,9 +433,12 @@ curl http://localhost:8080/me
 
 토큰과 함께 요청:
 
-```bash
+로그인 응답의 `token` 값을 생략 없이 복사합니다. 아래 `read` 명령을 실행하면 그 토큰을 붙여넣고 Enter를 누른 뒤 `/me` 요청을 실행합니다.
+
+```sh
+read -r TOKEN
 curl http://localhost:8080/me \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 응답:

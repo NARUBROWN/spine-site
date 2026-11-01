@@ -39,8 +39,8 @@ features:
 <div class="home-next-steps">
 
 <a href="/zh-Hans/learn/getting-started/first-app">
-<strong>构建用户查询API <span aria-hidden="true">→</span></strong>
-<span>从创建项目到发送请求并确认响应。</span>
+<strong>使用CLI创建第一个应用 <span aria-hidden="true">→</span></strong>
+<span>安装CLI，生成项目并确认 /health 响应。</span>
 </a>
 
 <a href="/zh-Hans/reference/examples/login">

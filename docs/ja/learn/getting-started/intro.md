@@ -7,27 +7,29 @@ Spineは、**リクエストの処理過程を隠さないGoウェブフレー�
 リクエストがどのように解決され、どのような順序で実行され、いつビジネスロジックが呼び出され、どのようにレスポンスとして完成するかを、明示的な実行パイプラインとして明らかにします。
 
 
+CLIが生成する `internal/application/application.go` でアプリを組み立てます。以下はユーザー機能を追加した登録例です。生成された `main.go` の `BuildApplication` → `Validate` → `Run` の順序を維持します。
+
+以下は手動で実装したユーザー型とインターセプターを前提とする登録の抜粋です。CLIの `resource user` が生成するのは `src/user` の `UserController.Get` と `GET /user/:id` です。生成されたプロジェクトでは `BuildApplication` の `user.Register(app)` のエラー確認を維持し、同じコンストラクタやルートを重複登録しないでください。生成と編集の手順は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)を参照してください。
+
 ```go
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
     
     // 依存関係の登録 — 順序は関係なく、コンストラクタを登録するだけで自動解決
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
     
     // インターセプター — 実行順序がコード上でそのまま見えます
-    app.Interceptor(&TxInterceptor{}, &LoggingInterceptor{})
+    app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
     
     // ルート — どのメソッドがどのパスであるかが明確
     app.Route("GET", "/users", (*UserController).GetUser)
     
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
 
@@ -160,7 +162,8 @@ func (c *UserController) CreateUser(
 
 
 ```bash
-go get github.com/NARUBROWN/spine
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
-[5分クイックスタート →](/ja/learn/getting-started/first-app)
+CLIをインストールし、[最初のアプリ](/ja/learn/getting-started/first-app)で変更計画を確認してプロジェクトを生成してください。

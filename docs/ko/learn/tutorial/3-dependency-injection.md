@@ -1,5 +1,7 @@
 # 의존성 주입
 
+[컨트롤러](/ko/learn/tutorial/2-controller)에서 CLI로 만든 `src/user` 리소스의 의존성을 살펴봅니다. 설치와 프로젝트 생성은 [첫 번째 앱](/ko/learn/getting-started/first-app)을 따릅니다.
+
 Spine의 DI 이해하기.
 
 
@@ -8,141 +10,91 @@ Spine의 DI 이해하기.
 Spine의 의존성 주입은 **생성자 기반**입니다.
 
 - 어노테이션 없음 (`@Autowired`, `@Injectable` 불필요)
-- 설정 파일 없음
+- DI 바인딩용 별도 설정 파일 없음 (`spine.toml`은 CLI 프로젝트 설정)
 - 생성자 파라미터가 곧 의존성 선언
 
 ```go
 // 파라미터 타입을 보고 자동으로 의존성 주입
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
+## CLI로 생성한 의존성
 
-## 기본 사용법
+아직 생성하지 않았다면 `hello-spine` 루트에서 실행합니다. 이미 생성했다면 다시 실행하지 마세요.
 
-### 1. 생성자 작성
+```bash
+spine generate resource user --dry-run
+```
 
-각 컴포넌트는 생성자 함수를 가집니다.
+미리보기에서 생성 파일과 등록 코드 변경을 확인한 뒤 아래 명령으로 생성합니다.
+
+```bash
+spine generate resource user
+```
+
+다음은 CLI가 `src/user`의 같은 `package user`에 생성한 생성자들입니다.
 
 ```go
-// repository.go
-type UserRepository struct {
-    db *bun.DB
-}
+// src/user/user_repository.go
+package user
 
-func NewUserRepository(db *bun.DB) *UserRepository {
-    return &UserRepository{db: db}
-}
+type UserRepository struct{}
 
-// service.go
-type UserService struct {
-    repo *UserRepository
-}
-
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// controller.go
-type UserController struct {
-    svc *UserService
-}
-
-func NewUserController(svc *UserService) *UserController {
-    return &UserController{svc: svc}
-}
+func NewUserRepository() *UserRepository { return &UserRepository{} }
 ```
-
-### 2. 생성자 등록
-
-`app.Constructor()`에 생성자를 등록합니다.
 
 ```go
-func main() {
-    app := spine.New()
-    
-    app.Constructor(
-        NewDB,              // *bun.DB 반환
-        NewUserRepository,  // *bun.DB 필요 → *UserRepository 반환
-        NewUserService,     // *UserRepository 필요 → *UserService 반환
-        NewUserController,  // *UserService 필요 → *UserController 반환
-    )
-    
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+// src/user/user_service.go
+package user
+
+type UserService struct{ repository *UserRepository }
+
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
-### 3. 자동 해결
+```go
+// src/user/user_controller.go
+package user
 
-Spine이 의존성 그래프를 분석하고 올바른 순서로 인스턴스를 생성합니다.
+type UserController struct{ service *UserService }
 
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
 ```
-등록 순서: 아무렇게나
-실행 순서: DB → Repository → Service → Controller
-```
 
-## 순서 무관
-
-등록 순서는 상관없습니다. Spine이 의존성을 분석해 자동으로 정렬합니다.
+`src/user/user_route.go`의 `Register`가 이 생성자들과 `GET /user/:id`를 등록합니다. CLI는 `internal/application/application.go`의 `BuildApplication()`에서 `user.Register(app)`의 오류를 확인하도록 연결합니다. 이미 자동 등록된 생성자를 다시 등록하지 마세요.
 
 ```go
-// 이렇게 등록해도
-app.Constructor(
-    NewUserController,  // UserService 필요
-    NewUserService,     // UserRepository 필요
-    NewUserRepository,  // bun.DB 필요
-    NewDB,
-)
-
-// 실제 생성 순서는
-// 1. NewDB()
-// 2. NewUserRepository(db)
-// 3. NewUserService(repo)
-// 4. NewUserController(svc)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository, NewUserService, NewUserController)
+app.Route("GET", "/user/:id", (*UserController).Get)
 ```
 
+## 등록 순서와 해결 순서
 
-## 의존성 그래프
+등록 순서와 관계없이 필요한 의존성을 먼저 해결합니다. 생성한 인스턴스는 컨테이너에서 공유하며 요청마다 새로 만들지 않습니다.
 
-### 시각화
+```go
+// user_route.go의 기존 Constructor 호출을 대체하는 예시입니다.
+app.Constructor(NewUserController, NewUserService, NewUserRepository)
+```
 
 ```mermaid
-graph TD
-    subgraph Step1 [main.go]
-        Code["app.Constructor(<br/>NewDB,<br/>NewUserRepository,<br/>NewUserService,<br/>NewUserController<br/>)"]
-    end
-
-    subgraph Step2 [의존성 그래프 분석]
-        D1[NewDB] --> D2["NewUserRepository(db)"]
-        D2 --> D3["NewUserService(repo)"]
-        D3 --> D4["NewUserController(svc)"]
-    end
-
-    subgraph Step3 [인스턴스 생성 완료]
-        R1["*bun.DB"]
-        R2["*UserRepository"]
-        R3["*UserService"]
-        R4["*UserController"]
-    end
-
-    Step1 --> Step2
-    Step2 --> Step3
+graph LR
+    Repository["NewUserRepository()"] --> Service["NewUserService(repository)"]
+    Service --> Controller["NewUserController(service)"]
 ```
-
 
 ## 생성자 규칙
 
 ### 파라미터
 
-생성자 파라미터는 **이미 등록된 타입**이어야 합니다.
+생성자 파라미터는 **provider가 등록된 타입**이어야 합니다.
 
 ```go
 // ✅ 올바른 예
@@ -157,25 +109,24 @@ func NewLogger() *Logger
 
 ### 반환 타입
 
-생성자는 **단일 값** 또는 **(값, error)**를 반환합니다.
+생성자는 정확히 하나의 값을 반환해야 합니다. `(값, error)` 생성자는 지원하지 않습니다. 반환 타입이 제공하는 타입이 되며 nil 반환도 오류입니다.
 
 ```go
-// ✅ 단일 값 반환
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// ✅ 에러 반환 가능
-func NewDB() (*bun.DB, error) {
-    db, err := sql.Open("mysql", "...")
-    if err != nil {
-        return nil, err
-    }
-    return bun.NewDB(db, mysqldialect.New()), nil
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
+DB 연결 함수도 [데이터베이스 예제](/ko/learn/tutorial/5-database)의 `database.NewDB() *bun.DB`처럼 단일 값을 반환하도록 구현하고 생성자로 등록합니다. `BuildApplication`은 등록만 수행하므로 생성된 검증 테스트가 DB 연결을 열지 않습니다. 연결 오류는 생성자가 실행되는 앱 시작 단계에서 처리되며, 실제 접속 확인은 별도로 해야 합니다.
+
+```go
+// internal/application/application.go: BuildApplication
+app.Constructor(database.NewDB)
+```
+
 ## 인터페이스 활용
+
+이 절은 [데이터베이스](/ko/learn/tutorial/5-database)의 수동 확장입니다. CLI의 `resource` 생성 결과에 Bun 설정이 들어 있지는 않습니다. 인터페이스와 정확히 일치하는 provider를 우선 사용하고, 그렇지 않으면 구현하는 provider가 하나일 때 주입합니다. 여러 후보가 있으면 오류입니다. 요청의 `bun.Tx`는 앱 전체에 공유하는 생성자에 자동으로 다시 주입되지 않습니다. 컨트롤러가 요청 컨텍스트에서 읽어 서비스·저장소의 `bun.IDB` 메서드 인자로 전달해야 합니다.
 
 ### 문제 상황
 
@@ -206,7 +157,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 ### 인터셉터에서 트랜잭션 주입
 
 ```go
-// interceptor/tx_interceptor.go
+// src/interceptor/tx_interceptor.go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     tx, err := i.db.BeginTx(ctx.Context(), nil)
     if err != nil {
@@ -227,7 +178,7 @@ func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Hand
 
     tx, ok := v.(bun.Tx)
     if !ok {
-        return nil
+        return errors.New("invalid transaction type")
     }
     
     if executionErr != nil {
@@ -241,53 +192,28 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 ```
 
 
-## 여러 컴포넌트 등록
+## 기능별 등록
 
-### 도메인별 분리
+다른 기능도 CLI로 생성하면 같은 composition root에 등록됩니다. 아래는 별도의 `order` 리소스를 생성하는 예시입니다. `user.Register`와 `order.Register` 호출은 CLI가 추가하므로 직접 중복 추가하지 마세요.
 
-```go
-func main() {
-    app := spine.New()
-    
-    // 인프라
-    app.Constructor(
-        NewDB,
-        NewRedisClient,
-        NewLogger,
-    )
-    
-    // User 도메인
-    app.Constructor(
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-    )
-    
-    // Order 도메인
-    app.Constructor(
-        repository.NewOrderRepository,
-        service.NewOrderService,
-        controller.NewOrderController,
-    )
-    
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
+```bash
+spine generate resource order --dry-run
 ```
 
-### 여러 번 호출 가능
+미리보기에서 생성 파일과 등록 코드 변경을 확인한 뒤 아래 명령으로 생성합니다.
 
-`app.Constructor()`는 여러 번 호출할 수 있습니다.
+```bash
+spine generate resource order
+```
+
+### 여러 Constructor 호출
+
+같은 `Register` 안에서 등록을 여러 호출로 나눌 수도 있습니다. 각 타입은 한 번씩 등록하세요.
 
 ```go
-app.Constructor(NewDB)
-app.Constructor(NewUserRepository, NewUserService)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository)
+app.Constructor(NewUserService)
 app.Constructor(NewUserController)
 ```
 
@@ -328,7 +254,7 @@ func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
 // 부팅 시 에러 발생
-// panic: 순환 의존성 감지: *A
+// circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
 ### 누락된 의존성
@@ -341,8 +267,18 @@ app.Constructor(
 )
 
 // 부팅 시 에러 발생
-// panic: 등록된 생성자가 없습니다: *repository.UserRepository
+// no constructor registered for *user.UserRepository
 ```
+
+## 검증 범위
+
+```bash
+spine doctor
+spine contract check
+spine verify
+```
+
+`contract check`는 정적 DI 계약을 검사하고 `verify`는 로컬 코드 검사도 수행합니다. `app.Validate(options)`만으로 생성자 실행과 DI warm-up을 검증했다고 볼 수 없습니다. 실제 초기화·DB 연결·요청은 앱 실행과 별도 E2E로 확인합니다. 순환·누락 의존성은 해결 과정에서 오류를 반환하며, 생성된 main은 Run 오류를 확인합니다.
 
 ## 핵심 정리
 

@@ -1,5 +1,7 @@
 # 실행 파이프라인
 
+컨트롤러 예제는 [CLI로 생성한 프로젝트](/ko/learn/tutorial/1-project-structure)의 구성 요소입니다. 성공 응답은 `github.com/NARUBROWN/spine/pkg/httpx`의 `httpx.Response[T]`로 감싸고 요청 DTO는 포인터로 받습니다. 생성자와 라우트는 `BuildApplication`에 등록합니다.
+
 Spine의 요청 생명주기 이해하기.
 
 
@@ -196,7 +198,7 @@ func isPathType(pt reflect.Type) bool {
 ```go
 // Route: /users/:userId/posts/:postId
 // Controller:
-func GetPost(userId path.Int, postId path.Int) // ✓ 순서 일치
+func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error) // ✓ 순서 일치
 ```
 
 
@@ -253,7 +255,7 @@ func (p *Pipeline) resolveArguments(ctx core.ExecutionContext, paramMetas []reso
 | `QueryValuesResolver` | `query.Values` | 전체 쿼리 파라미터 뷰 |
 | `DTOResolver` | `*struct` (포인터) | JSON body 바인딩 |
 | `FormDTOResolver` | `*struct` (form 태그) | Multipart/Form 바인딩 |
-| `UploadedFilesResolver` | `multipart.Form` | 파일 업로드 |
+| `UploadedFilesResolver` | `multipart.UploadedFiles` | 파일 업로드 |
 
 ### ArgumentResolver 인터페이스
 
@@ -354,11 +356,15 @@ func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, arg
 **Controller의 책임**: Controller는 순수하게 비즈니스 로직만 담당합니다. HTTP, 파이프라인, 실행 순서를 전혀 알지 못합니다.
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("유효하지 않은 사용자 ID")
+        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
     }
-    return c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(userId.Value)
+    if err != nil {
+        return httpx.Response[User]{}, err
+    }
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 

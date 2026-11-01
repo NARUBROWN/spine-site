@@ -6,27 +6,29 @@ Spine 是一个不隐藏请求过程的 Go Web 框架。
 
 显式执行管道揭示了如何解释请求、执行顺序、何时调用业务逻辑以及如何在响应中完成请求。
 
+在 CLI 生成的 `internal/application/application.go` 中组装应用。以下示例添加用户功能；保留生成的 `main.go` 中 `BuildApplication` → `Validate` → `Run` 的顺序。
+
+下面的注册片段假设用户类型和拦截器已手动实现。CLI 的 `resource user` 生成 `src/user` 中的 `UserController.Get`，路由为 `GET /user/:id`。在生成的项目中，保留 `BuildApplication` 内检查错误的 `user.Register(app)` 调用，不要重复注册相同的构造函数或路由。生成和修改步骤见[项目结构](/zh-Hans/learn/tutorial/1-project-structure)。
+
 ```go
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
 
     // 依赖注册 - 只需注册构造函数即可自动解决，无论顺序如何
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
 
     // 拦截器——执行顺序在代码中可见
-    app.Interceptor(&TxInterceptor{}, &LoggingInterceptor{})
+    app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
 
     // 路线 — 哪个方法是哪条路线一目了然。
     app.Route("GET", "/users", (*UserController).GetUser)
 
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
 
@@ -151,7 +153,8 @@ func (c *UserController) CreateUser(
 ## 你准备好开始了吗？
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.5.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
-[5 分钟快速入门 →](/zh-Hans/learn/getting-started/first-app)
+先安装 CLI，再按照[第一个应用](/zh-Hans/learn/getting-started/first-app)检查变更计划并生成项目。

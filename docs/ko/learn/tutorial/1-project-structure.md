@@ -1,359 +1,149 @@
 # 프로젝트 구조
 
-Spine 프로젝트를 구조화하는 방법.
+Spine CLI로 생성한 프로젝트를 기준으로 앱 구성과 기능 코드를 나눕니다. 먼저 [CLI 설치](/ko/learn/getting-started/installation)를 완료하세요.
 
+## CLI로 프로젝트 생성
 
-## 권장 구조
+프로젝트를 둘 상위 디렉터리에서 실행합니다.
 
+```sh
+spine version
+spine new my-app --module example.com/my-app
+cd my-app
+go mod tidy
+spine doctor
+spine inspect
 ```
+
+## 생성되는 기본 구조
+
+`spine new`는 다음 파일을 생성합니다. `go.sum`은 이후 `go mod tidy`에서 만들어집니다.
+
+```text
 my-app/
-├── main.go                  # 앱 진입점
+├── .gitignore
+├── README.md
 ├── go.mod
-├── go.sum
-│
-├── controller/              # 컨트롤러 계층
-│   └── user_controller.go
-│
-├── service/                 # 서비스 계층 (비즈니스 로직)
-│   └── user_service.go
-│
-├── repository/              # 리포지토리 계층 (데이터 접근)
-│   └── user_repository.go
-│
-├── entity/                  # 데이터베이스 엔티티
-│   └── user.go
-│
-├── dto/                     # 요청/응답 객체
-│   ├── user_request.go
-│   └── user_response.go
-│
-├── routes/                  # 라우트 정의
-│   └── user_routes.go
-│
-├── interceptor/             # 인터셉터
-│   ├── tx_interceptor.go
-│   └── logging_interceptor.go
-│
-└── migrations/              # DB 마이그레이션
-    ├── 001_create_users.up.sql
-    └── 001_create_users.down.sql
+├── main.go
+├── spine.toml
+└── internal/
+    └── application/
+        ├── application.go
+        └── application_test.go
 ```
 
+## CLI 설정
 
-## 각 계층의 역할
+`module`은 `go.mod`와 일치해야 합니다. `entrypoint`는 실행·빌드 대상이고 `composition`은 계약 검사와 생성기의 자동 등록 대상입니다. 설정 키는 아래 네 개만 지원합니다. DB 연결 같은 앱 설정은 별도로 관리합니다.
 
-### main.go
+```toml
+module = "example.com/my-app"
+entrypoint = "."
+composition = "./internal/application"
+port = 8080
+```
 
-앱의 진입점입니다. 생성자 등록, 인터셉터 설정, 라우트 등록을 수행합니다.
+## 실행과 앱 구성 분리
+
+`main.go`는 앱 구성, 검증, 실행만 담당합니다. 생성자·라우트·인터셉터는 `internal/application/application.go`의 `BuildApplication`에 등록합니다.
 
 ```go
 package main
 
 import (
     "log"
-    "time"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
+    "example.com/my-app/internal/application"
 )
 
 func main() {
-    app := spine.New()
-
-    // 1. 생성자 등록
-    app.Constructor(
-        NewDB,
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-        interceptor.NewTxInterceptor,
-    )
-
-    // 2. 인터셉터 등록
-    app.Interceptor(
-        (*interceptor.TxInterceptor)(nil),
-        &interceptor.LoggingInterceptor{},
-    )
-
-    // 3. 라우트 등록
-    routes.RegisterUserRoutes(app)
-
-    // 4. 서버 시작
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    app, options, err := application.BuildApplication()
+    if err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Validate(options); err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-### controller/
-
-HTTP 요청을 받아 서비스에 위임합니다. 비즈니스 로직을 포함하지 않습니다.
+생성된 구성 함수는 리스너를 시작하지 않고 앱과 실행 옵션을 반환합니다. 기본 HTTP 경로는 `GET /health`입니다.
 
 ```go
-// controller/user_controller.go
-package controller
+package application
 
 import (
-    "context"
+    "os"
 
-    "dto"
-    "service"
-
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
 )
 
-type UserController struct {
-    svc *service.UserService  // 서비스 의존성
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
+func BuildApplication() (spine.App, boot.Options, error) {
+    app := spine.New()
+    app.Constructor(NewHealthController)
+    app.Route("GET", "/health", (*HealthController).Get)
 
-// 함수 시그니처가 곧 API 스펙
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    id := int(q.Int("id", 0))
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, err
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
     }
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
-}
-
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    user, err := c.svc.Create(ctx, req.Name, req.Email)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, err
-    }
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
+## CLI로 기능 추가
 
-### service/
+프로젝트 루트에서 사용자 리소스를 생성합니다. 기존 프로젝트에 이미 생성했다면 이 명령은 건너뜁니다.
 
-비즈니스 로직을 담당합니다. 리포지토리를 통해 데이터에 접근합니다.
+```sh
+spine generate resource user
+```
+
+```text
+src/user/
+├── user_route.go
+├── user_repository.go
+├── user_service.go
+└── user_controller.go
+```
+
+기본 자동 등록은 `BuildApplication`에 아래 코드를 추가합니다. 직접 다시 등록하면 중복되므로 생성 결과를 확인하세요.
 
 ```go
-// service/user_service.go
-package service
-
-type UserService struct {
-    repo *repository.UserRepository  // 리포지토리 의존성
-}
-
-func NewUserService(repo *repository.UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-func (s *UserService) Get(ctx context.Context, id int) (dto.UserResponse, error) {
-    user, err := s.repo.FindByID(ctx, id)
-    if err != nil {
-        return dto.UserResponse{}, err
-    }
-    
-    return dto.UserResponse{
-        ID:    int(user.ID),
-        Name:  user.Name,
-        Email: user.Email,
-    }, nil
-}
-
-func (s *UserService) Create(ctx context.Context, name, email string) (dto.UserResponse, error) {
-    user := &entity.User{Name: name, Email: email}
-    
-    if err := s.repo.Save(ctx, user); err != nil {
-        return dto.UserResponse{}, err
-    }
-    
-    return dto.UserResponse{
-        ID:    int(user.ID),
-        Name:  user.Name,
-        Email: user.Email,
-    }, nil
+if err := user.Register(app); err != nil {
+    return nil, boot.Options{}, err
 }
 ```
 
+`user_route.go`는 생성자와 `GET /user/:id`를 등록합니다. 컨트롤러는 HTTP 입출력, 서비스는 비즈니스 로직, 리포지토리는 데이터 접근을 담당합니다. 이 리소스 생성기는 ID를 반환하는 GET 골격만 생성하며 DB 모델이나 영속 저장소를 구현하지 않습니다. 타입이 있는 생성·조회 예제가 필요하면 별도 이름으로 `spine generate slice order --storage memory --field name:string`을 사용하세요. 메모리 저장소는 개발용이며 종료하면 데이터가 사라집니다.
 
-### repository/
+## 등록 규칙과 검증
 
-데이터베이스 접근을 담당합니다. SQL 쿼리나 ORM 호출이 여기에 위치합니다.
+`BuildApplication() (spine.App, boot.Options, error)`의 최상위에 `app := spine.New()`를 유지합니다. 등록을 조건문·반복문·임의 헬퍼에 숨기지 말고, `Register(app)`의 오류를 확인해 반환합니다.
 
-```go
-// repository/user_repository.go
-package repository
-
-type UserRepository struct {
-    db bun.IDB  // bun.DB 또는 bun.Tx 모두 수용
-}
-
-func NewUserRepository(db bun.IDB) *UserRepository {
-    return &UserRepository{db: db}
-}
-
-func (r *UserRepository) FindByID(ctx context.Context, id int) (*entity.User, error) {
-    user := new(entity.User)
-    err := r.db.NewSelect().
-        Model(user).
-        Where("id = ?", id).
-        Scan(ctx)
-    return user, err
-}
-
-func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewInsert().
-        Model(user).
-        Exec(ctx)
-    return err
-}
+```sh
+spine contract check
+spine verify
+spine dev
 ```
 
-
-### entity/
-
-데이터베이스 테이블과 매핑되는 구조체입니다.
-
-```go
-// entity/user.go
-package entity
-
-type User struct {
-    ID        int64     `bun:",pk,autoincrement"`
-    Name      string    `bun:",notnull"`
-    Email     string    `bun:",unique,notnull"`
-    CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
-    UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
-}
-```
-
-
-### dto/
-
-요청/응답 객체입니다. API 계약을 정의합니다.
-
-```go
-// dto/user_request.go
-package dto
-
-type CreateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-
-type UpdateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-```
-
-```go
-// dto/user_response.go
-package dto
-
-type UserResponse struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-```
-
-
-### routes/
-
-라우트를 한 곳에서 관리합니다. 어떤 경로가 어떤 핸들러와 연결되는지 한눈에 파악할 수 있습니다.
-
-```go
-// routes/user_routes.go
-package routes
-
-func RegisterUserRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).GetUser)
-    app.Route("POST", "/users", (*controller.UserController).CreateUser)
-    app.Route("PUT", "/users", (*controller.UserController).UpdateUser)
-    app.Route("DELETE", "/users", (*controller.UserController).DeleteUser)
-}
-```
-
-
-### interceptor/
-
-요청 전/후 처리 로직입니다. 트랜잭션, 로깅, 인증 등을 담당합니다.
-
-```go
-// interceptor/logging_interceptor.go
-package interceptor
-
-type LoggingInterceptor struct{}
-
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
-    return nil
-}
-
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
-}
-
-func (i *LoggingInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    return nil
-}
-
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
-    }
-}
-```
-
-
-## 의존성 흐름
-
-```mermaid
-graph TD
-    Main[main.go]
-
-    subgraph Constructor [Constructor 등록]
-        Flow1["Controller → Service → Repository → DB"]
-    end
-
-    subgraph Interceptor [Interceptor 등록]
-        Flow2["Tx → Logging → ..."]
-    end
-
-    subgraph Routes [Routes 등록]
-        Flow3["GET /users → UserController.GetUser<br/>POST /users → UserController.CreateUser"]
-    end
-
-    Main --> Constructor --> Flow1
-    Main --> Interceptor --> Flow2
-    Main --> Routes --> Flow3
-```
-
-
-## 핵심 원칙
-
-| 원칙 | 설명 |
-|------|------|
-| **단방향 의존성** | Controller → Service → Repository (역방향 금지) |
-| **관심사 분리** | 각 계층은 자신의 역할만 수행 |
-| **생성자 주입** | 모든 의존성은 생성자를 통해 주입 |
-| **인터페이스 활용** | Repository는 `bun.IDB`로 DB/Tx 모두 수용 |
-
+`contract check`는 정적 계약을 검사하고 `verify`는 계약·gofmt·vet·Go 테스트를 확인합니다. DB·브로커 연결과 실제 HTTP 동작은 별도 실행으로 확인합니다.
 
 ## 다음 단계
 
-- [튜토리얼: 컨트롤러](/ko/learn/tutorial/2-controller) — 컨트롤러 작성법
-- [튜토리얼: 의존성 주입](/ko/learn/tutorial/3-dependency-injection) — DI 심화
-- [튜토리얼: 인터셉터](/ko/learn/tutorial/4-interceptor) — 트랜잭션, 로깅 구현
+- [컨트롤러](/ko/learn/tutorial/2-controller)
+- [의존성 주입](/ko/learn/tutorial/3-dependency-injection)
+- [인터셉터](/ko/learn/tutorial/4-interceptor)

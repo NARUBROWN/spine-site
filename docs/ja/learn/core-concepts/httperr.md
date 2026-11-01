@@ -1,5 +1,7 @@
 # httperrパッケージ
 
+以下のコントローラー例は[CLIで生成したプロジェクト](/ja/learn/tutorial/1-project-structure)に追加するコード断片です。`github.com/NARUBROWN/spine/pkg/httpx`、`github.com/NARUBROWN/spine/pkg/httperr`、`github.com/NARUBROWN/spine/pkg/path`をインポートし、コンストラクタとルートを`BuildApplication`に登録します。HTTPの成功値は`httpx.Response[T]`で包み、リクエストDTOは`*Request`のようなポインターで受け取ります。`User`やリポジトリなどの業務型はアプリで定義します。
+
 標準化されたHTTPエラー処理。
 
 
@@ -49,12 +51,12 @@ func (c *UserController) GetUser(ctx echo.Context) error {
 
 ```go
 // ✓ Spine 方式: HTTPを知らなくても意味は明確
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("ユーザーが見つかりません")
+        return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
     }
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 
@@ -95,9 +97,9 @@ func (e *HTTPError) Error() string {
 
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     // httperr.NotFound()は error 型を 返却
-    return User{}, httperr.NotFound("ユーザーが見つかりません")
+    return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
 }
 ```
 
@@ -120,7 +122,7 @@ func BadRequest(msg string) error {
 
 ```go
 if userId.Value <= 0 {
-    return User{}, httperr.BadRequest("無効なユーザーIDです")
+    return httpx.Response[User]{}, httperr.BadRequest("無効なユーザーIDです")
 }
 ```
 
@@ -138,7 +140,7 @@ func Unauthorized(msg string) error {
 
 ```go
 if !c.auth.IsValid(token) {
-    return User{}, httperr.Unauthorized("認証が必要です")
+    return httpx.Response[User]{}, httperr.Unauthorized("認証が必要です")
 }
 ```
 
@@ -157,7 +159,7 @@ func NotFound(msg string) error {
 ```go
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return User{}, httperr.NotFound("ユーザーが見つかりません")
+    return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
 }
 ```
 
@@ -176,7 +178,7 @@ func InternalServerError(msg string) error {
 ```go
 result, err := c.externalService.Call()
 if err != nil {
-    return Result{}, httperr.InternalServerError("外部サービス 呼び出しに 失敗しました")
+    return httpx.Response[Result]{}, httperr.InternalServerError("外部サービス 呼び出しに 失敗しました")
 }
 ```
 
@@ -253,17 +255,17 @@ return errors.New("something went wrong")  // → 500
 
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("無効なユーザーIDです")
+        return httpx.Response[User]{}, httperr.BadRequest("無効なユーザーIDです")
     }
     
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("ユーザーが見つかりません")
+        return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
     }
     
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 
@@ -286,17 +288,17 @@ GET /users/123
 
 
 ```go
-func (c *OrderController) GetOrder(orderId path.Int) (Order, error) {
+func (c *OrderController) GetOrder(orderId path.Int) (httpx.Response[Order], error) {
     order, err := c.repo.FindByID(orderId.Value)
     if err != nil {
-        return Order{}, httperr.NotFound("注文を 見つかりません")
+        return httpx.Response[Order]{}, httperr.NotFound("注文を 見つかりません")
     }
     
     if !c.auth.CanAccess(order.UserID) {
-        return Order{}, httperr.Unauthorized("アクセス 権限が ありません")
+        return httpx.Response[Order]{}, httperr.Unauthorized("アクセス 権限が ありません")
     }
     
-    return order, nil
+    return httpx.Response[Order]{Body: order}, nil
 }
 ```
 
@@ -304,25 +306,29 @@ func (c *OrderController) GetOrder(orderId path.Int) (Order, error) {
 
 
 ```go
-func (c *PaymentController) Process(req PaymentRequest) (Receipt, error) {
+func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt], error) {
     if req.Amount <= 0 {
-        return Receipt{}, httperr.BadRequest("決済金額は0より大きくする必要があります")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("決済金額は0より大きくする必要があります")
     }
     
     if req.Amount > 10000000 {
-        return Receipt{}, httperr.BadRequest("1回の決済上限を超えました")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("1回の決済上限を超えました")
     }
     
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return Receipt{}, httperr.NotFound("ウォレットを 見つかりません")
+        return httpx.Response[Receipt]{}, httperr.NotFound("ウォレットを 見つかりません")
     }
     
     if balance < req.Amount {
-        return Receipt{}, httperr.BadRequest("残高が不足しています")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("残高が不足しています")
     }
     
-    return c.processPayment(req)
+    receipt, err := c.processPayment(req)
+    if err != nil {
+        return httpx.Response[Receipt]{}, err
+    }
+    return httpx.Response[Receipt]{Body: receipt}, nil
 }
 ```
 
@@ -390,7 +396,7 @@ func WithCause(status int, msg string, cause error) error {
 // 使用
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return User{}, WithCause(404, "ユーザーが見つかりません", err)
+    return httpx.Response[User]{}, WithCause(404, "ユーザーが見つかりません", err)
 }
 ```
 
@@ -599,19 +605,19 @@ Goの慣例通り、エラーを戻り値として処理します。例外を投
 
 ```go
 // ✓ 明示的 返却
-func GetUser(id path.Int) (User, error) {
+func GetUser(id path.Int) (httpx.Response[User], error) {
     if ... {
-        return User{}, httperr.NotFound(...)
+        return httpx.Response[User]{}, httperr.NotFound(...)
     }
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 
 // ❌ panic (Spineは は 方式を 使用し しない)
-func GetUser(id path.Int) User {
+func GetUser(id path.Int) httpx.Response[User] {
     if ... {
         panic(httperr.NotFound(...))
     }
-    return user
+    return httpx.Response[User]{Body: user}
 }
 ```
 

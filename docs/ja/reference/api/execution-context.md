@@ -3,6 +3,8 @@
 ExecutionContextへのAPIリファレンス。
 
 
+以下のControllerコードは、[CLIプロジェクト](/ja/learn/tutorial/1-project-structure)の `src/user/user_controller.go` に追加する手動拡張例です。`User`・`AuthUser` とRepositoryのフィールドはアプリで定義し、HTTP応答は `httpx.Response[T]` で返します。生成された `BuildApplication` のエラーを確認する `user.Register(app)` とルートの `main.go` は維持します。
+
 ## 概要
 
 `ExecutionContext`は、Spineパイプラインから要求情報にアクセスし、コンポーネント間のデータを共有するインタフェースです。 HTTPリクエスト、イベントメッセージ、WebSocketメッセージの両方を処理する統合実行コンテキスト。
@@ -453,13 +455,17 @@ func (v controllerCtxView) Get(key string) (any, bool) {
 **使用例**
 
 ```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (User, error) {
+func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
     // Interceptor が Set("auth.user", ...) で注入した値を読み取る
     if authUser, ok := ctx.Get("auth.user"); ok {
-        user := authUser.(*AuthUser)
+        _ = authUser.(*AuthUser)
         // ...
     }
-    return c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(userId.Value)
+    if err != nil {
+        return httpx.Response[User]{}, err
+    }
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 

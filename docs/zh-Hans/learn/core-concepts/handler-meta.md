@@ -17,8 +17,10 @@ type HandlerMeta struct {
 
 使用方法表达式注册路由：
 
+在 [CLI 生成的项目](/zh-Hans/learn/tutorial/1-project-structure)中，下面的声明放在 `src/user/user_route.go` 的 `Register(app)` 内，修改已有的 `GET /user/:id`，不要重复注册。`BuildApplication` 保留检查错误的 `user.Register(app)` 调用；生成的 `main.go` 负责验证和运行。`AuthInterceptor` 是需要[手动实现的扩展](/zh-Hans/learn/tutorial/4-interceptor)。
+
 ```go
-app.Route("GET", "/users/:id", (*UserController).Get,
+app.Route("GET", "/user/:id", (*UserController).Get,
     route.WithInterceptors(&AuthInterceptor{}),
 )
 ```

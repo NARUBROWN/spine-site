@@ -39,8 +39,8 @@ features:
 <div class="home-next-steps">
 
 <a href="/en/learn/getting-started/first-app">
-<strong>Build a user lookup API <span aria-hidden="true">→</span></strong>
-<span>Create a project, send a request and check the response.</span>
+<strong>Create your first app with the CLI <span aria-hidden="true">→</span></strong>
+<span>Install the CLI, generate a project and check its /health response.</span>
 </a>
 
 <a href="/en/reference/examples/login">

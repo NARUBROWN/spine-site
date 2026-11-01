@@ -3,6 +3,8 @@
 ExecutionContext에 대한 API 참조.
 
 
+아래 컨트롤러 코드는 [CLI 프로젝트](/ko/learn/tutorial/1-project-structure)의 `src/user/user_controller.go`에 추가하는 수동 확장 예입니다. `User`·`AuthUser`와 저장소 필드는 앱에서 정의하며, HTTP 응답은 `httpx.Response[T]`로 반환합니다. 생성된 `BuildApplication`의 오류를 확인하는 `user.Register(app)`와 루트 `main.go`를 유지합니다.
+
 ## 개요
 
 `ExecutionContext`는 Spine 파이프라인에서 요청 정보에 접근하고, 컴포넌트 간 데이터를 공유하는 인터페이스입니다. HTTP 요청, 이벤트 메시지, WebSocket 메시지 모두를 처리하는 통합 실행 컨텍스트입니다.
@@ -423,13 +425,17 @@ func (v controllerCtxView) Get(key string) (any, bool) {
 
 **사용 예시**
 ```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (User, error) {
+func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
     // Interceptor가 Set("auth.user", ...)으로 주입한 값을 읽기
     if authUser, ok := ctx.Get("auth.user"); ok {
-        user := authUser.(*AuthUser)
+        _ = authUser.(*AuthUser)
         // ...
     }
-    return c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(userId.Value)
+    if err != nil {
+        return httpx.Response[User]{}, err
+    }
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 

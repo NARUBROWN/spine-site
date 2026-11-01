@@ -1,64 +1,53 @@
 # 控制器
 
-在 Spine 中编写控制器。
+在 CLI 生成的 `hello-spine` 项目中添加用户查询控制器。安装和生成项目请先参考[第一个应用](/zh-Hans/learn/getting-started/first-app)。如果已经生成了 `resource user`，请直接查看文件，不要重复生成。
 
-## 什么是控制器？
+## 使用 CLI 生成控制器
 
-控制器是一个接收 HTTP 请求并将其委托给服务的层。
+```bash
+spine generate resource user --dry-run
+```
 
-Spine 的控制器是**纯 Go 结构**。不需要注释、装饰器或特殊的接口实现。
+在预览中检查生成文件与注册代码的变更，然后执行下方命令生成。
+
+```bash
+spine generate resource user
+```
+
+### 生成的文件
+
+```text
+src/user/
+├── user_controller.go
+├── user_service.go
+├── user_repository.go
+└── user_route.go
+```
+
+生成的 `src/user/user_controller.go` 如下。它与 `UserService` 位于同一个 `user` 包中，因此不需要单独导入 `service` 包。
 
 ```go
-// 就是这个
-type UserController struct {
-    svc *service.UserService
+package user
+
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/path"
+)
+
+type UserController struct { service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
+
+func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": id.Value}}
 }
 ```
 
-## 基本结构
-
-### 1.结构体定义
-
-```go
-package controller
-
-type UserController struct {
-    svc *service.UserService  // 依赖
-}
-```
-
-### 2. 编写构造函数
-
-```go
-// 构造函数参数 = 依赖声明
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-```
-
-### 3.编写处理方法
-
-```go
-// 函数签名是API规范
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-```
-
-### 4. 路线注册
-
-```go
-app.Route("GET", "/users/:id", (*UserController).GetUser)
-```
+::: info
+`resource` 只生成查询骨架，不实现数据库、领域模型、DTO 或完整 CRUD。下文的输入和响应代码是手动扩展骨架的独立处理函数示例。请按示例需要自行实现 `UserResponse`、请求 DTO，以及 `UserService.Get/List/Create/Login` 等方法。示例类型放在 `src/user` 的 `package user` 中，并导入需要的标准库和 Spine 包。不要同时粘贴多个同名的替代方法。
+:::
 
 ## 处理程序签名
 
@@ -85,6 +74,9 @@ Spine 分析处理程序的函数签名并自动绑定输入。
 | `httpx.Response[T]` | `httpx.Response[T]` JSON 或字符串响应（包括状态代码、标头、cookie）|
 | `httpx.Redirect` | `httpx.Redirect`重定向响应 |
 | `error` | `error`错误响应 |
+| `httpx.Binary` | 字节响应 |
+
+还支持指针响应和 `(支持的响应类型, error)`。`httpx.Binary` 返回字节和明确的 Content-Type。
 
 ## 获取输入
 
@@ -93,18 +85,20 @@ Spine 分析处理程序的函数签名并自动绑定输入。
 使用 `query.Values` 解析查询字符串。
 
 ```go
-// GET /users?id=1&name=alice&active=true
+// GET /user?id=1&name=alice&active=true
 
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
-) httpx.Response[dto.UserResponse] {
+) httpx.Response[UserResponse] {
     id := q.Int("id", 0)                      // int64, 默认值 0
     name := q.String("name")                  // string
     active := q.GetBoolByKey("active", false) // bool, 默认值 false
+    _ = name
+    _ = active
 
-    user, _ := c.svc.Get(ctx, int(id))
-    return httpx.Response[dto.UserResponse]{Body: user}
+    user, _ := c.service.Get(ctx, int(id))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
@@ -123,16 +117,16 @@ func (c *UserController) GetUser(
 使用 `query.Pagination` 自动解析 `page` 和 `size` 查询参数。
 
 ```go
-// 获取 /users?page=2&size=10
+// 获取 /user?page=2&size=10
 
 func (c *UserController) ListUsers(
     ctx context.Context,
     page query.Pagination,
-) httpx.Response[[]dto.UserResponse] {
+) httpx.Response[[]UserResponse] {
     // 页.页 = 2 （默认值：1）
     // 页面大小 = 10（默认值：20）
-    users, _ := c.svc.List(ctx, page.Page, page.Size)
-    return httpx.Response[[]dto.UserResponse]{Body: users}
+    users, _ := c.service.List(ctx, page.Page, page.Size)
+    return httpx.Response[[]UserResponse]{Body: users}
 }
 ```
 
@@ -145,9 +139,9 @@ import "github.com/NARUBROWN/spine/pkg/header"
 
 func (c *CommonController) CheckHeader(
     headers header.Values,
-) httpx.Response[dto.HeaderInfo] {
-    return httpx.Response[dto.HeaderInfo]{
-        Body: dto.HeaderInfo{
+) httpx.Response[HeaderInfo] {
+    return httpx.Response[HeaderInfo]{
+        Body: HeaderInfo{
             UserAgent:   headers.Get("User-Agent"),
             ContentType: headers.Get("Content-Type"),
         },
@@ -164,6 +158,8 @@ func (c *CommonController) CheckHeader(
 
 ### 路径参数
 
+路径参数按照声明顺序绑定到 `path.Int`、`path.String` 和 `path.Boolean`。
+
 使用`path`包的类型绑定路由路径的参数。
 
 ```go
@@ -172,9 +168,9 @@ func (c *CommonController) CheckHeader(
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    return httpx.Response[dto.UserResponse]{Body: user}
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
@@ -198,6 +194,8 @@ type Boolean struct {
 
 ### JSON 请求体
 
+DTO 必须使用指针。JSON/Form 绑定由 DTO 的 `form` 标签与请求 Content-Type 决定。
+
 如果将 DTO 结构声明为指针，它将自动绑定到 JSON。
 
 ```go
@@ -206,10 +204,10 @@ type Boolean struct {
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *dto.CreateUserRequest,  // ← 声明为指针
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    return httpx.Response[dto.UserResponse]{
+    req *CreateUserRequest,  // ← 声明为指针
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Create(ctx, req.Name, req.Email)
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Status: 201,
@@ -219,7 +217,7 @@ func (c *UserController) CreateUser(
 ```
 
 ```go
-// dto/user_request.go
+// src/user/user_request.go
 type CreateUserRequest struct {
     Name  string `json:"name"`
     Email string `json:"email"`
@@ -237,21 +235,20 @@ func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
     spineCtx spine.Ctx,
-) httpx.Response[dto.UserResponse] {
+) httpx.Response[UserResponse] {
     // 检查拦截器中设置的值
     if v, ok := spineCtx.Get("userRole"); ok {
         role := v.(string)
         // ...
     }
 
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    return httpx.Response[dto.UserResponse]{Body: user}
+    user, _ := c.service.Get(ctx, int(userId.Value))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
 ## 返回响应
 
-Spine 支持三种返回类型：`httpx.Response[T]`、`httpx.Redirect` 和 `error`。
 
 ### 1. httpx.Response[T] — JSON/字符串响应
 
@@ -267,10 +264,10 @@ import "github.com/NARUBROWN/spine/pkg/httpx"
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
 
-    return httpx.Response[dto.UserResponse]{
+    return httpx.Response[UserResponse]{
         Body: user,  // 200 OK (默认值)
     }
 }
@@ -291,11 +288,11 @@ func (c *UserController) Health() httpx.Response[string] {
 ```go
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *dto.CreateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
+    req *CreateUserRequest,
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Create(ctx, req.Name, req.Email)
 
-    return httpx.Response[dto.UserResponse]{
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Status: 201, // Created
@@ -310,10 +307,10 @@ func (c *UserController) CreateUser(
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
 
-    return httpx.Response[dto.UserResponse]{
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Headers: map[string]string{
@@ -330,12 +327,12 @@ func (c *UserController) GetUser(
 ```go
 func (c *AuthController) Login(
     ctx context.Context,
-    req *dto.LoginRequest,
-) httpx.Response[dto.LoginResponse] {
-    token, refreshToken, _ := c.svc.Login(ctx, req.Email, req.Password)
+    req *LoginRequest,
+) httpx.Response[LoginResponse] {
+    token, refreshToken, _ := c.service.Login(ctx, req.Email, req.Password)
 
-    return httpx.Response[dto.LoginResponse]{
-        Body: dto.LoginResponse{Success: true},
+    return httpx.Response[LoginResponse]{
+        Body: LoginResponse{Success: true},
         Options: httpx.ResponseOptions{
             Cookies: []httpx.Cookie{
                 httpx.AccessTokenCookie(token, 15*time.Minute),
@@ -385,7 +382,7 @@ func (c *AuthController) OAuthCallback(
     q query.Values,
 ) httpx.Redirect {
     code := q.String("code")
-    c.svc.ProcessOAuthCode(ctx, code)
+    c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
         Location: "/dashboard",  // 302 Found (默认值)
@@ -413,9 +410,9 @@ func (c *UserController) MovedPermanently() httpx.Redirect {
 ```go
 func (c *AuthController) Login(
     ctx context.Context,
-    req *dto.LoginRequest,
+    req *LoginRequest,
 ) httpx.Redirect {
-    token, _ := c.svc.Login(ctx, req.Email, req.Password)
+    token, _ := c.service.Login(ctx, req.Email, req.Password)
 
     return httpx.Redirect{
         Location: "/dashboard",
@@ -455,7 +452,7 @@ func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
 ) error {
-    _, err := c.svc.Get(ctx, int(userId.Value))
+    _, err := c.service.Get(ctx, int(userId.Value))
     if err != nil {
         return httperr.NotFound("找不到用户。")
     }
@@ -481,25 +478,21 @@ func (c *UserController) GetUser(
 
 #### 与 httpx.Response[T] 和错误一起使用
 
-如果需要错误处理，您可以将其作为 `httpx.Response[T]` 中的状态代码进行处理，或者创建单独的错误处理程序方法。
+使用 `(httpx.Response[T], error)` 返回成功响应或错误。使用 `httperr` 映射服务错误，成功时返回 nil 错误。
 
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
+    userID path.Int,
+) (httpx.Response[UserResponse], error) {
+    user, err := c.service.Get(ctx, int(userID.Value))
     if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{
-                Status: 404,
-            },
-        }
+        return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
     }
-
-    return httpx.Response[dto.UserResponse]{Body: user}
+    return httpx.Response[UserResponse]{Body: user}, nil
 }
 ```
+
 
 ### 选择响应方法指南
 
@@ -639,195 +632,46 @@ func (c *PostController) Upload(
 
 遵循此规则可确保签名中揭示执行流程。
 
-## 注册路线
+## 自动注册与手动扩展
 
-将控制器方法附加到路由。
+CLI 生成 `src/user/user_route.go`，并在 `BuildApplication()` 中添加检查错误的 `user.Register(app)` 调用。下面说明生成结果，请勿重复添加注册。
 
 ```go
-// 路线/user_routes.go
-package routes
+// src/user/user_route.go
+package user
 
-import (
-    "my-app/controller"
-    "github.com/NARUBROWN/spine"
-)
+import "github.com/NARUBROWN/spine"
 
-func RegisterUserRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).ListUsers)
-    app.Route("GET", "/users/:id", (*controller.UserController).GetUser)
-    app.Route("POST", "/users", (*controller.UserController).CreateUser)
-    app.Route("PUT", "/users/:id", (*controller.UserController).UpdateUser)
-    app.Route("DELETE", "/users/:id", (*controller.UserController).DeleteUser)
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
+    app.Route("GET", "/user/:id", (*UserController).Get)
+    return nil
 }
 ```
 
 ```go
-// 主程序
-func main() {
-    app := spine.New()
-    app.Constructor(/* ... */)
-    routes.RegisterUserRoutes(app)
-    app.Run(boot.Options{
-        Address:                ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    })
+// internal/application/application.go: BuildApplication
+if err := user.Register(app); err != nil {
+    return nil, boot.Options{}, err
 }
 ```
 
-## 完整示例
+实现新处理函数后，在 `user_route.go` 的 `Register` 中添加对应路由。其他包的控制器由各自的注册函数组装。保留 `main.go` 中生成的 `BuildApplication → Validate → Run` 流程。
 
-```go
-// 控制器/user_controller.go
-package controller
+## 验证与运行
 
-import (
-    "context"
-    "net/http"
-    "time"
-
-    "my-app/dto"
-    "my-app/service"
-
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// 获取 /users?page=1&size=20
-func (c *UserController) ListUsers(
-    ctx context.Context,
-    page query.Pagination,
-) httpx.Response[[]dto.UserResponse] {
-    users, _ := c.svc.List(ctx, page.Page, page.Size)
-
-    return httpx.Response[[]dto.UserResponse]{
-        Body: users,
-        Options: httpx.ResponseOptions{
-            Headers: map[string]string{
-                "X-Total-Count": "100",
-            },
-        },
-    }
-}
-
-// 获取/用户/：id
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-
-// 发布/用户
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-
-    return httpx.Response[dto.UserResponse]{
-        Body: user,
-        Options: httpx.ResponseOptions{
-            Status: http.StatusCreated, // 201
-        },
-    }
-}
-
-// PUT /用户/：id
-func (c *UserController) UpdateUser(
-    ctx context.Context,
-    userId path.Int,
-    req *dto.UpdateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Update(ctx, int(userId.Value), req.Name)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-
-// 删除/用户/：id
-func (c *UserController) DeleteUser(
-    ctx context.Context,
-    userId path.Int,
-) error {
-    return c.svc.Delete(ctx, int(userId.Value))
-}
+```bash
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
-```go
-// 控制器/auth_controller.go
-package controller
-
-import (
-    "context"
-    "time"
-
-    "my-app/dto"
-    "my-app/service"
-
-    "github.com/NARUBROWN/spine/pkg/httpx"
-)
-
-type AuthController struct {
-    svc *service.AuthService
-}
-
-func NewAuthController(svc *service.AuthService) *AuthController {
-    return &AuthController{svc: svc}
-}
-
-// POST /auth/login
-func (c *AuthController) Login(
-    ctx context.Context,
-    req *dto.LoginRequest,
-) httpx.Redirect {
-    token, _ := c.svc.Login(ctx, req.Email, req.Password)
-
-    return httpx.Redirect{
-        Location: "/dashboard",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.AccessTokenCookie(token, 15*time.Minute),
-            },
-        },
-    }
-}
-
-// POST /auth/logout
-func (c *AuthController) Logout() httpx.Redirect {
-    return httpx.Redirect{
-        Location: "/login",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.ClearAccessTokenCookie(),
-                httpx.ClearRefreshTokenCookie(),
-            },
-        },
-    }
-}
+```bash
+curl http://localhost:8080/user/1
 ```
+
+分别检查契约、本地验证和实际 HTTP 响应。`GET /user/1` 的生成响应为 `{"id":1}`，并不执行真实用户查询或持久化。
 
 ## 主要摘要
 

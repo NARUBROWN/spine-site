@@ -1,5 +1,16 @@
 # spine.App
 
+## CLI 프로젝트에서 API 사용하기
+
+[첫 앱 만들기](/ko/learn/getting-started/first-app)에서 CLI로 생성한 프로젝트를 기준으로 합니다. 등록 코드는 `internal/application/application.go`의 `BuildApplication`에 둡니다. `Run` 호출 예시는 생성된 `main.go`에서 사용하며, `Validate`의 오류를 먼저 확인합니다.
+
+```sh
+spine doctor
+spine contract check
+spine verify
+```
+
+
 메인 애플리케이션 인터페이스에 대한 API 참조.
 
 ## 개요
@@ -757,7 +768,7 @@ func (e OrderCreated) OccurredAt() time.Time {
 ```go
 import "github.com/NARUBROWN/spine/pkg/event/publish"
 
-func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) Order {
+func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) httpx.Response[Order] {
     order := c.repo.Save(req)
     
     // 이벤트 발행
@@ -766,201 +777,45 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) O
         At:      time.Now(),
     })
     
-    return order
+    return httpx.Response[Order]{Body: order}
 }
 ```
 
 이벤트는 Controller 실행 완료 후 `PostExecutionHook`에서 일괄 발행됩니다. `publish.Event()`는 `context.Context`에 주입된 `EventBus`에 이벤트를 수집하며, 실행이 에러 없이 완료되면 등록된 Publisher(Kafka/RabbitMQ)를 통해 전송됩니다.
 
 
-## 전체 예시
+## CLI가 생성하는 앱 예시
 
 ```go
-package main
+package application
 
 import (
-    "context"
-    "encoding/json"
-    "log"
-    "strings"
-    "sync"
-    "time"
+	"os"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/interceptor/cors"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/event/publish"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-    "github.com/NARUBROWN/spine/pkg/route"
-    "github.com/NARUBROWN/spine/pkg/ws"
+	"github.com/NARUBROWN/spine"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/httpx"
 )
 
-func main() {
-    app := spine.New()
+type HealthController struct{}
 
-    // 생성자 등록
-    app.Constructor(
-        NewUserController,
-        NewOrderConsumer,
-        NewChatController,
-    )
+func NewHealthController() *HealthController { return &HealthController{} }
 
-    // HTTP 라우트 등록
-    app.Route("GET", "/users", (*UserController).GetUserQuery)
-    app.Route("GET", "/users/:id", (*UserController).GetUser,
-        route.WithInterceptors(&LoggingInterceptor{}),
-    )
-    app.Route("POST", "/orders/:orderId", (*UserController).CreateOrder)
-
-    // 전역 Interceptor 등록
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type"},
-        }),
-    )
-
-    // 이벤트 컨슈머 등록
-    if err := app.Consumers().Register("order.created", (*OrderConsumer).OnCreated); err != nil {
-        log.Fatal(err)
-    }
-
-    // WebSocket 등록
-    if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
-        log.Fatal(err)
-    }
-
-    // 서버 실행
-    if err := app.Run(boot.Options{
-        Address:                ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
-        RabbitMQ: &boot.RabbitMqOptions{
-            URL:                    "amqp://guest:guest@localhost:5672/",
-            AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
-            Read: &boot.RabbitMqReadOptions{
-                Exchange: "stock-exchange",
-            },
-            Write: &boot.RabbitMqWriteOptions{
-                Exchange: "stock-exchange",
-            },
-        },
-        HTTP: &boot.HTTPOptions{},
-    }); err != nil {
-        log.Fatal(err)
-    }
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-// Controller
-type UserController struct{}
+// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New()
+	app.Constructor(NewHealthController)
+	app.Route("GET", "/health", (*HealthController).Get)
 
-func NewUserController() *UserController {
-    return &UserController{}
-}
-
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    publish.Event(ctx, OrderCreated{
-        OrderID: orderId.Value,
-        At:      time.Now(),
-    })
-    return httpx.Response[string]{Body: "OK"}
-}
-
-// Event
-type OrderCreated struct {
-    OrderID int64     `json:"order_id"`
-    At      time.Time `json:"at"`
-}
-
-func (e OrderCreated) Name() string        { return "order.created" }
-func (e OrderCreated) OccurredAt() time.Time { return e.At }
-
-// Consumer
-type OrderConsumer struct{}
-
-func NewOrderConsumer() *OrderConsumer {
-    return &OrderConsumer{}
-}
-
-func (c *OrderConsumer) OnCreated(
-    ctx context.Context,
-    eventName string,
-    event OrderCreated,
-) error {
-    log.Println("이벤트 수신:", eventName)
-    log.Println("주문 ID:", event.OrderID)
-    return nil
-}
-
-// WebSocket
-type ChatController struct {
-    mu      sync.RWMutex
-    clients map[string]ws.Sender
-}
-
-func NewChatController() *ChatController {
-    return &ChatController{clients: make(map[string]ws.Sender)}
-}
-
-type ChatMessage struct {
-    Message string `json:"message"`
-}
-
-type ChatEvent struct {
-    Type    string `json:"type"`
-    From    string `json:"from"`
-    Message string `json:"message"`
-    At      string `json:"at"`
-}
-
-func (c *ChatController) OnMessage(
-    ctx context.Context,
-    connID ws.ConnectionID,
-    msg ChatMessage,
-) error {
-    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-    if ok && sender != nil {
-        c.mu.Lock()
-        c.clients[connID.Value] = sender
-        c.mu.Unlock()
-    }
-
-    message := strings.TrimSpace(msg.Message)
-    if message == "" {
-        return nil
-    }
-
-    payload, err := json.Marshal(ChatEvent{
-        Type:    "message",
-        From:    connID.Value,
-        Message: message,
-        At:      time.Now().UTC().Format(time.RFC3339),
-    })
-    if err != nil {
-        return err
-    }
-
-    c.mu.RLock()
-    clients := make(map[string]ws.Sender, len(c.clients))
-    for id, client := range c.clients {
-        clients[id] = client
-    }
-    c.mu.RUnlock()
-
-    var firstErr error
-    for id, client := range clients {
-        if err := client.Send(ws.TextMessage, payload); err != nil {
-            if firstErr == nil {
-                firstErr = err
-            }
-            c.mu.Lock()
-            delete(c.clients, id)
-            c.mu.Unlock()
-        }
-    }
-    return firstErr
+	address := ":8080"
+	if port := os.Getenv("SPINE_PORT"); port != "" {
+		address = ":" + port
+	}
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 

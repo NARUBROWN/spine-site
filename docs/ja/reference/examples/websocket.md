@@ -1,14 +1,27 @@
-# WebSocketチャットの例
+# CLIでWebSocketチャットを作る
 
-Webソケットを活用した簡単なリアルタイムチャットの例です。
+CLIでWebSocketコンポーネントを生成し、ブロードキャストを実装します。単一プロセスで動くローカル学習用の例です。
 
-## 概要
+## プロジェクトとハンドラーを生成する
 
-SpineのWebSocketサポートを使用してリアルタイムチャットサーバーを実装する方法を示す例です。あるクライアントから受信したメッセージをすべての接続されたクライアントにブロードキャストします。
+[インストールと最初のアプリ](/ja/learn/getting-started/first-app)でCLIをインストールしてから、以下でプロジェクトとWebSocketハンドラーを生成します。
 
-## Controller
+```sh
+spine new chat-app --module example.com/chat-app
+cd chat-app
+go mod tidy
+spine doctor
+spine generate websocket chat --path /ws/chat --field message:string
+```
+
+生成ファイルは `src/websocket/chat/chat_message.go`、`chat_handler.go`、`module.go` です。`BuildApplication` にエラーを確認する `chatwebsocket.Register(app)` が自動追加されます。同じパスやコンストラクタを再登録しないでください。
+
+## ブロードキャストを実装する
+
+生成ハンドラーは未実装エラーを返します。`chat_handler.go` 全体を以下で置き換え、`errors` importと未実装エラーを削除します。`ChatMessage` は生成された `chat_message.go` に残します。
+
 ```go
-package controller
+package chat
 
 import (
 	"context"
@@ -20,19 +33,15 @@ import (
 	"github.com/NARUBROWN/spine/pkg/ws"
 )
 
-type ChatController struct {
+type ChatSocket struct {
 	mu      sync.RWMutex
 	clients map[string]ws.Sender
 }
 
-func NewChatController() *ChatController {
-	return &ChatController{
+func NewChatSocket() *ChatSocket {
+	return &ChatSocket{
 		clients: make(map[string]ws.Sender),
 	}
-}
-
-type ChatMessage struct {
-	Message string `json:"message"`
 }
 
 type ChatEvent struct {
@@ -42,7 +51,7 @@ type ChatEvent struct {
 	At      string `json:"at"`
 }
 
-func (c *ChatController) OnMessage(
+func (c *ChatSocket) Handle(
 	ctx context.Context,
 	connID ws.ConnectionID,
 	msg ChatMessage,
@@ -76,95 +85,63 @@ func (c *ChatController) OnMessage(
 	}
 	c.mu.RUnlock()
 
-	var firstErr error
 	for id, client := range clients {
 		if err := client.Send(ws.TextMessage, payload); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
 			c.mu.Lock()
 			delete(c.clients, id)
 			c.mu.Unlock()
 		}
 	}
-	return firstErr
+	return nil
 }
 ```
 
-## Routes
+## 生成された構成を維持する
 
+`internal/application/application.go` の `BuildApplication` でhealth登録と `chatwebsocket.Register(app)` を維持し、返すオプションを以下に変更します。`time` importを追加します。生成された `main.go` の `BuildApplication` → `Validate` → `Run` を維持します。
 
 ```go
-package routes
-
-import (
-	"github.com/NARUBROWN/spine"
-	"github.com/NARUBROWN/spine-simple-chat-demo/controller"
-)
-
-func RegisterChatRoutes(app spine.App) error {
-	return app.WebSocket().Register("/ws/chat", (*controller.ChatController).OnMessage)
-}
+return app, boot.Options{
+    Address: address,
+    EnableGracefulShutdown: true,
+    ShutdownTimeout: 10 * time.Second,
+    HTTP: &boot.HTTPOptions{
+        WebSocket: boot.WebSocketOptions{
+            MaxConnections: 1024,
+            MaxMessageBytes: 1 << 20,
+            HandshakeTimeout: 10 * time.Second,
+            ReadTimeout: 60 * time.Second,
+            WriteTimeout: 10 * time.Second,
+            PingInterval: 30 * time.Second,
+        },
+    },
+}, nil
 ```
 
-## Main
+## 検証して実行する
 
-
-```go
-package main
-
-import (
-	"log"
-	"time"
-
-	"github.com/NARUBROWN/spine"
-	"github.com/NARUBROWN/spine-simple-chat-demo/controller"
-	"github.com/NARUBROWN/spine-simple-chat-demo/routes"
-	"github.com/NARUBROWN/spine/pkg/boot"
-)
-
-func main() {
-	app := spine.New()
-
-	app.Constructor(
-		controller.NewChatController,
-	)
-
-	if err := routes.RegisterChatRoutes(app); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{
-			WebSocket: boot.WebSocketOptions{
-				AllowedOrigins: []string{"https://app.example.com"},
-				MaxConnections: 1024,
-			},
-		},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
+```sh
+gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
+spine contract check
+spine verify
+spine contract export --format asyncapi --output asyncapi.json
+spine dev
 ```
 
-## Handshake認証と容量
+`contract check` は静的契約、`verify` はローカルGo検証です。接続とメッセージ交換は別途確認します。サーバー起動後、ブラウザーで `http://localhost:8080/health` を開き、そのタブの開発者コンソールで実行します。
 
-認証が必要なrouteのinterceptorは`core.WebSocketHandshakeInterceptor`も実装します。接続slotは`PreHandshake`より先に予約され、`PreHandshake`はHTTP upgradeより前に実行されます。未認証の待機中handshakeも`MaxConnections`に含まれます。メッセージごとの`PreHandle`は別に引き続き実行されます。
-
-```go
-func (i *AuthInterceptor) PreHandshake(
-	ctx core.WebSocketHandshakeContext,
-	meta core.HandlerMeta,
-) error {
-	token := ctx.Header("Authorization")
-	if token == "" {
-		return httperr.Unauthorized("missing credentials")
-	}
-	return i.verify(token)
-}
+```js
+const socket = new WebSocket('ws://localhost:8080/ws/chat')
+socket.onmessage = (event) => console.log(JSON.parse(event.data))
+socket.onopen = () => socket.send(JSON.stringify({ message: 'hello' }))
 ```
 
-`AllowedOrigins`を省略するとschemeとhostの両方が一致する要求だけが許可されます。接続上限を超えるとupgradeせず、HTTP 503、`Retry-After`、`WEBSOCKET_CAPACITY_EXCEEDED` JSONを返します。TLS終端proxyを信頼する場合は、正確な`TrustedProxyCIDRs`を設定してください。
+各接続は最初にメッセージを送るとsender一覧に登録されます。一覧はプロセス内メモリのみで、切断したsenderは後の送信失敗時に削除されます。永続的な接続管理やサーバー間の配信は提供しません。
+
+## 認証・Origin・接続上限
+
+基本例に認証はありません。追加する場合は4つの `core.Interceptor` メソッドと `core.WebSocketHandshakeInterceptor.PreHandshake` を実装し、`app.InterceptorFor(boot.InterceptorWebSocket, auth)` で登録します。upgrade前に拒否するには `PreHandshake` で認証情報を検証してエラーを返します。メッセージの `PreHandle` だけではhandshakeを保護できません。
+
+`AllowedOrigins` を省略すると、Origin付きリクエストはschemeとhostの一致が必要です。Originなしクライアントは許可されます。本番では正確な公開Originと必要なproxy CIDRを指定します。上限超過時はHTTP 503、`Retry-After`、`WEBSOCKET_CAPACITY_EXCEEDED` を返します。
+
+[インターセプターAPI](/ja/reference/api/interceptor) · [セキュリティ設定](/ja/reference/security-configuration)

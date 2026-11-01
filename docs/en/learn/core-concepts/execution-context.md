@@ -2,6 +2,8 @@
 
 Spine separates execution control, protocol input, and controller-visible state into small context interfaces.
 
+The application handlers below are manual extensions to `src/user/user_controller.go` in a [CLI project](/en/learn/tutorial/1-project-structure). Import response types from `github.com/NARUBROWN/spine/pkg/httpx` and `spine.Ctx` from `github.com/NARUBROWN/spine/pkg/spine`. Keep `BuildApplication` and its checked `user.Register(app)` call; framework implementation excerpts do not belong in application files.
+
 ## Why contexts are separated
 
 ```mermaid
@@ -81,12 +83,12 @@ func (i *AuthInterceptor) AfterCompletion(
 Controllers read the same value through `spine.Ctx`, the public resolver type backed by `ControllerContext`:
 
 ```go
-func (c *UserController) Me(ctx spine.Ctx) (User, error) {
+func (c *UserController) Me(ctx spine.Ctx) (httpx.Response[User], error) {
     value, ok := ctx.Get("myapp.auth.user")
     if !ok {
-        return User{}, httperr.Unauthorized("authentication required")
+        return httpx.Response[User]{}, httperr.Unauthorized("authentication required")
     }
-    return value.(User), nil
+    return httpx.Response[User]{Body: value.(User)}, nil
 }
 ```
 

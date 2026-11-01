@@ -18,27 +18,39 @@ graph TD
     Service --> Repository
 ```
 
+## Create the project with CLI
+
+Complete [CLI installation](/en/learn/getting-started/installation), then generate the base application. Add the complete memory-backed CRUD implementation below manually. The CLI resource generator provides a GET skeleton; `slice --storage memory` provides create/read skeletons, so neither generates the complete update/delete implementation shown here.
+
+```sh
+spine new crud-example --module example.com/crud-example
+cd crud-example
+go mod tidy
+spine doctor
+```
+
 ## Project Structure
 
-```
-spine-user-demo/
+```text
+crud-example/
+├── go.mod
 ├── main.go
-├── model/
-│   └── user.go
-├── repository/
-│   └── user_repository.go
-├── service/
-│   └── user_service.go
-├── controller/
-│   └── user_controller.go
-└── dto/
-    └── user_dto.go
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── model/user.go
+    ├── repository/user_repository.go
+    ├── dto/user_dto.go
+    ├── service/user_service.go
+    └── controller/user_controller.go
 ```
 
 ## Model
 
 ```go
-// model/user.go
+// src/model/user.go
 package model
 
 import "time"
@@ -55,7 +67,7 @@ type User struct {
 ## Repository
 
 ```go
-// repository/user_repository.go
+// src/repository/user_repository.go
 package repository
 
 import (
@@ -63,7 +75,7 @@ import (
     "sync"
     "time"
 
-    "spine-user-demo/model"
+    "example.com/crud-example/src/model"
 )
 
 var (
@@ -162,13 +174,13 @@ func (r *UserRepository) Count() int {
 ## DTO
 
 ```go
-// dto/user_dto.go
+// src/dto/user_dto.go
 package dto
 
 import (
     "time"
 
-    "spine-user-demo/model"
+    "example.com/crud-example/src/model"
 )
 
 // Request DTO
@@ -225,13 +237,13 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 ## Service
 
 ```go
-// service/user_service.go
+// src/service/user_service.go
 package service
 
 import (
-    "spine-user-demo/dto"
-    "spine-user-demo/model"
-    "spine-user-demo/repository"
+    "example.com/crud-example/src/dto"
+    "example.com/crud-example/src/model"
+    "example.com/crud-example/src/repository"
 )
 
 type UserService struct {
@@ -300,7 +312,7 @@ func (s *UserService) DeleteUser(id int64) error {
 ## Controller
 
 ```go
-// controller/user_controller.go
+// src/controller/user_controller.go
 package controller
 
 import (
@@ -310,9 +322,9 @@ import (
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
 
-    "spine-user-demo/dto"
-    "spine-user-demo/repository"
-    "spine-user-demo/service"
+    "example.com/crud-example/src/dto"
+    "example.com/crud-example/src/repository"
+    "example.com/crud-example/src/service"
 )
 
 type UserController struct {
@@ -406,62 +418,69 @@ func toHTTPError(err error) error {
 }
 ```
 
-## Main
+## Application assembly
+
+Keep the generated root `main.go`, which calls `BuildApplication`, `Validate`, and `Run` in order. Replace `internal/application/application.go` with the following, and manually add the model, repository, DTO, service, and controller files under `src/`.
 
 ```go
-// main.go
-package main
+// internal/application/application.go
+package application
 
 import (
-    "log"
     "time"
+
+    "example.com/crud-example/src/controller"
+    "example.com/crud-example/src/repository"
+    "example.com/crud-example/src/service"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
-
-    "spine-user-demo/controller"
-    "spine-user-demo/repository"
-    "spine-user-demo/service"
 )
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-
-    // Constructor Registration 
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
         controller.NewUserController,
     )
-
-    // Route Registration
     app.Route("GET", "/users", (*controller.UserController).List)
     app.Route("GET", "/users/:id", (*controller.UserController).GetByID)
     app.Route("POST", "/users", (*controller.UserController).Create)
     app.Route("PUT", "/users/:id", (*controller.UserController).Update)
     app.Route("DELETE", "/users/:id", (*controller.UserController).Delete)
 
-    // Interceptor Registration
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type"},
-        }),
-    )
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins: []string{"*"},
+        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders: []string{"Content-Type"},
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
-    // Start Server
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
+
+## Verify and run
+
+```sh
+gofmt -w src internal/application
+go mod tidy
+spine contract check
+spine verify
+spine dev
+```
+
+`contract check` checks the static contract; `verify` checks the contract, gofmt, vet, and Go tests. Check create, read, update, and delete behavior with the HTTP requests below. Memory data disappears when the process stops. Configure persistence separately in the [database tutorial](/en/learn/tutorial/5-database).
 
 ## API Test
 
@@ -557,7 +576,12 @@ curl http://localhost:8080/users/999
 }
 ```
 
+The previous step deleted the user. Recreate a user with the same email first (200), then submit that email again to get the duplicate error (400).
+
 ```bash
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alice", "email": "alice@example.com"}'
 # Duplicate Email
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
@@ -576,10 +600,10 @@ curl -X POST http://localhost:8080/users \
 
 ```go
 // ✓ Receives input as semantic type
-func (c *UserController) GetByID(id path.Int) (dto.UserResponse, error)
+func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
 // ✓ Expresses meaning with httperr
-return dto.UserResponse{}, httperr.NotFound("User not found")
+return httpx.Response[dto.UserResponse]{}, httperr.NotFound("User not found")
 ```
 
 ### Dependency Injection

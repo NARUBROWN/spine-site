@@ -1,5 +1,14 @@
 # query.Values
 
+Continue after creating a project with the CLI in [First App](/en/learn/getting-started/first-app) and generating `src/user` in [Controllers](/en/learn/tutorial/2-controller). Application handler examples manually extend the same `package user` under `src/user`. Implement `User`, search/page response types, and service search methods for your application; the CLI does not generate them. Product and Order snippets illustrate additional features following the same pattern. Handlers are independent alternatives, so add only the methods and routes you need. Wrap success results in `httpx.Response[T]` and import `httpx` and `query` for these handlers.
+
+```go
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
+```
+
 API Reference for query.Values helper.
 
 ## Overview
@@ -52,7 +61,7 @@ Returns the first value for the specified key.
 
 **Example**
 ```go
-// GET /users?name=john
+// GET /user?name=john
 q.Get("name")     // "john"
 q.Get("missing")  // ""
 ```
@@ -73,7 +82,7 @@ Returns the first value for the specified key as a string. Has the same implemen
 
 **Example**
 ```go
-// GET /users?status=active&name=john
+// GET /user?status=active&name=john
 q.String("status")  // "active"
 q.String("name")    // "john"
 q.String("missing") // ""
@@ -96,12 +105,12 @@ Parses the value of the specified key as an integer. Internally, it calls `Get()
 
 **Example**
 ```go
-// GET /users?page=3&size=20
+// GET /user?page=3&size=20
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
 q.Int("offset", 0)  // 0 (key missing)
 
-// GET /users?page=abc
+// GET /user?page=abc
 q.Int("page", 1)    // 1 (parse failed)
 ```
 
@@ -130,13 +139,13 @@ Values not matching any of the above will return the default value.
 
 **Example**
 ```go
-// GET /users?active=true&verified=1&premium=yes
+// GET /user?active=true&verified=1&premium=yes
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
 q.GetBoolByKey("deleted", false)   // false (key missing)
 
-// GET /users?active=maybe
+// GET /user?active=maybe
 q.GetBoolByKey("active", false)    // false (unrecognized)
 ```
 
@@ -156,7 +165,7 @@ Checks if the specified key exists.
 
 **Example**
 ```go
-// GET /users?status=active&empty=
+// GET /user?status=active&empty=
 q.Has("status")  // true
 q.Has("empty")   // true (key exists even if value is empty)
 q.Has("missing") // false
@@ -189,18 +198,18 @@ The Resolver type asserts `core.ExecutionContext` to `core.HttpRequestContext` a
 ## Usage in Controller
 
 ```go
-func (c *UserController) Search(q query.Values) []User {
+func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     status := q.String("status")
     page := q.Int("page", 1)
     size := q.Int("size", 20)
     active := q.GetBoolByKey("active", true)
     
-    return c.repo.Search(status, page, size, active)
+    return httpx.Response[[]User]{Body: c.service.Search(status, page, size, active)}
 }
 ```
 
 ```go
-func (c *ProductController) Filter(q query.Values) []Product {
+func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
     
     if q.Has("category") {
@@ -210,7 +219,7 @@ func (c *ProductController) Filter(q query.Values) []Product {
         filters["min_price"] = q.String("min_price")
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 

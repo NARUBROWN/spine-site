@@ -1,66 +1,53 @@
 # 컨트롤러
 
-Spine에서 컨트롤러 작성하기.
+CLI로 만든 `hello-spine` 프로젝트에 사용자 조회 컨트롤러를 추가합니다. 설치와 프로젝트 생성은 [첫 번째 앱](/ko/learn/getting-started/first-app)을 먼저 따라 하세요. 이미 `resource user`를 생성했다면 다시 생성하지 말고 파일을 확인합니다.
 
+## CLI로 컨트롤러 생성
 
-## 컨트롤러란?
+```bash
+spine generate resource user --dry-run
+```
 
-컨트롤러는 HTTP 요청을 받아 서비스에 위임하는 계층입니다.
+미리보기에서 생성 파일과 등록 코드 변경을 확인한 뒤 아래 명령으로 생성합니다.
 
-Spine의 컨트롤러는 **순수한 Go 구조체**입니다. 어노테이션도, 데코레이터도, 특별한 인터페이스 구현도 필요 없습니다.
+```bash
+spine generate resource user
+```
+
+### 생성되는 파일
+
+```text
+src/user/
+├── user_controller.go
+├── user_service.go
+├── user_repository.go
+└── user_route.go
+```
+
+생성된 `src/user/user_controller.go`는 다음과 같습니다. `UserService`와 같은 `user` 패키지에 있으므로 별도 `service` 패키지 import가 없습니다.
 
 ```go
-// 이게 전부입니다
-type UserController struct {
-    svc *service.UserService
+package user
+
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/path"
+)
+
+type UserController struct { service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
+
+func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": id.Value}}
 }
 ```
 
-## 기본 구조
-
-### 1. 구조체 정의
-
-```go
-package controller
-
-type UserController struct {
-    svc *service.UserService  // 의존성
-}
-```
-
-### 2. 생성자 작성
-
-```go
-// 생성자 파라미터 = 의존성 선언
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-```
-
-### 3. 핸들러 메서드 작성
-
-```go
-// 함수 시그니처가 곧 API 스펙
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-```
-
-### 4. 라우트 등록
-
-```go
-app.Route("GET", "/users/:id", (*UserController).GetUser)
-```
-
+::: info
+`resource`는 조회용 골격입니다. 데이터베이스·도메인 모델·DTO·CRUD를 자동 구현하지 않습니다. 아래 입력·응답 코드는 이 골격에 직접 추가하는 서로 독립적인 핸들러 예시입니다. `UserResponse`, 요청 DTO, `UserService.Get/List/Create/Login` 등의 메서드는 필요한 예제에 맞게 직접 구현해야 합니다. 예시 타입은 `src/user`의 `package user`에 두고 필요한 표준/Spine 패키지를 import하세요. 같은 이름의 메서드 예시를 한 번에 붙여 넣지 마세요.
+:::
 
 ## 핸들러 시그니처
 
@@ -87,6 +74,9 @@ Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 �
 | `httpx.Response[T]` | JSON 또는 문자열 응답 (상태 코드, 헤더, 쿠키 포함) |
 | `httpx.Redirect` | 리다이렉트 응답 |
 | `error` | 에러 응답 |
+| `httpx.Binary` | 바이트 응답 |
+
+포인터 응답과 `(지원하는 응답 타입, error)`도 사용할 수 있습니다. `httpx.Binary`는 명시적인 Content-Type과 바이트를 반환합니다.
 
 
 ## 입력 받기
@@ -96,18 +86,20 @@ Spine은 핸들러의 함수 시그니처를 분석해 자동으로 입력을 �
 `query.Values`를 사용해 쿼리 스트링을 파싱합니다.
 
 ```go
-// GET /users?id=1&name=alice&active=true
+// GET /user?id=1&name=alice&active=true
 
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
-) httpx.Response[dto.UserResponse] {
+) httpx.Response[UserResponse] {
     id := q.Int("id", 0)                      // int64, 기본값 0
     name := q.String("name")                  // string
     active := q.GetBoolByKey("active", false) // bool, 기본값 false
-    
-    user, _ := c.svc.Get(ctx, int(id))
-    return httpx.Response[dto.UserResponse]{Body: user}
+    _ = name
+    _ = active
+
+    user, _ := c.service.Get(ctx, int(id))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
@@ -127,16 +119,16 @@ func (c *UserController) GetUser(
 `query.Pagination`을 사용하면 `page`와 `size` 쿼리 파라미터를 자동으로 파싱합니다.
 
 ```go
-// GET /users?page=2&size=10
+// GET /user?page=2&size=10
 
 func (c *UserController) ListUsers(
     ctx context.Context,
     page query.Pagination,
-) httpx.Response[[]dto.UserResponse] {
+) httpx.Response[[]UserResponse] {
     // page.Page = 2 (기본값: 1)
     // page.Size = 10 (기본값: 20)
-    users, _ := c.svc.List(ctx, page.Page, page.Size)
-    return httpx.Response[[]dto.UserResponse]{Body: users}
+    users, _ := c.service.List(ctx, page.Page, page.Size)
+    return httpx.Response[[]UserResponse]{Body: users}
 }
 ```
 
@@ -150,9 +142,9 @@ import "github.com/NARUBROWN/spine/pkg/header"
 
 func (c *CommonController) CheckHeader(
     headers header.Values,
-) httpx.Response[dto.HeaderInfo] {
-    return httpx.Response[dto.HeaderInfo]{
-        Body: dto.HeaderInfo{
+) httpx.Response[HeaderInfo] {
+    return httpx.Response[HeaderInfo]{
+        Body: HeaderInfo{
             UserAgent:   headers.Get("User-Agent"),
             ContentType: headers.Get("Content-Type"),
         },
@@ -170,17 +162,19 @@ func (c *CommonController) CheckHeader(
 
 ### Path 파라미터
 
+경로 파라미터는 선언 순서대로 `path.Int`, `path.String`, `path.Boolean`에 바인딩됩니다.
+
 `path` 패키지의 타입을 사용하여 라우트 경로의 파라미터를 바인딩합니다.
 
 ```go
-// GET /users/:id
+// GET /user/:id
 
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    return httpx.Response[dto.UserResponse]{Body: user}
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
@@ -205,18 +199,20 @@ type Boolean struct {
 
 ### JSON 요청 본문
 
+DTO는 포인터여야 합니다. JSON/Form 바인딩은 DTO의 `form` 태그와 요청 Content-Type에 따라 결정됩니다.
+
 DTO 구조체를 포인터로 선언하면 자동으로 JSON이 바인딩됩니다.
 
 ```go
-// POST /users
+// POST /user
 // Body: {"name": "Alice", "email": "alice@example.com"}
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *dto.CreateUserRequest,  // ← 포인터로 선언
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    return httpx.Response[dto.UserResponse]{
+    req *CreateUserRequest,  // ← 포인터로 선언
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Create(ctx, req.Name, req.Email)
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Status: 201,
@@ -226,7 +222,7 @@ func (c *UserController) CreateUser(
 ```
 
 ```go
-// dto/user_request.go
+// src/user/user_request.go
 type CreateUserRequest struct {
     Name  string `json:"name"`
     Email string `json:"email"`
@@ -245,22 +241,21 @@ func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
     spineCtx spine.Ctx,
-) httpx.Response[dto.UserResponse] {
+) httpx.Response[UserResponse] {
     // 인터셉터에서 Set한 값 조회
     if v, ok := spineCtx.Get("userRole"); ok {
         role := v.(string)
         // ...
     }
-    
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    return httpx.Response[dto.UserResponse]{Body: user}
+
+    user, _ := c.service.Get(ctx, int(userId.Value))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
 
 ## 응답 반환
 
-Spine은 `httpx.Response[T]`, `httpx.Redirect`, `error` 세 가지 반환 타입을 지원합니다.
 
 ### 1. httpx.Response[T] — JSON/문자열 응답
 
@@ -276,10 +271,10 @@ import "github.com/NARUBROWN/spine/pkg/httpx"
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    
-    return httpx.Response[dto.UserResponse]{
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
+
+    return httpx.Response[UserResponse]{
         Body: user,  // 200 OK (기본값)
     }
 }
@@ -300,11 +295,11 @@ func (c *UserController) Health() httpx.Response[string] {
 ```go
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *dto.CreateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    
-    return httpx.Response[dto.UserResponse]{
+    req *CreateUserRequest,
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Create(ctx, req.Name, req.Email)
+
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Status: 201, // Created
@@ -319,10 +314,10 @@ func (c *UserController) CreateUser(
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    
-    return httpx.Response[dto.UserResponse]{
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
+
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Headers: map[string]string{
@@ -339,12 +334,12 @@ func (c *UserController) GetUser(
 ```go
 func (c *AuthController) Login(
     ctx context.Context,
-    req *dto.LoginRequest,
-) httpx.Response[dto.LoginResponse] {
-    token, refreshToken, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
-    return httpx.Response[dto.LoginResponse]{
-        Body: dto.LoginResponse{Success: true},
+    req *LoginRequest,
+) httpx.Response[LoginResponse] {
+    token, refreshToken, _ := c.service.Login(ctx, req.Email, req.Password)
+
+    return httpx.Response[LoginResponse]{
+        Body: LoginResponse{Success: true},
         Options: httpx.ResponseOptions{
             Cookies: []httpx.Cookie{
                 httpx.AccessTokenCookie(token, 15*time.Minute),
@@ -395,8 +390,8 @@ func (c *AuthController) OAuthCallback(
     q query.Values,
 ) httpx.Redirect {
     code := q.String("code")
-    c.svc.ProcessOAuthCode(ctx, code)
-    
+    c.service.ProcessOAuthCode(ctx, code)
+
     return httpx.Redirect{
         Location: "/dashboard",  // 302 Found (기본값)
     }
@@ -423,10 +418,10 @@ func (c *UserController) MovedPermanently() httpx.Redirect {
 ```go
 func (c *AuthController) Login(
     ctx context.Context,
-    req *dto.LoginRequest,
+    req *LoginRequest,
 ) httpx.Redirect {
-    token, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
+    token, _ := c.service.Login(ctx, req.Email, req.Password)
+
     return httpx.Redirect{
         Location: "/dashboard",
         Options: httpx.ResponseOptions{
@@ -466,7 +461,7 @@ func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
 ) error {
-    _, err := c.svc.Get(ctx, int(userId.Value))
+    _, err := c.service.Get(ctx, int(userId.Value))
     if err != nil {
         return httperr.NotFound("유저를 찾을 수 없습니다.")
     }
@@ -491,23 +486,18 @@ func (c *UserController) GetUser(
 
 #### httpx.Response[T]와 error 함께 사용
 
-에러 처리가 필요한 경우 `httpx.Response[T]` 내에서 상태 코드로 처리하거나, 별도 에러 핸들러 메서드를 만들 수 있습니다.
+성공 응답과 오류를 함께 반환하려면 `(httpx.Response[T], error)`를 사용합니다. 서비스 오류는 `httperr`로 매핑하고 성공 응답은 `nil` 오류와 반환합니다.
 
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
+    userID path.Int,
+) (httpx.Response[UserResponse], error) {
+    user, err := c.service.Get(ctx, int(userID.Value))
     if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{
-                Status: 404,
-            },
-        }
+        return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
     }
-    
-    return httpx.Response[dto.UserResponse]{Body: user}
+    return httpx.Response[UserResponse]{Body: user}, nil
 }
 ```
 
@@ -652,197 +642,46 @@ func (c *PostController) Upload(
 이 규칙을 따르면 실행 흐름이 시그니처에 그대로 드러납니다.
 
 
-## 라우트 등록
+## 자동 등록과 수동 확장
 
-컨트롤러 메서드를 라우트에 연결합니다.
+CLI는 `src/user/user_route.go`를 생성하고 `BuildApplication()`에서 `user.Register(app)`의 오류를 확인하도록 연결합니다. 다음 코드는 생성 결과를 설명하며, 같은 등록을 다시 추가하면 안 됩니다.
 
 ```go
-// routes/user_routes.go
-package routes
+// src/user/user_route.go
+package user
 
-import (
-    "my-app/controller"
-    "github.com/NARUBROWN/spine"
-)
+import "github.com/NARUBROWN/spine"
 
-func RegisterUserRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).ListUsers)
-    app.Route("GET", "/users/:id", (*controller.UserController).GetUser)
-    app.Route("POST", "/users", (*controller.UserController).CreateUser)
-    app.Route("PUT", "/users/:id", (*controller.UserController).UpdateUser)
-    app.Route("DELETE", "/users/:id", (*controller.UserController).DeleteUser)
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
+    app.Route("GET", "/user/:id", (*UserController).Get)
+    return nil
 }
 ```
 
 ```go
-// main.go
-func main() {
-    app := spine.New()
-    app.Constructor(/* ... */)
-    routes.RegisterUserRoutes(app)
-    app.Run(boot.Options{
-        Address:                ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    })
+// internal/application/application.go: BuildApplication
+if err := user.Register(app); err != nil {
+    return nil, boot.Options{}, err
 }
 ```
 
+새 핸들러를 구현했다면 `user_route.go`의 `Register` 안에 해당 라우트를 직접 추가합니다. 다른 패키지의 컨트롤러는 그 패키지의 등록 함수에서 조립하세요. `main.go`는 생성된 `BuildApplication → Validate → Run` 흐름을 유지합니다.
 
-## 전체 예제
+## 검증과 실행
 
-```go
-// controller/user_controller.go
-package controller
-
-import (
-    "context"
-    "net/http"
-    "time"
-    
-    "my-app/dto"
-    "my-app/service"
-    
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GET /users?page=1&size=20
-func (c *UserController) ListUsers(
-    ctx context.Context,
-    page query.Pagination,
-) httpx.Response[[]dto.UserResponse] {
-    users, _ := c.svc.List(ctx, page.Page, page.Size)
-    
-    return httpx.Response[[]dto.UserResponse]{
-        Body: users,
-        Options: httpx.ResponseOptions{
-            Headers: map[string]string{
-                "X-Total-Count": "100",
-            },
-        },
-    }
-}
-
-// GET /users/:id
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-    
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-
-// POST /users
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    
-    return httpx.Response[dto.UserResponse]{
-        Body: user,
-        Options: httpx.ResponseOptions{
-            Status: http.StatusCreated, // 201
-        },
-    }
-}
-
-// PUT /users/:id
-func (c *UserController) UpdateUser(
-    ctx context.Context,
-    userId path.Int,
-    req *dto.UpdateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Update(ctx, int(userId.Value), req.Name)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-    
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-
-// DELETE /users/:id
-func (c *UserController) DeleteUser(
-    ctx context.Context,
-    userId path.Int,
-) error {
-    return c.svc.Delete(ctx, int(userId.Value))
-}
+```bash
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
-```go
-// controller/auth_controller.go
-package controller
-
-import (
-    "context"
-    "time"
-    
-    "my-app/dto"
-    "my-app/service"
-    
-    "github.com/NARUBROWN/spine/pkg/httpx"
-)
-
-type AuthController struct {
-    svc *service.AuthService
-}
-
-func NewAuthController(svc *service.AuthService) *AuthController {
-    return &AuthController{svc: svc}
-}
-
-// POST /auth/login
-func (c *AuthController) Login(
-    ctx context.Context,
-    req *dto.LoginRequest,
-) httpx.Redirect {
-    token, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
-    return httpx.Redirect{
-        Location: "/dashboard",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.AccessTokenCookie(token, 15*time.Minute),
-            },
-        },
-    }
-}
-
-// POST /auth/logout
-func (c *AuthController) Logout() httpx.Redirect {
-    return httpx.Redirect{
-        Location: "/login",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.ClearAccessTokenCookie(),
-                httpx.ClearRefreshTokenCookie(),
-            },
-        },
-    }
-}
+```bash
+curl http://localhost:8080/user/1
 ```
 
+계약·로컬 검증의 성공과 실제 HTTP 응답은 각각 확인합니다. `GET /user/1`의 생성된 응답은 `{"id":1}`이며 실제 사용자 조회나 영속 저장을 뜻하지 않습니다.
 
 ## 핵심 정리
 

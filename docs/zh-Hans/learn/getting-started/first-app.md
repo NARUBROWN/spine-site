@@ -1,233 +1,101 @@
-# 第一个应用程序
+# 第一个应用
 
-5 分钟内创建用户查询 API。
+安装 Spine CLI、生成项目，并在约 5 分钟内运行 `GET /health`。需要 Go 1.25.5 或更高版本，CLI 推荐 Go 1.27.3。首次下载依赖所需的时间取决于环境。
 
-## 完成的外观
-
-```bash
-curl "http://localhost:8080/users?id=1"
-```
-
-```json
-{
-  "id": 1,
-  "name": "Alice",
-  "email": "alice@example.com"
-}
-```
-
-## 1.创建项目
+## 1. 安装并检查 CLI
 
 ```bash
-mkdir hello-spine && cd hello-spine
-go mod init hello-spine
-go get github.com/NARUBROWN/spine@v0.5.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
-## 2. 项目结构
+`spine version` 输出 `spine-cli 0.1.4`。如果找不到命令，请参考[安装指南](/zh-Hans/learn/getting-started/installation)配置 Go 可执行文件路径。
 
+## 2. 创建项目
+
+在准备存放项目的父目录中运行：
+
+```bash
+spine new hello-spine --module example.com/hello-spine
+cd hello-spine
+go mod tidy
 ```
+
+CLI 在 `go.mod` 中指定 Spine `v0.5.1`，使用 `go mod tidy` 准备依赖。
+
+## 3. 查看生成的结构
+
+```text
 hello-spine/
+├── .gitignore
+├── README.md
+├── go.mod
 ├── main.go
-├── controller/
-│   └── user_controller.go
-├── service/
-│   └── user_service.go
-└── routes/
-    └── routes.go
+├── spine.toml
+└── internal/application/
+    ├── application.go
+    └── application_test.go
 ```
 
-## 3.编写代码
+`spine.toml` 告诉 CLI 模块路径、运行入口和注册代码的位置。
 
-### main.go
+```toml
+module = "example.com/hello-spine"
+entrypoint = "."
+composition = "./internal/application"
+port = 8080
+```
+
+`internal/application/application.go` 中的 `BuildApplication()` 负责组装应用和启动选项。生成代码注册 `HealthController` 构造函数与 `GET /health`，并明确设置 `boot.HTTPOptions`。将路由、构造函数和拦截器注册集中在该函数中，或集中在它调用的 `Register(app) error` 函数中。
+
+`main.go` 已生成，无需覆盖。可以查看它的执行流程：
 
 ```go
-package main
-
-import (
-    "log"
-    "time"
-
-    "hello-spine/controller"
-    "hello-spine/routes"
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-)
-
 func main() {
-    app := spine.New()
-
-    // 注册构造函数——以任何顺序
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    // 路线登记
-    routes.RegisterRoutes(app)
-
-    // 启动服务器
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-### 服务/user_service.go
-
-```go
-package service
-
-// UserResponse 响应结构
-type UserResponse struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-
-// 用户服务 用户服务
-type UserService struct {
-    // 实际上，Repository是被注入的，但这里只是简单地实现了。
-}
-
-func NewUserService() *UserService {
-    return &UserService{}
-}
-
-// 获取用户查找（硬编码数据）
-func (s *UserService) Get(id int) (UserResponse, error) {
-    // 其实去DB查一下
-    users := map[int]UserResponse{
-        1: {ID: 1, Name: "Alice", Email: "alice@example.com"},
-        2: {ID: 2, Name: "Bob", Email: "bob@example.com"},
-    }
-
-    if user, ok := users[id]; ok {
-        return user, nil
-    }
-
-    return UserResponse{}, nil
-}
-```
-
-### 控制器/user_controller.go
-
-```go
-package controller
-
-import (
-    "context"
-
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-// NewUserController 构造函数 — 参数是依赖项
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GetUser 用户查找处理程序
-// 函数签名是API规范
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[service.UserResponse], error) {
-    id := int(q.Int("id", 0))
-    user, err := c.svc.Get(id)
+    app, options, err := application.BuildApplication()
     if err != nil {
-        return httpx.Response[service.UserResponse]{}, err
+        log.Fatal(err)
     }
-    return httpx.Response[service.UserResponse]{Body: user}, nil
+    if err := app.Validate(options); err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-### 路线/routes.go
-
-```go
-package routes
-
-import (
-    "hello-spine/controller"
-
-    "github.com/NARUBROWN/spine"
-)
-
-func RegisterRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).GetUser)
-}
-```
-
-## 4. 运行
+## 4. 验证契约与本地代码
 
 ```bash
-go run main.go
+spine doctor
+spine inspect
+spine contract check
+spine verify
 ```
 
-```
-________       _____
-__  ___/__________(_)___________
-_____ \___  __ \_  /__  __ \  _ \
-____/ /__  /_/ /  / _  / / /  __/
-/____/ _  .___//_/  /_/ /_/\___/
-       /_/
-2026/07/26 14:37:59 [Bootstrap] Spine version: v0.5.1
-```
+`doctor` 诊断工具和项目配置，`inspect` 显示已注册的执行契约。`contract check` 验证静态契约，`verify` 执行契约、gofmt、vet 和 test 检查。生成的 `application_test.go` 也会在不启动服务器的情况下检查 `BuildApplication()` 和 `app.Validate(options)`。
 
-## 5. 测试
+## 5. 运行并确认响应
 
 ```bash
-# 爱丽丝查找
-curl "http://localhost:8080/users?id=1"
+spine dev
+```
+
+在另一个终端中发送请求：
+
+```bash
+curl http://localhost:8080/health
 ```
 
 ```json
-{"id":1,"name":"Alice","email":"alice@example.com"}
+{"status":"ok"}
 ```
 
-```bash
-# 鲍勃·查找
-curl "http://localhost:8080/users?id=2"
-```
-
-```json
-{"id":2,"name":"Bob","email":"bob@example.com"}
-```
-
-## 🎉 完成！
-
-我在 5 分钟内创建了我的第一个 Spine 应用程序。
-
-### 到目前为止我学到了什么
-
-|概念|代码|
-|------|------|
-|创建应用程序 | `spine.New()` | `spine.New()`
-|注册依赖项 | `app.Constructor(...)` | `app.Constructor(...)`
-|路线登记| `app.Route("GET", "/users", ...)` | `app.Route("GET", "/users", ...)`
-|启动服务器| `app.Run(boot.Options{...})` | `app.Run(boot.Options{...})`
-
-### 要点
-
-- **构造函数参数 = 依赖声明** — 无需注释
-- **函数签名=API规范** — 输入输出清晰
-- **在一处管理您的路线** — 查看流程
+按 `Ctrl+C` 停止开发服务器。至此，你已确认 CLI 生成的项目、可复用的应用组装函数、静态契约检查和实际 HTTP 响应。
 
 ## 后续步骤
 
-- [教程：项目结构](/zh-Hans/learn/tutorial/1-project-structure) — 获取实际的项目结构
-- [教程：拦截器](/zh-Hans/learn/tutorial/4-interceptor) — 添加事务和日志记录
-- [教程：数据库](/zh-Hans/learn/tutorial/5-database) — 连接 Bun ORM
+- [项目结构](/zh-Hans/learn/tutorial/1-project-structure) — 向生成的项目添加功能
+- [控制器](/zh-Hans/learn/tutorial/2-controller) — 查看 CLI 生成的路由和处理函数
+- [数据库](/zh-Hans/learn/tutorial/5-database) — 为仓储连接 Bun ORM

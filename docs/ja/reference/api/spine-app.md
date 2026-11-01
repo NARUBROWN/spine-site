@@ -1,5 +1,16 @@
 # spine.App
 
+## CLIプロジェクトでAPIを使う
+
+[最初のアプリ](/ja/learn/getting-started/first-app)でCLIが生成したプロジェクトを使います。登録コードは `internal/application/application.go` の `BuildApplication` に置きます。`Run` の例は、`Validate` のエラーを確認した後、生成された `main.go` で使用します。
+
+```sh
+spine doctor
+spine contract check
+spine verify
+```
+
+
 メインアプリケーションインターフェイスへのAPIリファレンス。
 ## 概要
 `App`はSpineアプリケーションのエントリポイントです。コンストラクタの登録、ルート定義、Interceptorの設定、イベントコンシューマの登録、WebSocketハンドラの登録、Custom Transportの登録、サーバーの実行を担当します。
@@ -730,7 +741,7 @@ func (e OrderCreated) OccurredAt() time.Time {
 ```go
 import "github.com/NARUBROWN/spine/pkg/event/publish"
 
-func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) Order {
+func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) httpx.Response[Order] {
     order := c.repo.Save(req)
     
     // イベント 発行
@@ -739,7 +750,7 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) O
         At:      time.Now(),
     })
     
-    return order
+    return httpx.Response[Order]{Body: order}
 }
 ```
 
@@ -748,191 +759,35 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) O
 ## 完全な例
 
 ```go
-package main
+package application
 
 import (
-    "context"
-    "encoding/json"
-    "log"
-    "strings"
-    "sync"
-    "time"
+	"os"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/interceptor/cors"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/event/publish"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-    "github.com/NARUBROWN/spine/pkg/route"
-    "github.com/NARUBROWN/spine/pkg/ws"
+	"github.com/NARUBROWN/spine"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/httpx"
 )
 
-func main() {
-    app := spine.New()
+type HealthController struct{}
 
-    // コンストラクタ登録
-    app.Constructor(
-        NewUserController,
-        NewOrderConsumer,
-        NewChatController,
-    )
+func NewHealthController() *HealthController { return &HealthController{} }
 
-    // HTTP ルート 登録
-    app.Route("GET", "/users", (*UserController).GetUserQuery)
-    app.Route("GET", "/users/:id", (*UserController).GetUser,
-        route.WithInterceptors(&LoggingInterceptor{}),
-    )
-    app.Route("POST", "/orders/:orderId", (*UserController).CreateOrder)
-
-    // グローバル Interceptor の登録
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type"},
-        }),
-    )
-
-    // イベントコンシューマの登録
-    if err := app.Consumers().Register("order.created", (*OrderConsumer).OnCreated); err != nil {
-        log.Fatal(err)
-    }
-
-    // WebSocket 登録
-    if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err != nil {
-        log.Fatal(err)
-    }
-
-    // サーバーの実行
-    if err := app.Run(boot.Options{
-        Address:                ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
-        RabbitMQ: &boot.RabbitMqOptions{
-            URL:                    "amqp://guest:guest@localhost:5672/",
-            AllowInsecureTransport: true, // 隔離されたローカル開発環境専用
-            Read: &boot.RabbitMqReadOptions{
-                Exchange: "stock-exchange",
-            },
-            Write: &boot.RabbitMqWriteOptions{
-                Exchange: "stock-exchange",
-            },
-        },
-        HTTP: &boot.HTTPOptions{},
-    }); err != nil {
-        log.Fatal(err)
-    }
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-// Controller
-type UserController struct{}
+// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New()
+	app.Constructor(NewHealthController)
+	app.Route("GET", "/health", (*HealthController).Get)
 
-func NewUserController() *UserController {
-    return &UserController{}
-}
-
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    publish.Event(ctx, OrderCreated{
-        OrderID: orderId.Value,
-        At:      time.Now(),
-    })
-    return httpx.Response[string]{Body: "OK"}
-}
-
-// Event
-type OrderCreated struct {
-    OrderID int64     `json:"order_id"`
-    At      time.Time `json:"at"`
-}
-
-func (e OrderCreated) Name() string        { return "order.created" }
-func (e OrderCreated) OccurredAt() time.Time { return e.At }
-
-// Consumer
-type OrderConsumer struct{}
-
-func NewOrderConsumer() *OrderConsumer {
-    return &OrderConsumer{}
-}
-
-func (c *OrderConsumer) OnCreated(
-    ctx context.Context,
-    eventName string,
-    event OrderCreated,
-) error {
-    log.Println("イベント受信:", eventName)
-    log.Println("注文ID:", event.OrderID)
-    return nil
-}
-
-// WebSocket
-type ChatController struct {
-    mu      sync.RWMutex
-    clients map[string]ws.Sender
-}
-
-func NewChatController() *ChatController {
-    return &ChatController{clients: make(map[string]ws.Sender)}
-}
-
-type ChatMessage struct {
-    Message string `json:"message"`
-}
-
-type ChatEvent struct {
-    Type    string `json:"type"`
-    From    string `json:"from"`
-    Message string `json:"message"`
-    At      string `json:"at"`
-}
-
-func (c *ChatController) OnMessage(
-    ctx context.Context,
-    connID ws.ConnectionID,
-    msg ChatMessage,
-) error {
-    sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-    if ok && sender != nil {
-        c.mu.Lock()
-        c.clients[connID.Value] = sender
-        c.mu.Unlock()
-    }
-
-    message := strings.TrimSpace(msg.Message)
-    if message == "" {
-        return nil
-    }
-
-    payload, err := json.Marshal(ChatEvent{
-        Type:    "message",
-        From:    connID.Value,
-        Message: message,
-        At:      time.Now().UTC().Format(time.RFC3339),
-    })
-    if err != nil {
-        return err
-    }
-
-    c.mu.RLock()
-    clients := make(map[string]ws.Sender, len(c.clients))
-    for id, client := range c.clients {
-        clients[id] = client
-    }
-    c.mu.RUnlock()
-
-    var firstErr error
-    for id, client := range clients {
-        if err := client.Send(ws.TextMessage, payload); err != nil {
-            if firstErr == nil {
-                firstErr = err
-            }
-            c.mu.Lock()
-            delete(c.clients, id)
-            c.mu.Unlock()
-        }
-    }
-    return firstErr
+	address := ":8080"
+	if port := os.Getenv("SPINE_PORT"); port != "" {
+		address = ":" + port
+	}
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 

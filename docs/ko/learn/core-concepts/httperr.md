@@ -1,5 +1,7 @@
 # httperr 패키지
 
+아래 컨트롤러 예제는 [CLI로 생성한 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 코드 조각입니다. `github.com/NARUBROWN/spine/pkg/httpx`, `github.com/NARUBROWN/spine/pkg/httperr`, `github.com/NARUBROWN/spine/pkg/path`를 가져오고 생성자와 라우트를 `BuildApplication`에 등록합니다. HTTP 성공 값은 `httpx.Response[T]`로 감싸며 요청 DTO는 `*Request`처럼 포인터로 받습니다. `User`와 저장소 등 업무 타입은 앱에서 정의합니다.
+
 표준화된 HTTP 에러 처리.
 
 
@@ -46,12 +48,12 @@ func (c *UserController) GetUser(ctx echo.Context) error {
 
 ```go
 // ✓ Spine 방식: HTTP를 모르지만 의미는 명확
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
     }
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 
@@ -90,9 +92,9 @@ func (e *HTTPError) Error() string {
 `HTTPError`는 Go의 `error` 인터페이스를 구현합니다. 따라서 일반 에러처럼 반환하고 처리할 수 있습니다.
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     // httperr.NotFound()는 error 타입을 반환
-    return User{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+    return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 }
 ```
 
@@ -113,7 +115,7 @@ func BadRequest(msg string) error {
 
 ```go
 if userId.Value <= 0 {
-    return User{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+    return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
 }
 ```
 
@@ -129,7 +131,7 @@ func Unauthorized(msg string) error {
 
 ```go
 if !c.auth.IsValid(token) {
-    return User{}, httperr.Unauthorized("인증이 필요합니다")
+    return httpx.Response[User]{}, httperr.Unauthorized("인증이 필요합니다")
 }
 ```
 
@@ -146,7 +148,7 @@ func NotFound(msg string) error {
 ```go
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return User{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+    return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 }
 ```
 
@@ -163,7 +165,7 @@ func InternalServerError(msg string) error {
 ```go
 result, err := c.externalService.Call()
 if err != nil {
-    return Result{}, httperr.InternalServerError("외부 서비스 호출에 실패했습니다")
+    return httpx.Response[Result]{}, httperr.InternalServerError("외부 서비스 호출에 실패했습니다")
 }
 ```
 
@@ -237,17 +239,17 @@ return errors.New("something went wrong")  // → 500
 ### 기본 사용
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
     
     user, err := c.repo.FindByID(userId.Value)
     if err != nil {
-        return User{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
     }
     
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 
@@ -268,42 +270,46 @@ GET /users/123
 ### 인증 처리
 
 ```go
-func (c *OrderController) GetOrder(orderId path.Int) (Order, error) {
+func (c *OrderController) GetOrder(orderId path.Int) (httpx.Response[Order], error) {
     order, err := c.repo.FindByID(orderId.Value)
     if err != nil {
-        return Order{}, httperr.NotFound("주문을 찾을 수 없습니다")
+        return httpx.Response[Order]{}, httperr.NotFound("주문을 찾을 수 없습니다")
     }
     
     if !c.auth.CanAccess(order.UserID) {
-        return Order{}, httperr.Unauthorized("접근 권한이 없습니다")
+        return httpx.Response[Order]{}, httperr.Unauthorized("접근 권한이 없습니다")
     }
     
-    return order, nil
+    return httpx.Response[Order]{Body: order}, nil
 }
 ```
 
 ### 비즈니스 규칙 검증
 
 ```go
-func (c *PaymentController) Process(req PaymentRequest) (Receipt, error) {
+func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt], error) {
     if req.Amount <= 0 {
-        return Receipt{}, httperr.BadRequest("결제 금액은 0보다 커야 합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("결제 금액은 0보다 커야 합니다")
     }
     
     if req.Amount > 10000000 {
-        return Receipt{}, httperr.BadRequest("1회 결제 한도를 초과했습니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("1회 결제 한도를 초과했습니다")
     }
     
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return Receipt{}, httperr.NotFound("지갑을 찾을 수 없습니다")
+        return httpx.Response[Receipt]{}, httperr.NotFound("지갑을 찾을 수 없습니다")
     }
     
     if balance < req.Amount {
-        return Receipt{}, httperr.BadRequest("잔액이 부족합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("잔액이 부족합니다")
     }
     
-    return c.processPayment(req)
+    receipt, err := c.processPayment(req)
+    if err != nil {
+        return httpx.Response[Receipt]{}, err
+    }
+    return httpx.Response[Receipt]{Body: receipt}, nil
 }
 ```
 
@@ -368,7 +374,7 @@ func WithCause(status int, msg string, cause error) error {
 // 사용
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return User{}, WithCause(404, "사용자를 찾을 수 없습니다", err)
+    return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)
 }
 ```
 
@@ -570,19 +576,19 @@ Go의 관례대로 에러를 반환값으로 처리합니다. 예외(exception)�
 
 ```go
 // ✓ 명시적 반환
-func GetUser(id path.Int) (User, error) {
+func GetUser(id path.Int) (httpx.Response[User], error) {
     if ... {
-        return User{}, httperr.NotFound(...)
+        return httpx.Response[User]{}, httperr.NotFound(...)
     }
-    return user, nil
+    return httpx.Response[User]{Body: user}, nil
 }
 
 // ❌ panic (Spine은 이 방식을 사용하지 않음)
-func GetUser(id path.Int) User {
+func GetUser(id path.Int) httpx.Response[User] {
     if ... {
         panic(httperr.NotFound(...))
     }
-    return user
+    return httpx.Response[User]{Body: user}
 }
 ```
 

@@ -1,5 +1,7 @@
 # Dependency Injection
 
+Inspect the dependency graph of the CLI-generated `src/user` resource from [Controllers](/en/learn/tutorial/2-controller). Follow [First App](/en/learn/getting-started/first-app) for installation and project creation.
+
 Understanding DI in Spine.
 
 ## Core Concepts
@@ -7,141 +9,91 @@ Understanding DI in Spine.
 Spine's Dependency Injection is **constructor-based**.
 
 - No annotations (No `@Autowired`, `@Injectable`)
-- No configuration files
+- No separate DI binding configuration (`spine.toml` configures the CLI project)
 - Constructor parameters are the dependency declarations
 
 ```go
 // Automatically injects dependency based on parameter type
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
+## CLI-generated dependencies
 
-## Basic Usage
+If the resource does not exist yet, run this from the `hello-spine` root. Skip generation if it already exists.
 
-### 1. Write Constructors
+```bash
+spine generate resource user --dry-run
+```
 
-Each component has a constructor function.
+Review the generated files and registration changes in the preview, then run the command below to generate them.
+
+```bash
+spine generate resource user
+```
+
+The CLI generates these constructors in the same `package user` under `src/user`.
 
 ```go
-// repository.go
-type UserRepository struct {
-    db *bun.DB
-}
+// src/user/user_repository.go
+package user
 
-func NewUserRepository(db *bun.DB) *UserRepository {
-    return &UserRepository{db: db}
-}
+type UserRepository struct{}
 
-// service.go
-type UserService struct {
-    repo *UserRepository
-}
-
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// controller.go
-type UserController struct {
-    svc *UserService
-}
-
-func NewUserController(svc *UserService) *UserController {
-    return &UserController{svc: svc}
-}
+func NewUserRepository() *UserRepository { return &UserRepository{} }
 ```
-
-### 2. Register Constructors
-
-Register constructors in `app.Constructor()`.
 
 ```go
-func main() {
-    app := spine.New()
-    
-    app.Constructor(
-        NewDB,              // Returns *bun.DB
-        NewUserRepository,  // Needs *bun.DB → Returns *UserRepository
-        NewUserService,     // Needs *UserRepository → Returns *UserService
-        NewUserController,  // Needs *UserService → Returns *UserController
-    )
-    
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+// src/user/user_service.go
+package user
+
+type UserService struct{ repository *UserRepository }
+
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
-### 3. Automatic Resolution
+```go
+// src/user/user_controller.go
+package user
 
-Spine analyzes the dependency graph and creates instances in the correct order.
+type UserController struct{ service *UserService }
 
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
 ```
-Registration Order: Any
-Execution Order: DB → Repository → Service → Controller
-```
 
-## Order Independence
-
-Registration order does not matter. Spine automatically sorts them by analyzing dependencies.
+`Register` in `src/user/user_route.go` registers these constructors and `GET /user/:id`. The CLI adds a checked `user.Register(app)` call to `BuildApplication()` in `internal/application/application.go`. Do not register the same constructors again.
 
 ```go
-// Even if registered like this
-app.Constructor(
-    NewUserController,  // Needs UserService
-    NewUserService,     // Needs UserRepository
-    NewUserRepository,  // Needs bun.DB
-    NewDB,
-)
-
-// Actual creation order:
-// 1. NewDB()
-// 2. NewUserRepository(db)
-// 3. NewUserService(repo)
-// 4. NewUserController(svc)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository, NewUserService, NewUserController)
+app.Route("GET", "/user/:id", (*UserController).Get)
 ```
 
+## Registration and resolution order
 
-## Dependency Graph
+Dependencies resolve before the components that need them, regardless of registration order. The container shares resolved instances rather than creating them for each request.
 
-### Visualization
+```go
+// An alternative to the existing Constructor call in user_route.go.
+app.Constructor(NewUserController, NewUserService, NewUserRepository)
+```
 
 ```mermaid
-graph TD
-    subgraph Step1 [main.go]
-        Code["app.Constructor(<br/>NewDB,<br/>NewUserRepository,<br/>NewUserService,<br/>NewUserController<br/>)"]
-    end
-
-    subgraph Step2 [Dependency Graph Analysis]
-        D1[NewDB] --> D2["NewUserRepository(db)"]
-        D2 --> D3["NewUserService(repo)"]
-        D3 --> D4["NewUserController(svc)"]
-    end
-
-    subgraph Step3 [Instance Creation Complete]
-        R1["*bun.DB"]
-        R2["*UserRepository"]
-        R3["*UserService"]
-        R4["*UserController"]
-    end
-
-    Step1 --> Step2
-    Step2 --> Step3
+graph LR
+    Repository["NewUserRepository()"] --> Service["NewUserService(repository)"]
+    Service --> Controller["NewUserController(service)"]
 ```
-
 
 ## Constructor Rules
 
 ### Parameters
 
-Constructor parameters must be **already registered types**.
+Constructor parameters must be **types with registered providers**.
 
 ```go
 // ✅ Correct Example
@@ -156,25 +108,24 @@ func NewLogger() *Logger
 
 ### Return Types
 
-Constructors return a **single value** or **(value, error)**.
+A constructor must return exactly one value. Constructors returning `(value, error)` are unsupported. The return type identifies the provided type; a nil return is also an error.
 
 ```go
-// ✅ Return single value
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
-
-// ✅ Return with error
-func NewDB() (*bun.DB, error) {
-    db, err := sql.Open("mysql", "...")
-    if err != nil {
-        return nil, err
-    }
-    return bun.NewDB(db, mysqldialect.New()), nil
+func NewUserService(repository *UserRepository) *UserService {
+    return &UserService{repository: repository}
 }
 ```
 
+Implement database providers with one return value, such as `database.NewDB() *bun.DB` in the [database example](/en/learn/tutorial/5-database), and register the constructor. `BuildApplication` only registers it, so the generated validation test does not connect to the database. Connection failures are handled when the provider runs during application startup; verify live connectivity separately.
+
+```go
+// internal/application/application.go: BuildApplication
+app.Constructor(database.NewDB)
+```
+
 ## Using Interfaces
+
+This section is a manual extension covered in [Database](/en/learn/tutorial/5-database); `resource` does not generate Bun setup. An exact interface provider takes precedence; otherwise, one implementing provider can satisfy the interface. Multiple matching providers produce an error. A request transaction is not automatically reinjected into an application-wide constructor. Read `bun.Tx` from the request context and pass it through controller/service calls to repository methods accepting `bun.IDB`.
 
 ### Problem Scenario
 
@@ -205,7 +156,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 ### Injecting Transaction in Interceptor
 
 ```go
-// interceptor/tx_interceptor.go
+// src/interceptor/tx_interceptor.go
 func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     tx, err := i.db.BeginTx(ctx.Context(), nil)
     if err != nil {
@@ -239,53 +190,28 @@ func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.Han
 ```
 
 
-## Registering Multiple Components
+## Register features
 
-### Separation by Domain
+Generate another feature to register it in the same composition root. This example creates an independent `order` resource. The CLI adds `user.Register` and `order.Register` calls; do not duplicate them manually.
 
-```go
-func main() {
-    app := spine.New()
-    
-    // Infrastructure
-    app.Constructor(
-        NewDB,
-        NewRedisClient,
-        NewLogger,
-    )
-    
-    // User Domain
-    app.Constructor(
-        repository.NewUserRepository,
-        service.NewUserService,
-        controller.NewUserController,
-    )
-    
-    // Order Domain
-    app.Constructor(
-        repository.NewOrderRepository,
-        service.NewOrderService,
-        controller.NewOrderController,
-    )
-    
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
+```bash
+spine generate resource order --dry-run
 ```
 
-### Multiple Calls Allowed
+Review the generated files and registration changes in the preview, then run the command below to generate them.
 
-`app.Constructor()` can be called multiple times.
+```bash
+spine generate resource order
+```
+
+### Multiple Constructor calls
+
+You can split registration across several calls inside the same `Register`. Register each type once.
 
 ```go
-app.Constructor(NewDB)
-app.Constructor(NewUserRepository, NewUserService)
+// src/user/user_route.go: Register
+app.Constructor(NewUserRepository)
+app.Constructor(NewUserService)
 app.Constructor(NewUserController)
 ```
 
@@ -327,7 +253,7 @@ func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
 // Error at boot time
-// panic: circular dependency detected: *A
+// circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
 ### Missing Dependency
@@ -340,8 +266,18 @@ app.Constructor(
 )
 
 // Error at boot time
-// panic: no constructor registered for: *repository.UserRepository
+// no constructor registered for *user.UserRepository
 ```
+
+## Verification boundaries
+
+```bash
+spine doctor
+spine contract check
+spine verify
+```
+
+`contract check` checks the static DI contract; `verify` also runs local code checks. `app.Validate(options)` alone does not prove constructor execution or DI warm-up. Check initialization, database connections, and requests by running the app and separate E2E checks. Dependency resolution returns errors for circular or missing dependencies; generated main checks Run errors.
 
 ## Key Takeaways
 

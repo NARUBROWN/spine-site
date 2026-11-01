@@ -1,319 +1,247 @@
-我檢查了代碼。事實上，`httperr` 套件中只有三個輔助函數：
-
-```go
-// pkg/httperr/types.go
-func NotFound(msg string) error {
-    return &HTTPError{Status: 404, Message: msg}
-}
-
-func BadRequest(msg string) error {
-    return &HTTPError{Status: 400, Message: msg}
-}
-
-func Unauthorized(msg string) error {
-    return &HTTPError{Status: 401, Message: msg}
-}
-```
-
-讓我編輯一下文件：
-
----
-
 # 錯誤處理
 
-如何優雅地處理錯誤。
+使用[第一個應用程式](/zh-Hant/learn/getting-started/first-app)與[控制器](/zh-Hant/learn/tutorial/2-controller)中的 CLI 專案，手動擴充 `spine generate resource user` 產生的 `src/user` GET 處理函式。CLI 負責產生與註冊，領域錯誤與 HTTP 對應由應用程式實作。
 
-## 大綱
+## HTTP 錯誤與回應
 
-Spine 使用 `httperr` 套件表示 HTTP 錯誤。 Controller不直接處理HTTP，只用`httperr`來表達錯誤的**意義**。實際的 HTTP 回應轉換由 `ErrorReturnHandler` 處理。
+將成功結果放入 `httpx.Response[T]` 並另外回傳 `error`，不支援直接將一般結構體 `(User, error)` 當成 HTTP 回應。目前 `httperr` 套件提供四個輔助函式。
 
-```go
-import "github.com/NARUBROWN/spine/pkg/httperr"
+| Helper | HTTP | |
+|---|---|---|
+| `httperr.BadRequest(message)` | 400 | 無效輸入 |
+| `httperr.Unauthorized(message)` | 401 | 需要驗證身分 |
+| `httperr.NotFound(message)` | 404 | 資源不存在 |
+| `httperr.InternalServerError(message)` | 500 | 刻意公開的錯誤訊息 |
 
-func (c *UserController) GetUser(userId path.Int) (User, error) {
-    if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("使用者 ID 無效")
-    }
+`HTTPError.Message` 會公開給用戶端，不要直接放入資料庫內部錯誤或秘密值。未知的一般錯誤會轉換為 HTTP 500 與 `{"message":"Internal server error"}`。
 
-    user, err := c.repo.FindByID(userId.Value)
-    if err != nil {
-        return User{}, httperr.NotFound("找不到使用者")
-    }
+## 為產生的資源加入查詢錯誤
 
-    return user, nil
-}
-```
-
-## httperr 函數
-
-|功能|狀態碼|使用 |
-|------|----------|------|
-| `httperr.BadRequest(msg)` | `httperr.BadRequest(msg)` 400 |錯誤要求，輸入驗證失敗 |
-| `httperr.Unauthorized(msg)` | `httperr.Unauthorized(msg)` 401 | 401需要驗證，令牌無效 |
-| `httperr.NotFound(msg)` | `httperr.NotFound(msg)` 404 | 404沒有資源 |
-
-## HTTPError 結構體
+以下是教學用的唯讀記憶體查詢。取代產生的 repository、controller 檔案，並為服務加入 `Find`。所有檔案放在同一個 `package user`。沿用現有建構子名稱、`user.Register(app)` 與 `GET /user/:id` 註冊。此範例不提供資料庫持久化或完整 CRUD。
 
 ```go
-type HTTPError struct {
-    Status  int    // HTTP 狀態码
-    Message string // 錯誤消息
-    Cause   error  // 原因錯誤（可选）
-}
+// src/user/user_repository.go
+package user
 
-func (e *HTTPError) Error() string {
-    return e.Message
-}
-```
-
-## 用法範例
-
-### 沒有資源 (404)
-
-```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
-    user, err := c.repo.FindByID(userId.Value)
-    if err != nil {
-        return User{}, httperr.NotFound("找不到使用者")
-    }
-    return user, nil
-}
-```
-
-回覆：
-
-```json
-{"message": "找不到使用者"}
-```
-```http
-HTTP/1.1 404 Not Found
-```
-
-### 錯誤請求 (400)
-
-```go
-func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
-    if req.Name == "" {
-        return User{}, httperr.BadRequest("姓名為必填項目")
-    }
-    if req.Email == "" {
-        return User{}, httperr.BadRequest("電子郵件為必填項目")
-    }
-
-    return c.service.Create(req)
-}
-```
-
-### 需要身份驗證 (401)
-
-> 以下程式碼只展示錯誤處理所需的 `PreHandle`。作為完整的 `core.Interceptor` 實作，此型別還必須提供 `PostHandle`、`BeforeResponse` 和 `AfterCompletion`；不需要額外行為的方法可以使用空實作，並讓 `BeforeResponse` 回傳 `nil`。
-
-```go
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    token := ctx.Header("Authorization")
-
-    if token == "" {
-        return httperr.Unauthorized("需要驗證")
-    }
-
-    if !isValidToken(token) {
-        return httperr.Unauthorized("權杖無效")
-    }
-
-    return nil
-}
-```
-
-## 使用不同的狀態程式碼
-
-如果您需要未提供的狀態代碼，請自行產生 `HTTPError` 。
-
-```go
-// 403 禁忌
-func Forbidden(msg string) error {
-    return &httperr.HTTPError{Status: 403, Message: msg}
-}
-
-// 409 衝突
-func Conflict(msg string) error {
-    return &httperr.HTTPError{Status: 409, Message: msg}
-}
-
-// 500 內部伺服器錯誤
-func InternalServerError(msg string) error {
-    return &httperr.HTTPError{Status: 500, Message: msg}
-}
-```
-
-## 按層進行錯誤處理
-
-```mermaid
-flowchart LR
-    A[Repository<br/>原始錯誤] --> B[Service<br/>業務錯誤]
-    B --> C[Controller<br/>HTTP 錯誤]
-    C --> D[Response<br/>JSON]
-```
-
-### 儲存庫
-
-原始錯誤原樣回傳。
-
-```go
-func (r *UserRepository) FindByID(id int64) (*User, error) {
-    user, ok := r.users[id]
-    if !ok {
-        return nil, ErrUserNotFound  // 原始錯誤
-    }
-    return user, nil
-}
+import "errors"
 
 var ErrUserNotFound = errors.New("user not found")
-```
+var ErrEmailAlreadyExists = errors.New("email already exists")
 
-### 服務
+type User struct {
+    ID int64 `json:"id"`
+    Name string `json:"name"`
+}
 
-處理業務邏輯並傳遞儲存庫錯誤。
+type UserRepository struct{ users map[int64]User }
 
-```go
-func (s *UserService) GetUser(id int64) (*User, error) {
-    user, err := s.repo.FindByID(id)
-    if err != nil {
-        return nil, err  // 傳遞錯誤
+func NewUserRepository() *UserRepository {
+    return &UserRepository{users: map[int64]User{1: {ID: 1, Name: "Alice"}}}
+}
+
+func (r *UserRepository) FindByID(id int64) (User, error) {
+    user, ok := r.users[id]
+    if !ok {
+        return User{}, ErrUserNotFound
     }
     return user, nil
 }
 ```
 
-### 控制器
-
-將業務錯誤轉換為 HTTP 錯誤。
+```go
+// src/user/user_service.go
+func (s *UserService) Find(id int64) (User, error) {
+    return s.repository.FindByID(id)
+}
+```
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
-    user, err := c.service.GetUser(userId.Value)
-    if err != nil {
-        return User{}, toHTTPError(err)
+// src/user/user_controller.go
+package user
+
+import (
+    "errors"
+    "net/http"
+
+    "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/path"
+)
+
+type UserController struct{ service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
+
+func (c *UserController) Get(id path.Int) (httpx.Response[User], error) {
+    if id.Value <= 0 {
+        return httpx.Response[User]{}, httperr.BadRequest("invalid user ID")
     }
-    return *user, nil
+    user, err := c.service.Find(id.Value)
+    if err != nil {
+        return httpx.Response[User]{}, toHTTPError(err)
+    }
+    return httpx.Response[User]{Body: user}, nil
 }
 
 func toHTTPError(err error) error {
     switch {
-    case errors.Is(err, repository.ErrUserNotFound):
-        return httperr.NotFound("找不到使用者")
-    case errors.Is(err, repository.ErrEmailAlreadyExists):
-        return httperr.BadRequest("電子郵件已被使用")
+    case errors.Is(err, ErrUserNotFound):
+        return httperr.NotFound("user not found")
+    case errors.Is(err, ErrEmailAlreadyExists):
+        return &httperr.HTTPError{
+            Status: http.StatusConflict,
+            Message: "email already exists",
+            Cause: err,
+        }
     default:
-        return httperr.BadRequest(err.Error())
+        return err
     }
 }
 ```
 
-## 輸入驗證
+## 各層責任
 
-### 在DTO中定義驗證方法
+儲存庫回傳領域錯誤，服務向上傳遞，控制器只將預期錯誤對應為 HTTP 狀態碼。`errors.Is` 也能識別包裝過的錯誤。將未知錯誤轉換成 `BadRequest(err.Error())` 會洩漏內部細節，應原樣回傳以使用通用的去識別化 500 回應。
+
+```mermaid
+flowchart LR
+    Repository["Repository: domain error"] --> Service["Service"]
+    Service --> Controller["Controller: HTTP error"]
+    Controller --> Response["Response: JSON"]
+```
+
+## HTTPError 與其他狀態碼
+
+使用 `HTTPError` 表達沒有輔助函式的狀態，如 403、409。`Cause` 可透過 `Unwrap()` 追蹤原因，不會出現在 JSON 回應中。
 
 ```go
+type HTTPError struct {
+    Status int
+    Message string
+    Cause error
+}
+
+func (e *HTTPError) Error() string { return e.Message }
+func (e *HTTPError) Unwrap() error { return e.Cause }
+```
+
+```go
+return &httperr.HTTPError{
+    Status: http.StatusForbidden,
+    Message: "permission denied",
+}
+```
+
+## 驗證請求 DTO
+
+以下是選用的輸入驗證擴充。Spine 不會自動呼叫 `Validate()`，需要在處理函式中呼叫。請求 DTO 必須使用指標。此 POST 只回傳驗證後的輸入，不會儲存使用者；使用時在 `Register` 中手動加入 POST 路由。
+
+```go
+// src/user/user_create.go
+package user
+
+import (
+    "errors"
+    "net/http"
+    "unicode/utf8"
+
+    "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+)
+
 type CreateUserRequest struct {
-    Name  string `json:"name"`
+    Name string `json:"name"`
     Email string `json:"email"`
 }
 
 func (r *CreateUserRequest) Validate() error {
-    if r.Name == "" {
-        return errors.New("姓名為必填項目")
+    if r == nil || r.Name == "" {
+        return errors.New("name is required")
     }
-    if len(r.Name) > 100 {
-        return errors.New("姓名不得超過 100 個字元")
+    if utf8.RuneCountInString(r.Name) > 100 {
+        return errors.New("name must be at most 100 characters")
     }
     if r.Email == "" {
-        return errors.New("電子郵件為必填項目")
+        return errors.New("email is required")
     }
     return nil
 }
-```
 
-### 來自控制器的驗證調用
-
-```go
-func (c *UserController) CreateUser(req CreateUserRequest) (User, error) {
+func (c *UserController) Create(req *CreateUserRequest) (httpx.Response[CreateUserRequest], error) {
     if err := req.Validate(); err != nil {
-        return User{}, httperr.BadRequest(err.Error())
+        return httpx.Response[CreateUserRequest]{}, httperr.BadRequest(err.Error())
     }
-
-    return c.service.Create(req)
+    return httpx.Response[CreateUserRequest]{
+        Body: *req,
+        Options: httpx.ResponseOptions{Status: http.StatusCreated},
+    }, nil
 }
 ```
 
-## 攔截器中的錯誤處理
+```go
+// src/user/user_route.go: Register
+app.Route("POST", "/user", (*UserController).Create)
+```
 
-如果 `PreHandle` 傳回錯誤，控制器將不會運作。
+## 攔截器錯誤處理
 
-> 以下只是聚焦 `PreHandle` 的片段，並非完整的攔截器實作。完整實作還必須提供 `PostHandle`、`BeforeResponse` 和 `AfterCompletion`。
+`PreHandle` 回傳錯誤會停止控制器執行。以下是 `src/interceptor` 中使用自訂身分驗證服務的方法片段。完整型別必須實作 `PreHandle`、`PostHandle`、`BeforeResponse` 和 `AfterCompletion`，並在 `BuildApplication()` 中以 HTTP scope 註冊。
 
 ```go
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-
     if token == "" {
-        return httperr.Unauthorized("需要驗證權杖")
+        return httperr.Unauthorized("authentication required")
     }
-
     user, err := i.auth.Validate(token)
     if err != nil {
-        return httperr.Unauthorized("權杖無效")
+        return httperr.Unauthorized("invalid token")
     }
-
     ctx.Set("auth.user", user)
     return nil
 }
 ```
 
-```mermaid
-flowchart TD
-    A[Request] --> B[AuthInterceptor.PreHandle]
-    B -->|沒有權杖| C[401 Unauthorized]
-    B -->|權杖有效| D[執行 Controller]
-    D --> E[Response]
-```
+## 記錄錯誤
 
-## 錯誤記錄
-
-您可以在 `AfterCompletion` 中記錄錯誤。
-
-> 以下只展示完整攔截器中的日誌方法；同一型別仍須實作其他三個生命週期方法。
+`AfterCompletion` 可以記錄執行錯誤。以下也是完整日誌攔截器中的方法片段。不要記錄驗證權杖或請求中的秘密值。
 
 ```go
 func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
     if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
+        log.Printf("[ERR] %s %s: %v", ctx.Method(), ctx.Path(), err)
     }
 }
 ```
 
-## 一般錯誤處理
+## 驗證並檢查 HTTP 回應
 
-普通的 `error` 而非 `httperr.HTTPError` 被視為 500 狀態碼。
-
-```go
-// httperr.HTTPError → 指定狀態碼
-return httperr.NotFound("...")  // → 404
-
-// 一般錯誤 → 500
-return errors.New("something went wrong")  // → 500
+```bash
+gofmt -w src/user
+go mod tidy
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
-## 主要摘要
+通過契約與本機檢查後，在另一個終端機確認實際回應。以下結果對應上方的唯讀記憶體範例。
 
-|等級 |角色 |
-|------|------|
-|儲存庫 |傳回原始錯誤 |
-|服務 |業務邏輯處理、錯誤傳輸 |
-|控制器|轉換為 HTTP 錯誤 |
-|攔截器|常見錯誤處理（驗證、日誌記錄）|
+```bash
+curl -i http://localhost:8080/user/1
+curl -i http://localhost:8080/user/0
+curl -i http://localhost:8080/user/2
+```
 
-| httperr 函數 |狀態碼|
-|--------------|----------|
-| `BadRequest` | `BadRequest` 400 |
-| `Unauthorized` | `Unauthorized` 401 | 401
-| `NotFound` | `NotFound` 404 | 404
+| Request | HTTP | JSON |
+|---|---|---|
+| `/user/1` | 200 | `{"id":1,"name":"Alice"}` |
+| `/user/0` | 400 | `{"message":"invalid user ID"}` |
+| `/user/2` | 404 | `{"message":"user not found"}` |
+
+連接真實資料庫或身分驗證服務後，需要另外執行失敗路徑 E2E 檢查。靜態契約不能證明外部服務的錯誤對應正確。
+
+- [httperr](/zh-Hant/learn/core-concepts/httperr)
+- [Interceptors](/zh-Hant/learn/tutorial/4-interceptor)

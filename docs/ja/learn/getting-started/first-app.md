@@ -1,246 +1,101 @@
 # 最初のアプリ
 
-5分でユーザー照会APIを作成してみます。
+Spine CLI をインストールしてプロジェクトを生成し、約5分で `GET /health` を実行します。Go 1.25.5 以上が必要で、CLI の推奨バージョンは Go 1.27.3 です。初回の依存関係ダウンロードにかかる時間は環境によって異なります。
 
-## 完成イメージ
-
-
-```bash
-curl "http://localhost:8080/users?id=1"
-```
-
-
-```json
-{
-  "id": 1,
-  "name": "Alice",
-  "email": "alice@example.com"
-}
-```
-
-
-## 1. プロジェクトの作成
-
+## 1. CLI のインストールと確認
 
 ```bash
-mkdir hello-spine && cd hello-spine
-go mod init hello-spine
-go get github.com/NARUBROWN/spine
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
+`spine version` は `spine-cli 0.1.4` と表示します。コマンドが見つからない場合は、[インストール](/ja/learn/getting-started/installation)で Go 実行ファイルのパス設定を確認してください。
 
-## 2. プロジェクトの構造
+## 2. プロジェクトの生成
 
+プロジェクトを作成する親ディレクトリで実行します。
+
+```bash
+spine new hello-spine --module example.com/hello-spine
+cd hello-spine
+go mod tidy
 ```
+
+CLI は `go.mod` に Spine `v0.5.1` を指定します。`go mod tidy` で依存関係を準備します。
+
+## 3. 生成された構造を確認
+
+```text
 hello-spine/
+├── .gitignore
+├── README.md
+├── go.mod
 ├── main.go
-├── controller/
-│   └── user_controller.go
-├── service/
-│   └── user_service.go
-└── routes/
-    └── routes.go
+├── spine.toml
+└── internal/application/
+    ├── application.go
+    └── application_test.go
 ```
 
-## 3. コードの実装
+`spine.toml` は、モジュール、実行エントリポイント、登録コードの場所を CLI に伝えます。
 
-### main.go
+```toml
+module = "example.com/hello-spine"
+entrypoint = "."
+composition = "./internal/application"
+port = 8080
+```
 
+`internal/application/application.go` の `BuildApplication()` がアプリと起動オプションを組み立てます。生成コードは `HealthController` のコンストラクタと `GET /health` を登録し、`boot.HTTPOptions` を明示します。ルート・コンストラクタ・インターセプターの登録は、この関数またはここから呼ぶ `Register(app) error` にまとめます。
+
+`main.go` はすでに生成されています。上書きせずに、次の実行フローを確認してください。
 
 ```go
-package main
-
-import (
-    "log"
-    "time"
-
-    "hello-spine/controller"
-    "hello-spine/routes"
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-)
-
 func main() {
-    app := spine.New()
-
-    // コンストラクタの登録 — 順序は関係ありません
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    // ルートの登録
-    routes.RegisterRoutes(app)
-
-    // サーバーの起動
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-### service/user_service.go
-
-
-```go
-package service
-
-// UserResponse レスポンス構造体
-type UserResponse struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-
-// UserService ユーザーサービス
-type UserService struct {
-    // 実際にはRepositoryを注入しますが、ここでは簡単に実装します
-}
-
-func NewUserService() *UserService {
-    return &UserService{}
-}
-
-// Get ユーザー照会 (ハードコードされたデータ)
-func (s *UserService) Get(id int) (UserResponse, error) {
-    // 実際にはDBから取得します
-    users := map[int]UserResponse{
-        1: {ID: 1, Name: "Alice", Email: "alice@example.com"},
-        2: {ID: 2, Name: "Bob", Email: "bob@example.com"},
-    }
-
-    if user, ok := users[id]; ok {
-        return user, nil
-    }
-
-    return UserResponse{}, nil
-}
-```
-
-### controller/user_controller.go
-
-
-```go
-package controller
-
-import (
-    "context"
-
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-// NewUserController コンストラクタ — パラメータがそのまま依存関係になります
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GetUser ユーザー照会ハンドラー
-// 関数のシグネチャがそのままAPIスペックになります
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[service.UserResponse], error) {
-    id := int(q.Int("id", 0))
-    user, err := c.svc.Get(id)
+    app, options, err := application.BuildApplication()
     if err != nil {
-        return httpx.Response[service.UserResponse]{}, err
+        log.Fatal(err)
     }
-    return httpx.Response[service.UserResponse]{Body: user}, nil
+    if err := app.Validate(options); err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-### routes/routes.go
-
-
-```go
-package routes
-
-import (
-    "hello-spine/controller"
-
-    "github.com/NARUBROWN/spine"
-)
-
-func RegisterRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).GetUser)
-}
-```
-
-## 4. 実行
-
+## 4. 契約とローカルコードの検証
 
 ```bash
-go run main.go
+spine doctor
+spine inspect
+spine contract check
+spine verify
 ```
 
-```
-________       _____             
-__  ___/__________(_)___________ 
-_____ \___  __ \_  /__  __ \  _ \
-____/ /__  /_/ /  / _  / / /  __/
-/____/ _  .___//_/  /_/ /_/\___/ 
-       /_/        
-[Bootstrap] Spine version: <インストール済みバージョン>
-```
+`doctor` はツールとプロジェクト設定を診断し、`inspect` は登録された実行契約を表示します。`contract check` は静的契約を検証し、`verify` は契約・gofmt・vet・test を検査します。生成された `application_test.go` もサーバーを起動せずに `BuildApplication()` と `app.Validate(options)` を検証します。
 
-## 5. テスト
-
+## 5. 実行して応答を確認
 
 ```bash
-# Aliceを照会
-curl "http://localhost:8080/users?id=1"
+spine dev
 ```
 
+別のターミナルからリクエストします。
+
+```bash
+curl http://localhost:8080/health
+```
 
 ```json
-{"id":1,"name":"Alice","email":"alice@example.com"}
+{"status":"ok"}
 ```
 
-
-```bash
-# Bobを照会
-curl "http://localhost:8080/users?id=2"
-```
-
-
-```json
-{"id":2,"name":"Bob","email":"bob@example.com"}
-```
-
-## 🎉 完成！
-
-5分で最初のSpineアプリを作成しました。
-
-### ここまで学んだこと
-
-| コンセプトコード| （日本語に変更：コード）|------|------|
-| アプリ作成 | `spine.New()` |
-| 依存関係の登録 | `app.Constructor(...)` |
-| ルート登録 | `app.Route("GET", "/users", ...)` |
-| サーバー起動 | `app.Run(boot.Options{...})` |
-
-### キーポイント
-
-- **コンストラクタパラメータ = 依存関係の宣言** — アノテーションは不要
-- **関数シグネチャ = APIスペック** — 入出力が明確
-- **ルートを1箇所で管理** — 流れが見える
+開発サーバーは `Ctrl+C` で終了します。CLI で生成したプロジェクト、再利用可能なアプリ組み立て関数、静的契約の検証、実際の HTTP 応答を確認できました。
 
 ## 次のステップ
 
-- [チュートリアル: プロジェクトの構造](/ja/learn/tutorial/1-project-structure) — 実際のプロジェクト構造の作成
-- [チュートリアル: インターセプター](/ja/learn/tutorial/4-interceptor) — トランザクション、ロギングの追加
-- [チュートリアル: データベース](/ja/learn/tutorial/5-database) — Bun ORMの接続
+- [プロジェクトの構造](/ja/learn/tutorial/1-project-structure) — 生成したプロジェクトに機能を追加
+- [コントローラー](/ja/learn/tutorial/2-controller) — CLI が生成したルートとハンドラーを確認
+- [データベース](/ja/learn/tutorial/5-database) — リポジトリに Bun ORM を接続

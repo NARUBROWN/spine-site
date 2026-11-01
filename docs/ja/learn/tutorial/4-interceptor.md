@@ -2,6 +2,23 @@
 
 インターセプターの作成と使用方法。
 
+## CLIプロジェクトから始める
+
+[最初のアプリ](/ja/learn/getting-started/first-app)と[プロジェクト構造](/ja/learn/tutorial/1-project-structure)の `example.com/my-app` を使用します。ユーザーリソースがまだなければ、プロジェクトルートで生成します。
+
+```sh
+spine generate resource user --dry-run
+```
+
+```sh
+spine generate resource user
+```
+
+テキストのプレビューで生成ファイルを確認してから通常の生成コマンドを実行します。生成済みのリソースは再生成しません。
+
+CLIは `src/user` と `BuildApplication` 内の `user.Register(app)` を生成します。インターセプター生成機能はないため、以下の `src/interceptor` ファイルは手動で作成します。ログイン・更新・注文などの追加メソッドはポリシー説明用の手動拡張で、生成結果には含まれません。登録は `internal/application/application.go`、ルートのポリシーは `src/user/user_route.go` に追加し、ルートの `main.go` は構築・検証・実行の役割を維持します。
+
+
 ## インターセプターとは？
 
 インターセプターはリクエストの前後に実行されるロジックです。
@@ -76,7 +93,7 @@ Spineは2つのレベルのインターセプターをサポートしていま�
 
 
 ```go
-// interceptor/logging_interceptor.go
+// src/interceptor/logging_interceptor.go
 package interceptor
 
 import (
@@ -87,12 +104,7 @@ import (
 type LoggingInterceptor struct{}
 
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s → %s.%s",
-        ctx.Method(),
-        ctx.Path(),
-        meta.ControllerType.Name(),
-        meta.Method.Name,
-    )
+    log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
     return nil
 }
 
@@ -118,24 +130,48 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 }
 ```
 
+グローバルHTTPの `PreHandle` はルーティング前に実行されるため、`HandlerMeta` の型やメソッドが空の場合があります。生成済みの `NewHealthController` は維持します。
+
 ### グローバルインターセプターの登録
 
 
 ```go
-func main() {
+// internal/application/application.go
+package application
+
+import (
+    "os"
+
+    "example.com/my-app/src/interceptor"
+    "example.com/my-app/src/user"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-    
-    // グローバルインターセプター — すべてのリクエストに適用
-    app.Interceptor(
-        &interceptor.LoggingInterceptor{},
-    )
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    app.Constructor(NewHealthController)
+    app.Route("GET", "/health", (*HealthController).Get)
+    app.Interceptor(&interceptor.LoggingInterceptor{})
+
+    if err := user.Register(app); err != nil {
+        return nil, boot.Options{}, err
+    }
+
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
+    }
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
@@ -148,10 +184,12 @@ func main() {
 
 
 ```go
-// interceptor/auth_interceptor.go
+// src/interceptor/auth_interceptor.go
 package interceptor
 
 import (
+    "errors"
+
     "github.com/NARUBROWN/spine/core"
     "github.com/NARUBROWN/spine/pkg/httperr"
 )
@@ -181,10 +219,14 @@ func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Ha
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 
 func validateToken(token string) (map[string]string, error) {
-    // トークン検証ロジック
+    if token != "Bearer demo-token" {
+        return nil, errors.New("invalid demo token")
+    }
     return map[string]string{"id": "1", "name": "Alice"}, nil
 }
 ```
+
+トークン確認は動作確認用の公開デモです。実際のアプリでは認証サービスに置き換えてください。生成された `GET /user/:id` の登録を以下に変更し、`BuildApplication` の `user.Register(app)` は維持します。
 
 ### ルートインターセプターの登録
 
@@ -192,47 +234,24 @@ func validateToken(token string) (map[string]string, error) {
 
 
 ```go
+// src/user/user_route.go
+package user
+
 import (
+    "example.com/my-app/src/interceptor"
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/pkg/route"
 )
 
-func main() {
-    app := spine.New()
-    
-    app.Constructor(
-        NewUserController,
-    )
-    
-    // 認証不要なルート
-    app.Route(
-        "POST",
-        "/login",
-        (*UserController).Login,
-    )
-    
-    // 認証が必要なルート
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
     app.Route(
         "GET",
-        "/users/:id",
-        (*UserController).GetUser,
+        "/user/:id",
+        (*UserController).Get,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
-    
-    // 認証が必要なルート
-    app.Route(
-        "PUT",
-        "/users/:id",
-        (*UserController).UpdateUser,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    return nil
 }
 ```
 
@@ -243,47 +262,53 @@ func main() {
 
 
 ```go
-func main() {
+// internal/application/application.go
+package application
+
+import (
+    "os"
+
+    "example.com/my-app/src/interceptor"
+    "example.com/my-app/src/user"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/interceptor/cors"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-    
-    app.Constructor(
-        NewUserController,
-    )
-    
-    // グローバルインターセプター — すべてのリクエストに適用
-    app.Interceptor(
-        &interceptor.LoggingInterceptor{},
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
-        }),
-    )
-    
-    // 公開ルート — グローバルインターセプターのみ適用
-    app.Route("POST", "/login", (*UserController).Login)
-    app.Route("POST", "/signup", (*UserController).Signup)
-    
-    // 認証が必要なルート — グローバル + Auth インターセプター
-    app.Route(
-        "GET",
-        "/users/:id",
-        (*UserController).GetUser,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
-    
-    app.Route(
-        "GET",
-        "/me",
-        (*UserController).GetMe,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    app.Constructor(NewHealthController)
+    app.Route("GET", "/health", (*HealthController).Get)
+    app.Interceptor(&interceptor.LoggingInterceptor{})
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins:     []string{"https://app.example.com"},
+        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders:     []string{"Authorization", "Content-Type"},
+        AllowCredentials: true,
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+
+    if err := user.Register(app); err != nil {
+        return nil, boot.Options{}, err
+    }
+
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
+    }
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
@@ -402,12 +427,15 @@ Response (401 Unauthorized)
 // AuthInterceptor — ユーザー情報を保存
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    user, _ := validateToken(token)
+    user, err := validateToken(token)
+    if err != nil {
+        return httperr.Unauthorized("invalid credentials")
+    }
     ctx.Set("currentUser", user)
     return nil
 }
 
-// コントローラーで照会するにはExecutionContextを注入してもらう必要がある
+// 컨트롤러에서는 읽기 전용 spine.Ctx로 조회
 // または別のインターセプターで照会
 func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     user, ok := ctx.Get("currentUser")
@@ -434,7 +462,9 @@ func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handle
 
 ```go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("コントローラー: %s", meta.ControllerType.Name())  // UserController
+    if meta.ControllerType != nil {
+        log.Printf("コントローラー: %s", meta.ControllerType.String())
+    }
     log.Printf("メソッド: %s", meta.Method.Name)              // GetUser
     return nil
 }
@@ -449,7 +479,7 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 
 
 ```go
-// interceptor/tx_interceptor.go
+// src/interceptor/tx_interceptor.go
 package interceptor
 
 import (
@@ -577,6 +607,27 @@ app.Route(
 | **エラー時中断** | PreHandleでのエラー → コントローラースキップ |
 | **コンテキスト共有** | `ctx.Set()` / `ctx.Get()` でデータ伝達 |
 
+
+## 検証
+
+プロジェクトルートで実行します。静的契約・ローカルGo検証と、実際のHTTP・WebSocket認証やDBのE2E検証は別です。
+
+```sh
+gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
+spine contract check
+spine verify
+spine dev
+```
+
+別のターミナルで確認します。healthはHTTP 200、トークンなしは401、デモトークン付きは200となり、最後の応答には設定したoriginのCORSヘッダーが含まれます。
+
+```bash
+curl -i http://localhost:8080/health
+curl -i http://localhost:8080/user/1
+curl -i http://localhost:8080/user/1 \
+  -H 'Authorization: Bearer demo-token' \
+  -H 'Origin: https://app.example.com'
+```
 
 ## 次のステップ
 

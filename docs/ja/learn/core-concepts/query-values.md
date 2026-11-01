@@ -1,5 +1,14 @@
 # query.Values
 
+[最初のアプリ](/ja/learn/getting-started/first-app)で CLI プロジェクトを作成し、[コントローラー](/ja/learn/tutorial/2-controller)で `src/user` を生成してから進めます。ハンドラー例は `src/user` の同じ `package user` を手動で拡張します。`User`、検索・ページ応答型、サービスの検索メソッドは例に合わせて実装し、CLI は生成しません。Product・Order も同じ方式の追加機能です。各ハンドラーは独立した代替例なので必要なメソッドとルートだけを追加します。成功応答は `httpx.Response[T]` で包み、`httpx` と `query` を import してください。
+
+```go
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/query"
+)
+```
+
 クエリパラメータを明示的に処理する。
 
 ## 概要
@@ -9,7 +18,7 @@
 
 ```mermaid
 graph TD
-    Request["GET /users?status=active&tag=go&tag=web&page=1"]
+    Request["GET /user?status=active&tag=go&tag=web&page=1"]
     
     Request --> Values
     
@@ -46,13 +55,15 @@ Spineはこのアプローチを採用していません。
 
 ```go
 // Spine 方式: 明示的 抽出
-func Search(q query.Values) []User {
+func (c *UserController) Search(q query.Values) httpx.Response[[]User] {
     status := q.String("status")      // 明確な出所
     page := q.Int("page", 1)          // デフォルト値を明示
     
     if q.Has("premium") {             // 条件付き処理
         // ...
     }
+    users := c.service.Search(status, page, q.Has("premium"))
+    return httpx.Response[[]User]{Body: users}
 }
 ```
 
@@ -63,7 +74,7 @@ func Search(q query.Values) []User {
 
 ```go
 // 動的フィルタ処理
-func Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
     
     // どのような フィルターが 来るか あらかじめ 分からない
@@ -77,7 +88,7 @@ func Search(q query.Values) []Product {
         filters["category"] = q.String("category")
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Product]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -107,7 +118,7 @@ func NewValues(values map[string][]string) Values {
 
 
 ```go
-// GET /users?name=john&status=active
+// GET /user?name=john&status=active
 
 q.Get("name")    // "john"
 q.Get("status")  // "active"
@@ -129,7 +140,7 @@ q.String("name")  // "john"
 
 
 ```go
-// GET /users?page=3&size=20
+// GET /user?page=3&size=20
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
@@ -147,7 +158,7 @@ q.Int("page", 1)    // 1 (もし page=abcなら → デフォルト値)
 
 
 ```go
-// GET /users?active=true&verified=1&premium=yes
+// GET /user?active=true&verified=1&premium=yes
 
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
@@ -162,7 +173,7 @@ q.GetBoolByKey("active", false)    // false (もし active=maybe → デフォ�
 
 
 ```go
-// GET /users?status=active&empty=
+// GET /user?status=active&empty=
 
 q.Has("status")  // true
 q.Has("empty")   // true (値は 空ですだけ キーは 存在)
@@ -211,19 +222,19 @@ func (r *QueryValuesResolver) Resolve(ctx core.ExecutionContext, parameterMeta P
 
 
 ```go
-// cmd/demo/controller.go
-func (c *UserController) GetUserQuery(q query.Values) User {
-    return User{
+// src/user/user_controller.go
+func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
+    return httpx.Response[User]{Body: User{
         ID:   q.Int("id", 0),
         Name: q.String("name"),
-    }
+    }}
 }
 ```
 
 
 ```bash
 # リクエスト
-GET /users?id=123&name=john
+GET /user?id=123&name=john
 
 # レスポンス
 {
@@ -236,14 +247,14 @@ GET /users?id=123&name=john
 
 
 ```go
-func (c *ProductController) Search(q query.Values) SearchResult {
+func (c *ProductController) Search(q query.Values) httpx.Response[SearchResult] {
     keyword := q.String("q")
     category := q.String("category")
     minPrice := q.Int("min_price", 0)
     maxPrice := q.Int("max_price", 999999)
     inStock := q.GetBoolByKey("in_stock", true)
     
-    products := c.repo.Search(SearchCriteria{
+    products := c.service.Search(SearchCriteria{
         Keyword:  keyword,
         Category: category,
         MinPrice: minPrice,
@@ -251,17 +262,17 @@ func (c *ProductController) Search(q query.Values) SearchResult {
         InStock:  inStock,
     })
     
-    return SearchResult{
+    return httpx.Response[SearchResult]{Body: SearchResult{
         Query:    keyword,
         Count:    len(products),
         Products: products,
-    }
+    }}
 }
 ```
 
 
 ```bash
-GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
+GET /product?q=laptop&category=electronics&min_price=500&in_stock=true
 ```
 
 ### ページネーションで使用
@@ -270,32 +281,32 @@ GET /products?q=laptop&category=electronics&min_price=500&in_stock=true
 
 
 ```go
-func (c *UserController) List(p query.Pagination, q query.Values) PagedResult {
+func (c *UserController) List(p query.Pagination, q query.Values) httpx.Response[PagedResult] {
     status := q.String("status")
     sortBy := q.String("sort_by")
     
-    users := c.repo.FindAll(status, sortBy, p.Page, p.Size)
-    total := c.repo.Count(status)
+    users := c.service.FindAll(status, sortBy, p.Page, p.Size)
+    total := c.service.Count(status)
     
-    return PagedResult{
+    return httpx.Response[PagedResult]{Body: PagedResult{
         Data:  users,
         Page:  p.Page,
         Size:  p.Size,
         Total: total,
-    }
+    }}
 }
 ```
 
 
 ```bash
-GET /users?page=2&size=20&status=active&sort_by=created_at
+GET /user?page=2&size=20&status=active&sort_by=created_at
 ```
 
 ### 条件付きフィルタ
 
 
 ```go
-func (c *OrderController) List(q query.Values) []Order {
+func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
     filters := OrderFilters{}
     
     if q.Has("user_id") {
@@ -314,7 +325,7 @@ func (c *OrderController) List(q query.Values) []Order {
         filters.ToDate = parseDate(q.String("to_date"))
     }
     
-    return c.repo.FindByFilters(filters)
+    return httpx.Response[[]Order]{Body: c.service.FindByFilters(filters)}
 }
 ```
 
@@ -324,7 +335,7 @@ func (c *OrderController) List(q query.Values) []Order {
 クエリパラメータは、同じキーで複数の値を渡すことができます。
 
 ```
-GET /products?tag=go&tag=web&tag=api
+GET /product?tag=go&tag=web&tag=api
 ```
 
 現在、`query.Values`の`String()`、`Get()`メソッドは最初の値のみを返します。複数の値が必要な場合は、内部マップに直接アクセスするメソッドを追加したり、コンマ区切り値を解析する方法を使用できます。
@@ -332,13 +343,13 @@ GET /products?tag=go&tag=web&tag=api
 
 ```go
 // カンマ 区切り 方式
-// GET /products?tags=go,web,api
+// GET /product?tags=go,web,api
 
-func (c *ProductController) Search(q query.Values) []Product {
+func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     tagsRaw := q.String("tags")
     tags := strings.Split(tagsRaw, ",")
     
-    return c.repo.FindByTags(tags)
+    return httpx.Response[[]Product]{Body: c.service.FindByTags(tags)}
 }
 ```
 
@@ -357,13 +368,13 @@ func (c *ProductController) Search(q query.Values) []Product {
 
 ```go
 // 固定の ページネーションだけ 必要 → query.Pagination
-func List(p query.Pagination) []User
+func List(p query.Pagination) httpx.Response[[]User]
 
 // 動的 フィルター + ページネーション → 両方 使用
-func Search(p query.Pagination, q query.Values) []User
+func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
 
 // 完全に 動的のクエリ → query.Valuesだけ
-func CustomSearch(q query.Values) []User
+func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
 ## 設計原則

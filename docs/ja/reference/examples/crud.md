@@ -16,27 +16,39 @@ graph TD
     Controller --> Service
     Service --> Repository
 ```
-## プロジェクト構造
+## CLIでプロジェクトを作成
+
+[CLIのインストール](/ja/learn/getting-started/installation)後に基本アプリを生成します。以下のメモリ保存によるCRUD全体は手動で追加します。CLIのresource生成器はGETの骨組み、`slice --storage memory`は作成・取得の骨組みを提供しますが、以下の更新・削除までは生成しません。
+
+```sh
+spine new crud-example --module example.com/crud-example
+cd crud-example
+go mod tidy
+spine doctor
 ```
-spine-user-demo/
+
+## プロジェクト構造
+```text
+crud-example/
+├── go.mod
 ├── main.go
-├── model/
-│   └── user.go
-├── repository/
-│   └── user_repository.go
-├── service/
-│   └── user_service.go
-├── controller/
-│   └── user_controller.go
-└── dto/
-    └── user_dto.go
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── model/user.go
+    ├── repository/user_repository.go
+    ├── dto/user_dto.go
+    ├── service/user_service.go
+    └── controller/user_controller.go
 ```
 
 ## Model
 
 
 ```go
-// model/user.go
+// src/model/user.go
 package model
 
 import "time"
@@ -54,7 +66,7 @@ type User struct {
 
 
 ```go
-// repository/user_repository.go
+// src/repository/user_repository.go
 package repository
 
 import (
@@ -62,7 +74,7 @@ import (
     "sync"
     "time"
 
-    "spine-user-demo/model"
+    "example.com/crud-example/src/model"
 )
 
 var (
@@ -162,13 +174,13 @@ func (r *UserRepository) Count() int {
 
 
 ```go
-// dto/user_dto.go
+// src/dto/user_dto.go
 package dto
 
 import (
     "time"
 
-    "spine-user-demo/model"
+    "example.com/crud-example/src/model"
 )
 
 //リクエストDTO
@@ -226,13 +238,13 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 
 
 ```go
-// service/user_service.go
+// src/service/user_service.go
 package service
 
 import (
-    "spine-user-demo/dto"
-    "spine-user-demo/model"
-    "spine-user-demo/repository"
+    "example.com/crud-example/src/dto"
+    "example.com/crud-example/src/model"
+    "example.com/crud-example/src/repository"
 )
 
 type UserService struct {
@@ -302,7 +314,7 @@ func (s *UserService) DeleteUser(id int64) error {
 
 
 ```go
-// controller/user_controller.go
+// src/controller/user_controller.go
 package controller
 
 import (
@@ -312,9 +324,9 @@ import (
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/path"
 
-    "spine-user-demo/dto"
-    "spine-user-demo/repository"
-    "spine-user-demo/service"
+    "example.com/crud-example/src/dto"
+    "example.com/crud-example/src/repository"
+    "example.com/crud-example/src/service"
 )
 
 type UserController struct {
@@ -408,63 +420,70 @@ return httperr.BadRequest("既に使用中のメールです")
 }
 ```
 
-## Main
+## アプリの構成
 
+生成されたルートの`main.go`はそのまま使い、`BuildApplication`、`Validate`、`Run`の順に呼び出します。以下で`internal/application/application.go`を置き換え、モデル、リポジトリ、DTO、サービス、コントローラーを`src/`に手動で追加します。
 
 ```go
-// main.go
-package main
+// internal/application/application.go
+package application
 
 import (
-    "log"
     "time"
+
+    "example.com/crud-example/src/controller"
+    "example.com/crud-example/src/repository"
+    "example.com/crud-example/src/service"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
-
-    "spine-user-demo/controller"
-    "spine-user-demo/repository"
-    "spine-user-demo/service"
 )
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-
-//コンストラクタの登録
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
         controller.NewUserController,
     )
-
-//ルート登録
     app.Route("GET", "/users", (*controller.UserController).List)
     app.Route("GET", "/users/:id", (*controller.UserController).GetByID)
     app.Route("POST", "/users", (*controller.UserController).Create)
     app.Route("PUT", "/users/:id", (*controller.UserController).Update)
     app.Route("DELETE", "/users/:id", (*controller.UserController).Delete)
 
-// Interceptorの登録
-    app.Interceptor(
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-            AllowHeaders: []string{"Content-Type"},
-        }),
-    )
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins: []string{"*"},
+        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders: []string{"Content-Type"},
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
-//アプリを起動
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
+
+## 検証と実行
+
+```sh
+gofmt -w src internal/application
+go mod tidy
+spine contract check
+spine verify
+spine dev
+```
+
+`contract check`は静的契約、`verify`は契約、gofmt、vet、Goテストを確認します。作成・取得・更新・削除の動作は以下のHTTPリクエストで確認します。プロセス終了時にメモリ内のデータは消えます。永続化は[データベースチュートリアル](/ja/learn/tutorial/5-database)で別に構成します。
+
 ## APIテスト
 
 ### ユーザーの作成
@@ -566,7 +585,12 @@ curl http://localhost:8080/users/999
 ```
 
 
+前の手順でユーザーを削除したため、同じメールアドレスで再作成します（200）。続けて同じメールアドレスで作成すると重複エラーになります（400）。
+
 ```bash
+curl -X POST http://localhost:8080/users\
+  -H "Content-Type: application/json" \
+  -d '{"name": "ホン・ギルドン", "email": "hong@example.com"}'
 # メールアドレスの重複
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
@@ -585,10 +609,10 @@ curl -X POST http://localhost:8080/users \
 
 ```go
 // ✓ 意味タイプで入力を受け取る
-func (c *UserController) GetByID(id path.Int) (dto.UserResponse, error)
+func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
 //✓httperrで意味だけを表現
-return dto.UserResponse{}, httperr.NotFound("ユーザーが見つかりません")
+return httpx.Response[dto.UserResponse]{}, httperr.NotFound("ユーザーが見つかりません")
 ```
 ### 依存性注入
 ```go

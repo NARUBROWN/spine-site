@@ -1,5 +1,7 @@
 # 執行管線
 
+控制器範例用來擴充 [CLI 產生的專案](/zh-Hant/learn/tutorial/1-project-structure)。成功回應使用 `github.com/NARUBROWN/spine/pkg/httpx` 中的 `httpx.Response[T]` 包裝，請求 DTO 使用指標，並於 `BuildApplication` 註冊建構函式及路由。
+
 Spine 在寫出 HTTP 回應之前完成業務執行、回應準備和可失敗的提交階段。v0.5.1 的順序如下：
 
 ```mermaid

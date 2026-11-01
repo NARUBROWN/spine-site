@@ -4,139 +4,41 @@ import { useData } from 'vitepress'
 
 const { lang } = useData()
 
-const logs = {
-  ko: [
-    '________       _____             ',
-    '__  ___/__________(_)___________ ',
-    '_____ \\___  __ \\_  /__  __ \\  _ \\',
-    '____/ /__  /_/ /  / _  / / /  __/',
-    '/____/ _  .___//_/  /_/ /_/\\___/ ',
-    '       /_/        ',
-    '2026/01/20 19:20:05 [Bootstrap] Spine version: v0.2.1',
-    '2026/01/20 19:20:05 [Bootstrap] 컨테이너 초기화 시작',
-    '2026/01/20 19:20:05 [Bootstrap] 생성자 등록 시작 (5개)',
-    '2026/01/20 19:20:05 [Bootstrap] 생성자 등록 : func() *bun.DB',
-    '2026/01/20 19:20:05 [Bootstrap] 생성자 등록 : func(bun.IDB) *repository.UserRepository',
-    '2026/01/20 19:20:05 [Bootstrap] 생성자 등록 : func(*repository.UserRepository) *service.UserService',
-    '2026/01/20 19:20:05 [Bootstrap] 생성자 등록 : func(*service.UserService) *controller.UserController',
-    '2026/01/20 19:20:05 [Bootstrap] 생성자 등록 : func(*bun.DB) *interceptor.TxInterceptor',
-    '2026/01/20 19:20:05 [Bootstrap] 라우터 구성 시작 (4개 라우트)',
-    '2026/01/20 19:20:05 [Bootstrap] 라우터 등록 : (GET) /users',
-    '2026/01/20 19:20:05 [Bootstrap] 라우터 등록 : (POST) /users',
-    '2026/01/20 19:20:05 [Bootstrap] 라우터 등록 : (PUT) /users',
-    '2026/01/20 19:20:05 [Bootstrap] 라우터 등록 : (DELETE) /users',
-    '2026/01/20 19:20:05 [Bootstrap] 컨트롤러 의존성 Warm-up 시작',
-    '2026/01/20 19:20:05 [Container] Resolve 요청 : *controller.UserController',
-    '2026/01/20 19:20:05 [Container] Resolve 요청 : *service.UserService',
-    '2026/01/20 19:20:05 [Container] Resolve 요청 : *repository.UserRepository',
-    '2026/01/20 19:20:05 [Container] Resolve 요청 : bun.IDB',
-    '2026/01/20 19:20:05 [Bootstrap] 실행 파이프라인 구성',
-    '2026/01/20 19:20:05 [Bootstrap] ArgumentResolver 등록',
-    '2026/01/20 19:20:05 [Bootstrap] ReturnValueHandler 등록',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor 등록 시작',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor TxInterceptor가 컨테이너에서 생성됐습니다.',
-    '2026/01/20 19:20:05 [Container] Resolve 요청 : *interceptor.TxInterceptor',
-    '2026/01/20 19:20:05 [Container] Resolve 요청 : *bun.DB',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor *cors.CORSInterceptor가 인스턴스에서 사용됩니다.',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor *interceptor.LoggingInterceptor가 인스턴스에서 사용됩니다.',
-    '2026/01/20 19:20:05 [Bootstrap] HTTP 어댑터 마운트',
-    '2026/01/20 19:20:05 [Bootstrap] 서버 리스닝 시작: :8080'
-  ],
-  en: [
-    '________       _____             ',
-    '__  ___/__________(_)___________ ',
-    '_____ \\___  __ \\_  /__  __ \\  _ \\',
-    '____/ /__  /_/ /  / _  / / /  __/',
-    '/____/ _  .___//_/  /_/ /_/\\___/ ',
-    '       /_/        ',
-    '2026/01/20 19:20:05 [Bootstrap] Spine version: v0.2.1',
-    '2026/01/20 19:20:05 [Bootstrap] Container initialization started',
-    '2026/01/20 19:20:05 [Bootstrap] Constructor registration started (5 items)',
-    '2026/01/20 19:20:05 [Bootstrap] Register constructor : func() *bun.DB',
-    '2026/01/20 19:20:05 [Bootstrap] Register constructor : func(bun.IDB) *repository.UserRepository',
-    '2026/01/20 19:20:05 [Bootstrap] Register constructor : func(*repository.UserRepository) *service.UserService',
-    '2026/01/20 19:20:05 [Bootstrap] Register constructor : func(*service.UserService) *controller.UserController',
-    '2026/01/20 19:20:05 [Bootstrap] Register constructor : func(*bun.DB) *interceptor.TxInterceptor',
-    '2026/01/20 19:20:05 [Bootstrap] Router configuration started (4 routes)',
-    '2026/01/20 19:20:05 [Bootstrap] Register route : (GET) /users',
-    '2026/01/20 19:20:05 [Bootstrap] Register route : (POST) /users',
-    '2026/01/20 19:20:05 [Bootstrap] Register route : (PUT) /users',
-    '2026/01/20 19:20:05 [Bootstrap] Register route : (DELETE) /users',
-    '2026/01/20 19:20:05 [Bootstrap] Controller dependency warm-up started',
-    '2026/01/20 19:20:05 [Container] Resolve request : *controller.UserController',
-    '2026/01/20 19:20:05 [Container] Resolve request : *service.UserService',
-    '2026/01/20 19:20:05 [Container] Resolve request : *repository.UserRepository',
-    '2026/01/20 19:20:05 [Container] Resolve request : bun.IDB',
-    '2026/01/20 19:20:05 [Bootstrap] Execution pipeline configuration',
-    '2026/01/20 19:20:05 [Bootstrap] ArgumentResolver registration',
-    '2026/01/20 19:20:05 [Bootstrap] ReturnValueHandler registration',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor registration started',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor TxInterceptor created from container.',
-    '2026/01/20 19:20:05 [Container] Resolve request : *interceptor.TxInterceptor',
-    '2026/01/20 19:20:05 [Container] Resolve request : *bun.DB',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor *cors.CORSInterceptor used from instance.',
-    '2026/01/20 19:20:05 [Bootstrap] Interceptor *interceptor.LoggingInterceptor used from instance.',
-    '2026/01/20 19:20:05 [Bootstrap] HTTP adapter mounted',
-    '2026/01/20 19:20:05 [Bootstrap] Server started listening: :8080'
-  ],
-  ja: [
-    '________       _____             ',
-    '__  ___/__________(_)___________ ',
-    '_____ \\___  __ \\_  /__  __ \\  _ \\',
-    '____/ /__  /_/ /  / _  / / /  __/',
-    '/____/ _  .___//_/  /_/ /_/\\___/ ',
-    '       /_/        ',
-    '2026/01/20 19:20:05 [Bootstrap] Spine version: v0.2.1',
-    '2026/01/20 19:20:05 [Bootstrap] コンテナの初期化開始',
-    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録開始 (5個)',
-    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func() *bun.DB',
-    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(bun.IDB) *repository.UserRepository',
-    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(*repository.UserRepository) *service.UserService',
-    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(*service.UserService) *controller.UserController',
-    '2026/01/20 19:20:05 [Bootstrap] コンストラクタ登録 : func(*bun.DB) *interceptor.TxInterceptor',
-    '2026/01/20 19:20:05 [Bootstrap] ルーター構成開始 (4個のルート)',
-    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (GET) /users',
-    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (POST) /users',
-    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (PUT) /users',
-    '2026/01/20 19:20:05 [Bootstrap] ルーター登録 : (DELETE) /users',
-    '2026/01/20 19:20:05 [Bootstrap] コントローラー依存関係ウォームアップ開始',
-    '2026/01/20 19:20:05 [Container] Resolve要求 : *controller.UserController',
-    '2026/01/20 19:20:05 [Container] Resolve要求 : *service.UserService',
-    '2026/01/20 19:20:05 [Container] Resolve要求 : *repository.UserRepository',
-    '2026/01/20 19:20:05 [Container] Resolve要求 : bun.IDB',
-    '2026/01/20 19:20:05 [Bootstrap] 実行パイプラインの構成',
-    '2026/01/20 19:20:05 [Bootstrap] ArgumentResolverの登録',
-    '2026/01/20 19:20:05 [Bootstrap] ReturnValueHandler의 등록',
-    '2026/01/20 19:20:05 [Bootstrap] インターセプターの登録開始',
-    '2026/01/20 19:20:05 [Bootstrap] インターセプター TxInterceptor がコンテナから生成されました。',
-    '2026/01/20 19:20:05 [Container] Resolve要求 : *interceptor.TxInterceptor',
-    '2026/01/20 19:20:05 [Container] Resolve要求 : *bun.DB',
-    '2026/01/20 19:20:05 [Bootstrap] インターセプター *cors.CORSInterceptor がインスタンスから使用されます。',
-    '2026/01/20 19:20:05 [Bootstrap] インターセプター *interceptor.LoggingInterceptor がインスタンスから使用されます。',
-    '2026/01/20 19:20:05 [Bootstrap] HTTPアダプタのマウント',
-    '2026/01/20 19:20:05 [Bootstrap] サーバーのリスニング開始: :8080'
-  ]
-}
+// CLI로 생성한 /health 앱의 실행 출력 예시입니다.
+const bootLog = [
+  'Building application...',
+  'Application build succeeded.',
+  'Application process started.',
+  'Spine development server is watching application sources.',
+  '',
+  '[Bootstrap] Spine version: v0.5.1',
+  '[Bootstrap] Registering constructors (1)',
+  '[Bootstrap] Registering constructor: func() *application.HealthController',
+  '[Bootstrap] Configuring HTTP routes (1 routes)',
+  '[Bootstrap] Registered HTTP route: (GET) /health',
+  '[Bootstrap] Server listening on: :8080'
+]
+const logs = { ko: bootLog, en: bootLog, ja: bootLog }
 
 const uiText = {
   ko: {
-    prompt: '눈 깜짝하는 사이에 부팅이 끝났습니다.<br>다시 해볼까요?',
+    prompt: 'CLI로 생성한 앱의 실행 출력 예시입니다.',
     button: '다시 보기'
   },
   en: {
-    prompt: 'Boot finished in the blink of an eye.<br>Want to see it again?',
+    prompt: 'Example startup output from the CLI-generated app.',
     button: 'Replay'
   },
   ja: {
-    prompt: '瞬く間に起動が完了しました。<br>もう一度見てみますか？',
+    prompt: 'CLIが生成したアプリの起動出力例です。',
     button: 'もう一度見る'
   },
   zhHans: {
-    prompt: '启动在眨眼之间完成。<br>要再看一次吗？',
+    prompt: 'CLI生成应用的启动输出示例。',
     button: '再次播放'
   },
   zhHant: {
-    prompt: '啟動在眨眼之間完成。<br>要再看一次嗎？',
+    prompt: 'CLI產生應用程式的啟動輸出範例。',
     button: '再次播放'
   }
 }
@@ -234,9 +136,9 @@ onMounted(() => {
     <div class="content">
       <div class="command-line">
         <span class="prompt">➜  spine-app </span>
-        <span class="command">go run .</span>
+        <span class="command">spine dev</span>
       </div>
-      <div v-for="(line, index) in visibleLines" :key="index" class="line" :class="{ 'ascii-art': index < 6, 'log-line': index >= 6 }">
+      <div v-for="(line, index) in visibleLines" :key="index" class="line log-line">
         {{ line }}
       </div>
       <div v-if="isFinished" class="cursor-line">

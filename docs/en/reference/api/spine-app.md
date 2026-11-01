@@ -1,5 +1,16 @@
 # spine.App
 
+## Use the API in a CLI project
+
+Start with the [CLI-generated first app](/en/learn/getting-started/first-app). Put registration code in `BuildApplication` in `internal/application/application.go`. Use the `Run` examples in the generated `main.go`, after checking the error from `Validate`.
+
+```sh
+spine doctor
+spine contract check
+spine verify
+```
+
+
 API reference for configuring and running a Spine application.
 
 ## Interface
@@ -268,23 +279,38 @@ RabbitMQ: &boot.RabbitMqOptions{
 
 The publisher uses persistent messages, mandatory routing, publisher confirms, and bounded retry. A zero prefetch uses the safe default of 1. `RequeueOnError` is deprecated; use `FailurePolicy` explicitly. Broker dispatch uses AMQP `RoutingKey`, not producer-controlled `Type`.
 
-## Minimal HTTP application
+## CLI-generated application
 
 ```go
-func main() {
-    app := spine.New()
-    app.Constructor(NewUserService, NewUserController)
-    app.Route("GET", "/users/:id", (*UserController).Get)
+package application
 
-    opts := boot.Options{
-        Address:                ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
-        HTTP:                   &boot.HTTPOptions{},
-    }
-    if err := app.Run(opts); err != nil {
-        log.Fatal(err)
-    }
+import (
+	"os"
+
+	"github.com/NARUBROWN/spine"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New()
+	app.Constructor(NewHealthController)
+	app.Route("GET", "/health", (*HealthController).Get)
+
+	address := ":8080"
+	if port := os.Getenv("SPINE_PORT"); port != "" {
+		address = ":" + port
+	}
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 

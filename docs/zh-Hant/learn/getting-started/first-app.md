@@ -1,233 +1,101 @@
 # 第一個應用程式
 
-5 分鐘內建立使用者查詢 API。
+安裝 Spine CLI、產生專案，並在約 5 分鐘內執行 `GET /health`。需要 Go 1.25.5 或更新版本，CLI 建議使用 Go 1.27.3。首次下載相依套件所需的時間取決於環境。
 
-## 完成的外觀
-
-```bash
-curl "http://localhost:8080/users?id=1"
-```
-
-```json
-{
-  "id": 1,
-  "name": "Alice",
-  "email": "alice@example.com"
-}
-```
-
-## 1.建立項目
+## 1. 安裝並檢查 CLI
 
 ```bash
-mkdir hello-spine && cd hello-spine
-go mod init hello-spine
-go get github.com/NARUBROWN/spine@v0.5.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
-## 2. 專案結構
+`spine version` 會輸出 `spine-cli 0.1.4`。如果找不到命令，請參考[安裝指南](/zh-Hant/learn/getting-started/installation)設定 Go 執行檔路徑。
 
+## 2. 建立專案
+
+在準備存放專案的上層目錄中執行：
+
+```bash
+spine new hello-spine --module example.com/hello-spine
+cd hello-spine
+go mod tidy
 ```
+
+CLI 在 `go.mod` 中指定 Spine `v0.5.1`，使用 `go mod tidy` 準備相依套件。
+
+## 3. 查看產生的結構
+
+```text
 hello-spine/
+├── .gitignore
+├── README.md
+├── go.mod
 ├── main.go
-├── controller/
-│   └── user_controller.go
-├── service/
-│   └── user_service.go
-└── routes/
-    └── routes.go
+├── spine.toml
+└── internal/application/
+    ├── application.go
+    └── application_test.go
 ```
 
-## 3.寫程式碼
+`spine.toml` 告訴 CLI 模組路徑、執行進入點和註冊程式碼的位置。
 
-### main.go
+```toml
+module = "example.com/hello-spine"
+entrypoint = "."
+composition = "./internal/application"
+port = 8080
+```
+
+`internal/application/application.go` 中的 `BuildApplication()` 負責組裝應用程式和啟動選項。產生的程式碼註冊 `HealthController` 建構子與 `GET /health`，並明確設定 `boot.HTTPOptions`。將路由、建構子和攔截器註冊集中在此函式中，或集中在它呼叫的 `Register(app) error` 函式中。
+
+`main.go` 已經產生，無須覆寫。可以查看它的執行流程：
 
 ```go
-package main
-
-import (
-    "log"
-    "time"
-
-    "hello-spine/controller"
-    "hello-spine/routes"
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-)
-
 func main() {
-    app := spine.New()
-
-    // 註冊建構函數－以任何順序
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    // 路線登記
-    routes.RegisterRoutes(app)
-
-    // 啟動伺服器
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-### 服務/user_service.go
-
-```go
-package service
-
-// UserResponse 響應結構
-type UserResponse struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-
-// 用戶服務 用戶服務
-type UserService struct {
-    // 實際上，Repository是被注入的，但這裡只是簡單地實現了。
-}
-
-func NewUserService() *UserService {
-    return &UserService{}
-}
-
-// 取得用戶查找（硬編碼資料）
-func (s *UserService) Get(id int) (UserResponse, error) {
-    // 其實去DB查一下
-    users := map[int]UserResponse{
-        1: {ID: 1, Name: "Alice", Email: "alice@example.com"},
-        2: {ID: 2, Name: "Bob", Email: "bob@example.com"},
-    }
-
-    if user, ok := users[id]; ok {
-        return user, nil
-    }
-
-    return UserResponse{}, nil
-}
-```
-
-### 控制器/user_controller.go
-
-```go
-package controller
-
-import (
-    "context"
-
-    "hello-spine/service"
-
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-// NewUserController 建構函數 — 參數是依賴項
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GetUser 使用者尋找處理程式
-// 函數簽名是API規範
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[service.UserResponse], error) {
-    id := int(q.Int("id", 0))
-    user, err := c.svc.Get(id)
+    app, options, err := application.BuildApplication()
     if err != nil {
-        return httpx.Response[service.UserResponse]{}, err
+        log.Fatal(err)
     }
-    return httpx.Response[service.UserResponse]{Body: user}, nil
+    if err := app.Validate(options); err != nil {
+        log.Fatal(err)
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-### 路線/routes.go
-
-```go
-package routes
-
-import (
-    "hello-spine/controller"
-
-    "github.com/NARUBROWN/spine"
-)
-
-func RegisterRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).GetUser)
-}
-```
-
-## 4. 運行
+## 4. 驗證契約與本機程式碼
 
 ```bash
-go run main.go
+spine doctor
+spine inspect
+spine contract check
+spine verify
 ```
 
-```
-________       _____
-__  ___/__________(_)___________
-_____ \___  __ \_  /__  __ \  _ \
-____/ /__  /_/ /  / _  / / /  __/
-/____/ _  .___//_/  /_/ /_/\___/
-       /_/
-2026/07/26 14:37:59 [Bootstrap] Spine version: v0.5.1
-```
+`doctor` 診斷工具與專案設定，`inspect` 顯示已註冊的執行契約。`contract check` 驗證靜態契約，`verify` 執行契約、gofmt、vet 與 test 檢查。產生的 `application_test.go` 也會在不啟動伺服器的情況下檢查 `BuildApplication()` 與 `app.Validate(options)`。
 
-## 5. 測試
+## 5. 執行並確認回應
 
 ```bash
-# 愛麗絲查找
-curl "http://localhost:8080/users?id=1"
+spine dev
+```
+
+在另一個終端機中傳送請求：
+
+```bash
+curl http://localhost:8080/health
 ```
 
 ```json
-{"id":1,"name":"Alice","email":"alice@example.com"}
+{"status":"ok"}
 ```
 
-```bash
-# 鮑伯·查找
-curl "http://localhost:8080/users?id=2"
-```
-
-```json
-{"id":2,"name":"Bob","email":"bob@example.com"}
-```
-
-## 🎉 完成！
-
-我在 5 分鐘內創建了我的第一個 Spine 應用程式。
-
-### 到目前為止我學到了什麼
-
-|概念|代碼|
-|------|------|
-|建立應用程式 | `spine.New()` | `spine.New()`
-|註冊依賴項 | `app.Constructor(...)` | `app.Constructor(...)`
-|路線登記| `app.Route("GET", "/users", ...)` | `app.Route("GET", "/users", ...)`
-|啟動伺服器 | `app.Run(boot.Options{...})` | `app.Run(boot.Options{...})`
-
-### 要點
-
-- **建構子參數 = 依賴宣告** — 無需註釋
-- **函數簽章=API規格** — 輸入輸出清晰
-- **在一處進行路線管理** — 查看流程
+按 `Ctrl+C` 停止開發伺服器。至此，你已確認 CLI 產生的專案、可重複使用的應用程式組裝函式、靜態契約檢查和實際 HTTP 回應。
 
 ## 後續步驟
 
-- [教學：專案結構](/zh-Hant/learn/tutorial/1-project-structure) — 取得實際的專案結構
-- [教學：攔截器](/zh-Hant/learn/tutorial/4-interceptor) — 新增交易和日誌記錄
-- [教學：資料庫](/zh-Hant/learn/tutorial/5-database) — 連接 Bun ORM
+- [專案結構](/zh-Hant/learn/tutorial/1-project-structure) — 向產生的專案加入功能
+- [控制器](/zh-Hant/learn/tutorial/2-controller) — 查看 CLI 產生的路由和處理函式
+- [資料庫](/zh-Hant/learn/tutorial/5-database) — 為儲存庫連接 Bun ORM

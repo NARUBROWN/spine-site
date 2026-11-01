@@ -2,6 +2,8 @@
 
 API reference for Spine's execution and protocol-specific context contracts.
 
+Application controller examples are manual extensions to `src/user/user_controller.go` in a [CLI project](/en/learn/tutorial/1-project-structure). Define application types such as `User` yourself, import `httpx` from `github.com/NARUBROWN/spine/pkg/httpx` and `spine.Ctx` from `github.com/NARUBROWN/spine/pkg/spine`, and keep the generated `BuildApplication`, checked `user.Register(app)` call, and root `main.go`.
+
 ## Base carriers
 
 ```go
@@ -60,12 +62,12 @@ type ControllerContext interface {
 Controllers receive the read-only `spine.Ctx` facade rather than the mutable `ExecutionContext`:
 
 ```go
-func (c *UserController) Me(ctx spine.Ctx) (User, error) {
+func (c *UserController) Me(ctx spine.Ctx) (httpx.Response[User], error) {
     value, ok := ctx.Get("myapp.auth.user")
     if !ok {
-        return User{}, httperr.Unauthorized("authentication required")
+        return httpx.Response[User]{}, httperr.Unauthorized("authentication required")
     }
-    return value.(User), nil
+    return httpx.Response[User]{Body: value.(User)}, nil
 }
 ```
 
@@ -151,18 +153,17 @@ type WebSocketMessageContext interface {
 
 `WebSocketHandshakeContext` is supplied to `WebSocketHandshakeInterceptor.PreHandshake` before HTTP upgrade. Spine has already reserved a capacity slot, so pending authentication counts toward `MaxConnections`.
 
-The request data is snapshotted and exposed again during message processing through `WebSocketMessageContext`:
+The request data is snapshotted and exposed again during message processing through `WebSocketMessageContext`. Read it from a message interceptor, for example with the helper below called from `PreHandle`. `core.WebSocketContext` is not a supported controller handler parameter:
 
 ```go
-func (c *ChatController) OnMessage(ctx core.WebSocketContext) error {
+func websocketRequestInfo(ctx core.ExecutionContext) (string, string, error) {
     request, ok := ctx.(core.WebSocketMessageContext)
     if !ok {
-        return errors.New("handshake request snapshot unavailable")
+        return "", "", errors.New("handshake request snapshot unavailable")
     }
     tenant := request.Query("tenant")
     token, _ := request.Cookie("session")
-    // ...
-    return nil
+    return tenant, token, nil
 }
 ```
 

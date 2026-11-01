@@ -3,6 +3,25 @@
 Bunを使用してデータベースに接続する。
 
 
+## CLIプロジェクトの準備
+
+[最初のアプリ](/ja/learn/getting-started/first-app)と[プロジェクト構造](/ja/learn/tutorial/1-project-structure)の `example.com/my-app` を使用します。ユーザーリソースがまだなければ、生成計画を確認して適用します。
+
+```sh
+spine generate resource user --dry-run
+```
+
+```sh
+spine generate resource user
+```
+
+テキストのプレビューで生成ファイルを確認してから通常の生成コマンドを実行します。生成済みのリソースは再生成しません。
+
+CLIが生成するのはリソースの骨格と登録です。Bun・DB接続・モデル・マイグレーションの生成機能はないため、以下のファイルと依存関係は手動で追加します。生成された `main.go` は維持します。
+
+以下のRepositoryコードで `src/user/user_repository.go` を拡張します。生成済みのServiceとControllerはIDを返すGETの骨格なので、DB照会やCRUDを提供するには手動で接続してください。
+
+
 ## Bunとは？
 
 [Bun](https://bun.uptrace.dev/)はGoのための軽量ORMです。
@@ -19,11 +38,11 @@ Spineは特定のORMを強制しませんが、Bunとの組み合わせを推奨
 
 ```bash
 # Bun コア
-go get github.com/uptrace/bun
+go get github.com/uptrace/bun@v1.2.16
 
 # MySQL ドライバー + 方言
-go get github.com/uptrace/bun/dialect/mysqldialect
-go get github.com/go-sql-driver/mysql
+go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
+go get github.com/go-sql-driver/mysql@v1.9.3
 
 # PostgreSQLを使用する場合
 # go get github.com/uptrace/bun/dialect/pgdialect
@@ -37,86 +56,110 @@ go get github.com/go-sql-driver/mysql
 
 
 ```go
-// db.go
-package main
+// src/database/db.go
+package database
 
 import (
+    "context"
     "database/sql"
+    "os"
+    "time"
 
+    _ "github.com/go-sql-driver/mysql"
     "github.com/uptrace/bun"
     "github.com/uptrace/bun/dialect/mysqldialect"
-    _ "github.com/go-sql-driver/mysql"
 )
 
 func NewDB() *bun.DB {
-    // MySQL 接続
-    sqldb, err := sql.Open("mysql", 
-        "user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local",
-    )
+    dsn := os.Getenv("DATABASE_URL")
+    if dsn == "" {
+        panic("DATABASE_URL is required")
+    }
+    sqldb, err := sql.Open("mysql", dsn)
     if err != nil {
         panic(err)
     }
-    
-    // 接続確認
-    if err := sqldb.Ping(); err != nil {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    if err := sqldb.PingContext(ctx); err != nil {
+        _ = sqldb.Close()
         panic(err)
     }
-    
-    // Bun DB 作成
-    db := bun.NewDB(sqldb, mysqldialect.New())
-    
-    return db
+    return bun.NewDB(sqldb, mysqldialect.New())
 }
 ```
+
+`NewDB` はアプリ実行時にDIが生成するときに接続を確認します。コンストラクタの戻り値は1つだけです。`BuildApplication` では接続せず生成関数だけを登録し、静的検証と生成されたテストがDBを必要としないようにします。
 
 ### Spineに登録
 
 
 ```go
-// main.go
-func main() {
+// internal/application/application.go
+package application
+
+import (
+    "os"
+
+    "example.com/my-app/src/database"
+    "example.com/my-app/src/user"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-    
-    app.Constructor(
-        NewDB,  // *bun.DB を作成
-        // ...
-    )
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    app.Constructor(NewHealthController, database.NewDB)
+    app.Route("GET", "/health", (*HealthController).Get)
+    if err := user.Register(app); err != nil {
+        return nil, boot.Options{}, err
+    }
+
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
+    }
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
 ## PostgreSQL 接続
 
 
+PostgreSQLのコードはMySQL用 `src/database/db.go` の代替です。どちらか一方を使用し、DSNとマイグレーションSQLもDBに合わせます。`sql.Open` だけでは実際の接続は確認できません。
+
 ```go
-// db.go
-package main
+// src/database/db.go
+package database
 
 import (
     "database/sql"
+    "os"
 
+    _ "github.com/jackc/pgx/v5/stdlib"
     "github.com/uptrace/bun"
     "github.com/uptrace/bun/dialect/pgdialect"
-    _ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func NewDB() *bun.DB {
-    sqldb, err := sql.Open("pgx", 
-        "postgres://user:password@localhost:5432/mydb?sslmode=disable",
-    )
+    dsn := os.Getenv("DATABASE_URL")
+    if dsn == "" {
+        panic("DATABASE_URL is required")
+    }
+    sqldb, err := sql.Open("pgx", dsn)
     if err != nil {
         panic(err)
     }
-    
-    db := bun.NewDB(sqldb, pgdialect.New())
-    
-    return db
+    return bun.NewDB(sqldb, pgdialect.New())
 }
 ```
 
@@ -127,28 +170,17 @@ func NewDB() *bun.DB {
 
 
 ```go
-// db.go
-import "os"
-
-func NewDB() *bun.DB {
-    dsn := os.Getenv("DATABASE_URL")
-    if dsn == "" {
-        dsn = "user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
-    }
-    
-    sqldb, err := sql.Open("mysql", dsn)
-    if err != nil {
-        panic(err)
-    }
-    
-    return bun.NewDB(sqldb, mysqldialect.New())
+// src/database/db.go의 NewDB 내부 발췌
+dsn := os.Getenv("DATABASE_URL")
+if dsn == "" {
+    panic("DATABASE_URL is required")
 }
 ```
 
 
 ```bash
 export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
-go run main.go
+spine dev
 ```
 
 
@@ -158,17 +190,17 @@ go run main.go
 
 
 ```go
-// entity/user.go
+// src/entity/user.go
 package entity
 
 import "time"
 
 type User struct {
-    ID        int64     `bun:",pk,autoincrement"`
-    Name      string    `bun:",notnull"`
-    Email     string    `bun:",unique,notnull"`
-    CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
-    UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp"`
+    ID        int64     `bun:",pk,autoincrement" json:"id"`
+    Name      string    `bun:",notnull" json:"name"`
+    Email     string    `bun:",unique,notnull" json:"email"`
+    CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+    UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 ```
 
@@ -189,25 +221,25 @@ type User struct {
 
 ### bun.IDB インターフェースの使用
 
-`bun.IDB`を使用すると、`*bun.DB` と `*bun.Tx` の両方を受け入れることができます。
+`bun.IDB`を使用すると、`*bun.DB` と `bun.Tx` の両方を受け入れることができます。
 
 
 ```go
-// repository/user_repository.go
-package repository
+// src/user/user_repository.go
+package user
 
 import (
     "context"
-    "myapp/entity"
+    "example.com/my-app/src/entity"
 
     "github.com/uptrace/bun"
 )
 
 type UserRepository struct {
-    db bun.IDB  // *bun.DB または *bun.Tx の両方が可能
+    db bun.IDB  // *bun.DB または bun.Tx の両方が可能
 }
 
-func NewUserRepository(db bun.IDB) *UserRepository {
+func NewUserRepository(db *bun.DB) *UserRepository {
     return &UserRepository{db: db}
 }
 ```
@@ -216,7 +248,7 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 
 
 ```go
-func (r *UserRepository) FindByID(ctx context.Context, id int) (*entity.User, error) {
+func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, error) {
     user := new(entity.User)
     
     err := r.db.NewSelect().
@@ -295,14 +327,67 @@ func (r *UserRepository) Delete(ctx context.Context, id int) error {
 ```
 
 
+## 生成されたGETをDB照会に接続
+
+既存の `src/user/user_controller.go` を以下に置き換え、`src/user/user_read.go` を追加します。生成済みの `GET /user/:id` とコンストラクタ登録は維持します。保存済みユーザーを返し、IDがなければHTTP 404です。この手順でIDを返すだけの骨格を実際のDB照会に接続します。
+
+```go
+// src/user/user_controller.go
+package user
+
+import (
+    "context"
+    "database/sql"
+    "errors"
+
+    "example.com/my-app/src/entity"
+    "github.com/NARUBROWN/spine/pkg/httperr"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/path"
+)
+
+type UserController struct{ service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
+
+func (c *UserController) Get(ctx context.Context, id path.Int) (httpx.Response[*entity.User], error) {
+    user, err := c.service.FindByID(ctx, id.Value)
+    if errors.Is(err, sql.ErrNoRows) {
+        return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
+    }
+    if err != nil {
+        return httpx.Response[*entity.User]{}, err
+    }
+    return httpx.Response[*entity.User]{Body: user}, nil
+}
+```
+
+```go
+// src/user/user_read.go
+package user
+
+import (
+    "context"
+
+    "example.com/my-app/src/entity"
+)
+
+func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, error) {
+    return s.repository.FindByID(ctx, id)
+}
+```
+
 ## マイグレーション
 
 ### マイグレーションファイルの作成
 
 
-```
-sql
--- migrations/001_create_users.up.sql
+SQLファイルを `cmd/migrate/migrations` に配置します。マイグレーションは別の実行ファイルとして追加します。`spine migrate` コマンドはありません。DBを準備してから明示的に実行してください。
+
+```sql
+-- cmd/migrate/migrations/001_create_users.up.sql
 CREATE TABLE users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -313,9 +398,8 @@ CREATE TABLE users (
 ```
 
 
-```
-sql
--- migrations/001_create_users.down.sql
+```sql
+-- cmd/migrate/migrations/001_create_users.down.sql
 DROP TABLE IF EXISTS users;
 ```
 
@@ -323,16 +407,15 @@ DROP TABLE IF EXISTS users;
 
 
 ```go
-// main.go
+// cmd/migrate/main.go
 package main
 
 import (
     "context"
     "embed"
-    "flag"
-    "fmt"
-    "os"
+    "log"
 
+    "example.com/my-app/src/database"
     "github.com/uptrace/bun"
     "github.com/uptrace/bun/migrate"
 )
@@ -341,53 +424,25 @@ import (
 var sqlMigrations embed.FS
 
 func main() {
-    // CLI フラグ
-    migrateOnly := flag.Bool("migrate", false, "Run migrations and exit")
-    flag.Parse()
-
-    db := NewDB()
-
-    // マイグレーションのみ実行
-    if *migrateOnly {
-        if err := runMigrations(context.Background(), db); err != nil {
-            fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
-            os.Exit(1)
-        }
-        fmt.Println("Migrations applied successfully.")
-        return
+    db := database.NewDB()
+    defer db.Close()
+    if err := runMigrations(context.Background(), db); err != nil {
+        log.Fatal(err)
     }
-
-    // サーバー開始
-    app := spine.New()
-    // ...
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    log.Println("Migrations applied successfully.")
 }
 
 func runMigrations(ctx context.Context, db *bun.DB) error {
     migrations := migrate.NewMigrations()
-    
     if err := migrations.Discover(sqlMigrations); err != nil {
         return err
     }
-
     migrator := migrate.NewMigrator(db, migrations)
-
-    // マイグレーションテーブル作成
     if err := migrator.Init(ctx); err != nil {
         return err
     }
-
-    // マイグレーション実行
-    if _, err := migrator.Migrate(ctx); err != nil {
-        return err
-    }
-    
-    return nil
+    _, err := migrator.Migrate(ctx)
+    return err
 }
 ```
 
@@ -396,65 +451,85 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 
 ```bash
 # マイグレーション実行
-go run . -migrate
+go run ./cmd/migrate
 
 # サーバー実行
-go run .
+spine dev
 ```
 
 
 ## 全体構造
 
-```
-myapp/
+```text
+my-app/
+├── go.mod
 ├── main.go
-├── db.go                    # DB 接続
-├── entity/
-│   └── user.go              # テーブルマッピング
-├── repository/
-│   └── user_repository.go   # データアクセス
-├── service/
-│   └── user_service.go
-├── controller/
-│   └── user_controller.go
-├── routes/
-│   └── routes.go
-└── migrations/
-    ├── 001_create_users.up.sql
-    └── 001_create_users.down.sql
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+├── src/
+│   ├── database/db.go
+│   ├── entity/user.go
+│   └── user/
+│       ├── user_route.go
+│       ├── user_repository.go
+│       ├── user_service.go
+│       ├── user_read.go
+│       └── user_controller.go
+└── cmd/migrate/
+    ├── main.go
+    └── migrations/
+        ├── 001_create_users.up.sql
+        └── 001_create_users.down.sql
 ```
 
 ## Spineとの統合
 
 
 ```go
-// main.go
-func main() {
+// internal/application/application.go
+package application
+
+import (
+    "os"
+
+    "example.com/my-app/src/database"
+    "example.com/my-app/src/user"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-    
-    app.Constructor(
-        NewDB,                          // *bun.DB
-        repository.NewUserRepository,   // bun.IDB → *UserRepository
-        service.NewUserService,
-        controller.NewUserController,
-    )
-    
-    routes.RegisterUserRoutes(app)
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    app.Constructor(NewHealthController, database.NewDB)
+    app.Route("GET", "/health", (*HealthController).Get)
+    if err := user.Register(app); err != nil {
+        return nil, boot.Options{}, err
+    }
+
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
+    }
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
 
 ```go
-// repository/user_repository.go
-// bun.IDBを受け取るので *bun.DB が自動注入される
-func NewUserRepository(db bun.IDB) *UserRepository {
+// src/user/user_repository.go
+// DI는 구체 타입 *bun.DB를 받고 내부 쿼리 필드는 bun.IDB로 유지합니다.
+func NewUserRepository(db *bun.DB) *UserRepository {
     return &UserRepository{db: db}
 }
 ```
@@ -519,6 +594,8 @@ err := r.db.NewSelect().
     Scan(ctx)
 ```
 
+結合例には `Orders` の関連フィールド、Entity、Bunの関連タグが必要です。基本Userモデルには含まれていません。
+
 
 ## 要点のまとめ
 
@@ -529,6 +606,17 @@ err := r.db.NewSelect().
 | **Repository** | データアクセスレイヤー |
 | **Migration** | SQLファイルでスキーマを管理 |
 
+
+## 検証
+
+静的契約とローカルGo検証を実行します。`verify` の成功は実際のDB接続・マイグレーション・CRUDの確認を意味しません。DSNとテストDBを用意し、接続とクエリを別途検証してください。
+
+```sh
+go mod tidy
+gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
+spine contract check
+spine verify
+```
 
 ## 次のステップ
 

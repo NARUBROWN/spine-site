@@ -1,5 +1,7 @@
 # 実行pipeline
 
+コントローラー例は[CLIで生成したプロジェクト](/ja/learn/tutorial/1-project-structure)の構成要素です。成功応答は`github.com/NARUBROWN/spine/pkg/httpx`の`httpx.Response[T]`で包み、リクエストDTOはポインターで受け取ります。コンストラクタとルートは`BuildApplication`に登録します。
+
 Spineの要求ライフサイクルを理解する。
 
 
@@ -204,7 +206,7 @@ func isPathType(pt reflect.Type) bool {
 ```go
 // Route: /users/:userId/posts/:postId
 // Controller:
-func GetPost(userId path.Int, postId path.Int) // ✓ 順序 一致
+func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error) // ✓ 順序 一致
 ```
 
 
@@ -262,7 +264,7 @@ func (p *Pipeline) resolveArguments(ctx core.ExecutionContext, paramMetas []reso
 | `QueryValuesResolver` | `query.Values` |フルクエリパラメータビュー|
 | `DTOResolver` | `*struct`（ポインター）| JSON bodyバインディング|
 | `FormDTOResolver` | `*struct`（フォームタグ）| Multipart / Formバインディング
-| `UploadedFilesResolver` | `multipart.Form` |ファイルアップロード|
+| `UploadedFilesResolver` | `multipart.UploadedFiles` |ファイルアップロード|
 
 ### ArgumentResolver インタフェース
 
@@ -368,11 +370,15 @@ func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, arg
 
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (User, error) {
+func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
     if userId.Value <= 0 {
-        return User{}, httperr.BadRequest("無効な ユーザー ID")
+        return httpx.Response[User]{}, httperr.BadRequest("無効な ユーザー ID")
     }
-    return c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(userId.Value)
+    if err != nil {
+        return httpx.Response[User]{}, err
+    }
+    return httpx.Response[User]{Body: user}, nil
 }
 ```
 

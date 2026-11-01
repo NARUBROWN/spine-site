@@ -1,59 +1,91 @@
-# Spine
+# Spine: CLI-first application guide
 
-> Agent-oriented guide to understanding Spine and building correct applications with the current checkout. Spine is a Go backend framework whose method signatures are the request/response contract and whose startup wiring is explicit.
+> Create projects with Spine CLI, keep assembly in a reusable BuildApplication function, and verify the execution contract before running the app.
 
-## Read this first
+## Versions and sources
 
-This guide was verified against checkout `d05b629`, the untagged `v0.5.2` development snapshot on `main`. It requires Go `1.25.5` or later. The latest tag in this checkout is `v0.5.1`; do not mistake the runtime banner for a released `v0.5.2` tag.
+The examples use Spine CLI `v0.1.4`. `spine new` pins Spine `v0.5.1` and writes `go 1.25.5`. Use Go 1.25.5 or later. Check the installed tool with `spine version`, `spine schema --json`, and `spine capabilities --json`; current CLI source and tests are authoritative when prose differs.
 
-Use sources in this order:
+- CLI source and full agent contract: https://github.com/NARUBROWN/spine-cli
+- Framework API: https://github.com/NARUBROWN/spine
+- First app: /ko/learn/getting-started/first-app
+- Project structure: /ko/learn/tutorial/1-project-structure
+- English, Japanese, Simplified Chinese, and Traditional Chinese use the same paths under `/en`, `/ja`, `/zh-Hans`, and `/zh-Hant`.
 
-1. The current checkout's public API and tests are authoritative.
-2. Local executable examples and migration/security documents explain intended behavior.
-3. The three external demo repositories show complete application architecture.
-4. README prose and generated Swagger files are supporting material; when they disagree with code, follow code.
+Application imports use the framework root, `core`, `interceptor/...`, and `pkg/...`; never import `github.com/NARUBROWN/spine/internal/...`.
 
-The external demos reviewed on 2026-07-30 all pin Spine `v0.5.1`. Their architecture is useful, but reconcile copied code with this checkout before using it. The public usage style remains compatible with `v0.5.2`; the newer checkout rejects malformed requests and invalid registrations earlier.
-
-Do not import `github.com/NARUBROWN/spine/internal/...` from an application. Application code should use the root package, `core`, `interceptor/...`, and `pkg/...` only.
-
-For an external module, pin the intended version or commit explicitly. To match this guide's current source snapshot, use:
+## Install, plan, and generate
 
 ```sh
-go get github.com/NARUBROWN/spine@d05b629
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
+spine schema --json
+spine capabilities --json
+spine new hello-spine --module example.com/hello-spine --dry-run --json
 ```
 
-The linked demos intentionally pin the released `v0.5.1`; keep their pin when reproducing them exactly, and do not use a `v0.5.2`-only API without upgrading their module first.
+Read the `spine.cli-result/v1` envelope (`ok`, `exit_code`, `result`, `error`). Review `result.changes` and `result.diff`. Replace the quoted placeholder below with that plan's actual `result.base_hash`, then apply the same command:
 
-## Choose the right reference first
+```sh
+spine new hello-spine --module example.com/hello-spine --if-match '<base_hash>' --json
+cd hello-spine
+go mod tidy
+spine context --root . --json
+spine contract check --json
+spine verify --json
+spine dev
+```
 
-| Goal | Reference | Start with |
-|---|---|---|
-| Learn the current minimal runtime and secure defaults | This repository | `cmd/demo`, `examples/security-config`, `test/app_integration_test.go` |
-| CRUD, Bun ORM, request transactions, and Swagger UI | [spine-user-demo](https://github.com/NARUBROWN/spine-user-demo/tree/b07d2bb35d6e0b499c6f6974e1d34f3a4fafffba) | `main.go`, `routes/user_routes.go`, `interceptor/tx_interceptor.go`, `repository/user_repository.go` |
-| Kafka request/event flow, idempotency, poison messages, and outbox boundaries | [spine-simple-msa-demo](https://github.com/NARUBROWN/spine-simple-msa-demo/tree/aa3f0fae8057ec0999fadaafc9295b7c7987afbb) | `order-app/main.go`, `stock-app/main.go`, `shared/events`, `scenarios/outbox` |
-| Authenticated WebSocket chat, rooms, and runtime limits | [spine-simple-chat-demo](https://github.com/NARUBROWN/spine-simple-chat-demo/tree/b1fe598329eb79828eb4c84903c7fa3847d35914) | `main.go`, `interceptor/auth_interceptor.go`, `controller/chat_controller.go`, `e2e/websocket_e2e_test.go` |
+In another terminal, `curl http://localhost:8080/health` returns HTTP 200 and `{"status":"ok"}`. Stop the dev process before running a second app on the same port.
 
-`Bun ORM` means the Go ORM at `github.com/uptrace/bun`; it does not mean the Bun JavaScript runtime.
+`new` writes `.gitignore`, `README.md`, `go.mod`, `main.go`, `spine.toml`, `internal/application/application.go`, and `internal/application/application_test.go`. It does not run `go mod tidy`.
 
-## Repository map
+```toml
+module = "example.com/hello-spine"
+entrypoint = "."
+composition = "./internal/application"
+port = 8080
+```
 
-Use this map instead of searching the entire repository blindly:
+These are the only four `spine.toml` keys. `module` must match `go.mod`. Keep application-specific DB, broker, and auth configuration in application code or environment variables.
 
-- `app.go`: public `spine.App` assembly API.
-- `pkg/boot`: HTTP, WebSocket, Kafka, RabbitMQ, lifecycle, and validation options.
-- `pkg/path`, `pkg/query`, `pkg/header`, `pkg/multipart`: supported HTTP handler inputs.
-- `pkg/httpx`, `pkg/httperr`: supported HTTP outputs and expected HTTP errors.
-- `pkg/ws`: WebSocket connection identity and sending.
-- `pkg/event/publish`: domain-event contract and request-scoped publishing.
-- `pkg/route`: route-level interceptor options.
-- `core/interceptor.go`, `core/context.go`: interceptor and context contracts.
-- `interceptor/cors`: built-in CORS interceptor.
-- `cmd/demo`: a local application covering HTTP, files, events, WebSocket, CORS, and secure configuration.
-- `examples/security-config`: compact secure configuration example.
-- `test`: end-to-end HTTP and WebSocket usage.
-- `docs/migration`: version-specific behavioral changes.
-- `docs/security-configuration.md`: production security expectations.
+## Extend the generated project
+
+- Keep root `main.go` as `BuildApplication` → checked `app.Validate(options)` → checked `app.Run(options)`.
+- Put constructors, routes, scoped interceptors, and transport registrations in `internal/application/BuildApplication() (spine.App, boot.Options, error)` or direct, checked module `Register(app) error` calls.
+- Keep `app := spine.New()` at the top level of BuildApplication. Do not hide registration in loops, goroutines, or dynamic helpers. Treat `analysis_complete:false` as a failed gate.
+- Review a fresh dry-run before each generator invocation and apply only that command with its matching `--if-match` hash. `--force` also requires reviewing the overwrite plan.
+- `resource user` generates `src/user/user_route.go`, `user_repository.go`, `user_service.go`, and `user_controller.go`; `user.Register(app)` is automatically added to the composition root. Its route is `GET /user/:id`, not full CRUD.
+- `slice user --storage memory --field name:string` generates typed model/DTO/repository/service/controller code and a service test. Storage is development-only and loses data on restart.
+- `consumer` requires `--topic` and `--field`; `websocket` requires `--path` and `--field`. Both generated handlers initially return a not-implemented error: implement them before expecting verification to pass.
+- Bun, Kafka/RabbitMQ infrastructure, authentication, transactions, and outbox generation are not implemented. Add those integrations explicitly to the CLI project; do not invent generators or configuration keys.
+
+Example generation plan:
+
+```sh
+spine generate resource user --dry-run --json
+spine generate resource user --if-match '<base_hash>' --json
+spine contract check --json
+spine verify --json
+spine explain http GET /user/:id
+spine contract export --format openapi --output openapi.json
+spine contract export --format asyncapi --output asyncapi.json
+spine contract snapshot
+spine contract diff
+```
+
+The placeholder is the hash from the immediately preceding matching dry-run, not from `new`. Generated code is registered by default; use `--no-register` only when intentionally wiring it yourself. Never register the same constructor or route twice.
+
+## Verification boundaries
+
+- `inspect` and `explain` describe static evidence; inspect success is not a validation gate.
+- `contract check` must return complete analysis without error diagnostics.
+- `verify` adds local gofmt/vet/test checks. It can execute code and resolve Go modules.
+- `contract probe` executes BuildApplication and Validate, then reconciles only public consumer/WebSocket registries. It does not observe HTTP routes, DI construction, or interceptors.
+- DB, broker, listener, authentication, and deployed behavior require separate integration/E2E checks. Offline `doctor` does not connect to infrastructure.
+- Release v0.1.4 cannot infer arbitrary dynamic registration inputs. Use literal topic/path names in the composition root, and handle incomplete diagnostics explicitly.
+
+The runtime notes below describe framework APIs. Add these fragments inside the generated project; they do not replace its entrypoint. External demo repositories are optional architecture references and do not define the CLI scaffold.
 
 ## Mental model
 
@@ -75,13 +107,13 @@ constructors + routes + interceptors + transport registrations
          consumers/custom transports, then HTTP listener
 ```
 
-A successful HTTP request follows this framework-controlled order:
+For Spine `v0.5.1`, which the CLI-generated project pins, a successful HTTP request follows this framework-controlled order:
 
 ```text
 global PreHandle
   -> route selection
-  -> route PreHandle
   -> argument resolution
+  -> route PreHandle
   -> controller method
   -> response preparation and validation
   -> queued domain-event dispatch
@@ -91,7 +123,9 @@ global PreHandle
   -> AfterCompletion in reverse order
 ```
 
-On an error, event dispatch and `PostHandle` are skipped; `BeforeResponse`, error rendering, transport write, and `AfterCompletion` finish the failure path. Global `PreHandle` runs before route selection, so its `HandlerMeta` may be empty. Route `PreHandle` runs before body, multipart, and path argument resolution. Put authentication and early rejection there; do not make an interceptor depend on already-resolved controller arguments.
+A failure before event dispatch skips the remaining success stages; eligible `BeforeResponse` callbacks, error rendering, transport write, and `AfterCompletion` finish the failure path. A later `BeforeResponse` failure can replace the staged success response, but it cannot undo events already dispatched.
+
+Global `PreHandle` runs before route selection and receives empty `HandlerMeta`. In `v0.5.1`, body, multipart, and path argument resolution runs before route `PreHandle`; malformed input can therefore fail before route-level authentication executes. Use an HTTP-scoped global interceptor for authentication or rejection that must happen before binding, and route interceptors for route-specific checks after binding. Global checks cannot depend on resolved route metadata.
 
 ## Non-negotiable rules
 
@@ -107,68 +141,69 @@ On an error, event dispatch and `PostHandle` are skipped; `BeforeResponse`, erro
 - Use an outbox when a database write and external event publication must form one durable business operation.
 - Never enable plaintext broker compatibility in production.
 
-## Minimal HTTP application
+## Generated HTTP application
+
+`internal/application/application.go`:
+
+```go
+package application
+
+import (
+	"os"
+
+	"github.com/NARUBROWN/spine"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New()
+	app.Constructor(NewHealthController)
+	app.Route("GET", "/health", (*HealthController).Get)
+
+	address := ":8080"
+	if port := os.Getenv("SPINE_PORT"); port != "" {
+		address = ":" + port
+	}
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+}
+```
+
+Root `main.go` stays:
 
 ```go
 package main
 
 import (
 	"log"
-	"time"
 
-	"github.com/NARUBROWN/spine"
-	"github.com/NARUBROWN/spine/pkg/boot"
-	"github.com/NARUBROWN/spine/pkg/httperr"
-	"github.com/NARUBROWN/spine/pkg/httpx"
-	"github.com/NARUBROWN/spine/pkg/path"
+	"example.com/hello-spine/internal/application"
 )
 
-type Health struct {
-	ID     int64  `json:"id"`
-	Status string `json:"status"`
-}
-
-type HealthController struct{}
-
-func NewHealthController() *HealthController {
-	return &HealthController{}
-}
-
-func (c *HealthController) Get(id path.Int) (httpx.Response[Health], error) {
-	if id.Value <= 0 {
-		return httpx.Response[Health]{}, httperr.BadRequest("id must be positive")
-	}
-	return httpx.Response[Health]{
-		Body: Health{ID: id.Value, Status: "ok"},
-	}, nil
-}
-
 func main() {
-	app := spine.New()
-	app.Constructor(NewHealthController)
-	app.Route("GET", "/health/:id", (*HealthController).Get)
-
-	opts := boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP:                   &boot.HTTPOptions{},
-	}
-	if err := app.Validate(opts); err != nil {
+	app, options, err := application.BuildApplication()
+	if err != nil {
 		log.Fatal(err)
 	}
-	if err := app.Run(opts); err != nil {
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-Run it and call it:
-
-```sh
-go run .
-curl -i http://localhost:8080/health/42
-```
+Use `spine dev` to run it and `curl http://localhost:8080/health` in another terminal to check the response.
 
 Use `RunContext(ctx, opts)` instead of `Run(opts)` when a test or service host owns cancellation. `Run` and `RunContext` perform the same static validation as `Validate`; calling `Validate` separately is still useful in CI and deployment preflight.
 
@@ -249,13 +284,13 @@ app.Route(
 | Handler parameter | Value supplied by Spine | Important rule |
 |---|---|---|
 | `context.Context` | Request context plus request-scoped event publisher | Use this with `publish.Event` and database calls. |
-| `path.Int` | Parsed `int64` from the next `:segment` | Read `.Value`; malformed input returns HTTP 400. |
+| `path.Int` | Parsed `int64` from the next `:segment` | Read `.Value`; v0.5.1 parsing failures surface as a sanitized HTTP 500. |
 | `path.String` | Raw string from the next `:segment` | Read `.Value`. |
-| `path.Boolean` | Parsed boolean from the next `:segment` | Accepts true/false forms supported by Spine; malformed input returns HTTP 400. |
+| `path.Boolean` | Parsed boolean from the next `:segment` | Accepts true/false forms supported by Spine; do not assume parsing failures map to HTTP 400 in v0.5.1. |
 | `query.Values` | All query values | `Int(key, default)` falls back on missing or invalid input; validate business ranges yourself. |
 | `query.Pagination` | `page` and `size` | Defaults to page 1 and size 20; validate non-positive or excessive values yourself. |
 | `header.Values` | HTTP headers | Use `Get` and `Has`. |
-| `*SomeDTO` with no `form` tags | Bound request DTO | HTTP DTOs must be pointers to structs; the Echo binder and request `Content-Type` select the body format. Malformed input returns HTTP 400. |
+| `*SomeDTO` with no `form` tags | Bound request DTO | HTTP DTOs must be pointers to structs; the Echo binder and request `Content-Type` select the body format. In the pinned v0.5.1 runtime, malformed JSON binding failures surface as a sanitized HTTP 500. |
 | `*SomeForm` with at least one `form` tag | Bound form DTO | The presence of a form tag selects form binding. |
 | `multipart.UploadedFiles` | Uploaded file descriptors | Call each file's `Open` and close the returned stream. |
 | `pkg/spine.Ctx` or `core.ControllerContext` | Read-only view of values set by interceptors | Only `Get` is exposed; custom interfaces with extra methods are unsupported. |
@@ -347,7 +382,7 @@ corsInterceptor, err := cors.NewValidated(cors.Config{
 	AllowCredentials: true,
 })
 if err != nil {
-	log.Fatal(err)
+	return nil, boot.Options{}, err
 }
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
@@ -366,7 +401,7 @@ Response serialization, cookie validation, event dispatch, and post-processing h
 
 ## Swagger and transport extensions
 
-Spine does not generate OpenAPI automatically. The Bun demo uses Swaggo annotations and generated `docs/docs.go`, `docs/swagger.json`, and `docs/swagger.yaml`, imports that generated package for registration, then uses `app.Transport` to type-assert `*echo.Echo` and mount `httpSwagger.WrapHandler` at `/swagger/*`. Keep annotations and generated `docs/*` in sync. See the demo's `main.go` for the copy-safe imports and hook; generated Swagger is supporting output, not the authority for route behavior.
+The framework does not generate OpenAPI by itself. Spine CLI can export the static HTTP contract with `spine contract export --format openapi --output openapi.json`; that export does not mount Swagger UI. The Bun demo uses Swaggo annotations and generated `docs/docs.go`, `docs/swagger.json`, and `docs/swagger.yaml`, imports that generated package for registration, then uses `app.Transport` to type-assert `*echo.Echo` and mount `httpSwagger.WrapHandler` at `/swagger/*`. Keep annotations and generated `docs/*` in sync. See the demo's `main.go` for the copy-safe imports and hook; generated Swagger is supporting output, not the authority for route behavior.
 
 Use `App.RegisterTransport` only for an independent custom transport implementing `core.CustomTransport` (`Init`, `Start`, and `Stop`).
 
@@ -380,7 +415,7 @@ if err := app.WebSocket().Register(
 	"/ws/chat",
 	(*ChatController).OnMessage,
 ); err != nil {
-	log.Fatal(err)
+	return nil, boot.Options{}, err
 }
 ```
 
@@ -521,7 +556,7 @@ Zero values select bounded defaults for HTTP timeouts, header size, request body
 Important exceptions and rules:
 
 - `HTTPOptions.MaxBodyBytes < 0` explicitly disables the request-body limit.
-- Invalid JSON/form/multipart and invalid `path.Int`/`path.Boolean` produce HTTP 400.
+- In generated projects pinned to v0.5.1, malformed JSON and invalid `path.Int` parsing have been observed to return sanitized HTTP 500. Explicit handler validation can return `httperr.BadRequest` for HTTP 400; do not infer binder-error status from a newer framework checkout.
 - Request bodies above the configured maximum produce HTTP 413.
 - `DisableRecover: false` (the zero value) keeps recovery enabled.
 - Use `EnableGracefulShutdown: true` for signal-driven HTTP shutdown.
@@ -530,7 +565,7 @@ Important exceptions and rules:
 - Do not log broker URLs with embedded credentials or secret tokens.
 - Do not trust forwarded headers unless the immediate peer matches an exact configured proxy CIDR.
 
-Read `docs/security-configuration.md` and the latest applicable migration guide before changing production defaults.
+Read the [security configuration reference](/en/reference/security-configuration) and the latest applicable framework migration guide before changing production defaults.
 
 ## External example details
 
@@ -563,16 +598,17 @@ This single-process in-memory server implements authenticated `join -> message -
 - Verify WebSocket origins/auth/capacity, secure broker transport, poison-message behavior, and durable consumer deduplication.
 - Remember that `Validate` does not replace DI warm-up, route-ambiguity checks, or live consumer readiness in `Run`.
 
-For Go changes, run:
+For Go changes, format the edited files, then run the CLI gates:
 
 ```sh
 gofmt -w <changed-go-files>
-go test ./...
-go test -race ./...
-go vet ./...
+spine contract check --json
+spine verify --json
 ```
 
-Run relevant broker/database/WebSocket E2E separately. Translate POSIX environment syntax for PowerShell:
+Run `go test -race ./...` separately when the change affects concurrency.
+
+Run relevant broker/database/WebSocket E2E separately. For the historical external MSA demo only, run this PowerShell example from that demo repository root:
 
 ```powershell
 $env:SPINE_DEMO_KAFKA_BROKER = "localhost:19092"

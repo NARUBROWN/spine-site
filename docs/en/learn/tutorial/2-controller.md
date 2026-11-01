@@ -1,66 +1,53 @@
 # Controller
 
-Writing controllers in Spine.
+Add a user lookup controller to the CLI-generated `hello-spine` project. Follow [First App](/en/learn/getting-started/first-app) for installation and project creation. If you already generated `resource user`, inspect those files instead of generating them again.
 
+## Generate a controller with the CLI
 
-## What is a Controller?
+```bash
+spine generate resource user --dry-run
+```
 
-A controller is a layer that accepts HTTP requests and delegates them to a service.
+Review the generated files and registration changes in the preview, then run the command below to generate them.
 
-A Spine controller is a **pure Go struct**. No annotations, decorators, or special interface implementations are required.
+```bash
+spine generate resource user
+```
+
+### Generated files
+
+```text
+src/user/
+├── user_controller.go
+├── user_service.go
+├── user_repository.go
+└── user_route.go
+```
+
+The generated `src/user/user_controller.go` contains the following code. It shares `package user` with `UserService`, so there is no separate `service` package import.
 
 ```go
-// This is all
-type UserController struct {
-    svc *service.UserService
+package user
+
+import (
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/path"
+)
+
+type UserController struct { service *UserService }
+
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
+
+func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": id.Value}}
 }
 ```
 
-## Basic Structure
-
-### 1. Define Struct
-
-```go
-package controller
-
-type UserController struct {
-    svc *service.UserService  // Dependency
-}
-```
-
-### 2. Write Constructor
-
-```go
-// Constructor parameter = Dependency declaration
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-```
-
-### 3. Write Handler Method
-
-```go
-// Function signature is the API spec
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-```
-
-### 4. Register Route
-
-```go
-app.Route("GET", "/users/:id", (*UserController).GetUser)
-```
-
+::: info
+`resource` generates a lookup skeleton. It does not implement a database, domain models, DTOs, or full CRUD. The input and response snippets below are independent examples of manually extending that skeleton. Implement `UserResponse`, request DTOs, and service methods such as `UserService.Get/List/Create/Login` as needed for each example. Put example types in `package user` under `src/user` and import the required standard and Spine packages. Do not paste multiple alternative methods with the same name together.
+:::
 
 ## Handler Signature
 
@@ -87,6 +74,9 @@ Spine analyzes the handler's function signature to automatically bind inputs.
 | `httpx.Response[T]` | JSON or String response (including status code, headers, cookies) |
 | `httpx.Redirect` | Redirect response |
 | `error` | Error response |
+| `httpx.Binary` | Byte response |
+
+Pointer responses and `(supportedResponse, error)` are also supported. `httpx.Binary` returns bytes with an explicit content type.
 
 
 ## Receiving Input
@@ -96,18 +86,20 @@ Spine analyzes the handler's function signature to automatically bind inputs.
 Use `query.Values` to parse the query string.
 
 ```go
-// GET /users?id=1&name=alice&active=true
+// GET /user?id=1&name=alice&active=true
 
 func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
-) httpx.Response[dto.UserResponse] {
+) httpx.Response[UserResponse] {
     id := q.Int("id", 0)                      // int64, default 0
     name := q.String("name")                  // string
     active := q.GetBoolByKey("active", false) // bool, default false
-    
-    user, _ := c.svc.Get(ctx, int(id))
-    return httpx.Response[dto.UserResponse]{Body: user}
+    _ = name
+    _ = active
+
+    user, _ := c.service.Get(ctx, int(id))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
@@ -127,16 +119,16 @@ func (c *UserController) GetUser(
 Using `query.Pagination` automatically parses `page` and `size` query parameters.
 
 ```go
-// GET /users?page=2&size=10
+// GET /user?page=2&size=10
 
 func (c *UserController) ListUsers(
     ctx context.Context,
     page query.Pagination,
-) httpx.Response[[]dto.UserResponse] {
+) httpx.Response[[]UserResponse] {
     // page.Page = 2 (default: 1)
     // page.Size = 10 (default: 20)
-    users, _ := c.svc.List(ctx, page.Page, page.Size)
-    return httpx.Response[[]dto.UserResponse]{Body: users}
+    users, _ := c.service.List(ctx, page.Page, page.Size)
+    return httpx.Response[[]UserResponse]{Body: users}
 }
 ```
 
@@ -150,9 +142,9 @@ import "github.com/NARUBROWN/spine/pkg/header"
 
 func (c *CommonController) CheckHeader(
     headers header.Values,
-) httpx.Response[dto.HeaderInfo] {
-    return httpx.Response[dto.HeaderInfo]{
-        Body: dto.HeaderInfo{
+) httpx.Response[HeaderInfo] {
+    return httpx.Response[HeaderInfo]{
+        Body: HeaderInfo{
             UserAgent:   headers.Get("User-Agent"),
             ContentType: headers.Get("Content-Type"),
         },
@@ -170,17 +162,19 @@ func (c *CommonController) CheckHeader(
 
 ### Path Parameters
 
+Path parameters bind to `path.Int`, `path.String`, and `path.Boolean` in declaration order.
+
 Use types from the `path` package to bind route path parameters.
 
 ```go
-// GET /users/:id
+// GET /user/:id
 
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    return httpx.Response[dto.UserResponse]{Body: user}
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
@@ -205,18 +199,20 @@ type Boolean struct {
 
 ### JSON Request Body
 
+DTOs must be pointers. JSON/Form binding depends on DTO `form` tags and the request Content-Type.
+
 Declaring a DTO struct as a pointer automatically binds JSON.
 
 ```go
-// POST /users
+// POST /user
 // Body: {"name": "Alice", "email": "alice@example.com"}
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *dto.CreateUserRequest,  // ← Declare as pointer
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    return httpx.Response[dto.UserResponse]{
+    req *CreateUserRequest,  // ← Declare as pointer
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Create(ctx, req.Name, req.Email)
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Status: 201,
@@ -226,7 +222,7 @@ func (c *UserController) CreateUser(
 ```
 
 ```go
-// dto/user_request.go
+// src/user/user_request.go
 type CreateUserRequest struct {
     Name  string `json:"name"`
     Email string `json:"email"`
@@ -245,22 +241,21 @@ func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
     spineCtx spine.Ctx,
-) httpx.Response[dto.UserResponse] {
+) httpx.Response[UserResponse] {
     // Retrieve value set in interceptor
     if v, ok := spineCtx.Get("userRole"); ok {
         role := v.(string)
         // ...
     }
-    
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    return httpx.Response[dto.UserResponse]{Body: user}
+
+    user, _ := c.service.Get(ctx, int(userId.Value))
+    return httpx.Response[UserResponse]{Body: user}
 }
 ```
 
 
 ## Returning Responses
 
-Spine supports three return types: `httpx.Response[T]`, `httpx.Redirect`, and `error`.
 
 ### 1. httpx.Response[T] — JSON/String Response
 
@@ -276,10 +271,10 @@ import "github.com/NARUBROWN/spine/pkg/httpx"
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    
-    return httpx.Response[dto.UserResponse]{
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
+
+    return httpx.Response[UserResponse]{
         Body: user,  // 200 OK (default)
     }
 }
@@ -300,11 +295,11 @@ func (c *UserController) Health() httpx.Response[string] {
 ```go
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *dto.CreateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    
-    return httpx.Response[dto.UserResponse]{
+    req *CreateUserRequest,
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Create(ctx, req.Name, req.Email)
+
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Status: 201, // Created
@@ -319,10 +314,10 @@ func (c *UserController) CreateUser(
 func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Get(ctx, int(userId.Value))
-    
-    return httpx.Response[dto.UserResponse]{
+) httpx.Response[UserResponse] {
+    user, _ := c.service.Get(ctx, int(userId.Value))
+
+    return httpx.Response[UserResponse]{
         Body: user,
         Options: httpx.ResponseOptions{
             Headers: map[string]string{
@@ -339,12 +334,12 @@ func (c *UserController) GetUser(
 ```go
 func (c *AuthController) Login(
     ctx context.Context,
-    req *dto.LoginRequest,
-) httpx.Response[dto.LoginResponse] {
-    token, refreshToken, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
-    return httpx.Response[dto.LoginResponse]{
-        Body: dto.LoginResponse{Success: true},
+    req *LoginRequest,
+) httpx.Response[LoginResponse] {
+    token, refreshToken, _ := c.service.Login(ctx, req.Email, req.Password)
+
+    return httpx.Response[LoginResponse]{
+        Body: LoginResponse{Success: true},
         Options: httpx.ResponseOptions{
             Cookies: []httpx.Cookie{
                 httpx.AccessTokenCookie(token, 15*time.Minute),
@@ -402,8 +397,8 @@ func (c *AuthController) OAuthCallback(
     q query.Values,
 ) httpx.Redirect {
     code := q.String("code")
-    c.svc.ProcessOAuthCode(ctx, code)
-    
+    c.service.ProcessOAuthCode(ctx, code)
+
     return httpx.Redirect{
         Location: "/dashboard",  // 302 Found (default)
     }
@@ -430,10 +425,10 @@ func (c *UserController) MovedPermanently() httpx.Redirect {
 ```go
 func (c *AuthController) Login(
     ctx context.Context,
-    req *dto.LoginRequest,
+    req *LoginRequest,
 ) httpx.Redirect {
-    token, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
+    token, _ := c.service.Login(ctx, req.Email, req.Password)
+
     return httpx.Redirect{
         Location: "/dashboard",
         Options: httpx.ResponseOptions{
@@ -473,7 +468,7 @@ func (c *UserController) GetUser(
     ctx context.Context,
     userId path.Int,
 ) error {
-    _, err := c.svc.Get(ctx, int(userId.Value))
+    _, err := c.service.Get(ctx, int(userId.Value))
     if err != nil {
         return httperr.NotFound("User not found.")
     }
@@ -498,23 +493,18 @@ Error Response Format:
 
 #### Using httpx.Response[T] with error
 
-If error handling is needed, you can handle it via status code within `httpx.Response[T]` or create a separate error handler method.
+Use `(httpx.Response[T], error)` to return either a success response or an error. Map service errors with `httperr` and return a nil error on success.
 
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
+    userID path.Int,
+) (httpx.Response[UserResponse], error) {
+    user, err := c.service.Get(ctx, int(userID.Value))
     if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{
-                Status: 404,
-            },
-        }
+        return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
     }
-    
-    return httpx.Response[dto.UserResponse]{Body: user}
+    return httpx.Response[UserResponse]{Body: user}, nil
 }
 ```
 
@@ -659,197 +649,46 @@ func (c *PostController) Upload(
 By following these rules, the execution flow is revealed directly in the signature.
 
 
-## Registering Routes
+## Automatic registration and manual extensions
 
-Connect controller methods to routes.
+The CLI creates `src/user/user_route.go` and adds a checked `user.Register(app)` call to `BuildApplication()`. The following explains the generated result; do not add duplicate registrations.
 
 ```go
-// routes/user_routes.go
-package routes
+// src/user/user_route.go
+package user
 
-import (
-    "my-app/controller"
-    "github.com/NARUBROWN/spine"
-)
+import "github.com/NARUBROWN/spine"
 
-func RegisterUserRoutes(app spine.App) {
-    app.Route("GET", "/users", (*controller.UserController).ListUsers)
-    app.Route("GET", "/users/:id", (*controller.UserController).GetUser)
-    app.Route("POST", "/users", (*controller.UserController).CreateUser)
-    app.Route("PUT", "/users/:id", (*controller.UserController).UpdateUser)
-    app.Route("DELETE", "/users/:id", (*controller.UserController).DeleteUser)
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
+    app.Route("GET", "/user/:id", (*UserController).Get)
+    return nil
 }
 ```
 
 ```go
-// main.go
-func main() {
-    app := spine.New()
-    app.Constructor(/* ... */)
-    routes.RegisterUserRoutes(app)
-    app.Run(boot.Options{
-        Address:                ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout:        10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    })
+// internal/application/application.go: BuildApplication
+if err := user.Register(app); err != nil {
+    return nil, boot.Options{}, err
 }
 ```
 
+After implementing another handler, add its route inside `Register` in `user_route.go`. Assemble controllers from other packages in their own registration functions. Keep the generated `BuildApplication → Validate → Run` flow in `main.go`.
 
-## Complete Example
+## Verify and run
 
-```go
-// controller/user_controller.go
-package controller
-
-import (
-    "context"
-    "net/http"
-    "time"
-    
-    "my-app/dto"
-    "my-app/service"
-    
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// GET /users?page=1&size=20
-func (c *UserController) ListUsers(
-    ctx context.Context,
-    page query.Pagination,
-) httpx.Response[[]dto.UserResponse] {
-    users, _ := c.svc.List(ctx, page.Page, page.Size)
-    
-    return httpx.Response[[]dto.UserResponse]{
-        Body: users,
-        Options: httpx.ResponseOptions{
-            Headers: map[string]string{
-                "X-Total-Count": "100",
-            },
-        },
-    }
-}
-
-// GET /users/:id
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Get(ctx, int(userId.Value))
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-    
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-
-// POST /users
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, _ := c.svc.Create(ctx, req.Name, req.Email)
-    
-    return httpx.Response[dto.UserResponse]{
-        Body: user,
-        Options: httpx.ResponseOptions{
-            Status: http.StatusCreated, // 201
-        },
-    }
-}
-
-// PUT /users/:id
-func (c *UserController) UpdateUser(
-    ctx context.Context,
-    userId path.Int,
-    req *dto.UpdateUserRequest,
-) httpx.Response[dto.UserResponse] {
-    user, err := c.svc.Update(ctx, int(userId.Value), req.Name)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{
-            Options: httpx.ResponseOptions{Status: 404},
-        }
-    }
-    
-    return httpx.Response[dto.UserResponse]{Body: user}
-}
-
-// DELETE /users/:id
-func (c *UserController) DeleteUser(
-    ctx context.Context,
-    userId path.Int,
-) error {
-    return c.svc.Delete(ctx, int(userId.Value))
-}
+```bash
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
-```go
-// controller/auth_controller.go
-package controller
-
-import (
-    "context"
-    "time"
-    
-    "my-app/dto"
-    "my-app/service"
-    
-    "github.com/NARUBROWN/spine/pkg/httpx"
-)
-
-type AuthController struct {
-    svc *service.AuthService
-}
-
-func NewAuthController(svc *service.AuthService) *AuthController {
-    return &AuthController{svc: svc}
-}
-
-// POST /auth/login
-func (c *AuthController) Login(
-    ctx context.Context,
-    req *dto.LoginRequest,
-) httpx.Redirect {
-    token, _ := c.svc.Login(ctx, req.Email, req.Password)
-    
-    return httpx.Redirect{
-        Location: "/dashboard",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.AccessTokenCookie(token, 15*time.Minute),
-            },
-        },
-    }
-}
-
-// POST /auth/logout
-func (c *AuthController) Logout() httpx.Redirect {
-    return httpx.Redirect{
-        Location: "/login",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.ClearAccessTokenCookie(),
-                httpx.ClearRefreshTokenCookie(),
-            },
-        },
-    }
-}
+```bash
+curl http://localhost:8080/user/1
 ```
 
+Check contract/local verification and the actual HTTP response separately. The generated response for `GET /user/1` is `{"id":1}`; this does not perform a real user lookup or persist data.
 
 ## Key Takeaways
 

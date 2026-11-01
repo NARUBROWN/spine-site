@@ -1,212 +1,125 @@
-# Swagger 文档
+# Swagger 与 OpenAPI 文档
 
-创建 API 文档。
+使用[第一个应用](/zh-Hans/learn/getting-started/first-app)中 CLI 生成的项目。按[控制器](/zh-Hans/learn/tutorial/2-controller)中的 `spine generate resource user` 生成 `src/user`。CLI 静态 OpenAPI 导出和 Swaggo、Swagger UI 集成是独立功能。
 
-## 大纲
+## 使用 CLI 导出 OpenAPI
 
-Spine 使用 [Swaggo](https://github.com/swaggo/swag) 自动生成 Swagger 文档。
-
-- 从代码注释中提取API规范
-- 提供 Swagger UI 文档
-- 可以进行API测试
-
-## 安装
+CLI 根据已注册的路由和处理函数签名生成 OpenAPI 3.1，不需要 Swaggo 注释。
 
 ```bash
-# Swag CLI 安装
-go install github.com/swaggo/swag/cmd/swag@latest
-
-# 安装所需的包
-go get github.com/swaggo/swag
-go get github.com/swaggo/http-swagger
+spine doctor
+spine contract check
+spine contract export --format openapi --output openapi.json
 ```
 
-## 项目设置
+输出包含 `/health`、`/user/{id}` 和 `x-spine-*` 分析依据。Spine 的 `/user/:id` 在 OpenAPI 中表示为 `/user/{id}`。运行时选择的状态码等会标为静态分析边界。导出不会安装 Swagger UI 或注册 HTTP 端点。只有检查现有文件并确认替换时才使用 `--force`。
 
-### 添加 main.go 评论
+## 可选：Swaggo 与 Swagger UI
+
+下面使用 Swaggo 生成独立的 Swagger 2.0 文档，并手动将 UI 挂载到 Echo transport。CLI 不会自动配置此集成。CLI 的 `openapi.json` 与 Swaggo 的 `docs/swagger.json` 是不同的产物。
+
+### 1. 安装工具
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@v1.16.6
+go get github.com/swaggo/swag@v1.16.6 github.com/swaggo/http-swagger@v1.3.4
+```
+
+### 2. 添加通用注释
+
+在 `internal/application/application.go` 的 `BuildApplication()` 前添加注释。保留生成的 main 和 `spine.toml` 中的 `composition = "./internal/application"`。
 
 ```go
-// 主程序
-package main
+// @title Hello Spine API
+// @version 1.0.0
+// @description Spine HTTP API
+// @host localhost:8080
+// @BasePath /
+func BuildApplication() (spine.App, boot.Options, error) {
+    // ...
+}
+```
+
+### 3. 为实际查询处理函数添加文档
+
+手动扩展生成的 `src/user/user_controller.go`，如下所示。`UserIDResponse` 是新增的文档类型，响应 JSON 仍为 `{"id":1}`。此示例不实现数据库查询或完整 CRUD。
+
+```go
+package user
 
 import (
-    "log"
-    "time"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/path"
+)
 
-    "myapp/controller"
-    "myapp/routes"
-    "myapp/service"
+type UserController struct{ service *UserService }
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
+func NewUserController(service *UserService) *UserController {
+    return &UserController{service: service}
+}
+
+type UserIDResponse struct {
+    ID int64 `json:"id" example:"1"`
+}
+
+// Get godoc
+// @Summary Get user ID
+// @Tags users
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} UserIDResponse
+// @Router /user/{id} [get]
+func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
+    return httpx.Response[UserIDResponse]{Body: UserIDResponse{ID: id.Value}}
+}
+```
+
+### 4. 先生成 docs 包
+
+在项目根目录运行。在此步骤之前不要导入尚不存在的 `example.com/hello-spine/docs`。`--parseInternal` 用于解析包含通用注释的 internal 包。
+
+```bash
+swag init -g internal/application/application.go --parseInternal
+```
+
+生成 `docs/docs.go`、`docs/swagger.json` 和 `docs/swagger.yaml`。`docs.go` 的 init 函数负责注册规范，因此在生成后添加空白导入。请勿手动编辑生成文件。
+
+### 5. 挂载 UI
+
+向 `internal/application/application.go` 的 import 块添加：
+
+```go
+import (
+    _ "example.com/hello-spine/docs"
     "github.com/labstack/echo/v4"
     httpSwagger "github.com/swaggo/http-swagger"
-
-    _ "myapp/docs"  // 导入生成的 docs 包
 )
-
-// @title 我的应用程序 API
-// @版本1.0.0
-// @description 基于 Spine 的 REST API
-
-// @主机本地主机：8080
-// @基本路径/
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    routes.RegisterUserRoutes(app)
-
-    // 注册 Swagger UI
-    app.Transport(func(t any) {
-        e := t.(*echo.Echo)
-        e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-    })
-
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
 ```
 
-### main.go 注释标签
-
-|标签 |描述 |示例|
-|------|------|------|
-| `@title` | `@title` API 标题 | `My App API` | `My App API`
-| `@version` | `@version` API版本 | `1.0.0` | `1.0.0`
-| `@description` | `@description` API说明| `基于 Spine 的 REST API` | `基于 Spine 的 REST API`
-| `@host` | `@host`主机地址 | `localhost:8080` | `localhost:8080`
-| `@BasePath` | `@BasePath`默认路径 | `/` | `/`
-
-## 控制器文档
-
-### 默认格式
+在同一文件的 `BuildApplication()` 中，`app := spine.New()` 之后、return 之前添加。保留原有 health 和 user 注册。
 
 ```go
-// 控制器/user_controller.go
-package controller
-
-import (
-    "context"
-
-    "myapp/dto"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// 获取用户 godoc
-// @Summary用户查询
-// @Description 通过ID查找用户信息
-// @标签用户
-// @Param id query int true "用户 ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} 错误响应
-// @路由器/用户[获取]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    id := int(q.Int("id", 0))
-
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, httperr.NotFound("找不到用户。")
-    }
-
-    return httpx.Response[dto.UserResponse]{Body: user}, nil
-}
+app.Transport(func(transport any) {
+    e := transport.(*echo.Echo)
+    e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
+})
 ```
 
-### CRUD 完整示例
+### 6. 验证并运行
 
-```go
-// 获取用户 godoc
-// @Summary用户查询
-// @Description 通过ID查找用户信息
-// @标签用户
-// @Param id query int true "用户 ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} 错误响应
-// @路由器/用户[获取]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// 创建用户 godoc
-// @Summary 创建用户
-// @Description 创建一个新用户
-// @标签用户
-// @接受json
-// @生成json
-// @Param body body dto.CreateUserRequest true "请求创建用户"
-// @Success 200 {object} dto.UserResponse
-// @Failure 400 {object} 错误响应
-// @路由器/用户[帖子]
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// 更新用户 godoc
-// @Summary 用户编辑
-// @Description 修改用户信息
-// @标签用户
-// @接受json
-// @生成json
-// @Param id query int true "用户 ID"
-// @Param body body dto.UpdateUserRequest true "用户更新请求"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} 错误响应
-// @路由器/用户[放置]
-func (c *UserController) UpdateUser(
-    ctx context.Context,
-    q query.Values,
-    req *dto.UpdateUserRequest,
-) (httpx.Response[dto.UserResponse], error) {
-    // ...
-}
-
-// 删除用户 godoc
-// @Summary 删除用户
-// @Description 删除用户
-// @标签用户
-// @Param id query int true "用户 ID"
-// @Success 200
-// @Failure 404 {object} 错误响应
-// @Router /用户[删除]
-func (c *UserController) DeleteUser(
-    ctx context.Context,
-    q query.Values,
-) error {
-    // ...
-}
+```bash
+gofmt -w internal/application/application.go src/user/user_controller.go
+go mod tidy
+spine contract check
+spine verify
+spine dev
 ```
+
+在另一个终端检查 `http://localhost:8080/swagger/index.html` 和 `/swagger/doc.json`。Try it out 也应请求实际的 `/user/1`。通过 `app.Transport` 直接添加的 Echo 路由不属于 CLI 静态 Spine 路由契约，因此需要单独检查 UI 路径。
+
+## 手动扩展 CRUD 的注释与 DTO 参考
+
+下面的标签与 DTO 用于自行实现的额外功能。`resource` 不生成这些请求、响应类型或 POST、PUT、DELETE 处理函数。将类型放在 `src/user` 的同一个 `package user` 中，确保注释与实际路由、响应状态一致。处理函数必须通过指针接收请求 DTO。`example`、`enums`、`minimum` 等是文档元数据，不会自动执行输入验证。
 
 ## 评论标签参考
 
@@ -217,7 +130,7 @@ func (c *UserController) DeleteUser(
 | `@Summary` | `@Summary`摘要（一行）| `查询用户` | `查询用户`
 | `@Description` | `@Description`详细说明 | `根据 ID 查询用户信息` | `根据 ID 查询用户信息`
 | `@Tags` | `@Tags`组标签| `users` | `users`
-| `@Router` | `@Router`路径和方法| `/users [get]` | `/users [get]`
+| `@Router` | `@Router`路径和方法| `/user [get]` | `/user [get]`
 
 ### 请求标签
 
@@ -231,7 +144,7 @@ func (c *UserController) DeleteUser(
 
 |标签 |描述 |示例|
 |------|------|------|
-| `@Success` | `@Success`成功回复 | `200 {object} dto.UserResponse` | `200 {object} dto.UserResponse`
+| `@Success` | `@Success`成功回复 | `200 {object} UserResponse` | `200 {object} UserResponse`
 | `@Failure` | `@Failure`失败响应| `404 {object} ErrorResponse` | `404 {object} ErrorResponse`
 
 ## @参数格式
@@ -244,8 +157,8 @@ func (c *UserController) DeleteUser(
 
 |地点 |描述 |示例|
 |------|------|------|
-| `query` | `query`查询字符串| `/users?id=1` | `/users?id=1`
-| `path` | `path`网址路径| `/users/{id}` | `/users/{id}`
+| `query` | `query`查询字符串| `/user?id=1` | `/user?id=1`
+| `path` | `path`网址路径| `/user/{id}` | `/user/{id}`
 | `body` | `body`请求正文 | JSON 正文 |
 | `header` | `header`标题| `Authorization` | `Authorization`
 | `formData` | `formData`表格数据|上传文件 |
@@ -270,7 +183,7 @@ func (c *UserController) DeleteUser(
 // @Param active query bool false "活动状态"
 
 // 请求正文
-// @Param body body dto.CreateUserRequest true "请求创建用户"
+// @Param body body CreateUserRequest true "请求创建用户"
 
 // 标头
 // @Param 授权标头字符串 true“不记名令牌”
@@ -281,8 +194,8 @@ func (c *UserController) DeleteUser(
 ### 请求 DTO
 
 ```go
-// dto/user_request.go
-package dto
+// src/user/user_request.go
+package user
 
 // CreateUserRequest 用户创建请求
 type CreateUserRequest struct {
@@ -300,8 +213,8 @@ type UpdateUserRequest struct {
 ### 响应 DTO
 
 ```go
-// dto/user_response.go
-package dto
+// src/user/user_response.go
+package user
 
 // 用户响应 用户响应
 type UserResponse struct {
@@ -312,7 +225,7 @@ type UserResponse struct {
 
 // 错误响应 错误响应
 type ErrorResponse struct {
-    Error string `json:"error" example:"找不到用户。"`
+    Message string `json:"message" example:"找不到用户。"`
 }
 ```
 
@@ -326,261 +239,23 @@ type ErrorResponse struct {
 | `maximum` | `maximum`最大值| `maximum:"100"` | `maximum:"100"`
 | `default` | `default`默认 | `default:"10"` | `default:"10"`
 
-## 创建文档
 
-### 执行命令
+## 重新生成文档
 
-```bash
-# 从项目根运行
-swag init
-
-# 或指定 main.go 的路径
-swag init -g main.go
-```
-
-### 生成的结果
-
-```
-myapp/
-├── docs/
-│   ├── docs.go       # Go 代码
-│   ├── swagger.json  # JSON 规范
-│   └── swagger.yaml  # YAML 规范
-├── main.go
-└── ...
-```
-
-### 生成的 docs/docs.go
-
-```go
-// 包文档 swaggo/swag 生成的代码。请勿编辑
-package docs
-
-import "github.com/swaggo/swag"
-
-const docTemplate = `{
-    "swagger": "2.0",
-    "info": {
-        "title": "My App API",
-        "version": "1.0.0"
-    },
-    ...
-}`
-
-var SwaggerInfo = &swag.Spec{
-    Version:     "1.0.0",
-    Title:       "My App API",
-    Description: "基于 Spine 的 REST API",
-    // ...
-}
-
-func init() {
-    swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
-}
-```
-
-## Swagger UI 访问
-
-### 运行服务器
-
-```bash
-go run main.go
-```
-
-### 从浏览器访问
-
-```
-http://localhost:8080/swagger/index.html
-```
-
-## 自动再生
-
-修改代码时自动重新生成文档：
-
-### 使用 Makefile
+修改注释或 DTO 后重新运行 Swaggo。`spine dev` 不会自动运行 Swaggo。CLI 规范使用 `contract export` 单独更新。
 
 ```makefile
-# 生成文件
-
 .PHONY: swagger run
 
 swagger:
-	swag init -g main.go
+	swag init -g internal/application/application.go --parseInternal
 
 run: swagger
-	go run main.go
+	spine dev
 ```
-
-```bash
-make run
-```
-
-### 使用脚本
-
-```bash
-#!/bin/bash
-# 运行sh
-
-swag init -g main.go
-go run main.go
-```
-
-```bash
-chmod +x run.sh
-./run.sh
-```
-
-## 完整示例
-
-### 项目结构
-
-```
-myapp/
-├── main.go
-├── docs/
-│   ├── docs.go
-│   ├── swagger.json
-│   └── swagger.yaml
-├── controller/
-│   └── user_controller.go
-├── dto/
-│   ├── user_request.go
-│   └── user_response.go
-├── service/
-│   └── user_service.go
-└── routes/
-    └── routes.go
-```
-
-### main.go
-
-```go
-package main
-
-import (
-    "log"
-    "time"
-
-    "myapp/controller"
-    "myapp/routes"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/labstack/echo/v4"
-    httpSwagger "github.com/swaggo/http-swagger"
-
-    _ "myapp/docs"
-)
-
-// @title 我的应用程序 API
-// @版本1.0.0
-// @description 基于 Spine 的 REST API
-
-// @主机本地主机：8080
-// @基本路径/
-func main() {
-    app := spine.New()
-
-    app.Constructor(
-        service.NewUserService,
-        controller.NewUserController,
-    )
-
-    routes.RegisterUserRoutes(app)
-
-    // 注册 Swagger UI
-    app.Transport(func(t any) {
-        e := t.(*echo.Echo)
-        e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-    })
-
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-### 控制器/user_controller.go
-
-```go
-package controller
-
-import (
-    "context"
-
-    "myapp/dto"
-    "myapp/service"
-
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/query"
-)
-
-type UserController struct {
-    svc *service.UserService
-}
-
-func NewUserController(svc *service.UserService) *UserController {
-    return &UserController{svc: svc}
-}
-
-// 获取用户 godoc
-// @Summary用户查询
-// @Description 通过ID查找用户信息
-// @标签用户
-// @Param id query int true "用户 ID"
-// @Success 200 {object} dto.UserResponse
-// @Failure 404 {object} dto.ErrorResponse
-// @路由器/用户[获取]
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) (dto.UserResponse, error) {
-    id := int(q.Int("id", 0))
-
-    user, err := c.svc.Get(ctx, id)
-    if err != nil {
-        return dto.UserResponse{}, httperr.NotFound("找不到用户。")
-    }
-
-    return user, nil
-}
-
-// 创建用户 godoc
-// @Summary 创建用户
-// @Description 创建一个新用户
-// @标签用户
-// @接受json
-// @生成json
-// @Param body body dto.CreateUserRequest true "请求创建用户"
-// @Success 200 {object} dto.UserResponse
-// @Failure 400 {object} dto.ErrorResponse
-// @路由器/用户[帖子]
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req dto.CreateUserRequest,
-) (dto.UserResponse, error) {
-    return c.svc.Create(ctx, req.Name, req.Email)
-}
-```
-
-## 主要摘要
-
-|步骤|命令/动作 |
-|------|----------|
-| 1. 安装| `go install github.com/swaggo/swag/cmd/swag@latest` | `go install github.com/swaggo/swag/cmd/swag@latest`
-| 2.写评论| `// @Summary`、`// @Param`、`// @Router` 等 |
-| 3. 创建文档 | `swag init` | `swag init`
-| 4.UI注册| `e.GET("/swagger/*", ...)` | `e.GET("/swagger/*", ...)`
-| 5. 访问 | `http://localhost:8080/swagger/index.html` | `http://localhost:8080/swagger/index.html`
 
 ## 后续步骤
 
-- [参考：API](/zh-Hans/reference/api/spine-app) — Spine API 文档
-- [参考：示例](/zh-Hans/reference/examples/crud) — 完整示例项目
+- [Spine API](/zh-Hans/reference/api/spine-app)
+- [Swaggo v1.16.6](https://github.com/swaggo/swag/tree/v1.16.6)
+- [http-swagger v1.3.4](https://pkg.go.dev/github.com/swaggo/http-swagger@v1.3.4)

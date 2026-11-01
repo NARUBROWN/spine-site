@@ -1,69 +1,61 @@
 # Transaction Management
 
-Use an interceptor to align a request-scoped database transaction with Spine's prepared-response lifecycle.
+Continue with the CLI project `example.com/my-app` from [Database](/en/learn/tutorial/5-database). Use `src/database`, `src/entity`, and `src/user`; add the transaction code below manually. The CLI does not generate Bun transaction or outbox implementations.
 
-## Lifecycle
+## Execution order
+
+In Spine v0.5.1, start the transaction in `PreHandle` and commit or roll back in `BeforeResponse`. This boundary also handles response preparation failures, including serialization, status/cookie validation, and event dispatch. Use `AfterCompletion` for completion logging and cleanup.
 
 ```text
-PreHandle       begin transaction
-controller      execute business operations
-prepare         serialize response and validate cookies/status
-hooks           complete post-execution work
-BeforeResponse  commit on success, roll back on error
-flush           write the prepared HTTP response
-AfterCompletion observe the final result and clean up
+PreHandle: begin transaction
+→ Controller → response preparation → PostHandle
+→ BeforeResponse: rollback on error, commit on success
+→ HTTP response flush
+→ AfterCompletion: logging / cleanup
 ```
 
-Do not commit in `AfterCompletion`. v0.5.1 runs `BeforeResponse` after all application-controlled response preparation but before the response is flushed, so a commit failure can still replace a prepared success response with an error.
-
-## Transaction interceptor
+## Implement the interceptor
 
 ```go
+// src/interceptor/tx_interceptor.go
 package interceptor
 
 import (
     "errors"
+    "log"
 
     "github.com/NARUBROWN/spine/core"
     "github.com/uptrace/bun"
 )
 
-const TxContextKey = "app.tx"
-
-type TxInterceptor struct {
-    db *bun.DB
-}
+type TxInterceptor struct{ db *bun.DB }
 
 func NewTxInterceptor(db *bun.DB) *TxInterceptor {
     return &TxInterceptor{db: db}
 }
 
-func (i *TxInterceptor) PreHandle(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-) error {
+func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    if ctx.Context() == nil {
+        return errors.New("execution context has no request context")
+    }
     tx, err := i.db.BeginTx(ctx.Context(), nil)
     if err != nil {
         return err
     }
-    ctx.Set(TxContextKey, tx)
+    ctx.Set("tx", tx)
     return nil
 }
 
-func (i *TxInterceptor) PostHandle(core.ExecutionContext, core.HandlerMeta) {}
+func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
 
-func (i *TxInterceptor) BeforeResponse(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-    executionErr error,
-) error {
-    value, ok := ctx.Get(TxContextKey)
+func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
+    value, ok := ctx.Get("tx")
     if !ok {
         return nil
     }
     tx, ok := value.(bun.Tx)
     if !ok {
-        return errors.New("invalid request transaction")
+        return errors.New("transaction has unexpected type")
     }
     if executionErr != nil {
         return tx.Rollback()
@@ -71,137 +63,207 @@ func (i *TxInterceptor) BeforeResponse(
     return tx.Commit()
 }
 
-func (i *TxInterceptor) AfterCompletion(
-    core.ExecutionContext,
-    core.HandlerMeta,
-    error,
-) {}
+func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
+    if err != nil {
+        log.Printf("[TX] %s %s: %v", ctx.Method(), ctx.Path(), err)
+    }
+}
 ```
 
-`BeforeResponse` may be called for an early failure after `PreHandle`, so always make lookup and cleanup defensive. A rollback can itself fail; returning that error preserves it in the final pipeline error.
+Return commit and rollback errors so they become execution errors. Keep the imports, including `log` and `errors`, and all four interceptor methods.
 
-## Registration
+## Register in the generated app
 
-Transactions normally belong on write routes, not every HTTP or WebSocket operation.
+Add `example.com/my-app/src/interceptor` to the imports in `internal/application/application.go`. Keep the database tutorial’s `database.NewDB` provider and existing health/user registration; add only `interceptor.NewTxInterceptor` to the existing Constructor call. This excerpt belongs inside `BuildApplication()`.
 
 ```go
 app.Constructor(
-    NewDB,
+    NewHealthController,
+    database.NewDB,
     interceptor.NewTxInterceptor,
-    repository.NewUserRepository,
-    service.NewUserService,
-    controller.NewUserController,
 )
-
-app.Route(
-    "POST",
-    "/users",
-    (*controller.UserController).Create,
-    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),
-)
+app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
 ```
 
-The typed-nil interceptor is resolved from the DI container. If you intentionally register one globally for HTTP, scope it explicitly so it does not also wrap WebSocket messages:
+The typed-nil `(*interceptor.TxInterceptor)(nil)` resolves to the DI-created interceptor instance. `NewTxInterceptor` returns one value. Use `boot.InterceptorHTTP` for HTTP transactions; `app.Interceptor(...)` also applies to WebSocket messages. To scope a transaction to one route, omit global interceptor registration and pass `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` to that `app.Route` call.
+
+## Pass the request transaction to the repository
+
+This POST example is a manual extension to `src/user`. It uses the generated `UserController.service` and `UserService.repository` fields. Receive the request DTO as a pointer. Import `spine.Ctx` from `github.com/NARUBROWN/spine/pkg/spine`; use the alias `spinectx` if the root app package would conflict.
 
 ```go
-app.InterceptorFor(
-    boot.InterceptorHTTP,
-    (*interceptor.TxInterceptor)(nil),
+// src/user/user_create.go
+package user
+
+import (
+    "context"
+    "errors"
+    "net/http"
+
+    "example.com/my-app/src/entity"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    spinectx "github.com/NARUBROWN/spine/pkg/spine"
+    "github.com/uptrace/bun"
 )
-```
 
-## Passing the transaction to application code
+type CreateUserRequest struct {
+    Name string `json:"name"`
+    Email string `json:"email"`
+}
 
-`context.Context` carries cancellation and deadlines. `spine.Ctx` is the read-only controller view of values placed in `ExecutionContext` by interceptors.
-
-```go
-func (c *UserController) Create(
-    ctx context.Context,
-    req *dto.CreateUserRequest,
-    spineCtx spine.Ctx,
-) (httpx.Response[dto.UserResponse], error) {
-    value, ok := spineCtx.Get(interceptor.TxContextKey)
+func (c *UserController) Create(ctx context.Context, values spinectx.Ctx, req *CreateUserRequest) (httpx.Response[*entity.User], error) {
+    value, ok := values.Get("tx")
     if !ok {
-        return httpx.Response[dto.UserResponse]{},
-            httperr.InternalServerError("transaction unavailable")
+        return httpx.Response[*entity.User]{}, errors.New("transaction is missing")
     }
-
-    tx, ok := value.(bun.IDB)
+    tx, ok := value.(bun.Tx)
     if !ok {
-        return httpx.Response[dto.UserResponse]{},
-            httperr.InternalServerError("transaction unavailable")
+        return httpx.Response[*entity.User]{}, errors.New("transaction has unexpected type")
     }
-
     user, err := c.service.Create(ctx, tx, req)
     if err != nil {
-        return httpx.Response[dto.UserResponse]{}, err
+        return httpx.Response[*entity.User]{}, err
     }
-    return httpx.Response[dto.UserResponse]{Body: user, Status: 201}, nil
+    return httpx.Response[*entity.User]{
+        Body: user,
+        Options: httpx.ResponseOptions{Status: http.StatusCreated},
+    }, nil
+}
+
+func (s *UserService) Create(ctx context.Context, db bun.IDB, req *CreateUserRequest) (*entity.User, error) {
+    user := &entity.User{Name: req.Name, Email: req.Email}
+    if err := s.repository.Save(ctx, db, user); err != nil {
+        return nil, err
+    }
+    if err := db.NewSelect().Model(user).WherePK().Scan(ctx); err != nil {
+        return nil, err
+    }
+    return user, nil
 }
 ```
 
-Pass both values explicitly through service and repository methods:
+The service forwards `bun.IDB` to the repository. Both `*bun.DB` and `bun.Tx` implement it, but request transactions are not reinjected into constructors. Add or align the repository’s `Save(ctx, db, user)` signature as below.
+
+Replace the existing `Save` method with this implementation. Do not declare a second method with the same name.
 
 ```go
-func (s *UserService) Create(
-    ctx context.Context,
-    db bun.IDB,
-    req *dto.CreateUserRequest,
-) (dto.UserResponse, error) {
-    user := &entity.User{Name: req.Name, Email: req.Email}
-    if err := s.repo.Save(ctx, db, user); err != nil {
-        return dto.UserResponse{}, err
-    }
-    return dto.UserResponse{ID: user.ID, Name: user.Name}, nil
-}
-
-func (r *UserRepository) Save(
-    ctx context.Context,
-    db bun.IDB,
-    user *entity.User,
-) error {
+// src/user/user_repository.go
+func (r *UserRepository) Save(ctx context.Context, db bun.IDB, user *entity.User) error {
     _, err := db.NewInsert().Model(user).Exec(ctx)
     return err
 }
 ```
 
-Both `*bun.DB` and `bun.Tx` implement `bun.IDB`, so one repository method can support transactional and non-transactional callers. Any repository call that uses its base `*bun.DB` instead of the supplied `bun.IDB` runs outside the request transaction.
-
-## Transaction options
-
-Choose `sql.TxOptions` in `PreHandle` when the route needs a specific isolation level or read-only transaction:
+Add the POST route manually inside `Register` in `src/user/user_route.go`. Keep the existing GET registration.
 
 ```go
-tx, err := i.db.BeginTx(ctx.Context(), &sql.TxOptions{
-    Isolation: sql.LevelSerializable,
-    ReadOnly:  false,
-})
+app.Route("POST", "/user", (*UserController).Create)
 ```
 
-Avoid selecting behavior from method-name conventions when a route-level interceptor makes the transaction boundary explicit.
+## Multiple writes and rollback in one request
 
-## External events and atomicity
+Save multiple users in the same transaction as the single-create example. Add `src/user/user_batch.go` and register the POST route below inside `Register` in `src/user/user_route.go`. If the second INSERT fails on a duplicate email, the first INSERT must roll back too.
 
-Spine prepares and validates the response before domain-event post-processing and `BeforeResponse`, but a broker publish cannot be atomic with a later database commit or physical socket write. For durable cross-system consistency:
+```go
+// src/user/user_batch.go
+package user
 
-- write an outbox record in the same database transaction;
-- publish the outbox asynchronously;
-- use idempotency keys in consumers;
-- expect at-least-once delivery from broker retries.
+import (
+    "context"
+    "errors"
+    "net/http"
 
-## Key takeaways
+    "example.com/my-app/src/entity"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    spinectx "github.com/NARUBROWN/spine/pkg/spine"
+    "github.com/uptrace/bun"
+)
 
-| Concern | Correct boundary |
-|---|---|
-| begin transaction | `PreHandle` |
-| commit or rollback | `BeforeResponse` |
-| metrics and cleanup | `AfterCompletion` |
-| cancellation | `context.Context` |
-| request-scoped transaction lookup | `spine.Ctx` |
-| repository abstraction | `bun.IDB` |
+type CreateUsersRequest struct {
+    Users []CreateUserRequest `json:"users"`
+}
 
-## Next steps
+func (c *UserController) CreateBatch(ctx context.Context, values spinectx.Ctx, req *CreateUsersRequest) (httpx.Response[[]*entity.User], error) {
+    value, ok := values.Get("tx")
+    if !ok {
+        return httpx.Response[[]*entity.User]{}, errors.New("transaction is missing")
+    }
+    tx, ok := value.(bun.Tx)
+    if !ok {
+        return httpx.Response[[]*entity.User]{}, errors.New("transaction has unexpected type")
+    }
+    users := make([]*entity.User, 0, len(req.Users))
+    for index := range req.Users {
+        user, err := c.service.Create(ctx, tx, &req.Users[index])
+        if err != nil {
+            return httpx.Response[[]*entity.User]{}, err
+        }
+        users = append(users, user)
+    }
+    return httpx.Response[[]*entity.User]{
+        Body: users,
+        Options: httpx.ResponseOptions{Status: http.StatusCreated},
+    }, nil
+}
+```
 
-- [Interceptors](/en/learn/tutorial/4-interceptor)
-- [Execution pipeline](/en/learn/core-concepts/pipeline)
-- [Current Release](/en/community/changelog)
+```go
+app.Route("POST", "/user/batch", (*UserController).CreateBatch)
+```
+
+## Exclude read requests
+
+To skip read requests, add this condition at the start of `PreHandle`. `BeforeResponse` must also handle the absence of a transaction. Do not skip transactions for handlers that require them.
+
+```go
+if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" {
+    return nil
+}
+```
+
+## Verify and run
+
+```bash
+gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
+go mod tidy
+spine doctor
+spine inspect
+spine contract check
+spine verify
+spine dev
+```
+
+Passing contract and local checks does not prove real database commits and rollbacks. Running the app requires `DATABASE_URL` and migrations from the database tutorial. Separately check successful persistence, rollback on failure, and commit/rollback error handling against a real database.
+
+## Check against a real database
+
+Run migrations as shown in the database tutorial, then start the app. These requests assume an empty test database. The first request returns HTTP 201; GET its response ID to read the same persisted user. The batch fails with HTTP 500 because its second email is duplicated. This example returns database failures as ordinary errors, so the response does not disclose internal SQL errors.
+
+```bash
+curl -i -X POST http://localhost:8080/user \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+curl -i http://localhost:8080/user/1
+
+curl -i -X POST http://localhost:8080/user/batch \
+  -H 'Content-Type: application/json' \
+  -d '{"users":[{"name":"Rollback","email":"rollback@example.com"},{"name":"Duplicate","email":"alice@example.com"}]}'
+
+curl -i -X POST http://localhost:8080/user \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Bob","email":"bob@example.com"}'
+```
+
+Use a database client to confirm that the SELECT results below are 1 and 0. The second result must be 0 to show that the earlier successful INSERT also rolled back. A later request with a unique email should still return HTTP 201 and persist.
+
+```sql
+SELECT COUNT(*) FROM users WHERE email = 'alice@example.com';
+SELECT COUNT(*) FROM users WHERE email = 'rollback@example.com';
+```
+
+## Atomicity boundary
+
+A database commit is not atomic with broker publication or the physical socket write. Events may be published before a later commit failure, and response delivery may fail after commit. Store business changes and an outbox record in the same database transaction, publish through a separate relay, and deduplicate consumers using stable event IDs.
+
+- [Interceptor API](/en/reference/api/interceptor)
+- [Database](/en/learn/tutorial/5-database)

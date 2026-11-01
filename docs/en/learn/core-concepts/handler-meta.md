@@ -2,6 +2,13 @@
 
 Metadata about Route Handlers.
 
+## Connect this to a CLI project
+
+In the `example.com/my-app` [CLI project](/en/learn/tutorial/1-project-structure), declare user routes in `Register(app)` in `src/user/user_route.go`. `BuildApplication` in `internal/application/application.go` checks and returns any `user.Register(app)` error; the generated `main.go` handles validation and execution. The generated handler is `(*UserController).Get` at `GET /user/:id`.
+
+The `GetUser`, admin handler, and authentication interceptor examples below are manual extensions for explaining metadata. Framework implementation excerpts do not need to be copied into your app. See the [interceptor tutorial](/en/learn/tutorial/4-interceptor) for implementations and registrations.
+
+
 ## Overview
 
 `HandlerMeta` is a structure that holds metadata about the Controller method to be executed. When the Router matches a request path, it returns `HandlerMeta`, and the Pipeline uses this information to call the actual method.
@@ -60,7 +67,7 @@ Reflection information of the method to call. Includes method name, signature, a
 
 ```go
 meta.Method.Name           // "GetUser"
-meta.Method.Type           // func(*UserController, path.Int) (User, error)
+meta.Method.Type           // func(*UserController, path.Int) (httpx.Response[User], error)
 meta.Method.Func           // Callable reflect.Value
 ```
 
@@ -79,11 +86,11 @@ meta.Interceptors  // []core.Interceptor (Route level)
 Spine uses **Method Expressions** to register handlers.
 
 ```go
-// cmd/demo/main.go
+// src/user/user_route.go의 Register 내부 발췌
 app.Route(
     "GET",
-    "/users/:id",
-    (*UserController).GetUser,  // Method Expression
+    "/user/:id",
+    (*UserController).Get,  // Method Expression
 )
 ```
 
@@ -91,7 +98,7 @@ The method expression `(*UserController).GetUser` is treated as a regular functi
 
 ```go
 // Actual type of method expression
-func(*UserController, path.Int) (User, error)
+func(*UserController, path.Int) (httpx.Response[User], error)
 //   ↑ receiver is converted to the first argument
 ```
 
@@ -202,7 +209,7 @@ fn.Name()  // "github.com/NARUBROWN/spine-demo.(*UserController).GetUser"
 ```go
 method, _ := reflect.TypeOf(&UserController{}).MethodByName("GetUser")
 // method.Name: "GetUser"
-// method.Type: func(*UserController, path.Int) (User, error)
+// method.Type: func(*UserController, path.Int) (httpx.Response[User], error)
 // method.Func: Callable reflect.Value
 ```
 
@@ -340,13 +347,17 @@ func (i *Invoker) Invoke(controllerType reflect.Type, method reflect.Method, arg
 All Interceptor methods receive `HandlerMeta` and can access execution target information.
 
 ```go
-// cmd/demo/loggin_interceptor.go
+// src/interceptor/logging_interceptor.go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+    controllerName := "<unresolved>"
+    if meta.ControllerType != nil {
+        controllerName = meta.ControllerType.String()
+    }
     log.Printf(
         "[REQ] %s %s -> %s.%s",
         ctx.Method(),
         ctx.Path(),
-        meta.ControllerType.Name(),  // "UserController"
+        controllerName,
         meta.Method.Name,            // "GetUser"
     )
     return nil
@@ -377,7 +388,7 @@ This is a complete minimal interceptor implementation. Handler metadata is avail
 ### 1. Route Declaration
 
 ```go
-// cmd/demo/main.go
+// src/user/user_route.go의 Register 내부 발췌
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 ```
 
@@ -495,7 +506,7 @@ Only allows method expressions, not regular functions or closures.
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
 // ❌ Regular Function (Not supported)
-app.Route("GET", "/users/:id", func(id path.Int) User { ... })
+app.Route("GET", "/users/:id", func(id path.Int) httpx.Response[User] { ... })
 
 // ❌ Instance Method (Not supported)
 ctrl := &UserController{}
@@ -508,10 +519,10 @@ Value receivers are not supported.
 
 ```go
 // ✓ Pointer Receiver
-func (c *UserController) GetUser(id path.Int) User
+func (c *UserController) GetUser(id path.Int) httpx.Response[User]
 
 // ❌ Value Receiver (Not supported)
-func (c UserController) GetUser(id path.Int) User
+func (c UserController) GetUser(id path.Int) httpx.Response[User]
 ```
 
 ### 3. Bootstrap Verification

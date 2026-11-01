@@ -3,6 +3,8 @@
 Spine 요청의 핵심.
 
 
+아래 앱 핸들러는 [CLI 프로젝트](/ko/learn/tutorial/1-project-structure)의 `src/user/user_controller.go`에 추가하는 수동 확장 예입니다. 필요한 응답 타입은 `github.com/NARUBROWN/spine/pkg/httpx`에서 가져옵니다. 생성된 `BuildApplication`과 오류를 확인하는 `user.Register(app)`는 유지합니다. 프레임워크 내부 구현 발췌는 앱에 복사하지 않습니다.
+
 ## 개요
 
 `ExecutionContext`는 Spine 파이프라인 전체에서 공유되는 요청 스코프 컨텍스트입니다. HTTP 요청이 도착하면 Transport 어댑터가 `ExecutionContext`를 생성하고, 이 컨텍스트는 파이프라인의 모든 단계를 통과하며 요청 정보와 실행 상태를 전달합니다.
@@ -258,9 +260,9 @@ func (v controllerCtxView) Get(key string) (any, bool) {
 
 ```go
 // Controller에서 Interceptor가 주입한 값 참조
-func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) User {
+func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) httpx.Response[any] {
     authInfo, _ := cc.Get("auth.user")
-    // ...
+    return httpx.Response[any]{Body: authInfo}
 }
 ```
 
@@ -935,16 +937,18 @@ func (h *JSONReturnHandler) Handle(value any, ctx core.ExecutionContext) error {
 
 ### Controller에서 이벤트 발행
 
+이 발췌의 `publish`는 `github.com/NARUBROWN/spine/pkg/event/publish`에서 가져옵니다. `OrderCreated`는 앱에서 정의하며 `Name() string`과 `OccurredAt() time.Time`을 구현하는 이벤트 타입입니다.
+
 ```go
-// cmd/demo/controller.go
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) string {
+// src/user/user_controller.go
+func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
     // context.Context에서 EventBus를 꺼내 이벤트 발행
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),
     })
 
-    return "OK"
+    return httpx.Response[string]{Body: "OK"}
 }
 ```
 
@@ -992,13 +996,13 @@ Controller는 `ExecutionContext`나 `HttpRequestContext`를 직접 받지 않습
 
 ```go
 // ❌ 안티패턴
-func (c *UserController) GetUser(ctx core.ExecutionContext) User
+func (c *UserController) GetUser(ctx core.ExecutionContext) httpx.Response[User]
 
 // ✓ Spine 방식
-func (c *UserController) GetUser(ctx context.Context, userId path.Int) User
+func (c *UserController) GetUser(ctx context.Context, userId path.Int) httpx.Response[User]
 
 // ✓ Interceptor 주입 값이 필요할 때
-func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) User
+func (c *UserController) GetUser(ctx context.Context, cc core.ControllerContext, userId path.Int) httpx.Response[User]
 ```
 
 ### 2. Resolver는 ExecutionContext를 받고 필요한 타입으로 단언한다

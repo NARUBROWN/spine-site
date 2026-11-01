@@ -1,5 +1,7 @@
 # 执行管道
 
+控制器示例用于扩展 [CLI 生成的项目](/zh-Hans/learn/tutorial/1-project-structure)。成功响应使用 `github.com/NARUBROWN/spine/pkg/httpx` 中的 `httpx.Response[T]` 包装，请求 DTO 使用指针，并在 `BuildApplication` 注册构造函数及路由。
+
 Spine 在写出 HTTP 响应之前完成业务执行、响应准备和可失败的提交阶段。v0.5.1 的顺序如下：
 
 ```mermaid

@@ -2,6 +2,23 @@
 
 인터셉터 생성 및 사용하기.
 
+## CLI 프로젝트에서 시작
+
+[첫 앱](/ko/learn/getting-started/first-app)과 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)의 `example.com/my-app`을 사용합니다. 사용자 리소스가 아직 없다면 프로젝트 루트에서 생성합니다.
+
+```sh
+spine generate resource user --dry-run
+```
+
+```sh
+spine generate resource user
+```
+
+텍스트 미리보기에서 생성 파일을 확인한 뒤 일반 생성 명령을 실행합니다. 이미 만든 리소스라면 다시 생성하지 않습니다.
+
+CLI는 `src/user`와 `BuildApplication`의 `user.Register(app)`를 생성합니다. 인터셉터 생성기는 없으므로 아래 `src/interceptor` 파일은 직접 작성합니다. 로그인·수정·주문 같은 추가 메서드는 정책 설명용 수동 확장이며 생성물에 포함되지 않습니다. 앱 등록은 `internal/application/application.go`, 라우트 정책은 `src/user/user_route.go`에 작성하고, 루트 `main.go`의 구성·검증·실행 흐름을 유지합니다.
+
+
 ## 인터셉터란?
 
 인터셉터는 요청 전/후에 실행되는 로직입니다.
@@ -73,7 +90,7 @@ Spine은 두 가지 레벨의 인터셉터를 지원합니다.
 ### 로깅 인터셉터 예제
 
 ```go
-// interceptor/logging_interceptor.go
+// src/interceptor/logging_interceptor.go
 package interceptor
 
 import (
@@ -84,12 +101,7 @@ import (
 type LoggingInterceptor struct{}
 
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s → %s.%s",
-        ctx.Method(),
-        ctx.Path(),
-        meta.ControllerType.Name(),
-        meta.Method.Name,
-    )
+    log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
     return nil
 }
 
@@ -115,23 +127,47 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 }
 ```
 
+전역 HTTP `PreHandle`은 라우팅 전에 실행되므로 `HandlerMeta`의 타입과 메서드가 비어 있을 수 있습니다. 생성된 `NewHealthController`는 유지합니다.
+
 ### 전역 인터셉터 등록
 
 ```go
-func main() {
+// internal/application/application.go
+package application
+
+import (
+    "os"
+
+    "example.com/my-app/src/interceptor"
+    "example.com/my-app/src/user"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-    
-    // 전역 인터셉터 — 모든 요청에 적용
-    app.Interceptor(
-        &interceptor.LoggingInterceptor{},
-    )
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    app.Constructor(NewHealthController)
+    app.Route("GET", "/health", (*HealthController).Get)
+    app.Interceptor(&interceptor.LoggingInterceptor{})
+
+    if err := user.Register(app); err != nil {
+        return nil, boot.Options{}, err
+    }
+
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
+    }
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
@@ -143,10 +179,12 @@ func main() {
 ### 인증 인터셉터 예제
 
 ```go
-// interceptor/auth_interceptor.go
+// src/interceptor/auth_interceptor.go
 package interceptor
 
 import (
+    "errors"
+
     "github.com/NARUBROWN/spine/core"
     "github.com/NARUBROWN/spine/pkg/httperr"
 )
@@ -176,57 +214,38 @@ func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.Ha
 func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
 
 func validateToken(token string) (map[string]string, error) {
-    // 토큰 검증 로직
+    if token != "Bearer demo-token" {
+        return nil, errors.New("invalid demo token")
+    }
     return map[string]string{"id": "1", "name": "Alice"}, nil
 }
 ```
+
+토큰 검사는 동작 확인용 공개 데모입니다. 실제 앱에서는 인증 서비스로 교체하세요. 생성된 `GET /user/:id` 등록을 아래 코드로 수정하고, `BuildApplication`의 `user.Register(app)`는 유지합니다.
 
 ### 라우트 인터셉터 등록
 
 `route.WithInterceptors()`를 사용합니다.
 
 ```go
+// src/user/user_route.go
+package user
+
 import (
+    "example.com/my-app/src/interceptor"
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/pkg/route"
 )
 
-func main() {
-    app := spine.New()
-    
-    app.Constructor(
-        NewUserController,
-    )
-    
-    // 인증 필요 없는 라우트
-    app.Route(
-        "POST",
-        "/login",
-        (*UserController).Login,
-    )
-    
-    // 인증 필요한 라우트
+func Register(app spine.App) error {
+    app.Constructor(NewUserRepository, NewUserService, NewUserController)
     app.Route(
         "GET",
-        "/users/:id",
-        (*UserController).GetUser,
+        "/user/:id",
+        (*UserController).Get,
         route.WithInterceptors(&interceptor.AuthInterceptor{}),
     )
-    
-    // 인증 필요한 라우트
-    app.Route(
-        "PUT",
-        "/users/:id",
-        (*UserController).UpdateUser,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    return nil
 }
 ```
 
@@ -236,47 +255,53 @@ func main() {
 실제 애플리케이션에서는 두 가지를 함께 사용합니다.
 
 ```go
-func main() {
+// internal/application/application.go
+package application
+
+import (
+    "os"
+
+    "example.com/my-app/src/interceptor"
+    "example.com/my-app/src/user"
+    "github.com/NARUBROWN/spine"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/interceptor/cors"
+)
+
+type HealthController struct{}
+
+func NewHealthController() *HealthController { return &HealthController{} }
+
+func (c *HealthController) Get() httpx.Response[map[string]string] {
+    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+}
+
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
-    
-    app.Constructor(
-        NewUserController,
-    )
-    
-    // 전역 인터셉터 — 모든 요청에 적용
-    app.Interceptor(
-        &interceptor.LoggingInterceptor{},
-        cors.New(cors.Config{
-            AllowOrigins: []string{"*"},
-            AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
-        }),
-    )
-    
-    // 공개 라우트 — 전역 인터셉터만 적용
-    app.Route("POST", "/login", (*UserController).Login)
-    app.Route("POST", "/signup", (*UserController).Signup)
-    
-    // 인증 필요 라우트 — 전역 + Auth 인터셉터
-    app.Route(
-        "GET",
-        "/users/:id",
-        (*UserController).GetUser,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
-    
-    app.Route(
-        "GET",
-        "/me",
-        (*UserController).GetMe,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
-    
-    app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	})
+    app.Constructor(NewHealthController)
+    app.Route("GET", "/health", (*HealthController).Get)
+    app.Interceptor(&interceptor.LoggingInterceptor{})
+    corsInterceptor, err := cors.NewValidated(cors.Config{
+        AllowOrigins:     []string{"https://app.example.com"},
+        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders:     []string{"Authorization", "Content-Type"},
+        AllowCredentials: true,
+    })
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+
+    if err := user.Register(app); err != nil {
+        return nil, boot.Options{}, err
+    }
+
+    address := ":8080"
+    if port := os.Getenv("SPINE_PORT"); port != "" {
+        address = ":" + port
+    }
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
 }
 ```
 
@@ -392,12 +417,15 @@ Response (401 Unauthorized)
 // AuthInterceptor — 사용자 정보 저장
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
-    user, _ := validateToken(token)
+    user, err := validateToken(token)
+    if err != nil {
+        return httperr.Unauthorized("invalid credentials")
+    }
     ctx.Set("currentUser", user)
     return nil
 }
 
-// 컨트롤러에서 조회하려면 ExecutionContext를 주입받아야 함
+// 컨트롤러에서는 읽기 전용 spine.Ctx로 조회
 // 또는 다른 인터셉터에서 조회
 func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     user, ok := ctx.Get("currentUser")
@@ -423,7 +451,9 @@ func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handle
 
 ```go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("컨트롤러: %s", meta.ControllerType.Name())  // UserController
+    if meta.ControllerType != nil {
+        log.Printf("컨트롤러: %s", meta.ControllerType.String())
+    }
     log.Printf("메서드: %s", meta.Method.Name)              // GetUser
     return nil
 }
@@ -437,7 +467,7 @@ func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Hand
 ### 트랜잭션 인터셉터 예제
 
 ```go
-// interceptor/tx_interceptor.go
+// src/interceptor/tx_interceptor.go
 package interceptor
 
 import (
@@ -561,6 +591,27 @@ app.Route(
 | **에러 시 중단** | PreHandle 에러 → 컨트롤러 스킵 |
 | **컨텍스트 공유** | `ctx.Set()` / `ctx.Get()`으로 데이터 전달 |
 
+
+## 검증
+
+프로젝트 루트에서 실행합니다. 정적 계약·로컬 Go 검증과 실제 HTTP·WebSocket 인증·DB E2E 검증은 별개입니다.
+
+```sh
+gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
+spine contract check
+spine verify
+spine dev
+```
+
+다른 터미널에서 확인합니다. health는 HTTP 200, 토큰 없는 사용자 요청은 401, 데모 토큰 요청은 200이어야 합니다. 마지막 응답에 지정한 origin의 CORS 헤더가 포함됩니다.
+
+```bash
+curl -i http://localhost:8080/health
+curl -i http://localhost:8080/user/1
+curl -i http://localhost:8080/user/1 \
+  -H 'Authorization: Bearer demo-token' \
+  -H 'Origin: https://app.example.com'
+```
 
 ## 다음 단계
 

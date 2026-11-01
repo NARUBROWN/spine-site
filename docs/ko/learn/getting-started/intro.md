@@ -6,27 +6,29 @@ Spine은 **요청 과정을 숨기지 않는 Go 웹 프레임워크**입니다.
 
 요청이 어떻게 해석되고, 어떤 순서로 실행되며, 언제 비즈니스 로직이 호출되고, 어떻게 응답으로 완성되는지를 명시적인 실행 파이프라인으로 드러냅니다.
 
+CLI가 생성한 `internal/application/application.go`에서 앱을 조립합니다. 아래는 사용자 기능을 추가한 등록 예시이며, 생성된 `main.go`는 `BuildApplication` → `Validate` → `Run` 순서를 유지합니다.
+
+아래 코드는 직접 구현한 사용자 타입과 인터셉터를 전제로 한 등록 발췌입니다. CLI의 `resource user`가 생성하는 핸들러는 `src/user`의 `UserController.Get`이며 경로는 `GET /user/:id`입니다. 생성된 프로젝트에서는 `BuildApplication`의 `user.Register(app)` 오류 확인을 유지하고, 같은 생성자·라우트를 다시 등록하지 않습니다. 자세한 생성·수정 절차는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)를 참고하세요.
+
 ```go
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New()
     
     // 의존성 등록 — 순서 상관없이, 생성자만 등록하면 자동 해결
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
     
     // 인터셉터 — 실행 순서가 코드에 그대로 보임
-    app.Interceptor(&TxInterceptor{}, &LoggingInterceptor{})
+    app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
     
     // 라우트 — 어떤 메서드가 어떤 경로인지 명확
     app.Route("GET", "/users", (*UserController).GetUser)
     
-    if err := app.Run(boot.Options{
-		Address:                ":8080",
-		EnableGracefulShutdown: true,
-		ShutdownTimeout:        10 * time.Second,
-		HTTP: &boot.HTTPOptions{},
-	}); err != nil {
-		log.Fatal(err)
-	}
+    return app, boot.Options{
+        Address: ":8080",
+        EnableGracefulShutdown: true,
+        ShutdownTimeout: 10 * time.Second,
+        HTTP: &boot.HTTPOptions{},
+    }, nil
 }
 ```
 
@@ -156,7 +158,8 @@ func (c *UserController) CreateUser(
 ## 시작할 준비가 되셨나요?
 
 ```bash
-go get github.com/NARUBROWN/spine
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+spine version
 ```
 
-[5분 퀵스타트 →](/ko/learn/getting-started/first-app)
+CLI를 설치한 뒤 [5분 첫 앱 만들기](/ko/learn/getting-started/first-app)에서 변경 계획을 확인하고 프로젝트를 생성하세요.
