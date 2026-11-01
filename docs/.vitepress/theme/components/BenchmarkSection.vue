@@ -88,10 +88,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
         <p v-if="mode === 'throughput'" id="benchmark-capacity-note" class="capacity-note">{{ copy.capacityNote }}</p>
       </div>
     </div>
-    <div class="benchmark-bottom">
-      <p class="benchmark-method">{{ copy.method }}</p>
-      <a class="benchmark-csv" :href="withBase(`${assetRoot}/measurements.csv`)" download>{{ copy.csv }}<span aria-hidden="true">↓</span></a>
-    </div>
+    <a class="benchmark-csv" :href="withBase(`${assetRoot}/measurements.csv`)" download>{{ copy.csv }}<span aria-hidden="true">↓</span></a>
   </section>
 </template>
 
@@ -142,9 +139,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .comparison-notes { grid-area: notes; align-self: start; }
 .benchmark-section .chart-condition, .benchmark-section .capacity-note { max-width: 48ch; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; }
 .benchmark-section .capacity-note { margin-top: 16px; }
-.benchmark-bottom { display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; margin-top: 40px; }
-.benchmark-method { max-width: 60ch; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; }
-.benchmark-csv { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; min-height: 44px; color: var(--vp-c-brand-1); font-size: 14px; text-decoration: none; }
+.benchmark-csv { display: inline-flex; align-items: center; gap: 10px; margin-top: 28px; min-height: 44px; color: var(--vp-c-brand-1); font-size: 14px; text-decoration: none; }
 .benchmark-section a:focus-visible, .benchmark-section button:focus-visible, [role='tabpanel']:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 5px; }
 @media (max-width: 900px) {
   .benchmark-heading-row { gap: 32px; }
@@ -169,7 +164,6 @@ function selectWithKeyboard(event: KeyboardEvent) {
   .row-name { font-size: 14px; gap: 6px; }
   .row-value { font-size: 16px; }
   .row-unit { font-size: 13px; }
-  .benchmark-bottom { flex-direction: column; gap: 12px; margin-top: 28px; }
 }
 @media (prefers-reduced-motion: reduce) { .bar-fill, .metric-tabs button, .benchmark-report-link span { transition: none; } }
 /* 고대비 모드에서는 그래프 경계를 선으로 표시합니다. taste-skill-ignore */
