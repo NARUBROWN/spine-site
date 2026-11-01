@@ -95,6 +95,8 @@ function selectWithKeyboard(event: KeyboardEvent) {
 
 <style scoped>
 .benchmark-section { position: relative; margin: 64px 0 88px; padding: 36px; border: 1px solid var(--vp-c-divider); border-radius: 24px; background: var(--vp-c-bg-soft); scroll-margin-top: 90px; }
+.benchmark-section:lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
+.benchmark-section:lang(ko) .row-comparison { text-wrap: balance; }
 :global(.dark .benchmark-section) { --vp-c-brand-1: #a8b1ff; }
 .benchmark-heading-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
 .benchmark-heading-row > div { min-width: 0; max-width: 100%; }
