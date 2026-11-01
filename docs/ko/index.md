@@ -1,10 +1,10 @@
 ---
 layout: home
-description: "Same DX, better performance. 익숙한 컨트롤러와 서비스 구조, 생성자 주입과 인터셉터를 Go로 이어가세요. 내부 랩에서 확인한 처리량과 메모리 결과를 공개합니다."
+description: "익숙한 개발 방식으로, 더 빠른 서버를. 익숙한 컨트롤러와 서비스 구조, 생성자 주입과 인터셉터를 Go로 이어가세요. 내부 랩에서 확인한 처리량과 메모리 결과를 공개합니다."
 
 hero:
   name: "Spine"
-  text: "Same DX, better performance."
+  text: "익숙한 개발 방식으로,<br>더 빠른 서버를."
   tagline: "NestJS와 Spring에서 익숙했던 컨트롤러와 서비스 구조를 Go에서도 이어가세요. 생성자 주입과 인터셉터로 앱을 구성하고, 같은 자원에서 확인한 처리량과 메모리 차이를 살펴보세요."
   actions:
     - theme: brand

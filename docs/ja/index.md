@@ -1,10 +1,10 @@
 ---
 layout: home
-description: "Same DX, better performance. 使い慣れたコントローラー、サービス、コンストラクタ注入、インターセプターをGoで。内部ラボの処理量とメモリ測定結果を公開しています。"
+description: "使い慣れた設計で、もっと速いサーバーを。 使い慣れたコントローラー、サービス、コンストラクタ注入、インターセプターをGoで。内部ラボの処理量とメモリ測定結果を公開しています。"
 
 hero:
   name: "Spine"
-  text: "Same DX, better performance."
+  text: "使い慣れた設計で、<br>もっと速いサーバーを。"
   tagline: "NestJSやSpringで使い慣れたコントローラーとサービスの構成をGoでも。コンストラクタ注入とインターセプターでアプリを構築し、同じリソース制約での処理量とメモリ使用量を比較できます。"
   actions:
     - theme: brand

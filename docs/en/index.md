@@ -1,10 +1,10 @@
 ---
 layout: home
-description: "Same DX, better performance. Bring familiar controllers, services, constructor injection and interceptors to Go. Explore throughput and memory results from the Spine internal lab."
+description: "Familiar patterns. Faster backends. Bring familiar controllers, services, constructor injection and interceptors to Go. Explore throughput and memory results from the Spine internal lab."
 
 hero:
   name: "Spine"
-  text: "Same DX, better performance."
+  text: "Familiar patterns.<br>Faster backends."
   tagline: "Bring the controller and service structure you know from NestJS and Spring to Go. Build with constructor injection and interceptors, then compare throughput and memory use within the same resource budget."
   actions:
     - theme: brand

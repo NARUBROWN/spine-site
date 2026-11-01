@@ -1,10 +1,10 @@
 ---
 layout: home
-description: "Same DX, better performance. 在Go中使用熟悉的控制器、服務、建構函式注入與攔截器。查看Spine內部實驗室的吞吐量與記憶體量測結果。"
+description: "用熟悉的方式，打造更快的後端。 在Go中使用熟悉的控制器、服務、建構函式注入與攔截器。查看Spine內部實驗室的吞吐量與記憶體量測結果。"
 
 hero:
   name: "Spine"
-  text: "Same DX, better performance."
+  text: "用熟悉的方式，<br>打造更快的後端。"
   tagline: "將NestJS和Spring中熟悉的控制器與服務結構帶到Go。使用建構函式注入與攔截器建立應用程式，再比較相同資源預算下的吞吐量與記憶體用量。"
   actions:
     - theme: brand
