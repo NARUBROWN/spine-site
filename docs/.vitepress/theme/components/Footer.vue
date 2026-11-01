@@ -181,10 +181,13 @@ const locales = {
 
 <style scoped>
 .custom-footer {
-  background-color: var(--vp-c-bg-soft);
+  --vp-c-text-1: #f3f0f8;
+  --vp-c-text-2: #c0bacd;
+  --vp-c-brand-1: #d4c9ff;
+  background-color: #302b3e;
   border-top: 0;
   color: var(--vp-c-text-1);
-  padding: 64px clamp(20px, 4vw, 48px) 48px;
+  padding: 72px clamp(20px, 4vw, 48px) 40px;
   font-family: var(--vp-font-family-base);
   position: relative;
   z-index: 12;
@@ -214,10 +217,16 @@ const locales = {
   text-decoration: none;
 }
 
+.logo-link:focus-visible,
+.footer-link:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 5px;
+}
+
 .footer-logo {
   height: 24px;
   display: block;
-  filter: none;
+  filter: brightness(0) invert(1);
 }
 
 .description {
@@ -272,6 +281,7 @@ const locales = {
 }
 
 @media (max-width: 768px) {
+  .custom-footer { padding-top: 48px; padding-bottom: 32px; }
   .footer-top {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 32px;
@@ -285,5 +295,4 @@ const locales = {
     gap: 0.5rem;
   }
 }
-:global(.dark .custom-footer .footer-logo) { filter: brightness(0) invert(1); }
 </style>

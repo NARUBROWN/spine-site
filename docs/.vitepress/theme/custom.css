@@ -35,6 +35,23 @@
   filter: invert(1);
 }
 
+/* 메인 네비게이션은 본문과 다른 배경으로 구분하고 같은 기준선에 맞춥니다. */
+.VPNav:has(.VPNavBar.home) {
+  --vp-nav-bg-color: #eeebf5;
+  --vp-c-brand-1: #5750c8;
+  background: var(--vp-nav-bg-color);
+}
+.VPNavBar.home { background: var(--vp-nav-bg-color); }
+.VPNavBar.home .wrapper { padding: 0 clamp(20px, 4vw, 48px); }
+.VPNavBar.home .container { max-width: 1120px; }
+.VPNavBar.home .divider { display: none; }
+.VPNavBar.home.screen-open { border-bottom: 0; }
+.VPNav:has(.VPNavBar.home) .VPNavScreen { background: var(--vp-nav-bg-color); }
+.dark .VPNav:has(.VPNavBar.home) {
+  --vp-nav-bg-color: #302b3e;
+  --vp-c-brand-1: #c6bcff;
+}
+
 /* 실제 코드와 성능 결과를 공유하는 제품 페이지의 레이아웃입니다. */
 .VPHome {
   --home-width: 1120px;
