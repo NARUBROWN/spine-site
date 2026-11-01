@@ -2,9 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useData, withBase } from 'vitepress'
 import { benchmarkCopy } from '../benchmark/copy'
-import { assetRoot, common, nameFor, number, throughput, type Result } from '../benchmark/data'
+import { assetRoot, common, number, throughput } from '../benchmark/data'
 import { vmCostCopy } from '../benchmark/vm-cost-copy'
-import VmCostRows from './VmCostRows.vue'
+import BenchmarkRows from './BenchmarkRows.vue'
 import VmCostMethod from './VmCostMethod.vue'
 
 const { lang } = useData()
@@ -12,23 +12,11 @@ const copy = computed(() => benchmarkCopy(lang.value))
 const costCopy = computed(() => vmCostCopy(copy.value.path))
 const metrics = ['throughput', 'memory', 'cost'] as const
 const mode = ref<typeof metrics[number]>('throughput')
-const rows = computed(() => mode.value === 'throughput' ? throughput : common)
-const maximum = computed(() => Math.max(...rows.value.map(value)))
-const spine = computed(() => rows.value[0])
 
 onMounted(() => {
   const requested = new URLSearchParams(window.location.search).get('metric')
   if (metrics.includes(requested as typeof metrics[number])) mode.value = requested as typeof metrics[number]
 })
-
-function value(row: Result) {
-  return mode.value === 'throughput' ? row.rps : row.memory_current_median_mib
-}
-
-function comparison(row: Result) {
-  if (mode.value === 'throughput') return copy.value.throughputCapacity.replace('{value}', number(spine.value.rps - row.rps))
-  return copy.value.memoryRatio.replace('{value}', number((1 - spine.value.memory_current_median_mib / row.memory_current_median_mib) * 100, 1))
-}
 
 function selectWithKeyboard(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
@@ -86,19 +74,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
       <div id="benchmark-comparison-panel" :aria-describedby="mode === 'cost' ? 'vm-cost-note-home' : mode === 'throughput' ? 'benchmark-condition benchmark-capacity-note' : 'benchmark-condition'" role="tabpanel" :aria-labelledby="`benchmark-tab-${mode}`" tabindex="0">
         <p v-if="mode === 'throughput'" class="capacity-assumption">{{ copy.capacityAssumption }}</p>
         <p v-else-if="mode === 'cost'" class="capacity-assumption">{{ costCopy.assumption }}</p>
-        <VmCostRows v-if="mode === 'cost'" />
-        <div v-else class="comparison-rows">
-          <div v-for="row in rows" :key="row.case" class="comparison-row" :class="{ 'is-spine': row.case === 'spine' }">
-            <div class="row-heading">
-              <span class="row-name">{{ nameFor(row.case) }}<span v-if="row.case === 'spine'" class="spine-version">0.5.2</span></span>
-              <span class="row-value">{{ number(value(row), mode === 'throughput' ? 0 : 1) }}<span class="row-unit">{{ mode === 'throughput' ? 'req/s' : 'MiB' }}</span></span>
-            </div>
-            <div class="bar-track" aria-hidden="true"><div class="bar-fill" :style="{ width: `${value(row) / maximum * 100}%` }"></div></div>
-            <p v-if="row.case !== 'spine'" class="row-comparison">
-              {{ comparison(row) }}
-            </p>
-          </div>
-        </div>
+        <BenchmarkRows :metric="mode" />
       </div>
       <div class="comparison-notes">
         <VmCostMethod v-if="mode === 'cost'" context="home" />
@@ -129,7 +105,6 @@ function selectWithKeyboard(event: KeyboardEvent) {
 }
 .benchmark-inner { max-width: var(--home-width, 1120px); margin: 0 auto; }
 .benchmark-section:lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
-.benchmark-section:lang(ko) .row-comparison { text-wrap: balance; }
 :global(.dark .benchmark-section) { background: #141219; --vp-c-brand-1: #c6bcff; }
 .benchmark-section p { margin: 0; }
 .benchmark-heading-row { display: grid; grid-template-columns: 1.1fr 1fr; align-items: start; gap: 64px; }
@@ -159,18 +134,7 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .metric-tabs button:hover { background: var(--vp-c-default-soft); }
 .metric-tabs button[aria-selected='true'] { background: var(--vp-c-brand-3); color: var(--vp-c-white); }
 #benchmark-comparison-panel { grid-area: chart; min-width: 0; }
-.comparison-rows { display: grid; gap: 28px; }
 .benchmark-section .capacity-assumption { margin-bottom: 24px; color: var(--vp-c-text-1); font-size: 14px; font-weight: 550; line-height: 1.8; }
-.row-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
-.row-name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; color: var(--vp-c-text-1); font-size: 16px; line-height: 1.6; }
-.row-value { flex-shrink: 0; color: var(--vp-c-text-1); font-size: 18px; font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; }
-.row-unit { margin-left: 6px; color: var(--vp-c-text-2); font-size: 14px; font-weight: 450; }
-.spine-version { color: var(--vp-c-text-2); font-size: 13px; font-weight: 450; }
-.bar-track { height: 10px; overflow: hidden; background: var(--vp-c-bg-soft); border-radius: 2px; }
-.bar-fill { height: 100%; background: var(--vp-c-text-3); transition: width .25s ease; }
-.is-spine .row-name, .is-spine .row-value { color: var(--vp-c-brand-1); font-weight: 650; }
-.is-spine .bar-fill { background: var(--vp-c-brand-1); }
-.comparison-row .row-comparison { margin-top: 8px; color: var(--vp-c-text-1); font-size: 14px; font-weight: 450; line-height: 1.8; text-align: right; }
 .comparison-notes { grid-area: notes; align-self: start; }
 .benchmark-section .chart-condition, .benchmark-section .capacity-note { max-width: 48ch; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; }
 .benchmark-section .capacity-note { margin-top: 16px; }
@@ -200,17 +164,12 @@ function selectWithKeyboard(event: KeyboardEvent) {
   .benchmark-section .comparison-title { font-size: 19px; }
   .metric-tabs { width: 100%; }
   .metric-tabs button { flex: 1; }
-  .comparison-rows { gap: 22px; }
   .benchmark-section .capacity-assumption { margin-bottom: 18px; font-size: 13px; }
-  .row-name { font-size: 14px; gap: 6px; }
-  .row-value { font-size: 16px; }
-  .row-unit { font-size: 13px; }
-  .comparison-row .row-comparison { font-size: 13px; line-height: 1.65; }
   .benchmark-section .chart-condition, .benchmark-section .capacity-note { font-size: 13px; line-height: 1.7; }
   .benchmark-section .capacity-note { margin-top: 12px; }
   .benchmark-csv { margin-top: 20px; }
 }
-@media (prefers-reduced-motion: reduce) { .bar-fill, .metric-tabs button, .benchmark-report-link span { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .metric-tabs button, .benchmark-report-link span { transition: none; } }
 /* 고대비 모드에서는 그래프 경계를 선으로 표시합니다. taste-skill-ignore */
-@media (forced-colors: active) { /* taste-skill-ignore */ .bar-fill, .is-spine .bar-fill { background: Highlight; forced-color-adjust: none; } .bar-track { border: 1px solid CanvasText; } .metric-tabs button[aria-selected='true'] { outline: 2px solid Highlight; } }
+@media (forced-colors: active) { /* taste-skill-ignore */ .metric-tabs button[aria-selected='true'] { outline: 2px solid Highlight; } }
 </style>

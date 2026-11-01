@@ -4,7 +4,7 @@ import { useData, withBase } from 'vitepress'
 import { benchmarkCopy } from '../benchmark/copy'
 import { assetRoot, common, high, nameFor, number, snapshot, throughput } from '../benchmark/data'
 import { vmCostCopy } from '../benchmark/vm-cost-copy'
-import VmCostRows from './VmCostRows.vue'
+import BenchmarkRows from './BenchmarkRows.vue'
 import VmCostMethod from './VmCostMethod.vue'
 
 const { lang } = useData()
@@ -60,7 +60,7 @@ const sourceLinks = [
       <h2 id="report-vm-cost-heading">{{ costCopy.reportTitle }}</h2>
       <p>{{ costCopy.reportIntro }}</p>
       <p>{{ costCopy.assumption }}</p>
-      <VmCostRows />
+      <BenchmarkRows />
       <VmCostMethod context="report" />
     </section>
     <h2>{{ copy.methodTitle }}</h2>
