@@ -815,9 +815,9 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) h
 在[创建第一个应用](/zh-Hans/learn/getting-started/first-app)中生成的项目，通过 `internal/application/application.go` 中的 `BuildApplication` 配置应用，并在根目录的 `main.go` 中检查 `Validate` 错误后调用 `Run`。可以通过以下命令检查项目。
 
 ```sh
-spine doctor
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli contract check
+spine-cli verify
 ```
 
 以下是生成的 `BuildApplication` 的基本形式。

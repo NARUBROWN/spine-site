@@ -4,7 +4,7 @@
 
 ## Versions and sources
 
-From Spine `v0.6.0`, CLI `new` is the official starting point. Install the CLI with `@latest`; its bundled recipe selects compatible Spine, Echo platform, and Echo versions. Read the generated go.mod for the selected versions. The examples were verified on 2026-11-02 with CLI v0.4.0, Spine v0.6.0, Echo platform v0.1.0, and Echo v5.4.4. Check `spine version`, `spine schema --json`, and `spine capabilities --json`; source and tests are authoritative when prose differs.
+From Spine `v0.6.0`, CLI `new` is the official starting point. Install the CLI with `@latest`; its bundled recipe selects compatible Spine, Echo platform, and Echo versions. Read the generated go.mod for the selected versions. The examples were verified on 2026-11-02 with CLI v0.4.0, Spine v0.6.0, Echo platform v0.1.0, and Echo v5.4.4. Check `spine-cli version`, `spine-cli schema --json`, and `spine-cli capabilities --json`; source and tests are authoritative when prose differs.
 
 - CLI source and full agent contract: https://github.com/NARUBROWN/spine-cli
 - Framework API: https://github.com/NARUBROWN/spine
@@ -18,22 +18,22 @@ Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from
 ## Install, plan, and generate
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
-spine schema --json
-spine capabilities --json
-spine new hello-spine --module example.com/hello-spine --dry-run --json
+go install github.com/NARUBROWN/spine-cli@latest
+spine-cli version
+spine-cli schema --json
+spine-cli capabilities --json
+spine-cli new hello-spine --module example.com/hello-spine --dry-run --json
 ```
 
 Read the `spine.cli-result/v1` envelope (`ok`, `exit_code`, `result`, `error`). Review `result.changes`, `result.diff`, and `result.base_hash`, then apply the same command using that hash:
 
 ```sh
-spine new hello-spine --module example.com/hello-spine --if-match '<base_hash>' --json
+spine-cli new hello-spine --module example.com/hello-spine --if-match '<base_hash>' --json
 cd hello-spine
-spine context --root . --json
-spine contract check --json
-spine verify --json
-spine dev
+spine-cli context --root . --json
+spine-cli contract check --json
+spine-cli verify --json
+spine-cli dev
 ```
 
 In another terminal, `curl http://localhost:8080/health` returns HTTP 200 and `{"status":"ok"}`. Stop the dev process before running another app on the same port.
@@ -53,23 +53,23 @@ These are the six supported `spine.toml` keys. Keep DB, broker, and authenticati
 
 ## Extend the generated project
 
-Default `layered-v1` generators use database/domain, src/dto, src/repository, src/service, src/controller, and src/route. A resource composes role generators and does not implement a business handler or add a route automatically. Implement the handler, then register it with `spine g route get-users --method GET --path /users --handler src/controller:UserController.Get`. Review each generator plan with `--dry-run --json` and apply it with that plan's `--if-match` hash.
+Default `layered-v1` generators use database/domain, src/dto, src/repository, src/service, src/controller, and src/route. A resource composes role generators and does not implement a business handler or add a route automatically. Implement the handler, then register it with `spine-cli g route get-users --method GET --path /users --handler src/controller:UserController.Get`. Review each generator plan with `--dry-run --json` and apply it with that plan's `--if-match` hash.
 
 The site's feature-based `src/user` tutorials explicitly use a separate `legacy` layout, supported by the CLI with versions selected by its bundled recipe. They do not describe default `new` output. Start those examples in a fresh directory:
 
 ```sh
-spine new my-app --layout legacy --module example.com/my-app --dry-run --json
-spine new my-app --layout legacy --module example.com/my-app --if-match '<base_hash>' --json
+spine-cli new my-app --layout legacy --module example.com/my-app --dry-run --json
+spine-cli new my-app --layout legacy --module example.com/my-app --if-match '<base_hash>' --json
 cd my-app
-spine generate resource user --dry-run --json
-spine generate resource user --if-match '<base_hash>' --json
-spine contract check --json
-spine verify --json
-spine explain http GET /user/:id
-spine contract export --format openapi --output openapi.json
-spine contract export --format asyncapi --output asyncapi.json
-spine contract snapshot
-spine contract diff
+spine-cli generate resource user --dry-run --json
+spine-cli generate resource user --if-match '<base_hash>' --json
+spine-cli contract check --json
+spine-cli verify --json
+spine-cli explain http GET /user/:id
+spine-cli contract export --format openapi --output openapi.json
+spine-cli contract export --format asyncapi --output asyncapi.json
+spine-cli contract snapshot
+spine-cli contract diff
 ```
 
 Use a separate fresh base_hash for each matching command pair. The legacy resource generates src/user/user_route.go, user_repository.go, user_service.go, and user_controller.go, registers user.Register(app), and provides GET /user/:id. Legacy slice --storage memory is development-only. Consumer and WebSocket skeletons return not-implemented errors until implemented. Bun, brokers, authentication, and outbox require explicit application code.
@@ -202,7 +202,7 @@ func main() {
 }
 ```
 
-Use `spine dev` to run it and `curl http://localhost:8080/health` in another terminal to check the response.
+Use `spine-cli dev` to run it and `curl http://localhost:8080/health` in another terminal to check the response.
 
 Use `RunContext(ctx, opts)` instead of `Run(opts)` when a test or service host owns cancellation. `Run` and `RunContext` perform the same static validation as `Validate`; calling `Validate` separately is still useful in CI and deployment preflight.
 
@@ -400,7 +400,7 @@ Response serialization, cookie validation, event dispatch, and post-processing h
 
 ## Swagger and transport extensions
 
-The framework does not generate OpenAPI by itself. Export the static HTTP contract with `spine contract export --format openapi --output openapi.json`. To mount Swagger UI in v0.6.0, import native Echo v5 and construct the app with `platform.New(platform.WithEcho(func(e *echo.Echo) { e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler)) }))`. Preserve the following constructor and route registrations. Native Echo routes bypass Spine interceptors and staging. The historical Bun demo snapshot below uses the removed App.Transport hook; use typed WithEcho for current code.
+The framework does not generate OpenAPI by itself. Export the static HTTP contract with `spine-cli contract export --format openapi --output openapi.json`. To mount Swagger UI in v0.6.0, import native Echo v5 and construct the app with `platform.New(platform.WithEcho(func(e *echo.Echo) { e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler)) }))`. Preserve the following constructor and route registrations. Native Echo routes bypass Spine interceptors and staging. The historical Bun demo snapshot below uses the removed App.Transport hook; use typed WithEcho for current code.
 
 Use `App.RegisterTransport` only for an independent custom transport implementing `core.CustomTransport` (`Init`, `Start`, and `Stop`).
 
@@ -601,8 +601,8 @@ For Go changes, format the edited files, then run the CLI gates:
 
 ```sh
 gofmt -w <changed-go-files>
-spine contract check --json
-spine verify --json
+spine-cli contract check --json
+spine-cli verify --json
 ```
 
 Run `go test -race ./...` separately when the change affects concurrency.

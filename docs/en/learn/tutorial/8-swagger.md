@@ -4,16 +4,16 @@ Export an OpenAPI file with the CLI, then add Swaggo documentation and Swagger U
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
 
-Use the `example.com/my-app` project from [Your first app](/en/learn/tutorial/1-project-structure). First generate `src/user` with `spine generate resource user` from [Controllers](/en/learn/tutorial/2-controller). If you used a different module path, replace only the `example.com/my-app` prefix in the import path below with your module path and keep the `/docs` suffix. Run commands from the project root.
+Use the `example.com/my-app` project from [Your first app](/en/learn/tutorial/1-project-structure). First generate `src/user` with `spine-cli generate resource user` from [Controllers](/en/learn/tutorial/2-controller). If you used a different module path, replace only the `example.com/my-app` prefix in the import path below with your module path and keep the `/docs` suffix. Run commands from the project root.
 
 ## Export OpenAPI with the CLI
 
 The CLI generates an OpenAPI 3.1 document from registered routes and handler signatures. Swaggo annotations are not required.
 
 ```bash
-spine doctor
-spine contract check
-spine contract export --format openapi --output openapi.json
+spine-cli doctor
+spine-cli contract check
+spine-cli contract export --format openapi --output openapi.json
 ```
 
 Check the generated `openapi.json` for `/health` and `/user/{id}`. Spine's `/user/:id` is represented as `/user/{id}` in OpenAPI, and the `x-spine-*` fields record the analysis evidence and its limitations. For example, static analysis alone cannot determine response status codes selected at runtime.
@@ -116,9 +116,9 @@ app := platform.New(platform.WithEcho(func(e *echo.Echo) {
 gofmt -w internal/application/application.go src/user/user_controller.go
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 Open `http://localhost:8080/swagger/index.html` in a browser and check that the GET route appears. `/swagger/doc.json` should return the generated Swagger 2.0 document. Use Try it out in the UI to request `/user/1`; the response should be HTTP 200 with `{"id":1}`.
@@ -253,7 +253,7 @@ type ErrorResponse struct {
 
 ## Regenerate documentation
 
-Regenerate the Swaggo documentation whenever you change annotations or DTOs. `spine dev` does not run Swaggo automatically. Add the following Makefile to update the documentation before starting the app with `make run`. Update the CLI's OpenAPI file separately with `spine contract export`.
+Regenerate the Swaggo documentation whenever you change annotations or DTOs. `spine-cli dev` does not run Swaggo automatically. Add the following Makefile to update the documentation before starting the app with `make run`. Update the CLI's OpenAPI file separately with `spine-cli contract export`.
 
 ```makefile
 .PHONY: swagger run
@@ -262,7 +262,7 @@ swagger:
 	swag init -g internal/application/application.go --parseInternal
 
 run: swagger
-	spine dev
+	spine-cli dev
 ```
 
 ## Next steps

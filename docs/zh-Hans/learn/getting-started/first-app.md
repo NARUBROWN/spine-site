@@ -7,18 +7,18 @@
 ## 1. 安装 CLI 并确认命令
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
+go install github.com/NARUBROWN/spine-cli@latest
+spine-cli version
 ```
 
-使用 `spine version` 确认已安装的 CLI 版本。 如果找不到命令，请在[安装指南](/zh-Hans/learn/getting-started/installation)中检查 PATH 设置。
+使用 `spine-cli version` 确认已安装的 CLI 版本。 如果找不到命令，请在[安装指南](/zh-Hans/learn/getting-started/installation)中检查 PATH 设置。
 
 ## 2. 创建项目
 
 在准备存放项目的父目录中运行。如果 `hello-spine` 目录已存在，请使用其他名称。
 
 ```bash
-spine new hello-spine --module example.com/hello-spine
+spine-cli new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
@@ -79,10 +79,10 @@ func main() {
 在生成项目的根目录中运行。
 
 ```bash
-spine doctor
-spine inspect
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli inspect
+spine-cli contract check
+spine-cli verify
 ```
 
 `doctor` 诊断工具和项目配置。`inspect` 展示代码中注册的路由、依赖等应用配置。CLI 从注册代码中提取的这些信息称为执行契约。
@@ -92,7 +92,7 @@ spine verify
 ## 5. 运行并确认响应
 
 ```bash
-spine dev
+spine-cli dev
 ```
 
 保持服务器运行，打开另一个终端发送请求。

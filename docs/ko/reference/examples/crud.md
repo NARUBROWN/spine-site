@@ -27,9 +27,9 @@ graph TD
 기본 앱을 생성하고 의존성과 프로젝트 설정을 확인합니다. 이후 명령은 `crud-example/`에서 실행합니다.
 
 ```sh
-spine new crud-example --layout legacy --module example.com/crud-example
+spine-cli new crud-example --layout legacy --module example.com/crud-example
 cd crud-example
-spine doctor
+spine-cli doctor
 ```
 
 ### 파일 배치
@@ -495,9 +495,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check`는 정적 계약을 검사합니다. `verify`는 정적 계약과 gofmt, go vet, Go 테스트를 검사합니다. 서버가 실제 요청을 처리하는지는 다음 HTTP 요청으로 확인합니다.

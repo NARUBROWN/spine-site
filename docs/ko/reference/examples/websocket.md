@@ -11,10 +11,10 @@
 프로젝트와 WebSocket 핸들러를 생성합니다. 이후 명령은 `chat-app/`에서 실행합니다.
 
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app
+spine-cli new chat-app --layout legacy --module example.com/chat-app
 cd chat-app
-spine doctor
-spine generate websocket chat --path /ws/chat --field message:string
+spine-cli doctor
+spine-cli generate websocket chat --path /ws/chat --field message:string
 ```
 
 `src/websocket/chat/`에 `chat_message.go`, `chat_handler.go`, `module.go`가 생성됩니다. `BuildApplication`에는 `chatwebsocket.Register(app)` 호출과 오류 확인 코드가 자동으로 추가됩니다. 같은 경로나 생성자를 다시 등록하지 마세요.
@@ -129,10 +129,10 @@ return app, boot.Options{
 
 ```sh
 gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
-spine contract check
-spine verify
-spine contract export --format asyncapi --output asyncapi.json
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli contract export --format asyncapi --output asyncapi.json
+spine-cli dev
 ```
 
 `contract check`는 정적 계약을 검사합니다. `verify`는 정적 계약과 gofmt, go vet, Go 테스트를 검사합니다. `contract export`는 등록된 WebSocket 계약을 `asyncapi.json`에 기록합니다. 실제 연결과 메시지 교환은 다음 단계에서 확인합니다.

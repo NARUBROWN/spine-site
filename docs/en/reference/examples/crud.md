@@ -27,9 +27,9 @@ graph TD
 Create a basic app and check its dependencies and project configuration. Run subsequent commands from `crud-example/`.
 
 ```sh
-spine new crud-example --layout legacy --module example.com/crud-example
+spine-cli new crud-example --layout legacy --module example.com/crud-example
 cd crud-example
-spine doctor
+spine-cli doctor
 ```
 
 ### File Layout
@@ -495,9 +495,9 @@ From the project root, format the code, check dependencies and code, and start t
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. Use the HTTP requests below to confirm that the server handles actual requests.

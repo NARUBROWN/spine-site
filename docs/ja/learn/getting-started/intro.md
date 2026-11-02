@@ -35,7 +35,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```
 
 
-CLIの`spine generate resource user`が生成するコードは、上の例と名前やパスが異なります。生成されるハンドラーは`src/user`の`UserController.Get`で、パスは`GET /user/:id`です。コンストラクタが登録されている状態で、同じコンストラクタやルートを再度登録しないでください。`BuildApplication`に追加された`user.Register(app)`の呼び出しとエラー処理も維持してください。詳しい手順は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で確認できます。
+CLIの`spine-cli generate resource user`が生成するコードは、上の例と名前やパスが異なります。生成されるハンドラーは`src/user`の`UserController.Get`で、パスは`GET /user/:id`です。コンストラクタが登録されている状態で、同じコンストラクタやルートを再度登録しないでください。`BuildApplication`に追加された`user.Register(app)`の呼び出しとエラー処理も維持してください。詳しい手順は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で確認できます。
 
 ## 基本的な概念
 
@@ -115,8 +115,8 @@ func (c *UserController) CreateUser(
 ## 始める
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
+go install github.com/NARUBROWN/spine-cli@latest
+spine-cli version
 ```
 
 CLIをインストールしたら、[最初のアプリ](/ja/learn/getting-started/first-app)でプロジェクトを生成し、HTTPレスポンスを確認してください。コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)のパス設定を参照してください。

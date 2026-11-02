@@ -11,10 +11,10 @@
 建立專案並產生 WebSocket 處理器。後續命令均在 `chat-app/` 中執行。
 
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app
+spine-cli new chat-app --layout legacy --module example.com/chat-app
 cd chat-app
-spine doctor
-spine generate websocket chat --path /ws/chat --field message:string
+spine-cli doctor
+spine-cli generate websocket chat --path /ws/chat --field message:string
 ```
 
 `src/websocket/chat/` 下會產生 `chat_message.go`、`chat_handler.go` 和 `module.go`。`BuildApplication` 會自動加入 `chatwebsocket.Register(app)` 呼叫和錯誤檢查程式碼。請勿重複註冊相同路徑或建構函式。
@@ -129,10 +129,10 @@ return app, boot.Options{
 
 ```sh
 gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
-spine contract check
-spine verify
-spine contract export --format asyncapi --output asyncapi.json
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli contract export --format asyncapi --output asyncapi.json
+spine-cli dev
 ```
 
 `contract check` 檢查靜態契約。`verify` 檢查靜態契約，並執行 gofmt、go vet 和 Go 測試。`contract export` 會將已註冊的 WebSocket 契約寫入 `asyncapi.json`。實際連線和訊息交換會在下一步確認。

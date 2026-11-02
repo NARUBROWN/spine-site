@@ -11,11 +11,11 @@ Bun으로 MySQL에 연결하고, 생성된 `GET /user/:id`가 데이터베이스
 사용자 리소스가 아직 없다면 생성할 파일을 확인한 뒤 적용합니다. 이미 만든 리소스는 다시 생성하지 않습니다.
 
 ```sh
-spine generate resource user --dry-run
+spine-cli generate resource user --dry-run
 ```
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 CLI는 사용자 리소스의 기본 파일과 등록 코드를 생성합니다. Bun 의존성, 데이터베이스 연결, 모델, 마이그레이션은 아래 단계에서 직접 추가합니다. 생성된 `main.go`는 유지합니다.
@@ -170,7 +170,7 @@ if dsn == "" {
 
 ```bash
 export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
-spine dev
+spine-cli dev
 ```
 
 
@@ -367,7 +367,7 @@ func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, err
 
 ### 마이그레이션 파일 작성
 
-아래 SQL 파일을 `cmd/migrate/migrations`에 만듭니다. 마이그레이션은 별도 Go 프로그램으로 실행하며 `spine migrate` 명령은 없습니다. 다음 실행 단계는 기존 데이터베이스에 `users` 테이블을 추가하므로, 앞에서 설정한 `DATABASE_URL`이 예제용 DB를 가리키는지 확인하세요.
+아래 SQL 파일을 `cmd/migrate/migrations`에 만듭니다. 마이그레이션은 별도 Go 프로그램으로 실행하며 `spine-cli migrate` 명령은 없습니다. 다음 실행 단계는 기존 데이터베이스에 `users` 테이블을 추가하므로, 앞에서 설정한 `DATABASE_URL`이 예제용 DB를 가리키는지 확인하세요.
 
 ```sql
 -- cmd/migrate/migrations/001_create_users.up.sql
@@ -436,7 +436,7 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 go run ./cmd/migrate
 
 # 서버 실행
-spine dev
+spine-cli dev
 ```
 
 
@@ -586,11 +586,11 @@ err := r.db.NewSelect().
 go mod tidy
 go mod download all
 gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
-spine contract check
-spine verify
+spine-cli contract check
+spine-cli verify
 ```
 
-마이그레이션 후 `spine dev`로 앱을 실행하고 `GET /user/:id`를 요청합니다. 빈 테이블에서는 해당 ID가 없어 HTTP 404가 반환됩니다. 사용자를 저장한 뒤 조회하려면 다음 트랜잭션 튜토리얼의 POST 예제를 적용하세요.
+마이그레이션 후 `spine-cli dev`로 앱을 실행하고 `GET /user/:id`를 요청합니다. 빈 테이블에서는 해당 ID가 없어 HTTP 404가 반환됩니다. 사용자를 저장한 뒤 조회하려면 다음 트랜잭션 튜토리얼의 POST 예제를 적용하세요.
 
 ## 다음 단계
 

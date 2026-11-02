@@ -25,13 +25,13 @@ func NewUserService(repository *UserRepository) *UserService {
 아직 생성하지 않았다면 `my-app` 루트에서 실행합니다. 이미 생성했다면 다시 실행하지 마세요.
 
 ```bash
-spine generate resource user --dry-run
+spine-cli generate resource user --dry-run
 ```
 
 미리보기에서 생성 파일과 등록 코드 변경을 확인한 뒤 아래 명령으로 생성합니다.
 
 ```bash
-spine generate resource user
+spine-cli generate resource user
 ```
 
 다음은 CLI가 같은 `user` 패키지에 생성한 코드에서 타입과 생성자만 발췌한 것입니다. 기존 파일을 이 코드로 덮어쓰지 마세요. 컨트롤러의 `Get` 메서드는 생성된 파일에 유지합니다.
@@ -181,13 +181,13 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 다른 기능을 CLI로 생성하면 각 패키지의 `Register` 함수와 앱을 조립하는 `BuildApplication`에 연결됩니다. 아래는 별도의 `order` 리소스를 추가하는 선택 예제입니다. CLI가 `order.Register(app)` 호출을 추가하므로 직접 중복 등록하지 마세요.
 
 ```bash
-spine generate resource order --dry-run
+spine-cli generate resource order --dry-run
 ```
 
 미리보기에서 생성 파일과 등록 코드 변경을 확인한 뒤 아래 명령으로 생성합니다.
 
 ```bash
-spine generate resource order
+spine-cli generate resource order
 ```
 
 ### 생성자 등록을 여러 호출로 나누기
@@ -266,14 +266,14 @@ app.Constructor(
 프로젝트 루트에서 다음 명령을 실행합니다.
 
 ```bash
-spine doctor
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli contract check
+spine-cli verify
 ```
 
-`spine contract check`는 소스에서 추출한 DI 계약을 검사하고, `spine verify`는 포맷, `go vet`, 테스트도 검사합니다. `app.Validate(options)`의 성공만으로 생성자 실행이나 인스턴스 초기화까지 확인한 것은 아닙니다.
+`spine-cli contract check`는 소스에서 추출한 DI 계약을 검사하고, `spine-cli verify`는 포맷, `go vet`, 테스트도 검사합니다. `app.Validate(options)`의 성공만으로 생성자 실행이나 인스턴스 초기화까지 확인한 것은 아닙니다.
 
-실제 초기화와 요청 처리는 `spine dev`로 앱을 실행한 뒤 확인하세요. 데이터베이스를 연결했다면 실제 접속과 질의도 별도로 확인해야 합니다. 순환 의존성이나 누락된 생성자는 의존성 해결 과정에서 오류를 반환하며, 생성된 `main.go`는 `Run` 오류를 확인합니다.
+실제 초기화와 요청 처리는 `spine-cli dev`로 앱을 실행한 뒤 확인하세요. 데이터베이스를 연결했다면 실제 접속과 질의도 별도로 확인해야 합니다. 순환 의존성이나 누락된 생성자는 의존성 해결 과정에서 오류를 반환하며, 생성된 `main.go`는 `Run` 오류를 확인합니다.
 
 ## 다음 단계
 

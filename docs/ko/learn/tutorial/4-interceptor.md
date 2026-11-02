@@ -11,13 +11,13 @@
 사용자 리소스가 아직 없다면 프로젝트 루트에서 생성합니다. 이미 만들었다면 생성 단계를 건너뜁니다.
 
 ```sh
-spine generate resource user --dry-run
+spine-cli generate resource user --dry-run
 ```
 
 미리보기에서 생성 파일과 등록 코드 변경을 확인한 뒤 생성합니다.
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 CLI는 `src/user` 파일과 `BuildApplication`의 `user.Register(app)` 호출을 생성합니다. 인터셉터 생성기는 없으므로 `src/interceptor` 디렉터리를 만들고 아래 로깅과 인증 인터셉터 파일을 직접 작성하세요.
@@ -316,13 +316,13 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ## 로깅과 인증 동작 검증
 
-기본 예제의 로깅, 인증, CORS 코드를 적용한 뒤 프로젝트 루트에서 실행합니다. `spine contract check`는 정적 계약을 검사하고 `spine verify`는 로컬 코드 검사를 수행합니다. 실제 요청의 인증과 응답은 서버를 실행해 별도로 확인합니다.
+기본 예제의 로깅, 인증, CORS 코드를 적용한 뒤 프로젝트 루트에서 실행합니다. `spine-cli contract check`는 정적 계약을 검사하고 `spine-cli verify`는 로컬 코드 검사를 수행합니다. 실제 요청의 인증과 응답은 서버를 실행해 별도로 확인합니다.
 
 ```sh
 gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 다른 터미널에서 다음 요청을 보냅니다.

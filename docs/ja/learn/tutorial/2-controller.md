@@ -4,18 +4,18 @@ CLI で作成した `my-app` プロジェクトに `GET /user/:id` のコント�
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
 
-[最初のアプリ](/ja/learn/tutorial/1-project-structure)のインストールとプロジェクト作成を済ませ、プロジェクトルートで進めてください。すでに `spine generate resource user` を実行した場合は、生成手順を省略してファイルを確認します。
+[最初のアプリ](/ja/learn/tutorial/1-project-structure)のインストールとプロジェクト作成を済ませ、プロジェクトルートで進めてください。すでに `spine-cli generate resource user` を実行した場合は、生成手順を省略してファイルを確認します。
 
 ## CLI でコントローラーを生成する
 
 ```bash
-spine generate resource user --dry-run
+spine-cli generate resource user --dry-run
 ```
 
 プレビューで生成ファイルと登録コードの変更を確認してから、次のコマンドで生成します。
 
 ```bash
-spine generate resource user
+spine-cli generate resource user
 ```
 
 ### 生成されるファイル
@@ -84,10 +84,10 @@ if err := user.Register(app); err != nil {
 プロジェクトルートで契約とローカルコードを検査してから、サーバーを起動します。
 
 ```bash
-spine doctor
-spine contract check
-spine verify
-spine dev
+spine-cli doctor
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 別のターミナルから、生成されたルートを呼び出します。
@@ -96,7 +96,7 @@ spine dev
 curl http://localhost:8080/user/1
 ```
 
-`GET /user/1` は HTTP 200 と `{"id":1}` を返すはずです。このレスポンスで確認できるのは、パスのバインディングとルートの実行です。データベースからユーザーを取得した結果ではありません。`spine contract check` と `spine verify` の成否は、実際の HTTP レスポンスとは別に確認してください。
+`GET /user/1` は HTTP 200 と `{"id":1}` を返すはずです。このレスポンスで確認できるのは、パスのバインディングとルートの実行です。データベースからユーザーを取得した結果ではありません。`spine-cli contract check` と `spine-cli verify` の成否は、実際の HTTP レスポンスとは別に確認してください。
 
 ## 拡張例の前提
 

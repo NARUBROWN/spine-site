@@ -25,13 +25,13 @@ func NewUserService(repository *UserRepository) *UserService {
 若尚未產生，請在 `my-app` 根目錄執行。若已產生，請勿重複執行。
 
 ```bash
-spine generate resource user --dry-run
+spine-cli generate resource user --dry-run
 ```
 
 在預覽中確認將產生的檔案與註冊程式碼的變更後，執行下列命令產生檔案。
 
 ```bash
-spine generate resource user
+spine-cli generate resource user
 ```
 
 以下僅擷取 CLI 在同一個 `user` 套件中產生的型別與建構函式。請勿以這些程式碼覆寫現有檔案。控制器的 `Get` 方法應保留在產生的檔案中。
@@ -181,13 +181,13 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 使用 CLI 產生其他功能時，會連接到各套件的 `Register` 函式，以及組裝應用程式的 `BuildApplication`。以下是新增獨立 `order` 資源的選用範例。CLI 會加入 `order.Register(app)` 呼叫，請勿手動重複註冊。
 
 ```bash
-spine generate resource order --dry-run
+spine-cli generate resource order --dry-run
 ```
 
 在預覽中確認將產生的檔案與註冊程式碼的變更後，執行下列命令產生檔案。
 
 ```bash
-spine generate resource order
+spine-cli generate resource order
 ```
 
 ### 將建構函式註冊拆成多次呼叫
@@ -266,14 +266,14 @@ app.Constructor(
 在專案根目錄執行下列命令。
 
 ```bash
-spine doctor
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli contract check
+spine-cli verify
 ```
 
-`spine contract check` 會檢查從原始碼擷取的 DI 契約，`spine verify` 也會檢查格式、`go vet` 與測試。僅憑 `app.Validate(options)` 成功，無法確認建構函式執行與執行個體初始化。
+`spine-cli contract check` 會檢查從原始碼擷取的 DI 契約，`spine-cli verify` 也會檢查格式、`go vet` 與測試。僅憑 `app.Validate(options)` 成功，無法確認建構函式執行與執行個體初始化。
 
-請以 `spine dev` 啟動應用程式後，確認實際初始化與請求處理。若已連接資料庫，還需要另外確認實際連線與查詢。循環相依性或缺少建構函式會在相依性解析過程中傳回錯誤，產生的 `main.go` 會檢查 `Run` 錯誤。
+請以 `spine-cli dev` 啟動應用程式後，確認實際初始化與請求處理。若已連接資料庫，還需要另外確認實際連線與查詢。循環相依性或缺少建構函式會在相依性解析過程中傳回錯誤，產生的 `main.go` 會檢查 `Run` 錯誤。
 
 ## 下一步
 

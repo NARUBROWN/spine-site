@@ -11,10 +11,10 @@ Complete [Installation and Your First App](/en/learn/getting-started/first-app) 
 Generate the project and WebSocket handler. Run subsequent commands from `chat-app/`.
 
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app
+spine-cli new chat-app --layout legacy --module example.com/chat-app
 cd chat-app
-spine doctor
-spine generate websocket chat --path /ws/chat --field message:string
+spine-cli doctor
+spine-cli generate websocket chat --path /ws/chat --field message:string
 ```
 
 The command generates `chat_message.go`, `chat_handler.go`, and `module.go` in `src/websocket/chat/`. It also adds a `chatwebsocket.Register(app)` call and error handling to `BuildApplication`. Do not register the same path or constructor again.
@@ -129,10 +129,10 @@ From the project root, check the code, export the AsyncAPI document, and start t
 
 ```sh
 gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
-spine contract check
-spine verify
-spine contract export --format asyncapi --output asyncapi.json
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli contract export --format asyncapi --output asyncapi.json
+spine-cli dev
 ```
 
 `contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. `contract export` writes the registered WebSocket contracts to `asyncapi.json`. Check actual connections and message exchange in the next step.

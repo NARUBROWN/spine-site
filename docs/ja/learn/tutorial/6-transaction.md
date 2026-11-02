@@ -235,11 +235,11 @@ if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" 
 gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
 go mod tidy
 go mod download all
-spine doctor
-spine inspect
-spine contract check
-spine verify
-spine dev
+spine-cli doctor
+spine-cli inspect
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 契約検査とローカル検査だけでは、実際のDBのコミットとロールバックを確認できません。アプリを実行するには、データベースのチュートリアルにある `DATABASE_URL` の設定とマイグレーションが必要です。次の手順で、成功したリクエストの保存と、失敗したリクエストのロールバックを確認します。コミットとロールバック自体が失敗した場合のエラー処理は、別途確認する必要があります。

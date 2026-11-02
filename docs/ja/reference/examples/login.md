@@ -13,9 +13,9 @@
 基本アプリと JWT の依存関係を準備します。以降のコマンドは `login-example/` で実行します。
 
 ```sh
-spine new login-example --layout legacy --module example.com/login-example
+spine-cli new login-example --layout legacy --module example.com/login-example
 cd login-example
-spine doctor
+spine-cli doctor
 go get github.com/golang-jwt/jwt/v5
 ```
 
@@ -376,9 +376,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。実際のユーザー登録、ログイン、認証は、次の HTTP リクエストで確認します。

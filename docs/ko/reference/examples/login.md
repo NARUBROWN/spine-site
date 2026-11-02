@@ -13,9 +13,9 @@
 기본 앱과 JWT 의존성을 준비합니다. 이후 명령은 `login-example/`에서 실행합니다.
 
 ```sh
-spine new login-example --layout legacy --module example.com/login-example
+spine-cli new login-example --layout legacy --module example.com/login-example
 cd login-example
-spine doctor
+spine-cli doctor
 go get github.com/golang-jwt/jwt/v5
 ```
 
@@ -376,9 +376,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check`는 정적 계약을 검사합니다. `verify`는 정적 계약과 gofmt, go vet, Go 테스트를 검사합니다. 실제 회원가입과 로그인, 인증은 다음 HTTP 요청으로 확인합니다.

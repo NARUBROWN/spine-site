@@ -18,17 +18,17 @@ go version
 執行下列指令安裝 CLI 並確認版本。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
+go install github.com/NARUBROWN/spine-cli@latest
+spine-cli version
 ```
 
-使用 `spine version` 確認已安裝的 CLI 版本。
+使用 `spine-cli version` 確認已安裝的 CLI 版本。
 
-若找不到 `spine` 指令，且未另外設定 `GOBIN`，請在 Bash 或 Zsh 執行下列指令，將路徑加入目前的工作階段。若要持續使用，請將相同設定存入 shell 啟動檔。若已設定 `GOBIN`，請改為加入該目錄。
+若找不到 `spine-cli` 指令，且未另外設定 `GOBIN`，請在 Bash 或 Zsh 執行下列指令，將路徑加入目前的工作階段。若要持續使用，請將相同設定存入 shell 啟動檔。若已設定 `GOBIN`，請改為加入該目錄。
 
 ```bash
 export PATH="$(go env GOPATH)/bin:$PATH"
-spine version
+spine-cli version
 ```
 
 ## 建立新專案
@@ -36,7 +36,7 @@ spine version
 在預計放置專案的上層目錄執行。若已有同名的 `my-app` 目錄，請使用其他名稱。
 
 ```bash
-spine new my-app --module example.com/my-app
+spine-cli new my-app --module example.com/my-app
 cd my-app
 ```
 
@@ -58,27 +58,27 @@ platform = "echo"
 ## 驗證與執行
 
 ```bash
-spine doctor
-spine inspect
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli inspect
+spine-cli contract check
+spine-cli verify
 ```
 
 確認每個指令都執行完畢，且未發生錯誤。
 
 | 指令 | 檢查內容 |
 | --- | --- |
-| `spine doctor` | Go 工具與專案設定 |
-| `spine inspect` | 程式碼中註冊的路由、相依性等應用程式設定 |
-| `spine contract check` | 從註冊程式碼擷取的執行契約是否有效 |
-| `spine verify` | 執行契約，以及 `gofmt`、`go vet` 與 Go 測試結果 |
+| `spine-cli doctor` | Go 工具與專案設定 |
+| `spine-cli inspect` | 程式碼中註冊的路由、相依性等應用程式設定 |
+| `spine-cli contract check` | 從註冊程式碼擷取的執行契約是否有效 |
+| `spine-cli verify` | 執行契約，以及 `gofmt`、`go vet` 與 Go 測試結果 |
 
 產生的 `application_test.go` 會在不啟動伺服器的情況下，檢查 `BuildApplication()` 與 `app.Validate(options)`。此步驟驗證的是程式碼與應用程式設定，實際 HTTP 回應則在下一步確認。
 
-通過檢查後，執行 `spine dev`，並在另一個終端機確認實際的 HTTP 回應。
+通過檢查後，執行 `spine-cli dev`，並在另一個終端機確認實際的 HTTP 回應。
 
 ```bash
-spine dev
+spine-cli dev
 ```
 
 ```bash

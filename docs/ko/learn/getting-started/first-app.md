@@ -7,18 +7,18 @@ Go 1.25.5 이상이 필요하며, CLI의 권장 버전은 Go 1.27.3입니다. �
 ## 1. CLI 설치와 명령 확인
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
+go install github.com/NARUBROWN/spine-cli@latest
+spine-cli version
 ```
 
-`spine version`으로 설치된 CLI 버전을 확인합니다. 명령을 찾을 수 없다면 [설치 안내](/ko/learn/getting-started/installation)에서 PATH 설정을 확인하세요.
+`spine-cli version`으로 설치된 CLI 버전을 확인합니다. 명령을 찾을 수 없다면 [설치 안내](/ko/learn/getting-started/installation)에서 PATH 설정을 확인하세요.
 
 ## 2. 프로젝트 생성
 
 프로젝트를 둘 상위 디렉터리에서 실행합니다. `hello-spine` 디렉터리가 이미 있다면 다른 이름을 사용하세요.
 
 ```bash
-spine new hello-spine --module example.com/hello-spine
+spine-cli new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
@@ -79,10 +79,10 @@ func main() {
 생성한 프로젝트의 루트 디렉터리에서 실행합니다.
 
 ```bash
-spine doctor
-spine inspect
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli inspect
+spine-cli contract check
+spine-cli verify
 ```
 
 `doctor`는 도구와 프로젝트 설정을 진단합니다. `inspect`는 코드에 등록된 라우트와 의존성 등 앱 구성을 보여줍니다. CLI가 등록 코드에서 추출한 이 정보를 실행 계약이라고 합니다.
@@ -92,7 +92,7 @@ spine verify
 ## 5. 실행하고 응답 확인
 
 ```bash
-spine dev
+spine-cli dev
 ```
 
 서버가 실행된 상태에서 다른 터미널을 열고 요청합니다.

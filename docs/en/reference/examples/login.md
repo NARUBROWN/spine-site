@@ -13,9 +13,9 @@ This example uses an in-memory store, plaintext password comparison, and a JWT s
 Prepare a basic app and the JWT dependency. Run subsequent commands from `login-example/`.
 
 ```sh
-spine new login-example --layout legacy --module example.com/login-example
+spine-cli new login-example --layout legacy --module example.com/login-example
 cd login-example
-spine doctor
+spine-cli doctor
 go get github.com/golang-jwt/jwt/v5
 ```
 
@@ -376,9 +376,9 @@ From the project root, format the code, check dependencies and code, and start t
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. Use the HTTP requests below to check actual signup, login, and authentication.
