@@ -1,6 +1,6 @@
 # インストール
 
-Spine CLIをインストールし、新しいプロジェクトを作成して、開発サーバーのレスポンスを確認します。このページは、Spine CLI 0.4.0と、CLIが生成するSpine v0.6.0のプロジェクトを対象としています。
+Spine `v0.6.0` 以降、公式の開始方法は CLI の `new` です。最新の公開 CLI をインストールし、プロジェクトを作成して開発サーバーの応答を確認します。
 
 ## 要件
 
@@ -18,11 +18,11 @@ go version
 次のコマンドでCLIをインストールし、バージョンを確認します。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-`spine version`が`spine-cli 0.4.0`を表示すれば、インストールは完了です。
+`spine version` でインストール済み CLI のバージョンを確認してください。
 
 `spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
 
@@ -40,7 +40,7 @@ spine new my-app --module example.com/my-app
 cd my-app
 ```
 
-`new` は Spine `v0.6.0`、Echo プラットフォーム `v0.1.0`、Echo `v5.4.4` をインストールし、静的契約の検査とビルドを完了します。`--skip-install` でファイルだけを生成した場合に限り、別途 `go mod tidy` を実行してください。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
+`new` はインストール済み CLI の検証済みレシピで互換性のある Spine、Echo プラットフォーム、Echo のバージョンを選択し、依存関係のインストール、静的契約の検査、ビルドを完了します。選択されたバージョンは生成された `go.mod` で確認してください。`--skip-install` を使った場合は、別途 `go mod tidy` と `go mod download all` を実行します。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
 
 生成される`spine.toml`は次のとおりです。
 

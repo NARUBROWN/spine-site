@@ -1,6 +1,6 @@
 # 安裝
 
-安裝 Spine CLI 後，建立新專案並確認開發伺服器的回應。本篇以 Spine CLI 0.4.0 及其產生的 Spine v0.6.0 專案為準。
+從 Spine `v0.6.0` 開始，官方進入點是 CLI 的 `new`。安裝最新發布的 CLI，建立專案並檢查開發伺服器的回應。
 
 ## 需求
 
@@ -18,11 +18,11 @@ go version
 執行下列指令安裝 CLI 並確認版本。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-`spine version` 輸出 `spine-cli 0.4.0` 即表示安裝完成。
+使用 `spine version` 確認已安裝的 CLI 版本。
 
 若找不到 `spine` 指令，且未另外設定 `GOBIN`，請在 Bash 或 Zsh 執行下列指令，將路徑加入目前的工作階段。若要持續使用，請將相同設定存入 shell 啟動檔。若已設定 `GOBIN`，請改為加入該目錄。
 
@@ -40,7 +40,7 @@ spine new my-app --module example.com/my-app
 cd my-app
 ```
 
-`new` 會安裝 Spine `v0.6.0`、Echo 平台 `v0.1.0` 與 Echo `v5.4.4`，並完成靜態契約檢查與建置。只有使用 `--skip-install` 僅產生檔案時，才需要另外執行 `go mod tidy`。安裝過程不會初始化應用程式、執行測試或啟動監聽器。
+`new` 依照已安裝 CLI 的驗證配方選擇相容的 Spine、Echo 平台與 Echo 版本，並完成相依套件安裝、靜態契約檢查與建置。請在產生的 `go.mod` 中查看選取的版本。使用 `--skip-install` 時，請另外執行 `go mod tidy` 與 `go mod download all`。安裝過程不會初始化應用程式、執行測試或啟動監聽器。
 
 產生的 `spine.toml` 如下。
 

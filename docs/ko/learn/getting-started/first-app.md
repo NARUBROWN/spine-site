@@ -7,11 +7,11 @@ Go 1.25.5 이상이 필요하며, CLI의 권장 버전은 Go 1.27.3입니다. �
 ## 1. CLI 설치와 명령 확인
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-`spine version`은 `spine-cli 0.4.0`를 출력합니다. 명령을 찾지 못하면 [설치 안내](/ko/learn/getting-started/installation)에서 Go 실행 파일 경로 설정을 확인하세요.
+`spine version`으로 설치된 CLI 버전을 확인합니다. 명령을 찾을 수 없다면 [설치 안내](/ko/learn/getting-started/installation)에서 PATH 설정을 확인하세요.
 
 ## 2. 프로젝트 생성
 
@@ -22,7 +22,7 @@ spine new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
-`new`는 Spine `v0.6.0`, Echo 플랫폼 `v0.1.0`과 Echo `v5.4.4`를 설치하고 정적 계약 검사와 빌드까지 마칩니다. `--skip-install`로 파일만 생성했을 때는 `go mod tidy`를 별도로 실행하세요. 설치 과정에서는 앱 초기화, 테스트나 리스너를 실행하지 않습니다.
+`new`는 설치한 CLI의 검증 레시피에 따라 Spine, Echo 플랫폼과 Echo의 호환 버전을 선택하고 의존성 설치, 정적 계약 검사와 빌드를 완료합니다. 선택된 버전은 생성된 `go.mod`에서 확인합니다. `--skip-install`로 파일만 생성했다면 `go mod tidy`와 `go mod download all`을 별도로 실행하세요. 설치 과정에서는 앱 초기화, 테스트나 리스너를 실행하지 않습니다.
 
 ## 3. 생성된 구조 확인
 

@@ -4,7 +4,7 @@
 
 ## Versions and sources
 
-Spine CLI `v0.4.0` is the official starting point for Spine `v0.6.0`. Its default `new` recipe installs Spine `v0.6.0`, Echo platform `v0.1.0`, and Echo `v5.4.4`, using Go 1.25.5 or later. Check `spine version`, `spine schema --json`, and `spine capabilities --json`; source and tests are authoritative when prose differs.
+From Spine `v0.6.0`, CLI `new` is the official starting point. Install the CLI with `@latest`; its bundled recipe selects compatible Spine, Echo platform, and Echo versions. Read the generated go.mod for the selected versions. The examples were verified on 2026-11-02 with CLI v0.4.0, Spine v0.6.0, Echo platform v0.1.0, and Echo v5.4.4. Check `spine version`, `spine schema --json`, and `spine capabilities --json`; source and tests are authoritative when prose differs.
 
 - CLI source and full agent contract: https://github.com/NARUBROWN/spine-cli
 - Framework API: https://github.com/NARUBROWN/spine
@@ -18,7 +18,7 @@ Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from
 ## Install, plan, and generate
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 spine schema --json
 spine capabilities --json
@@ -55,7 +55,7 @@ These are the six supported `spine.toml` keys. Keep DB, broker, and authenticati
 
 Default `layered-v1` generators use database/domain, src/dto, src/repository, src/service, src/controller, and src/route. A resource composes role generators and does not implement a business handler or add a route automatically. Implement the handler, then register it with `spine g route get-users --method GET --path /users --handler src/controller:UserController.Get`. Review each generator plan with `--dry-run --json` and apply it with that plan's `--if-match` hash.
 
-The site's feature-based `src/user` tutorials explicitly use a separate `legacy` layout, still supported by CLI v0.4.0 with the same current Spine and Echo platform versions. They do not describe default `new` output. Start those examples in a fresh directory:
+The site's feature-based `src/user` tutorials explicitly use a separate `legacy` layout, supported by the CLI with versions selected by its bundled recipe. They do not describe default `new` output. Start those examples in a fresh directory:
 
 ```sh
 spine new my-app --layout legacy --module example.com/my-app --dry-run --json

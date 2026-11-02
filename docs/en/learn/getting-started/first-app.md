@@ -7,11 +7,11 @@ Go 1.25.5 or later is required, and the CLI recommends Go 1.27.3. The time neede
 ## 1. Install the CLI and Check the Command
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-`spine version` prints `spine-cli 0.4.0`. If the command cannot be found, check the Go executable path setup in the [installation guide](/en/learn/getting-started/installation).
+Use `spine version` to check the installed CLI version. If the command is not found, check PATH setup in the [installation guide](/en/learn/getting-started/installation).
 
 ## 2. Create a Project
 
@@ -22,7 +22,7 @@ spine new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
-`new` installs Spine `v0.6.0`, Echo platform `v0.1.0`, and Echo `v5.4.4`, then checks the static contract and builds the app. Run `go mod tidy` separately only if you use `--skip-install` to generate files. Installation does not initialize the app, run tests, or open a listener.
+`new` uses the installed CLI’s verified recipe to select compatible Spine, Echo platform, and Echo versions, installs dependencies, checks the static contract, and builds the app. Check the generated `go.mod` for selected versions. If you use `--skip-install`, run `go mod tidy` and `go mod download all` separately. Installation does not initialize the app, run tests, or open a listener.
 
 ## 3. Inspect the Generated Structure
 

@@ -1,6 +1,6 @@
 # Installation
 
-Install the Spine CLI, create a new project, and check the development server's response. This guide uses Spine CLI 0.4.0 and the Spine v0.6.0 project it generates.
+From Spine `v0.6.0`, the official starting point is CLI `new`. Install the latest released CLI, create a project, and check the development server response.
 
 ## Requirements
 
@@ -18,11 +18,11 @@ Check that the reported Go version is 1.25.5 or later.
 Run the following commands to install the CLI and check its version.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-Installation is complete when `spine version` prints `spine-cli 0.4.0`.
+Use `spine version` to check the installed CLI version.
 
 If the `spine` command cannot be found and you have not set `GOBIN` separately, run the following commands in Bash or Zsh to add the directory to the current session's path. To keep using it in future sessions, save the same setting in your shell startup file. If you have set `GOBIN`, add that directory instead.
 
@@ -40,7 +40,7 @@ spine new my-app --module example.com/my-app
 cd my-app
 ```
 
-`new` installs Spine `v0.6.0`, Echo platform `v0.1.0`, and Echo `v5.4.4`, then checks the static contract and builds the app. Run `go mod tidy` separately only if you use `--skip-install` to generate files. Installation does not initialize the app, run tests, or open a listener.
+`new` uses the installed CLI’s verified recipe to select compatible Spine, Echo platform, and Echo versions, installs dependencies, checks the static contract, and builds the app. Check the generated `go.mod` for selected versions. If you use `--skip-install`, run `go mod tidy` and `go mod download all` separately. Installation does not initialize the app, run tests, or open a listener.
 
 The generated `spine.toml` contains the following:
 

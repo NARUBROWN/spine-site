@@ -115,7 +115,7 @@ func (c *UserController) CreateUser(
 ## Getting Started
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 

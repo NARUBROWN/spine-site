@@ -7,11 +7,11 @@
 ## 1. 安裝 CLI 並確認指令
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-`spine version` 會輸出 `spine-cli 0.4.0`。若找不到指令，請參閱[安裝說明](/zh-Hant/learn/getting-started/installation)，確認 Go 執行檔的路徑設定。
+使用 `spine version` 確認已安裝的 CLI 版本。 若找不到指令，請在[安裝說明](/zh-Hant/learn/getting-started/installation)中檢查 PATH 設定。
 
 ## 2. 建立專案
 
@@ -22,7 +22,7 @@ spine new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
-`new` 會安裝 Spine `v0.6.0`、Echo 平台 `v0.1.0` 與 Echo `v5.4.4`，並完成靜態契約檢查與建置。只有使用 `--skip-install` 僅產生檔案時，才需要另外執行 `go mod tidy`。安裝過程不會初始化應用程式、執行測試或啟動監聽器。
+`new` 依照已安裝 CLI 的驗證配方選擇相容的 Spine、Echo 平台與 Echo 版本，並完成相依套件安裝、靜態契約檢查與建置。請在產生的 `go.mod` 中查看選取的版本。使用 `--skip-install` 時，請另外執行 `go mod tidy` 與 `go mod download all`。安裝過程不會初始化應用程式、執行測試或啟動監聽器。
 
 ## 3. 確認產生的結構
 

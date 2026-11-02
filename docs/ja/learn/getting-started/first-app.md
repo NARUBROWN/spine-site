@@ -7,11 +7,11 @@ Go 1.25.5以上が必要です。CLIの推奨バージョンはGo 1.27.3です�
 ## 1. CLIのインストールとコマンドの確認
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-`spine version`は`spine-cli 0.4.0`を表示します。コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)でGoの実行ファイルのパス設定を確認してください。
+`spine version` でインストール済み CLI のバージョンを確認してください。 コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)で PATH 設定を確認してください。
 
 ## 2. プロジェクトの生成
 
@@ -22,7 +22,7 @@ spine new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
-`new` は Spine `v0.6.0`、Echo プラットフォーム `v0.1.0`、Echo `v5.4.4` をインストールし、静的契約の検査とビルドを完了します。`--skip-install` でファイルだけを生成した場合に限り、別途 `go mod tidy` を実行してください。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
+`new` はインストール済み CLI の検証済みレシピで互換性のある Spine、Echo プラットフォーム、Echo のバージョンを選択し、依存関係のインストール、静的契約の検査、ビルドを完了します。選択されたバージョンは生成された `go.mod` で確認してください。`--skip-install` を使った場合は、別途 `go mod tidy` と `go mod download all` を実行します。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
 
 ## 3. 生成された構造の確認
 

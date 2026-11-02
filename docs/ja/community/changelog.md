@@ -1,6 +1,6 @@
 # 現在のリリース
 
-このドキュメントサイトは、Spine v0.6.0 と Spine CLI v0.4.0 を基準としています。
+ドキュメントの例は 2026-11-02 に Spine v0.6.0 と CLI v0.4.0 で検証しました。通常のインストールには `@latest` を使い、実際の CLI と依存関係のバージョンは `spine version` と生成された `go.mod` で確認してください。
 
 ## Spine v0.6.0
 
@@ -23,7 +23,7 @@ Spine v0.6.0 の公開 API とランタイムは、次の機能を提供しま�
 
 ## Spine CLI v0.4.0
 
-インストールとプロジェクト作成の例は、Spine CLI v0.4.0 を基準としています。このバージョンの CLI は、Spine v0.6.0 を使用するプロジェクトを生成します。
+CLI v0.4.0 は Spine v0.6.0、Echo プラットフォーム v0.1.0、HTTP アダプター v2 契約をサポートします。
 
 - [CLI のインストール](/ja/learn/getting-started/installation)
 - [最初のアプリを作る](/ja/learn/getting-started/first-app)

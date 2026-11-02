@@ -1,6 +1,6 @@
 # Current releases
 
-This documentation site is based on Spine v0.6.0 and Spine CLI v0.4.0.
+The examples were verified on 2026-11-02 with Spine v0.6.0 and CLI v0.4.0. General installation uses `@latest`; check `spine version` and the generated `go.mod` for the actual CLI and dependency versions.
 
 ## Spine v0.6.0
 
@@ -23,7 +23,7 @@ See [Security configuration](/en/reference/security-configuration) for productio
 
 ## Spine CLI v0.4.0
 
-The installation and project creation examples use Spine CLI v0.4.0. This CLI version creates projects that use Spine v0.6.0.
+CLI v0.4.0 supports Spine v0.6.0, Echo platform v0.1.0, and the HTTP adapter v2 contract.
 
 - [Install the CLI](/en/learn/getting-started/installation)
 - [Build your first app](/en/learn/getting-started/first-app)

@@ -1,6 +1,6 @@
 # 当前版本
 
-本文档站点以 Spine v0.6.0 和 Spine CLI v0.4.0 为基准。
+文档示例于 2026-11-02 使用 Spine v0.6.0 和 CLI v0.4.0 验证。一般安装使用 `@latest`；实际 CLI 和依赖版本请通过 `spine version` 及生成的 `go.mod` 确认。
 
 ## Spine v0.6.0
 
@@ -23,7 +23,7 @@ Spine v0.6.0 的公开 API 和运行时提供以下功能。
 
 ## Spine CLI v0.4.0
 
-安装和项目创建示例以 Spine CLI v0.4.0 为基准。此版本的 CLI 会创建使用 Spine v0.6.0 的项目。
+CLI v0.4.0 支持 Spine v0.6.0、Echo 平台 v0.1.0 和 HTTP 适配器 v2 契约。
 
 - [安装 CLI](/zh-Hans/learn/getting-started/installation)
 - [创建第一个应用](/zh-Hans/learn/getting-started/first-app)
