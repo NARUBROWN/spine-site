@@ -377,15 +377,15 @@ type WebSocketHandshakeInterceptor interface {
 
 ## 存储区键与执行时点
 
-Spine 在内部存储区中使用以下键。应用不要覆盖这些键。应用自己的值应使用 `auth.user` 这样能表明用途的独立名称。
+路由状态与 HTTP 响应 writer 使用具有明确类型的契约，与用户 Set/Get 存储分离。路由器通过 `SetRoute` 保存路径值，HTTP 管道通过 `HTTPResponseContext` 选择 writer。
 
-| 键 | 值的类型 | 用途 |
+| API | 值的类型 | 用途 |
 | --- | --- | --- |
-| `spine.params` | `map[string]string` | 路由器提取的路径参数 |
-| `spine.pathKeys` | `[]string` | 路径参数的声明顺序 |
-| `spine.response_writer` | `core.ResponseWriter` | HTTP 响应写入和缓冲处理 |
+| `Params()` | `map[string]string` | 路由器提取的路径参数 |
+| `PathKeys()` | `[]string` | 路径参数的声明顺序 |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | HTTP 响应写入和缓冲处理 |
 
-`spine.response_writer` 关联适配器提供的响应写入器，流水线会在发送响应前，用带缓冲区的写入器包装它。请让控制器返回 `httpx.Response[T]`、`httpx.Redirect`、`httpx.Binary`，不要取出这个键直接写入响应。
+`HTTPResponseContext.ResponseWriter()` 返回 HTTP 响应 writer。管道在准备响应时将其替换为 staging writer，并在发送前恢复。控制器通常返回 `httpx.Response[T]`、`httpx.Redirect` 或 `httpx.Binary`，而不是直接访问 writer。
 
 能够从上下文读取哪些值，也取决于执行时点。全局 `PreHandle` 在路由前执行，路由 `PreHandle` 在路由和参数绑定后执行。设计时应同时考虑存储区中必须有值的时点，以及生成该值的阶段。
 

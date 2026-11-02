@@ -377,15 +377,15 @@ type WebSocketHandshakeInterceptor interface {
 
 ## 儲存區鍵與執行時點
 
-Spine 在內部儲存區使用下列鍵。應用程式請勿覆寫相同的鍵。應用程式的值請使用像 `auth.user` 這樣，能表明用途的獨立名稱。
+路由狀態與 HTTP 回應 writer 使用具有明確型別的契約，與使用者 Set/Get 儲存空間分離。路由器透過 `SetRoute` 儲存路徑值，HTTP 管線透過 `HTTPResponseContext` 選擇 writer。
 
-| 鍵 | 值的型別 | 用途 |
+| API | 值的型別 | 用途 |
 | --- | --- | --- |
-| `spine.params` | `map[string]string` | 路由器擷取的路徑參數 |
-| `spine.pathKeys` | `[]string` | 路徑參數的宣告順序 |
-| `spine.response_writer` | `core.ResponseWriter` | HTTP 回應寫入與緩衝處理 |
+| `Params()` | `map[string]string` | 路由器擷取的路徑參數 |
+| `PathKeys()` | `[]string` | 路徑參數的宣告順序 |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | HTTP 回應寫入與緩衝處理 |
 
-`spine.response_writer` 會連結配接器提供的回應寫入器，管線則會將其包裝成在回應傳送前使用緩衝區的寫入器。請回傳 `httpx.Response[T]`、`httpx.Redirect` 或 `httpx.Binary`，不要在控制器取出這個鍵並直接寫入回應。
+`HTTPResponseContext.ResponseWriter()` 回傳 HTTP 回應 writer。管線準備回應時將其替換為 staging writer，並在傳送前復原。控制器通常回傳 `httpx.Response[T]`、`httpx.Redirect` 或 `httpx.Binary`，而不是直接存取 writer。
 
 能從內容物件讀取哪些值，也取決於執行時點。全域 `PreHandle` 在路由前執行，路由 `PreHandle` 則在路由與引數綁定後執行。設計時，必須一併考慮儲存區應在何時具備該值，以及哪個階段會建立這個值。
 

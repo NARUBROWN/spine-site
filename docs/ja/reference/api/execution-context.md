@@ -53,6 +53,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -95,6 +96,17 @@ type HttpRequestContext interface {
     MultipartForm() (*multipart.Form, error)
 }
 ```
+
+### HTTPResponseContext
+
+```go
+type HTTPResponseContext interface {
+    ResponseWriter() ResponseWriter
+    SetResponseWriter(ResponseWriter)
+}
+```
+
+`HTTPResponseContext.ResponseWriter()` は HTTP 応答 writer を返します。パイプラインは応答準備中に staging writer に置き換え、送信前に復元します。コントローラーは通常、writer に直接アクセスせず `httpx.Response[T]`、`httpx.Redirect`、`httpx.Binary` を返します。
 
 ### ConsumerRequestContext
 
@@ -312,6 +324,14 @@ PathKeys() []string
 ctx.PathKeys()  // ["userId", "postId"]
 ```
 
+### SetRoute
+
+```go
+SetRoute(params map[string]string, pathKeys []string)
+```
+
+ルーターが解決したパラメーターとキーの順序を保存します。実装は入力をコピーし、ユーザーの Set/Get ストアと分離します。ExecutionContext を独自実装する場合、このメソッドも必要です。
+
 ### Queries
 
 ```go
@@ -375,9 +395,7 @@ Get(key string) (any, bool)
 **例**
 
 ```go
-if rw, ok := ctx.Get("spine.response_writer"); ok {
-    responseWriter := rw.(core.ResponseWriter)
-}
+value, exists := ctx.Get("auth.user")
 ```
 
 ## ControllerContext
@@ -582,13 +600,15 @@ var msg ChatMessage
 json.Unmarshal(payload, &msg)
 ```
 
-## 予約済みキー
+## ルーティングと応答の契約
 
-| キー | 型 | 説明 |
+ルーティング情報と HTTP 応答 writer は、ユーザーの Set/Get ストアとは独立した型付き契約で管理します。ルーターは `SetRoute` でパス値を保存し、HTTP パイプラインは `HTTPResponseContext` で writer を選択します。
+
+| API | 型 | 説明 |
 |----|------|------|
-| `spine.response_writer` | `core.ResponseWriter` | レスポンス出力インターフェース |
-| `spine.params` | `map[string]string` | パスパラメータ |
-| `spine.pathKeys` | `[]string` | パスパラメータのキーの順序 |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | レスポンス出力インターフェース |
+| `Params()` | `map[string]string` | パスパラメータ |
+| `PathKeys()` | `[]string` | パスパラメータのキーの順序 |
 
 ## インターセプターでの使用
 
@@ -638,11 +658,11 @@ type CORSInterceptor struct {
 }
 
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
+    httpCtx, ok := ctx.(core.HTTPResponseContext)
+    if !ok || httpCtx.ResponseWriter() == nil {
         return nil
     }
-    rw := rwAny.(core.ResponseWriter)
+    rw := httpCtx.ResponseWriter()
 
     origin := ctx.Header("Origin")
     if origin != "" && i.isAllowedOrigin(origin) {
@@ -651,7 +671,9 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     }
 
     if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
+        if err := rw.WriteStatus(204); err != nil {
+            return err
+        }
         return core.ErrAbortPipeline
     }
 

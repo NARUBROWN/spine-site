@@ -377,15 +377,15 @@ WebSocket に適用するために登録した `core.Interceptor` がこの契�
 
 ## ストアのキーと実行タイミング
 
-Spine は内部ストアで次のキーを使います。アプリで同じキーを上書きしないでください。アプリの値には、`auth.user` のように用途が分かる別の名前を使います。
+ルーティング情報と HTTP 応答 writer は、ユーザーの Set/Get ストアとは独立した型付き契約で管理します。ルーターは `SetRoute` でパス値を保存し、HTTP パイプラインは `HTTPResponseContext` で writer を選択します。
 
-| キー | 値の型 | 用途 |
+| API | 値の型 | 用途 |
 | --- | --- | --- |
-| `spine.params` | `map[string]string` | ルーターが抽出したパスパラメーター |
-| `spine.pathKeys` | `[]string` | パスパラメーターの宣言順序 |
-| `spine.response_writer` | `core.ResponseWriter` | HTTP レスポンスの書き込みとバッファー処理 |
+| `Params()` | `map[string]string` | ルーターが抽出したパスパラメーター |
+| `PathKeys()` | `[]string` | パスパラメーターの宣言順序 |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | HTTP レスポンスの書き込みとバッファー処理 |
 
-`spine.response_writer` には、アダプターが提供するレスポンスライターを関連付けます。パイプラインはレスポンスを送信するまで、バッファーを使うライターでこれを包みます。コントローラーでこのキーを取り出してレスポンスを直接書き込む代わりに、`httpx.Response[T]`、`httpx.Redirect`、`httpx.Binary` を返してください。
+`HTTPResponseContext.ResponseWriter()` は HTTP 応答 writer を返します。パイプラインは応答準備中に staging writer に置き換え、送信前に復元します。コントローラーは通常、writer に直接アクセスせず `httpx.Response[T]`、`httpx.Redirect`、`httpx.Binary` を返します。
 
 コンテキストから読み取れる値は、実行タイミングにも依存します。グローバルの `PreHandle` はルーティング前、ルートの `PreHandle` はルーティングと引数バインディングの後に実行します。ストアに値が必要になるタイミングと、その値を作成する段階を併せて設計する必要があります。
 

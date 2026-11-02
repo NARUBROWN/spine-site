@@ -53,6 +53,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -95,6 +96,17 @@ type HttpRequestContext interface {
     MultipartForm() (*multipart.Form, error)
 }
 ```
+
+### HTTPResponseContext
+
+```go
+type HTTPResponseContext interface {
+    ResponseWriter() ResponseWriter
+    SetResponseWriter(ResponseWriter)
+}
+```
+
+`HTTPResponseContext.ResponseWriter()`는 HTTP 응답 writer를 반환합니다. 파이프라인은 응답 준비 중 writer를 staging writer로 바꾸고 전송 전에 복구합니다. 컨트롤러는 writer를 직접 꺼내기보다 `httpx.Response[T]`, `httpx.Redirect`, `httpx.Binary`를 반환합니다.
 
 ### ConsumerRequestContext
 
@@ -312,6 +324,14 @@ PathKeys() []string
 ctx.PathKeys()  // ["userId", "postId"]
 ```
 
+### SetRoute
+
+```go
+SetRoute(params map[string]string, pathKeys []string)
+```
+
+라우터가 찾은 매개변수와 키 순서를 저장합니다. 구현체는 입력을 복사하며 사용자 `Set/Get` 저장소를 사용하지 않습니다. 직접 `ExecutionContext`를 구현한 경우 이 메서드도 제공해야 합니다.
+
 ### Queries
 
 ```go
@@ -375,9 +395,7 @@ Get(key string) (any, bool)
 **예시**
 
 ```go
-if rw, ok := ctx.Get("spine.response_writer"); ok {
-    responseWriter := rw.(core.ResponseWriter)
-}
+value, exists := ctx.Get("auth.user")
 ```
 
 ## ControllerContext
@@ -582,13 +600,15 @@ var msg ChatMessage
 json.Unmarshal(payload, &msg)
 ```
 
-## 예약된 키
+## 라우팅과 응답 계약
 
-| 키 | 타입 | 설명 |
+라우팅 정보와 HTTP 응답 writer는 타입이 명시된 계약으로 관리하며 사용자 `Set/Get` 저장소와 분리됩니다. 라우터는 `SetRoute`로 경로 값을 저장하고 HTTP 파이프라인은 `HTTPResponseContext`로 writer를 선택합니다.
+
+| API | 타입 | 설명 |
 |----|------|------|
-| `spine.response_writer` | `core.ResponseWriter` | 응답 출력 인터페이스 |
-| `spine.params` | `map[string]string` | 경로 매개변수 |
-| `spine.pathKeys` | `[]string` | 경로 매개변수 키 순서 |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | 응답 출력 인터페이스 |
+| `Params()` | `map[string]string` | 경로 매개변수 |
+| `PathKeys()` | `[]string` | 경로 매개변수 키 순서 |
 
 ## 인터셉터에서 사용
 
@@ -638,11 +658,11 @@ type CORSInterceptor struct {
 }
 
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
+    httpCtx, ok := ctx.(core.HTTPResponseContext)
+    if !ok || httpCtx.ResponseWriter() == nil {
         return nil
     }
-    rw := rwAny.(core.ResponseWriter)
+    rw := httpCtx.ResponseWriter()
 
     origin := ctx.Header("Origin")
     if origin != "" && i.isAllowedOrigin(origin) {
@@ -651,7 +671,9 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     }
 
     if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
+        if err := rw.WriteStatus(204); err != nil {
+            return err
+        }
         return core.ErrAbortPipeline
     }
 

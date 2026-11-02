@@ -377,15 +377,15 @@ Check the type for the relevant interface before using protocol-specific functio
 
 ## Store Keys and Execution Timing
 
-Spine uses the following keys in its internal store. Do not overwrite them in your app. Use separate, descriptive names such as `auth.user` for app values.
+Routing state and the HTTP response writer use typed contracts separate from user Set/Get storage. The router stores path values through `SetRoute`, and the HTTP pipeline selects its writer through `HTTPResponseContext`.
 
-| Key | Value type | Purpose |
+| API | Value type | Purpose |
 | --- | --- | --- |
-| `spine.params` | `map[string]string` | Path parameters extracted by the router |
-| `spine.pathKeys` | `[]string` | Declaration order of path parameters |
-| `spine.response_writer` | `core.ResponseWriter` | HTTP response writing and buffering |
+| `Params()` | `map[string]string` | Path parameters extracted by the router |
+| `PathKeys()` | `[]string` | Declaration order of path parameters |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | HTTP response writing and buffering |
 
-`spine.response_writer` holds the response writer supplied by the adapter. The pipeline wraps it with a writer that buffers the response until transmission. Return `httpx.Response[T]`, `httpx.Redirect`, or `httpx.Binary` instead of retrieving this key in a controller to write the response directly.
+`HTTPResponseContext.ResponseWriter()` returns the HTTP response writer. The pipeline swaps it for a staging writer while preparing a response and restores it before transmission. Controllers normally return `httpx.Response[T]`, `httpx.Redirect`, or `httpx.Binary` instead of accessing a writer directly.
 
 The values available in the context also depend on execution timing. Global `PreHandle` runs before routing, while route `PreHandle` runs after routing and argument binding. Design the stage that creates a value together with the point at which the store must contain it.
 

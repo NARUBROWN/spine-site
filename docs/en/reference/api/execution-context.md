@@ -53,6 +53,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -95,6 +96,17 @@ type HttpRequestContext interface {
     MultipartForm() (*multipart.Form, error)
 }
 ```
+
+### HTTPResponseContext
+
+```go
+type HTTPResponseContext interface {
+    ResponseWriter() ResponseWriter
+    SetResponseWriter(ResponseWriter)
+}
+```
+
+`HTTPResponseContext.ResponseWriter()` returns the HTTP response writer. The pipeline swaps it for a staging writer while preparing a response and restores it before transmission. Controllers normally return `httpx.Response[T]`, `httpx.Redirect`, or `httpx.Binary` instead of accessing a writer directly.
 
 ### ConsumerRequestContext
 
@@ -312,6 +324,14 @@ Returns path parameter keys in declaration order.
 ctx.PathKeys()  // ["userId", "postId"]
 ```
 
+### SetRoute
+
+```go
+SetRoute(params map[string]string, pathKeys []string)
+```
+
+Stores the parameters and key order found by the router. Implementations copy the inputs and keep them separate from user Set/Get storage. Custom ExecutionContext implementations must provide this method.
+
 ### Queries
 
 ```go
@@ -375,9 +395,7 @@ Retrieves a value from the internal store.
 **Example**
 
 ```go
-if rw, ok := ctx.Get("spine.response_writer"); ok {
-    responseWriter := rw.(core.ResponseWriter)
-}
+value, exists := ctx.Get("auth.user")
 ```
 
 ## ControllerContext
@@ -582,13 +600,15 @@ var msg ChatMessage
 json.Unmarshal(payload, &msg)
 ```
 
-## Reserved keys
+## Routing and response contracts
 
-| Key | Type | Description |
+Routing state and the HTTP response writer use typed contracts separate from user Set/Get storage. The router stores path values through `SetRoute`, and the HTTP pipeline selects its writer through `HTTPResponseContext`.
+
+| API | Type | Description |
 |----|------|------|
-| `spine.response_writer` | `core.ResponseWriter` | Response output interface |
-| `spine.params` | `map[string]string` | Path parameters |
-| `spine.pathKeys` | `[]string` | Path parameter key order |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | Response output interface |
+| `Params()` | `map[string]string` | Path parameters |
+| `PathKeys()` | `[]string` | Path parameter key order |
 
 ## Using ExecutionContext in interceptors
 
@@ -638,11 +658,11 @@ type CORSInterceptor struct {
 }
 
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    rwAny, ok := ctx.Get("spine.response_writer")
-    if !ok {
+    httpCtx, ok := ctx.(core.HTTPResponseContext)
+    if !ok || httpCtx.ResponseWriter() == nil {
         return nil
     }
-    rw := rwAny.(core.ResponseWriter)
+    rw := httpCtx.ResponseWriter()
 
     origin := ctx.Header("Origin")
     if origin != "" && i.isAllowedOrigin(origin) {
@@ -651,7 +671,9 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     }
 
     if ctx.Method() == "OPTIONS" {
-        rw.WriteStatus(204)
+        if err := rw.WriteStatus(204); err != nil {
+            return err
+        }
         return core.ErrAbortPipeline
     }
 

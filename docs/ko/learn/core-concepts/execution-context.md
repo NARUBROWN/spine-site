@@ -377,15 +377,15 @@ WebSocket에 적용하도록 등록한 `core.Interceptor`가 이 계약도 구�
 
 ## 저장소 키와 실행 시점
 
-Spine은 내부 저장소에서 다음 키를 사용합니다. 앱에서 같은 키를 덮어쓰지 마세요. 앱의 값에는 `auth.user`처럼 용도가 드러나는 별도 이름을 사용합니다.
+라우팅 정보와 HTTP 응답 writer는 타입이 명시된 계약으로 관리하며 사용자 `Set/Get` 저장소와 분리됩니다. 라우터는 `SetRoute`로 경로 값을 저장하고 HTTP 파이프라인은 `HTTPResponseContext`로 writer를 선택합니다.
 
-| 키 | 값의 타입 | 용도 |
+| API | 값의 타입 | 용도 |
 | --- | --- | --- |
-| `spine.params` | `map[string]string` | 라우터가 추출한 경로 매개변수 |
-| `spine.pathKeys` | `[]string` | 경로 매개변수의 선언 순서 |
-| `spine.response_writer` | `core.ResponseWriter` | HTTP 응답 작성과 버퍼 처리 |
+| `Params()` | `map[string]string` | 라우터가 추출한 경로 매개변수 |
+| `PathKeys()` | `[]string` | 경로 매개변수의 선언 순서 |
+| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | HTTP 응답 작성과 버퍼 처리 |
 
-`spine.response_writer`에는 어댑터가 제공한 응답 작성기가 연결되며, 파이프라인은 응답을 전송하기 전까지 버퍼를 사용하는 작성기로 이를 감쌉니다. 컨트롤러가 이 키를 꺼내 응답을 직접 쓰는 방식 대신 `httpx.Response[T]`, `httpx.Redirect`, `httpx.Binary`를 반환하세요.
+`HTTPResponseContext.ResponseWriter()`는 HTTP 응답 writer를 반환합니다. 파이프라인은 응답 준비 중 writer를 staging writer로 바꾸고 전송 전에 복구합니다. 컨트롤러는 writer를 직접 꺼내기보다 `httpx.Response[T]`, `httpx.Redirect`, `httpx.Binary`를 반환합니다.
 
 컨텍스트에서 어떤 값을 읽을 수 있는지는 실행 시점에도 달려 있습니다. 전역 `PreHandle`은 라우팅 전, 라우트 `PreHandle`은 라우팅과 인자 바인딩 후에 실행합니다. 저장소에 값이 있어야 하는 시점과 이 값을 만드는 단계를 함께 설계해야 합니다.
 
