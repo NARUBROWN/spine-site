@@ -21,6 +21,13 @@ Spine v0.6.0 的公开 API 和运行时提供以下功能。
 
 生产环境的默认值和限制请参阅[安全配置](/zh-Hans/reference/security-configuration)。
 
+## Spine CLI v0.4.1
+
+官方安装路径为 `github.com/NARUBROWN/spine-cli/cmd/spine`，调用命令为 `spine`。此补丁新增既有应用迁移指南，以及离线契约检查所需的模块缓存准备步骤；CLI v0.4.0 的命令和生成行为保持不变。
+
+- [CLI v0.4.1 发布说明](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.1)
+- [既有应用迁移指南](https://github.com/NARUBROWN/spine-cli/blob/v0.4.1/migration/v0.4.0.md)
+
 ## Spine CLI v0.4.0
 
 CLI v0.4.0 支持 Spine v0.6.0、Echo 平台 v0.1.0 和 HTTP 适配器 v2 契约。

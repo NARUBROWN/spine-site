@@ -17,6 +17,8 @@ Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from
 
 ## Install, plan, and generate
 
+The official installation package is `github.com/NARUBROWN/spine-cli/cmd/spine`; invoke the CLI as `spine`. To update the CLI itself, rerun the `go install` command below. `spine update` updates project dependencies and does not update the CLI executable.
+
 ```sh
 go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
@@ -38,7 +40,7 @@ spine dev
 
 In another terminal, `curl http://localhost:8080/health` returns HTTP 200 and `{"status":"ok"}`. Stop the dev process before running another app on the same port.
 
-Default `new` creates go.mod/go.sum, main.go, spine.toml, internal/application, src/controller/health_controller.go, and src/route/route.go. It installs dependencies, checks the static contract, and builds before publishing the project. It does not initialize the app, run tests, or open a listener. Only `--skip-install` requires a separate `go mod tidy`. Installed dry-runs may use the network and module cache. Use `GOWORK=off` when a parent workspace is active.
+Default `new` creates go.mod/go.sum, main.go, spine.toml, internal/application, src/controller/health_controller.go, and src/route/route.go. It installs dependencies, checks the static contract, and builds before publishing the project. It does not initialize the app, run tests, or open a listener. With `--skip-install`, run `go mod tidy` and `go mod download all` separately to prepare dependencies and all offline module metadata. Installed dry-runs may use the network and module cache. Use `GOWORK=off` when a parent workspace is active.
 
 ```toml
 module = "example.com/hello-spine"
@@ -50,6 +52,15 @@ platform = "echo"
 ```
 
 These are the six supported `spine.toml` keys. Keep DB, broker, and authentication settings in application code or environment variables.
+
+If static inspection reports `MODULE_GRAPH_UNAVAILABLE` after a manual dependency change, prepare the full module metadata before retrying:
+
+```sh
+go mod tidy
+go mod download all
+spine contract check --json
+spine verify --json
+```
 
 ## Extend the generated project
 

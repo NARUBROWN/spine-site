@@ -22,6 +22,8 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+更新 CLI 本身时，请重新运行上面的 `go install` 命令。`spine update` 更新当前项目的 Spine 和 Echo 平台依赖，不会更新 CLI 可执行文件。
+
 使用 `spine version` 确认已安装的 CLI 版本。
 
 如果找不到 `spine` 命令，且未单独设置 `GOBIN`，请在 Bash 或 Zsh 中运行以下命令，将安装路径添加到当前会话中。要持久保存此设置，请将相同配置写入 Shell 启动文件。如果已设置 `GOBIN`，则应添加该目录。
@@ -86,6 +88,17 @@ curl http://localhost:8080/health
 ```
 
 如果返回 `{"status":"ok"}`，则表示开发服务器已处理请求。在运行服务器的终端中按 `Ctrl+C` 结束运行。连接外部数据库或消息代理，或部署应用后，还需要在相应环境中确认运行情况。
+
+## 恢复模块缓存错误
+
+静态契约检查会离线读取模块图。如果使用 `--skip-install` 生成文件或手动更改依赖后出现 `MODULE_GRAPH_UNAVAILABLE`，请先准备完整的模块元数据，再重新检查。
+
+```bash
+go mod tidy
+go mod download all
+spine contract check
+spine verify
+```
 
 ## 后续步骤
 

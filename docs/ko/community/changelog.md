@@ -21,6 +21,13 @@ Spine v0.6.0의 공개 API와 런타임은 다음 기능을 제공합니다.
 
 운영 환경의 기본값과 제약은 [보안 설정](/ko/reference/security-configuration)에서 확인하세요.
 
+## Spine CLI v0.4.1
+
+공식 설치 경로는 `github.com/NARUBROWN/spine-cli/cmd/spine`, 호출 명령은 `spine`으로 안내합니다. 기존 앱의 마이그레이션 가이드와 오프라인 계약 검사의 모듈 캐시 준비 절차를 추가한 패치이며, CLI v0.4.0의 명령과 생성 동작은 유지합니다.
+
+- [CLI v0.4.1 릴리스](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.1)
+- [기존 앱 마이그레이션 가이드](https://github.com/NARUBROWN/spine-cli/blob/v0.4.1/migration/v0.4.0.md)
+
 ## Spine CLI v0.4.0
 
 CLI v0.4.0은 Spine v0.6.0, Echo 플랫폼 v0.1.0과 HTTP 어댑터 v2 계약을 지원합니다.

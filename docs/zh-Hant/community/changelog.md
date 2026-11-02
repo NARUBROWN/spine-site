@@ -21,6 +21,13 @@ Spine v0.6.0 的公開 API 與執行階段提供以下功能。
 
 正式環境的預設值與限制，請參閱[安全性設定](/zh-Hant/reference/security-configuration)。
 
+## Spine CLI v0.4.1
+
+官方安裝路徑為 `github.com/NARUBROWN/spine-cli/cmd/spine`，呼叫指令為 `spine`。此修補版本新增既有應用程式遷移指南，以及離線契約檢查所需的模組快取準備步驟；CLI v0.4.0 的指令與產生行為保持不變。
+
+- [CLI v0.4.1 發行說明](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.1)
+- [既有應用程式遷移指南](https://github.com/NARUBROWN/spine-cli/blob/v0.4.1/migration/v0.4.0.md)
+
 ## Spine CLI v0.4.0
 
 CLI v0.4.0 支援 Spine v0.6.0、Echo 平台 v0.1.0 與 HTTP 配接器 v2 契約。

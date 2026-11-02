@@ -22,6 +22,8 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+To update the CLI itself, rerun the `go install` command above. `spine update` updates the current project’s Spine and Echo platform dependencies; it does not update the CLI executable.
+
 Use `spine version` to check the installed CLI version.
 
 If the `spine` command cannot be found and you have not set `GOBIN` separately, run the following commands in Bash or Zsh to add the directory to the current session's path. To keep using it in future sessions, save the same setting in your shell startup file. If you have set `GOBIN`, add that directory instead.
@@ -86,6 +88,17 @@ curl http://localhost:8080/health
 ```
 
 If the server returns `{"status":"ok"}`, it has handled the request. Press `Ctrl+C` in the terminal running the server to stop it. After connecting an external database or message broker, or deploying the app, you must also check its behavior in that environment.
+
+## Recover from Module Cache Errors
+
+Static contract inspection reads the module graph offline. If inspection reports `MODULE_GRAPH_UNAVAILABLE` after generating files with `--skip-install` or changing dependencies manually, prepare the full module metadata and check again.
+
+```bash
+go mod tidy
+go mod download all
+spine contract check
+spine verify
+```
 
 ## Next Steps
 

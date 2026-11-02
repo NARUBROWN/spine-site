@@ -21,6 +21,13 @@ The public API and runtime in Spine v0.6.0 provide the following features.
 
 See [Security configuration](/en/reference/security-configuration) for production defaults and constraints.
 
+## Spine CLI v0.4.1
+
+The official installation path is `github.com/NARUBROWN/spine-cli/cmd/spine`, and the executable command is `spine`. This patch adds an existing-app migration guide and module cache preparation for offline contract inspection while preserving CLI v0.4.0 commands and generation behavior.
+
+- [CLI v0.4.1 release](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.1)
+- [Existing-app migration guide](https://github.com/NARUBROWN/spine-cli/blob/v0.4.1/migration/v0.4.0.md)
+
 ## Spine CLI v0.4.0
 
 CLI v0.4.0 supports Spine v0.6.0, Echo platform v0.1.0, and the HTTP adapter v2 contract.
