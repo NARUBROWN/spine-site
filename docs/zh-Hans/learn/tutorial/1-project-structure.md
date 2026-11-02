@@ -9,11 +9,11 @@
 在准备存放项目的父目录中运行。如果已存在同名的 `my-app` 目录，请使用其他名称。
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine-cli version
+spine-cli new my-app --layout legacy --module example.com/my-app
 cd my-app
-spine doctor
-spine inspect
+spine-cli doctor
+spine-cli inspect
 ```
 
 命令会创建 `my-app` 目录并准备依赖。`doctor` 诊断工具和项目配置，`inspect` 可以显示默认路径 `GET /health` 的注册情况。
@@ -125,7 +125,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 在项目根目录中生成用户资源。如果已有项目中已生成该资源，请跳过此命令。
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 ```text
@@ -154,7 +154,7 @@ if err := user.Register(app); err != nil {
 
 资源生成器仅生成返回 ID 的 GET 处理器的基础代码。数据库模型和数据持久化功能需要自行实现。
 
-如果需要带有类型的创建和查询示例，请使用其他名称运行 `spine generate slice order --storage memory --field name:string`。该命令使用的内存存储仅用于开发，应用退出后数据会丢失。
+如果需要带有类型的创建和查询示例，请使用其他名称运行 `spine-cli generate slice order --storage memory --field name:string`。该命令使用的内存存储仅用于开发，应用退出后数据会丢失。
 
 ## 注册规则与验证
 
@@ -163,9 +163,9 @@ if err := user.Register(app); err != nil {
 检查应用配置后，再运行服务器。
 
 ```sh
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check` 检查从注册代码中提取的执行契约。`verify` 检查契约，并运行 `gofmt`、`go vet` 和 Go 测试。两条命令均执行完毕且没有错误后，`dev` 启动开发服务器。实际 HTTP 行为以及外部数据库、消息代理的连接，需要在运行环境中另行确认。

@@ -9,11 +9,11 @@ Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. �
 프로젝트를 둘 상위 디렉터리에서 실행합니다. 같은 이름의 `my-app` 디렉터리가 이미 있다면 다른 이름을 사용하세요.
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine-cli version
+spine-cli new my-app --layout legacy --module example.com/my-app
 cd my-app
-spine doctor
-spine inspect
+spine-cli doctor
+spine-cli inspect
 ```
 
 `my-app` 디렉터리가 생성되고 의존성이 준비됩니다. `doctor`가 도구와 프로젝트 설정을 진단하며, `inspect`에서 기본 경로인 `GET /health` 등록을 확인할 수 있습니다.
@@ -125,7 +125,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 프로젝트 루트에서 사용자 리소스를 생성합니다. 기존 프로젝트에 이미 생성했다면 이 명령은 건너뜁니다.
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 ```text
@@ -154,7 +154,7 @@ if err := user.Register(app); err != nil {
 
 리소스 생성기는 ID를 반환하는 GET 핸들러의 기본 코드만 생성합니다. 데이터베이스 모델이나 데이터를 영구 저장하는 기능은 직접 구현해야 합니다.
 
-타입이 있는 생성, 조회 예제가 필요하면 별도 이름으로 `spine generate slice order --storage memory --field name:string`을 사용하세요. 이 명령의 메모리 저장소는 개발용이며 앱을 종료하면 데이터가 사라집니다.
+타입이 있는 생성, 조회 예제가 필요하면 별도 이름으로 `spine-cli generate slice order --storage memory --field name:string`을 사용하세요. 이 명령의 메모리 저장소는 개발용이며 앱을 종료하면 데이터가 사라집니다.
 
 ## 등록 규칙과 검증
 
@@ -163,9 +163,9 @@ CLI가 등록 코드를 검사할 수 있도록 `BuildApplication() (spine.App, 
 앱 구성을 검사한 뒤 서버를 실행합니다.
 
 ```sh
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check`는 등록 코드에서 추출한 실행 계약을 검사합니다. `verify`는 계약 검사와 `gofmt`, `go vet`, Go 테스트를 실행합니다. 두 명령이 오류 없이 끝나면 `dev`가 개발 서버를 시작합니다. 실제 HTTP 동작과 외부 데이터베이스, 메시지 브로커 연결은 실행 환경에서 별도로 확인해야 합니다.

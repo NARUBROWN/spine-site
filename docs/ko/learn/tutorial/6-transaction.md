@@ -235,11 +235,11 @@ if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" 
 gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
 go mod tidy
 go mod download all
-spine doctor
-spine inspect
-spine contract check
-spine verify
-spine dev
+spine-cli doctor
+spine-cli inspect
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 계약과 로컬 검사로는 실제 DB의 커밋과 롤백을 확인할 수 없습니다. 앱을 실행하려면 데이터베이스 튜토리얼의 `DATABASE_URL` 설정과 마이그레이션이 필요합니다. 다음 단계에서 성공 요청의 저장과 실패 요청의 롤백을 확인합니다. 커밋과 롤백 자체가 실패하는 경우의 오류 처리는 별도로 확인해야 합니다.

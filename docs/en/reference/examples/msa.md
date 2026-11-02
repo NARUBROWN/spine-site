@@ -15,15 +15,15 @@ Create a working directory and preview the files to be generated.
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine-cli new order-app --layout legacy --module example.com/order-app --dry-run
+spine-cli new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 Review the preview, then create both apps. Run subsequent commands from `spine-msa/` unless instructed otherwise.
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app
-spine new stock-app --layout legacy --module example.com/stock-app
+spine-cli new order-app --layout legacy --module example.com/order-app
+spine-cli new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. Generate the Stock Consumer Scaffold
@@ -31,13 +31,13 @@ spine new stock-app --layout legacy --module example.com/stock-app
 Generate a consumer in `stock-app` to receive order events. Review the preview first.
 
 ```sh
-spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
+spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
 The following command creates the consumer files and adds an `order.Register(app)` call and error handling to `stock-app/internal/application/application.go`. The generated handler returns a not-implemented error, so replace it with the code in step 5 before validation can pass.
 
 ```sh
-spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
+spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
 ### File Layout
@@ -261,12 +261,12 @@ gofmt -w src internal/application
 go mod tidy
 go mod download all
 cd ..
-spine doctor --root order-app
-spine doctor --root stock-app
-spine contract check --root order-app
-spine contract check --root stock-app
-spine verify --root order-app
-spine verify --root stock-app
+spine-cli doctor --root order-app
+spine-cli doctor --root stock-app
+spine-cli contract check --root order-app
+spine-cli contract check --root stock-app
+spine-cli verify --root order-app
+spine-cli verify --root stock-app
 ```
 
 Each service uses a local plaintext connection, so each produces one `INSECURE_TRANSPORT_ENABLED` warning. The default checks pass, but they fail with `--warnings-as-errors`.
@@ -280,13 +280,13 @@ Make sure Kafka is running at `localhost:9092` and the `order.created` topic exi
 Run the stock service in the first terminal.
 
 ```sh
-spine run --root stock-app
+spine-cli run --root stock-app
 ```
 
 Run the order service in the second terminal.
 
 ```sh
-spine run --root order-app
+spine-cli run --root order-app
 ```
 
 Send a create-order request in the third terminal.

@@ -235,11 +235,11 @@ if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" 
 gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
 go mod tidy
 go mod download all
-spine doctor
-spine inspect
-spine contract check
-spine verify
-spine dev
+spine-cli doctor
+spine-cli inspect
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 契約與本機檢查無法確認實際 DB 的提交與回滾。執行應用程式前，需要完成資料庫教學中的 `DATABASE_URL` 設定與遷移。下一步將確認成功請求的儲存，以及失敗請求的回滾。若提交與回滾本身失敗，其錯誤處理仍須另外確認。

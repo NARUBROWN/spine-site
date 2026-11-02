@@ -11,13 +11,13 @@ Use the project created in [Your first app](/en/learn/tutorial/1-project-structu
 If you do not have a user resource yet, generate it from the project root. If you have already created it, skip generation.
 
 ```sh
-spine generate resource user --dry-run
+spine-cli generate resource user --dry-run
 ```
 
 Review the files to be generated and the registration code changes in the preview, then generate them.
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 The CLI generates the `src/user` files and the `user.Register(app)` call in `BuildApplication`. There is no interceptor generator, so create the `src/interceptor` directory and write the logging and authentication interceptor files below yourself.
@@ -316,13 +316,13 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ## Verify logging and authentication behavior
 
-After applying the logging, authentication, and CORS code from the basic example, run the following commands from the project root. `spine contract check` checks the static contract, and `spine verify` checks local code. Run the server to check authentication and responses for actual requests separately.
+After applying the logging, authentication, and CORS code from the basic example, run the following commands from the project root. `spine-cli contract check` checks the static contract, and `spine-cli verify` checks local code. Run the server to check authentication and responses for actual requests separately.
 
 ```sh
 gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 Send the following requests from another terminal.

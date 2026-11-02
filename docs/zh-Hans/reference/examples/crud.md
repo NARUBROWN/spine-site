@@ -27,9 +27,9 @@ graph TD
 创建基础应用，检查依赖和项目配置。后续命令均在 `crud-example/` 中运行。
 
 ```sh
-spine new crud-example --layout legacy --module example.com/crud-example
+spine-cli new crud-example --layout legacy --module example.com/crud-example
 cd crud-example
-spine doctor
+spine-cli doctor
 ```
 
 ### 文件布局
@@ -495,9 +495,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check` 检查静态契约。`verify` 检查静态契约，并运行 gofmt、go vet 和 Go 测试。接下来通过 HTTP 请求确认服务器是否实际处理了请求。

@@ -815,9 +815,9 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) h
 Projects created in [Create your first app](/en/learn/getting-started/first-app) configure the app in `BuildApplication` in `internal/application/application.go`. The root `main.go` checks `Validate` errors before calling `Run`. You can check the project with the following commands.
 
 ```sh
-spine doctor
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli contract check
+spine-cli verify
 ```
 
 The following is the default structure of the generated `BuildApplication`.

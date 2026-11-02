@@ -136,7 +136,7 @@ onMounted(() => {
     <div class="content">
       <div class="command-line">
         <span class="prompt">➜  spine-app </span>
-        <span class="command">spine dev</span>
+        <span class="command">spine-cli dev</span>
       </div>
       <div v-for="(line, index) in visibleLines" :key="index" class="line log-line">
         {{ line }}

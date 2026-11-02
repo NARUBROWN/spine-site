@@ -7,18 +7,18 @@
 ## 1. 安裝 CLI 並確認指令
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
+go install github.com/NARUBROWN/spine-cli@latest
+spine-cli version
 ```
 
-使用 `spine version` 確認已安裝的 CLI 版本。 若找不到指令，請在[安裝說明](/zh-Hant/learn/getting-started/installation)中檢查 PATH 設定。
+使用 `spine-cli version` 確認已安裝的 CLI 版本。 若找不到指令，請在[安裝說明](/zh-Hant/learn/getting-started/installation)中檢查 PATH 設定。
 
 ## 2. 建立專案
 
 在預計放置專案的上層目錄執行。若已有 `hello-spine` 目錄，請使用其他名稱。
 
 ```bash
-spine new hello-spine --module example.com/hello-spine
+spine-cli new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
@@ -79,10 +79,10 @@ func main() {
 在建立的專案根目錄執行。
 
 ```bash
-spine doctor
-spine inspect
-spine contract check
-spine verify
+spine-cli doctor
+spine-cli inspect
+spine-cli contract check
+spine-cli verify
 ```
 
 `doctor` 會診斷工具與專案設定。`inspect` 會顯示程式碼中註冊的路由與相依性等應用程式設定。CLI 從註冊程式碼擷取的這些資訊稱為執行契約。
@@ -92,7 +92,7 @@ spine verify
 ## 5. 執行並確認回應
 
 ```bash
-spine dev
+spine-cli dev
 ```
 
 伺服器執行時，開啟另一個終端機發送請求。

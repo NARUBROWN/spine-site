@@ -11,13 +11,13 @@
 若尚無使用者資源，請在專案根目錄產生。若已建立，請略過產生步驟。
 
 ```sh
-spine generate resource user --dry-run
+spine-cli generate resource user --dry-run
 ```
 
 在預覽中確認將產生的檔案與註冊程式碼的變更後，再產生檔案。
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 CLI 會產生 `src/user` 檔案與 `BuildApplication` 中的 `user.Register(app)` 呼叫。由於沒有攔截器產生器，請建立 `src/interceptor` 目錄，並自行撰寫下列日誌與驗證攔截器檔案。
@@ -316,13 +316,13 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ## 驗證日誌記錄與身分驗證的運作
 
-套用基本範例的日誌記錄、身分驗證與 CORS 程式碼後，在專案根目錄執行。`spine contract check` 檢查靜態契約，`spine verify` 則執行本機程式碼檢查。實際請求的身分驗證與回應，需要啟動伺服器後另外確認。
+套用基本範例的日誌記錄、身分驗證與 CORS 程式碼後，在專案根目錄執行。`spine-cli contract check` 檢查靜態契約，`spine-cli verify` 則執行本機程式碼檢查。實際請求的身分驗證與回應，需要啟動伺服器後另外確認。
 
 ```sh
 gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 在另一個終端機送出下列請求。

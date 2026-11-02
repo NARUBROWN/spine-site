@@ -9,11 +9,11 @@ Spine CLIでプロジェクトを作成し、ユーザーリソースを追加�
 プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine-cli version
+spine-cli new my-app --layout legacy --module example.com/my-app
 cd my-app
-spine doctor
-spine inspect
+spine-cli doctor
+spine-cli inspect
 ```
 
 `my-app`ディレクトリが生成され、依存関係が用意されます。`doctor`がツールとプロジェクト設定を診断し、`inspect`で既定のパスである`GET /health`の登録を確認できます。
@@ -125,7 +125,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 プロジェクトのルートでユーザーリソースを生成します。既存のプロジェクトですでに生成している場合は、このコマンドを省略します。
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 ```text
@@ -154,7 +154,7 @@ if err := user.Register(app); err != nil {
 
 リソースジェネレーターが生成するのは、IDを返すGETハンドラーの基本コードだけです。データベースモデルやデータを永続保存する機能は、自分で実装する必要があります。
 
-型を定義した作成と取得の例が必要な場合は、別の名前で`spine generate slice order --storage memory --field name:string`を使ってください。このコマンドのメモリストレージは開発用で、アプリを終了するとデータが失われます。
+型を定義した作成と取得の例が必要な場合は、別の名前で`spine-cli generate slice order --storage memory --field name:string`を使ってください。このコマンドのメモリストレージは開発用で、アプリを終了するとデータが失われます。
 
 ## 登録規則と検証
 
@@ -163,9 +163,9 @@ CLIが登録コードを検査できるように、`BuildApplication() (spine.Ap
 アプリ構成を検査してからサーバーを実行します。
 
 ```sh
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check`は、登録コードから抽出した実行契約を検査します。`verify`は契約の検査と、`gofmt`、`go vet`、Goのテストを実行します。両方のコマンドがエラーなく終了すると、`dev`が開発サーバーを起動します。実際のHTTPの動作と、外部のデータベースやメッセージブローカーへの接続は、実行環境で別途確認する必要があります。

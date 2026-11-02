@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine-cli new order-app --layout legacy --module example.com/order-app --dry-run
+spine-cli new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 確認預覽後，建立兩個應用程式。除非另有說明，後續命令均在 `spine-msa/` 中執行。
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app
-spine new stock-app --layout legacy --module example.com/stock-app
+spine-cli new order-app --layout legacy --module example.com/order-app
+spine-cli new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. 產生庫存消費者骨架
@@ -31,13 +31,13 @@ spine new stock-app --layout legacy --module example.com/stock-app
 在 `stock-app` 中產生接收訂單事件的消費者。請先確認預覽。
 
 ```sh
-spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
+spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
 以下命令會建立消費者檔案，並在 `stock-app/internal/application/application.go` 中加入 `order.Register(app)` 呼叫和錯誤檢查程式碼。剛產生的處理器會回傳未實作錯誤，因此必須以步驟 5 的程式碼取代，才能通過驗證。
 
 ```sh
-spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
+spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
 ### 檔案配置
@@ -261,12 +261,12 @@ gofmt -w src internal/application
 go mod tidy
 go mod download all
 cd ..
-spine doctor --root order-app
-spine doctor --root stock-app
-spine contract check --root order-app
-spine contract check --root stock-app
-spine verify --root order-app
-spine verify --root stock-app
+spine-cli doctor --root order-app
+spine-cli doctor --root stock-app
+spine-cli contract check --root order-app
+spine-cli contract check --root stock-app
+spine-cli verify --root order-app
+spine-cli verify --root stock-app
 ```
 
 由於兩個服務都使用本機明文連線，因此各會出現一個 `INSECURE_TRANSPORT_ENABLED` 警告。預設檢查仍會通過，但使用 `--warnings-as-errors` 時會失敗。
@@ -280,13 +280,13 @@ spine verify --root stock-app
 在第一個終端機啟動庫存服務。
 
 ```sh
-spine run --root stock-app
+spine-cli run --root stock-app
 ```
 
 在第二個終端機啟動訂單服務。
 
 ```sh
-spine run --root order-app
+spine-cli run --root order-app
 ```
 
 在第三個終端機傳送建立訂單的請求。

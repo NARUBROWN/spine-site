@@ -9,11 +9,11 @@ Complete [CLI installation](/en/learn/getting-started/installation) first. This 
 Run these commands in the parent directory where you want to place the project. If a `my-app` directory already exists, use a different name.
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine-cli version
+spine-cli new my-app --layout legacy --module example.com/my-app
 cd my-app
-spine doctor
-spine inspect
+spine-cli doctor
+spine-cli inspect
 ```
 
 The `my-app` directory is created and its dependencies are prepared. `doctor` diagnoses tools and project settings, and `inspect` lets you check that the default route, `GET /health`, is registered.
@@ -125,7 +125,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 Generate a user resource from the project root. If you have already generated it in an existing project, skip this command.
 
 ```sh
-spine generate resource user
+spine-cli generate resource user
 ```
 
 ```text
@@ -154,7 +154,7 @@ if err := user.Register(app); err != nil {
 
 The resource generator only creates starter code for a GET handler that returns an ID. You must implement database models and persistent data storage yourself.
 
-For typed creation and lookup examples, use a different name with `spine generate slice order --storage memory --field name:string`. This command's in-memory store is for development, and its data is lost when the app stops.
+For typed creation and lookup examples, use a different name with `spine-cli generate slice order --storage memory --field name:string`. This command's in-memory store is for development, and its data is lost when the app stops.
 
 ## Registration Rules and Validation
 
@@ -163,9 +163,9 @@ To let the CLI inspect the registration code, keep `app := platform.New()` at th
 Inspect the app configuration, then run the server.
 
 ```sh
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 `contract check` checks the execution contract extracted from the registration code. `verify` runs the contract check, `gofmt`, `go vet`, and Go tests. If both commands complete without errors, `dev` starts the development server. Check actual HTTP behavior and connections to external databases and message brokers separately in the runtime environment.

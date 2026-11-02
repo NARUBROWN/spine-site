@@ -4,16 +4,16 @@ CLI로 OpenAPI 파일을 내보내고, 필요하면 Swaggo 문서와 Swagger UI�
 
 이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
-[첫 번째 앱](/ko/learn/tutorial/1-project-structure)에서 만든 `example.com/my-app` 프로젝트를 사용합니다. [컨트롤러](/ko/learn/tutorial/2-controller)의 `spine generate resource user`로 `src/user`를 먼저 생성하세요. 다른 모듈 경로를 사용했다면 아래 import 경로의 `example.com/my-app` 부분만 해당 모듈 경로로 바꾸고 `/docs` 접미사는 유지합니다. 명령은 프로젝트 루트에서 실행합니다.
+[첫 번째 앱](/ko/learn/tutorial/1-project-structure)에서 만든 `example.com/my-app` 프로젝트를 사용합니다. [컨트롤러](/ko/learn/tutorial/2-controller)의 `spine-cli generate resource user`로 `src/user`를 먼저 생성하세요. 다른 모듈 경로를 사용했다면 아래 import 경로의 `example.com/my-app` 부분만 해당 모듈 경로로 바꾸고 `/docs` 접미사는 유지합니다. 명령은 프로젝트 루트에서 실행합니다.
 
 ## CLI로 OpenAPI 내보내기
 
 CLI는 등록된 경로와 핸들러 시그니처에서 OpenAPI 3.1 문서를 생성합니다. Swaggo 주석은 필요하지 않습니다.
 
 ```bash
-spine doctor
-spine contract check
-spine contract export --format openapi --output openapi.json
+spine-cli doctor
+spine-cli contract check
+spine-cli contract export --format openapi --output openapi.json
 ```
 
 생성된 `openapi.json`에서 `/health`와 `/user/{id}`를 확인합니다. Spine의 `/user/:id`는 OpenAPI에서 `/user/{id}`로 표현되며, `x-spine-*` 필드에는 분석 근거와 한계가 기록됩니다. 예를 들어 실행 중에 선택하는 응답 상태 코드는 정적 분석만으로 확정할 수 없습니다.
@@ -116,9 +116,9 @@ app := platform.New(platform.WithEcho(func(e *echo.Echo) {
 gofmt -w internal/application/application.go src/user/user_controller.go
 go mod tidy
 go mod download all
-spine contract check
-spine verify
-spine dev
+spine-cli contract check
+spine-cli verify
+spine-cli dev
 ```
 
 브라우저에서 `http://localhost:8080/swagger/index.html`을 열어 GET 경로가 표시되는지 확인합니다. `/swagger/doc.json`에서는 생성한 Swagger 2.0 문서가 반환되어야 합니다. UI의 Try it out으로 `/user/1`에 요청하면 HTTP 200과 `{"id":1}`이 반환됩니다.
@@ -253,7 +253,7 @@ type ErrorResponse struct {
 
 ## 문서 다시 생성하기
 
-주석이나 DTO를 변경하면 Swaggo 문서를 다시 생성해야 합니다. `spine dev`는 Swaggo를 자동 실행하지 않습니다. 다음 Makefile을 추가하면 `make run`으로 문서를 갱신한 뒤 앱을 실행할 수 있습니다. CLI의 OpenAPI 파일은 `spine contract export`로 따로 갱신합니다.
+주석이나 DTO를 변경하면 Swaggo 문서를 다시 생성해야 합니다. `spine-cli dev`는 Swaggo를 자동 실행하지 않습니다. 다음 Makefile을 추가하면 `make run`으로 문서를 갱신한 뒤 앱을 실행할 수 있습니다. CLI의 OpenAPI 파일은 `spine-cli contract export`로 따로 갱신합니다.
 
 ```makefile
 .PHONY: swagger run
@@ -262,7 +262,7 @@ swagger:
 	swag init -g internal/application/application.go --parseInternal
 
 run: swagger
-	spine dev
+	spine-cli dev
 ```
 
 ## 다음 단계
