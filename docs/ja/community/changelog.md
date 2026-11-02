@@ -21,6 +21,13 @@ Spine v0.6.0 の公開 API とランタイムは、次の機能を提供しま�
 
 本番環境のデフォルト値と制約は、[セキュリティ設定](/ja/reference/security-configuration)を参照してください。
 
+## Spine CLI v0.4.1
+
+公式のインストール先は `github.com/NARUBROWN/spine-cli/cmd/spine`、実行コマンドは `spine` です。既存アプリの移行ガイドと、オフライン契約検査に必要なモジュールキャッシュの準備手順を追加したパッチです。CLI v0.4.0 のコマンドと生成動作は維持します。
+
+- [CLI v0.4.1 リリース](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.1)
+- [既存アプリの移行ガイド](https://github.com/NARUBROWN/spine-cli/blob/v0.4.1/migration/v0.4.0.md)
+
 ## Spine CLI v0.4.0
 
 CLI v0.4.0 は Spine v0.6.0、Echo プラットフォーム v0.1.0、HTTP アダプター v2 契約をサポートします。

@@ -22,6 +22,8 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+CLI 자체를 갱신하려면 위 `go install` 명령을 다시 실행합니다. `spine update`는 현재 프로젝트의 Spine과 Echo 플랫폼 의존성을 갱신하는 명령이며 CLI 실행 파일은 갱신하지 않습니다.
+
 `spine version`으로 설치된 CLI 버전을 확인합니다.
 
 `spine` 명령을 찾지 못하고 `GOBIN`을 따로 설정하지 않았다면, Bash나 Zsh에서 다음 명령으로 현재 세션의 경로를 추가하세요. 계속 사용하려면 같은 설정을 셸 시작 파일에 저장합니다. `GOBIN`을 설정했다면 그 디렉터리를 대신 추가하세요.
@@ -86,6 +88,17 @@ curl http://localhost:8080/health
 ```
 
 `{"status":"ok"}`가 반환되면 개발 서버가 요청을 처리한 것입니다. 서버를 실행한 터미널에서 `Ctrl+C`를 눌러 종료합니다. 외부 데이터베이스나 메시지 브로커를 연결하거나 배포한 뒤에는 해당 환경에서도 동작을 확인해야 합니다.
+
+## 의존성 캐시 오류 복구
+
+정적 계약 검사는 모듈 그래프를 오프라인으로 읽습니다. `--skip-install`로 파일만 생성했거나 의존성을 수동으로 바꾼 뒤 `MODULE_GRAPH_UNAVAILABLE`이 발생하면, 전체 모듈 메타데이터를 준비하고 다시 검사합니다.
+
+```bash
+go mod tidy
+go mod download all
+spine contract check
+spine verify
+```
 
 ## 다음 단계
 

@@ -22,6 +22,8 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+CLI 自体を更新する場合は、上の `go install` コマンドを再実行します。`spine update` は現在のプロジェクトの Spine と Echo プラットフォームの依存関係を更新するコマンドであり、CLI 実行ファイルは更新しません。
+
 `spine version` でインストール済み CLI のバージョンを確認してください。
 
 `spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
@@ -86,6 +88,17 @@ curl http://localhost:8080/health
 ```
 
 `{"status":"ok"}`が返れば、開発サーバーがリクエストを処理できたことを確認できます。サーバーを実行したターミナルで`Ctrl+C`を押して終了します。外部のデータベースやメッセージブローカーを接続した後、またはデプロイした後は、その環境でも動作を確認する必要があります。
+
+## モジュールキャッシュエラーからの復旧
+
+静的契約の検査ではモジュールグラフをオフラインで読み取ります。`--skip-install` でファイルだけを生成した後や、依存関係を手動で変更した後に `MODULE_GRAPH_UNAVAILABLE` が表示された場合は、モジュールのメタデータを揃えて再検査します。
+
+```bash
+go mod tidy
+go mod download all
+spine contract check
+spine verify
+```
 
 ## 次のステップ
 
