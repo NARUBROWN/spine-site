@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine-cli new order-app --layout legacy --module example.com/order-app --dry-run
-spine-cli new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 プレビューを確認してから 2 つのアプリを作成します。以降のコマンドは、別途指定がなければ `spine-msa/` で実行します。
 
 ```sh
-spine-cli new order-app --layout legacy --module example.com/order-app
-spine-cli new stock-app --layout legacy --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app
+spine new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. 在庫コンシューマーのひな形を生成する
@@ -31,13 +31,13 @@ spine-cli new stock-app --layout legacy --module example.com/stock-app
 `stock-app` に、注文イベントを受け取るコンシューマーを生成します。まずプレビューを確認します。
 
 ```sh
-spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
 次のコマンドはコンシューマーのファイルを作成し、`stock-app/internal/application/application.go` に `order.Register(app)` の呼び出しとエラー確認のコードを追加します。生成直後のハンドラーは未実装エラーを返すため、検証を通過するには手順 5 のコードに置き換える必要があります。
 
 ```sh
-spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
 ### ファイル構成
@@ -261,12 +261,12 @@ gofmt -w src internal/application
 go mod tidy
 go mod download all
 cd ..
-spine-cli doctor --root order-app
-spine-cli doctor --root stock-app
-spine-cli contract check --root order-app
-spine-cli contract check --root stock-app
-spine-cli verify --root order-app
-spine-cli verify --root stock-app
+spine doctor --root order-app
+spine doctor --root stock-app
+spine contract check --root order-app
+spine contract check --root stock-app
+spine verify --root order-app
+spine verify --root stock-app
 ```
 
 各サービスはローカルの平文接続を使用するため、`INSECURE_TRANSPORT_ENABLED` の警告が 1 件ずつ出ます。通常の検査は通過しますが、`--warnings-as-errors` を使用すると失敗します。
@@ -280,13 +280,13 @@ Kafka が `localhost:9092` で起動しており、`order.created` トピック�
 1 つ目のターミナルで在庫サービスを起動します。
 
 ```sh
-spine-cli run --root stock-app
+spine run --root stock-app
 ```
 
 2 つ目のターミナルで注文サービスを起動します。
 
 ```sh
-spine-cli run --root order-app
+spine run --root order-app
 ```
 
 3 つ目のターミナルで注文作成リクエストを送信します。

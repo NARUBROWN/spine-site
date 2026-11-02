@@ -1,6 +1,6 @@
 # Current releases
 
-The examples were verified on 2026-11-02 with Spine v0.6.0 and CLI v0.4.0. General installation uses `@latest`; check `spine-cli version` and the generated `go.mod` for the actual CLI and dependency versions.
+The examples were verified on 2026-11-02 with Spine v0.6.0 and CLI v0.4.0. General installation uses `@latest`; check `spine version` and the generated `go.mod` for the actual CLI and dependency versions.
 
 ## Spine v0.6.0
 

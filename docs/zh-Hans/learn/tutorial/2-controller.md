@@ -4,18 +4,18 @@
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
 
-完成[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)中的安装和项目创建后，请在项目根目录中继续操作。如果已经运行过 `spine-cli generate resource user`，请跳过生成步骤，直接检查文件。
+完成[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)中的安装和项目创建后，请在项目根目录中继续操作。如果已经运行过 `spine generate resource user`，请跳过生成步骤，直接检查文件。
 
 ## 使用 CLI 生成控制器
 
 ```bash
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 在预览中确认待生成的文件和注册代码的变更后，运行以下命令生成文件。
 
 ```bash
-spine-cli generate resource user
+spine generate resource user
 ```
 
 ### 生成的文件
@@ -84,10 +84,10 @@ if err := user.Register(app); err != nil {
 在项目根目录检查契约和本地代码，然后启动服务器。
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
 在另一个终端中调用生成的路由。
@@ -96,7 +96,7 @@ spine-cli dev
 curl http://localhost:8080/user/1
 ```
 
-`GET /user/1` 应返回 HTTP 200 和 `{"id":1}`。该响应验证了路径绑定和路由执行，并不代表从数据库中查询到了用户。请分别确认 `spine-cli contract check`、`spine-cli verify` 是否成功，以及实际 HTTP 响应是否符合预期。
+`GET /user/1` 应返回 HTTP 200 和 `{"id":1}`。该响应验证了路径绑定和路由执行，并不代表从数据库中查询到了用户。请分别确认 `spine contract check`、`spine verify` 是否成功，以及实际 HTTP 响应是否符合预期。
 
 ## 扩展示例的前提
 

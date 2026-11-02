@@ -11,11 +11,11 @@
 若尚未建立使用者資源，先確認將產生的檔案，再套用變更。已建立的資源不必重新產生。
 
 ```sh
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 ```sh
-spine-cli generate resource user
+spine generate resource user
 ```
 
 CLI 會產生使用者資源的基本檔案與註冊程式碼。Bun 相依套件、資料庫連線、模型與遷移將在以下步驟中自行新增。請保留產生的 `main.go`。
@@ -170,7 +170,7 @@ if dsn == "" {
 
 ```bash
 export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
-spine-cli dev
+spine dev
 ```
 
 
@@ -367,7 +367,7 @@ func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, err
 
 ### 撰寫遷移檔
 
-在 `cmd/migrate/migrations` 中建立以下 SQL 檔案。遷移由獨立的 Go 程式執行，並沒有 `spine-cli migrate` 命令。下一個執行步驟會在既有資料庫中新增 `users` 資料表，因此請確認先前設定的 `DATABASE_URL` 指向範例用 DB。
+在 `cmd/migrate/migrations` 中建立以下 SQL 檔案。遷移由獨立的 Go 程式執行，並沒有 `spine migrate` 命令。下一個執行步驟會在既有資料庫中新增 `users` 資料表，因此請確認先前設定的 `DATABASE_URL` 指向範例用 DB。
 
 ```sql
 -- cmd/migrate/migrations/001_create_users.up.sql
@@ -436,7 +436,7 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 go run ./cmd/migrate
 
 # 서버 실행
-spine-cli dev
+spine dev
 ```
 
 
@@ -586,11 +586,11 @@ err := r.db.NewSelect().
 go mod tidy
 go mod download all
 gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
-spine-cli contract check
-spine-cli verify
+spine contract check
+spine verify
 ```
 
-遷移後，以 `spine-cli dev` 啟動應用程式，並傳送 `GET /user/:id` 請求。空資料表中沒有對應的 ID，因此會回傳 HTTP 404。若要先儲存使用者再查詢，請套用下一篇交易教學中的 POST 範例。
+遷移後，以 `spine dev` 啟動應用程式，並傳送 `GET /user/:id` 請求。空資料表中沒有對應的 ID，因此會回傳 HTTP 404。若要先儲存使用者再查詢，請套用下一篇交易教學中的 POST 範例。
 
 ## 下一步
 

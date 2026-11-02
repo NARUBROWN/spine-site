@@ -4,18 +4,18 @@
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
 
-完成[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)的安裝與專案建立後，請在專案根目錄進行操作。如果已執行過 `spine-cli generate resource user`，請略過產生步驟並確認檔案。
+完成[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)的安裝與專案建立後，請在專案根目錄進行操作。如果已執行過 `spine generate resource user`，請略過產生步驟並確認檔案。
 
 ## 使用 CLI 產生控制器
 
 ```bash
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 在預覽中確認將產生的檔案與註冊程式碼的變更後，執行下列命令產生檔案。
 
 ```bash
-spine-cli generate resource user
+spine generate resource user
 ```
 
 ### 產生的檔案
@@ -84,10 +84,10 @@ if err := user.Register(app); err != nil {
 在專案根目錄檢查契約與本機程式碼後，啟動伺服器。
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
 在另一個終端機呼叫產生的路由。
@@ -96,7 +96,7 @@ spine-cli dev
 curl http://localhost:8080/user/1
 ```
 
-`GET /user/1` 應傳回 HTTP 200 和 `{"id":1}`。這個回應用於確認路徑繫結與路由執行，並非從資料庫查詢使用者的結果。請分別確認 `spine-cli contract check`、`spine-cli verify` 是否成功，以及實際 HTTP 回應。
+`GET /user/1` 應傳回 HTTP 200 和 `{"id":1}`。這個回應用於確認路徑繫結與路由執行，並非從資料庫查詢使用者的結果。請分別確認 `spine contract check`、`spine verify` 是否成功，以及實際 HTTP 回應。
 
 ## 擴充範例的前提
 

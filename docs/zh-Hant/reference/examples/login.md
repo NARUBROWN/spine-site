@@ -13,9 +13,9 @@
 準備基本應用程式和 JWT 相依套件。後續命令均在 `login-example/` 中執行。
 
 ```sh
-spine-cli new login-example --layout legacy --module example.com/login-example
+spine new login-example --layout legacy --module example.com/login-example
 cd login-example
-spine-cli doctor
+spine doctor
 go get github.com/golang-jwt/jwt/v5
 ```
 
@@ -376,9 +376,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine contract check
+spine verify
+spine dev
 ```
 
 `contract check` 檢查靜態契約。`verify` 檢查靜態契約，並執行 gofmt、go vet 和 Go 測試。接著透過 HTTP 請求確認實際的註冊、登入和身分驗證。

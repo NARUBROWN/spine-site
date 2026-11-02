@@ -4,18 +4,18 @@ Add a `GET /user/:id` controller to the CLI-generated `my-app` project and retur
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
 
-Complete the installation and project creation steps in [Your first app](/en/learn/tutorial/1-project-structure), then work from the project root. If you have already run `spine-cli generate resource user`, skip generation and check the files.
+Complete the installation and project creation steps in [Your first app](/en/learn/tutorial/1-project-structure), then work from the project root. If you have already run `spine generate resource user`, skip generation and check the files.
 
 ## Generate a controller with the CLI
 
 ```bash
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 Review the files to be generated and the registration code changes in the preview, then generate them with the following command.
 
 ```bash
-spine-cli generate resource user
+spine generate resource user
 ```
 
 ### Generated files
@@ -84,10 +84,10 @@ Keep the `BuildApplication → Validate → Run` flow in `main.go`. When you imp
 Check the contract and local code from the project root, then start the server.
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
 Call the generated route from another terminal.
@@ -96,7 +96,7 @@ Call the generated route from another terminal.
 curl http://localhost:8080/user/1
 ```
 
-`GET /user/1` should return HTTP 200 and `{"id":1}`. This response confirms path binding and route execution; it does not represent a user retrieved from a database. Check the results of `spine-cli contract check` and `spine-cli verify` separately from the actual HTTP response.
+`GET /user/1` should return HTTP 200 and `{"id":1}`. This response confirms path binding and route execution; it does not represent a user retrieved from a database. Check the results of `spine contract check` and `spine verify` separately from the actual HTTP response.
 
 ## Prerequisites for the extension examples
 

@@ -815,9 +815,9 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) h
 [첫 앱 만들기](/ko/learn/getting-started/first-app)에서 생성한 프로젝트는 `internal/application/application.go`의 `BuildApplication`에서 앱을 구성하고, 루트 `main.go`에서 `Validate` 오류를 확인한 뒤 `Run`을 호출합니다. 다음 명령으로 프로젝트를 점검할 수 있습니다.
 
 ```sh
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine contract check
+spine verify
 ```
 
 다음은 생성되는 `BuildApplication`의 기본 형태입니다.

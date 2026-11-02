@@ -18,17 +18,17 @@ go version
 次のコマンドでCLIをインストールし、バージョンを確認します。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli@latest
-spine-cli version
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+spine version
 ```
 
-`spine-cli version` でインストール済み CLI のバージョンを確認してください。
+`spine version` でインストール済み CLI のバージョンを確認してください。
 
-`spine-cli`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
+`spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
 
 ```bash
 export PATH="$(go env GOPATH)/bin:$PATH"
-spine-cli version
+spine version
 ```
 
 ## 新しいプロジェクトの生成
@@ -36,7 +36,7 @@ spine-cli version
 プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。
 
 ```bash
-spine-cli new my-app --module example.com/my-app
+spine new my-app --module example.com/my-app
 cd my-app
 ```
 
@@ -58,27 +58,27 @@ platform = "echo"
 ## 検証と実行
 
 ```bash
-spine-cli doctor
-spine-cli inspect
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine inspect
+spine contract check
+spine verify
 ```
 
 各コマンドがエラーなく終了することを確認してください。
 
 | コマンド | 確認する内容 |
 | --- | --- |
-| `spine-cli doctor` | Goのツールとプロジェクト設定 |
-| `spine-cli inspect` | コードに登録されたルートや依存関係などのアプリ構成 |
-| `spine-cli contract check` | 登録コードから抽出した実行契約の有効性 |
-| `spine-cli verify` | 実行契約と`gofmt`、`go vet`、Goのテスト結果 |
+| `spine doctor` | Goのツールとプロジェクト設定 |
+| `spine inspect` | コードに登録されたルートや依存関係などのアプリ構成 |
+| `spine contract check` | 登録コードから抽出した実行契約の有効性 |
+| `spine verify` | 実行契約と`gofmt`、`go vet`、Goのテスト結果 |
 
 生成された`application_test.go`は、サーバーを起動せずに`BuildApplication()`と`app.Validate(options)`を検査します。この段階ではコードとアプリの構成を検証します。実際のHTTPレスポンスは次の段階で確認します。
 
-検査に合格したら`spine-cli dev`で実行し、別のターミナルで実際のHTTPレスポンスを確認します。
+検査に合格したら`spine dev`で実行し、別のターミナルで実際のHTTPレスポンスを確認します。
 
 ```bash
-spine-cli dev
+spine dev
 ```
 
 ```bash

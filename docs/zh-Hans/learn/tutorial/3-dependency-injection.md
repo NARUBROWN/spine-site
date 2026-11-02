@@ -25,13 +25,13 @@ func NewUserService(repository *UserRepository) *UserService {
 如果尚未生成资源，请在 `my-app` 根目录执行以下命令。如果已经生成，请勿重复执行。
 
 ```bash
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 在预览中确认待生成的文件和注册代码的变更后，运行以下命令生成文件。
 
 ```bash
-spine-cli generate resource user
+spine generate resource user
 ```
 
 以下仅摘录了 CLI 在同一个 `user` 包中生成的类型和构造函数。请勿用这些代码覆盖现有文件。保留生成文件中控制器的 `Get` 方法。
@@ -181,13 +181,13 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 通过 CLI 生成其他功能时，会连接对应包的 `Register` 函数和组装应用的 `BuildApplication`。以下是可选的独立 `order` 资源添加示例。CLI 会添加 `order.Register(app)` 调用，请勿手动重复注册。
 
 ```bash
-spine-cli generate resource order --dry-run
+spine generate resource order --dry-run
 ```
 
 在预览中确认待生成的文件和注册代码的变更后，运行以下命令生成文件。
 
 ```bash
-spine-cli generate resource order
+spine generate resource order
 ```
 
 ### 分多次调用注册构造函数
@@ -266,14 +266,14 @@ app.Constructor(
 在项目根目录执行以下命令。
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine contract check
+spine verify
 ```
 
-`spine-cli contract check` 检查从源代码提取的 DI 契约，`spine-cli verify` 还会检查格式、`go vet` 和测试。仅有 `app.Validate(options)` 成功，并不能证明构造函数已经执行或实例已经初始化。
+`spine contract check` 检查从源代码提取的 DI 契约，`spine verify` 还会检查格式、`go vet` 和测试。仅有 `app.Validate(options)` 成功，并不能证明构造函数已经执行或实例已经初始化。
 
-请通过 `spine-cli dev` 启动应用后，检查实际的初始化和请求处理。如果接入了数据库，还需要单独确认实际连接和查询。循环依赖或缺失的构造函数会在依赖解析过程中返回错误，生成的 `main.go` 会检查 `Run` 错误。
+请通过 `spine dev` 启动应用后，检查实际的初始化和请求处理。如果接入了数据库，还需要单独确认实际连接和查询。循环依赖或缺失的构造函数会在依赖解析过程中返回错误，生成的 `main.go` 会检查 `Run` 错误。
 
 ## 后续步骤
 

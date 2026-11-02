@@ -35,7 +35,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```
 
 
-CLI 指令 `spine-cli generate resource user` 產生的程式碼，其名稱與路徑和上述範例不同。產生的處理器是 `src/user` 中的 `UserController.Get`，路徑則是 `GET /user/:id`。建構函式已註冊時，請勿再次註冊相同的建構函式或路由。也必須保留新增至 `BuildApplication` 的 `user.Register(app)` 呼叫及錯誤處理。詳細步驟請參閱[專案結構](/zh-Hant/learn/tutorial/1-project-structure)。
+CLI 指令 `spine generate resource user` 產生的程式碼，其名稱與路徑和上述範例不同。產生的處理器是 `src/user` 中的 `UserController.Get`，路徑則是 `GET /user/:id`。建構函式已註冊時，請勿再次註冊相同的建構函式或路由。也必須保留新增至 `BuildApplication` 的 `user.Register(app)` 呼叫及錯誤處理。詳細步驟請參閱[專案結構](/zh-Hant/learn/tutorial/1-project-structure)。
 
 ## 核心概念
 
@@ -115,8 +115,8 @@ func (c *UserController) CreateUser(
 ## 開始使用
 
 ```bash
-go install github.com/NARUBROWN/spine-cli@latest
-spine-cli version
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+spine version
 ```
 
 安裝 CLI 後，請依照[第一個應用程式](/zh-Hant/learn/getting-started/first-app)建立專案並確認 HTTP 回應。若找不到指令，請參閱[安裝說明](/zh-Hant/learn/getting-started/installation)中的路徑設定。

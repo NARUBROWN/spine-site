@@ -7,18 +7,18 @@ Go 1.25.5 or later is required, and the CLI recommends Go 1.27.3. The time neede
 ## 1. Install the CLI and Check the Command
 
 ```bash
-go install github.com/NARUBROWN/spine-cli@latest
-spine-cli version
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+spine version
 ```
 
-Use `spine-cli version` to check the installed CLI version. If the command is not found, check PATH setup in the [installation guide](/en/learn/getting-started/installation).
+Use `spine version` to check the installed CLI version. If the command is not found, check PATH setup in the [installation guide](/en/learn/getting-started/installation).
 
 ## 2. Create a Project
 
 Run these commands in the parent directory where you want to place the project. If a `hello-spine` directory already exists, use a different name.
 
 ```bash
-spine-cli new hello-spine --module example.com/hello-spine
+spine new hello-spine --module example.com/hello-spine
 cd hello-spine
 ```
 
@@ -79,10 +79,10 @@ func main() {
 Run these commands in the root directory of the generated project.
 
 ```bash
-spine-cli doctor
-spine-cli inspect
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine inspect
+spine contract check
+spine verify
 ```
 
 `doctor` diagnoses tools and project settings. `inspect` shows the app configuration registered in code, including routes and dependencies. The CLI calls this information extracted from registration code the execution contract.
@@ -92,7 +92,7 @@ spine-cli verify
 ## 5. Run the App and Check the Response
 
 ```bash
-spine-cli dev
+spine dev
 ```
 
 With the server running, open another terminal and send a request.

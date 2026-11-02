@@ -1,6 +1,6 @@
 # 当前版本
 
-文档示例于 2026-11-02 使用 Spine v0.6.0 和 CLI v0.4.0 验证。一般安装使用 `@latest`；实际 CLI 和依赖版本请通过 `spine-cli version` 及生成的 `go.mod` 确认。
+文档示例于 2026-11-02 使用 Spine v0.6.0 和 CLI v0.4.0 验证。一般安装使用 `@latest`；实际 CLI 和依赖版本请通过 `spine version` 及生成的 `go.mod` 确认。
 
 ## Spine v0.6.0
 

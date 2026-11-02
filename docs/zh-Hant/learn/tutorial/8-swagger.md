@@ -4,16 +4,16 @@
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
 
-使用[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)中建立的 `example.com/my-app` 專案。請先按照[控制器](/zh-Hant/learn/tutorial/2-controller)使用 `spine-cli generate resource user` 產生 `src/user`。若使用不同的模組路徑，請只將下方 import 路徑中的 `example.com/my-app` 部分替換為該模組路徑，並保留 `/docs` 後綴。請在專案根目錄執行命令。
+使用[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)中建立的 `example.com/my-app` 專案。請先按照[控制器](/zh-Hant/learn/tutorial/2-controller)使用 `spine generate resource user` 產生 `src/user`。若使用不同的模組路徑，請只將下方 import 路徑中的 `example.com/my-app` 部分替換為該模組路徑，並保留 `/docs` 後綴。請在專案根目錄執行命令。
 
 ## 使用 CLI 匯出 OpenAPI
 
 CLI 會根據已註冊的路徑與處理器簽章產生 OpenAPI 3.1 文件，不需要 Swaggo 註解。
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli contract export --format openapi --output openapi.json
+spine doctor
+spine contract check
+spine contract export --format openapi --output openapi.json
 ```
 
 確認產生的 `openapi.json` 中有 `/health` 與 `/user/{id}`。Spine 的 `/user/:id` 在 OpenAPI 中表示為 `/user/{id}`，而 `x-spine-*` 欄位會記錄分析依據與限制。例如，執行期間才選定的回應狀態碼，無法僅靠靜態分析確定。
@@ -116,9 +116,9 @@ app := platform.New(platform.WithEcho(func(e *echo.Echo) {
 gofmt -w internal/application/application.go src/user/user_controller.go
 go mod tidy
 go mod download all
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine contract check
+spine verify
+spine dev
 ```
 
 在瀏覽器開啟 `http://localhost:8080/swagger/index.html`，確認 GET 路徑是否顯示。`/swagger/doc.json` 應回傳產生的 Swagger 2.0 文件。在 UI 中使用 Try it out 向 `/user/1` 傳送請求，應回傳 HTTP 200 與 `{"id":1}`。
@@ -253,7 +253,7 @@ type ErrorResponse struct {
 
 ## 重新產生文件
 
-變更註解或 DTO 後，必須重新產生 Swaggo 文件。`spine-cli dev` 不會自動執行 Swaggo。新增以下 Makefile 後，即可使用 `make run` 先更新文件再啟動應用程式。CLI 的 OpenAPI 檔案則以 `spine-cli contract export` 另外更新。
+變更註解或 DTO 後，必須重新產生 Swaggo 文件。`spine dev` 不會自動執行 Swaggo。新增以下 Makefile 後，即可使用 `make run` 先更新文件再啟動應用程式。CLI 的 OpenAPI 檔案則以 `spine contract export` 另外更新。
 
 ```makefile
 .PHONY: swagger run
@@ -262,7 +262,7 @@ swagger:
 	swag init -g internal/application/application.go --parseInternal
 
 run: swagger
-	spine-cli dev
+	spine dev
 ```
 
 ## 下一步
