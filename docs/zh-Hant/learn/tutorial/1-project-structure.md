@@ -2,7 +2,7 @@
 
 透過 Spine CLI 建立專案並新增使用者資源。閱讀產生的檔案，了解應用程式設定程式碼應放置的位置，以及控制器、服務與儲存庫各自的職責。
 
-請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。若已依照[第一個應用程式](/zh-Hant/learn/getting-started/first-app)建立專案，可以略過建立步驟，直接在該專案繼續操作。閱讀下列程式碼時，請將模組路徑替換成自己的專案路徑。
+請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。本教學使用依功能劃分的套件，因此請在新目錄中以 `--layout legacy` 建立 `my-app`。它與[第一個應用程式](/zh-Hant/learn/getting-started/first-app)的預設 `layered-v1` 結構不同，不會自動轉換既有應用程式。
 
 ## 透過 CLI 建立專案
 
@@ -10,9 +10,8 @@
 
 ```sh
 spine version
-spine new my-app --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app
 cd my-app
-go mod tidy
 spine doctor
 spine inspect
 ```
@@ -21,13 +20,14 @@ spine inspect
 
 ## 產生的基本結構
 
-`spine new` 會產生下列檔案。`go.sum` 會在之後執行 `go mod tidy` 時建立。
+上述 `new` 指令會建立包含 `go.sum` 的專案檔案，並完成相依套件安裝與建置。
 
 ```text
 my-app/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 └── internal/
@@ -38,13 +38,15 @@ my-app/
 
 ## CLI 設定
 
-`spine.toml` 包含 CLI 尋找及執行專案所需的設定。支援的鍵有以下四個，資料庫連線等應用程式設定則需另外管理。
+`spine.toml` 設定模組、進入點、應用程式組裝位置、連接埠、布局與平台。資料庫、驗證等應用程式設定應另外管理。
 
 ```toml
 module = "example.com/my-app"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "legacy"
+platform = "echo"
 ```
 
 | 鍵 | 用途 |
@@ -53,6 +55,8 @@ port = 8080
 | `entrypoint` | 要執行或建置的目標 |
 | `composition` | 檢查應用程式設定及自動註冊產生的程式碼的位置 |
 | `port` | 開發伺服器使用的連接埠 |
+| `layout` | 產生器檔案布局（`legacy` 或 `layered-v1`） |
+| `platform` | HTTP 平台（`echo`） |
 
 ## 分開處理執行與應用程式設定
 
@@ -87,6 +91,7 @@ func main() {
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -103,7 +108,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -153,7 +158,7 @@ if err := user.Register(app); err != nil {
 
 ## 註冊規則與驗證
 
-為了讓 CLI 能檢查註冊程式碼，請保留位於 `BuildApplication() (spine.App, boot.Options, error)` 函式本體最外層的 `app := spine.New()`。請勿將註冊程式碼移入條件判斷、迴圈或任意輔助函式中。也必須檢查並回傳 `Register(app)` 所回傳的錯誤。
+為了讓 CLI 能檢查註冊程式碼，請保留位於 `BuildApplication() (spine.App, boot.Options, error)` 函式本體最外層的 `app := platform.New()`。請勿將註冊程式碼移入條件判斷、迴圈或任意輔助函式中。也必須檢查並回傳 `Register(app)` 所回傳的錯誤。
 
 檢查應用程式設定後，再啟動伺服器。
 

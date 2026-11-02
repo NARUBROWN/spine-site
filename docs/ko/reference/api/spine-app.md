@@ -1,34 +1,28 @@
 # spine.App
 
-`App`은 생성자, HTTP 라우트, 인터셉터, 이벤트 소비자, WebSocket 핸들러와 사용자 정의 전송 방식을 등록하고 애플리케이션을 실행하는 진입점입니다. 이 참조는 Spine v0.5.1의 공개 API와 부트 옵션을 다룹니다.
+`App`은 생성자, HTTP 라우트, 인터셉터, 이벤트 소비자, WebSocket 핸들러와 사용자 정의 전송 방식을 등록하고 애플리케이션을 실행하는 진입점입니다. 이 참조는 Spine v0.6.0의 공개 API와 부트 옵션을 다룹니다.
 
 ```go
-import "github.com/NARUBROWN/spine"
+import (
+    "github.com/NARUBROWN/spine"
+    platform "github.com/NARUBROWN/spine-echo-platform"
+)
 ```
 
 ## 인터페이스 정의
 
 ```go
 type App interface {
-    // 생성자 선언
     Constructor(constructors ...any)
-    // 라우트 선언
     Route(method string, path string, handler any, opts ...router.RouteOption)
-    // 인터셉터 선언
     Interceptor(interceptors ...core.Interceptor)
-    // HTTP/WebSocket 범위를 지정한 전역 인터셉터 선언
     InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
-    // HTTP 서버 확장 (Echo 등)
-    Transport(fn func(any))
-    // 독립 실행되는 사용자 정의 전송 방식 등록
     RegisterTransport(t core.CustomTransport)
-    // 네트워크 연결 없이 설정 검증
     Validate(opts boot.Options) error
-    // 실행
+    Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
     Run(opts boot.Options) error
-    // 이벤트 소비자 레지스트리 반환
+    RunContext(ctx context.Context, opts boot.Options) error
     Consumers() *consumer.Registry
-    // 웹소켓 레지스트리 반환
     WebSocket() *ws.Registry
 }
 ```
@@ -40,8 +34,10 @@ type App interface {
 ### New
 
 ```go
-func New() App
+func New(options ...Option) App
 ```
+
+`spine.New(options ...Option)`는 HTTP 구현을 선택하지 않는 커널 앱을 만듭니다. HTTP 없는 워커는 `spine.New()`를 사용하고, Echo HTTP 앱은 `platform.New()` 또는 `spine.New(platform.Option())`로 생성합니다.
 
 새로운 Spine 애플리케이션 인스턴스를 생성합니다.
 
@@ -52,7 +48,7 @@ func New() App
 **예시**
 
 ```go
-app := spine.New()
+app := platform.New()
 app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
@@ -232,34 +228,28 @@ app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
 app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ```
 
-### Transport
+### WithEcho
 
 ```go
-Transport(fn func(any))
+platform.WithEcho(fn func(*echo.Echo)) platform.EchoOption
 ```
 
-HTTP 서버의 Echo 인스턴스를 설정하는 콜백을 등록합니다. 콜백에서 미들웨어나 정적 파일 경로를 추가할 수 있습니다.
-
-**매개변수**
-
-- `fn` - Echo 인스턴스를 받는 콜백 함수
-
-**예시**
+Echo 확장은 플랫폼 생성 시 `*echo.Echo` 타입을 받는 `WithEcho` 옵션으로 등록합니다. 아래 코드로 기존 `app := platform.New()`를 교체하고 기존 생성자와 라우트 등록은 이어서 유지합니다. `App.Transport`는 Spine v0.6.0에서 제거되었습니다.
 
 ```go
-import "github.com/labstack/echo/v4"
-import "github.com/labstack/echo/v4/middleware"
+import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/labstack/echo/v5"
+    "github.com/labstack/echo/v5/middleware"
+)
 
-app.Transport(func(e any) {
-    echo := e.(*echo.Echo)
-
-    // Echo 미들웨어 추가
-    echo.Use(middleware.RequestID())
-
-    // 정적 파일 서빙
-    echo.Static("/static", "public")
-})
+app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+    e.Use(middleware.RequestID())
+    e.Static("/static", "public")
+}))
 ```
+
+플랫폼 옵션으로 추가한 native Echo 경로는 Spine의 HTTP 인터셉터와 응답 staging을 거치지 않으며 CLI의 정적 Spine 라우트 계약에도 포함되지 않습니다. 실제 경로는 별도로 확인하세요.
 
 ### RegisterTransport
 
@@ -323,6 +313,20 @@ func (t *GRPCTransport) Stop(ctx context.Context) error {
 
 app.RegisterTransport(&GRPCTransport{})
 ```
+
+### RunContext / Prepare
+
+```go
+RunContext(ctx context.Context, opts boot.Options) error
+Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
+
+type PreparedApplication interface {
+    Handler() http.Handler
+    Close(ctx context.Context) error
+}
+```
+
+`RunContext`는 context 취소로 정상 종료를 시작합니다. `Prepare`는 리스너 없이 앱을 준비하고 `Handler()`와 `Close(ctx)`를 반환합니다. consumer와 custom transport의 Start는 실행하지 않지만, 설정에 따라 broker readiness와 custom Init에서 네트워크 연결이 발생할 수 있습니다. 준비 결과의 Close와 외부 HTTP 서버의 종료는 호출자가 관리합니다.
 
 ### Consumers
 
@@ -822,6 +826,7 @@ spine verify
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
 	"os"
 
 	"github.com/NARUBROWN/spine"
@@ -839,7 +844,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := spine.New()
+	app := platform.New()
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -857,7 +862,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 이 준비가 끝난 뒤 소비자와 사용자 정의 전송 방식의 `Start`를 별도 고루틴에서 실행하고, 마지막에 HTTP 서버를 시작합니다. HTTP 라우트는 같은 메서드에서 경로가 모호하게 겹치면 시작에 실패합니다. 예를 들어 `/users/:id`와 `/users/me`는 겹치는 경로로 검사합니다.
 
-종료 시에는 WebSocket과 HTTP로 들어오는 요청을 먼저 닫고, 소비자가 멈출 때까지 기다린 뒤 사용자 정의 전송 방식의 `Stop`을 초기화 역순으로 호출합니다. 이후 이벤트 발행기의 자원을 정리합니다. 구체적인 구현은 [v0.5.1 시작 및 종료 코드](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/bootstrap/bootstrap.go)를 참고하십시오.
+종료 시에는 WebSocket과 HTTP로 들어오는 요청을 먼저 닫고, 소비자가 멈출 때까지 기다린 뒤 사용자 정의 전송 방식의 `Stop`을 초기화 역순으로 호출합니다. 이후 이벤트 발행기의 자원을 정리합니다. 구체적인 구현은 [v0.6.0 시작 및 종료 코드](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/bootstrap/bootstrap.go)를 참고하십시오.
 
 ## 제약과 오류
 

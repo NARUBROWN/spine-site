@@ -1,6 +1,6 @@
 # Security configuration
 
-Spine v0.5.1 applies encrypted broker connections and HTTP and WebSocket size, time, and connection limits by default. Use this reference to check defaults and configuration constraints, then choose the origins, authentication, and message failure policies for your deployed application.
+Spine v0.6.0 applies encrypted broker connections and HTTP and WebSocket size, time, and connection limits by default. Use this reference to check defaults and configuration constraints, then choose the origins, authentication, and message failure policies for your deployed application.
 
 ## Configuration validation
 

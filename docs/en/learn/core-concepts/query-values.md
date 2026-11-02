@@ -2,7 +2,9 @@
 
 Use `query.Values` to read HTTP query parameters and specify defaults. Declare `q query.Values` as a controller argument, then read the keys you need as strings, integers, or booleans. Automatically mapping query parameters to an arbitrary DTO is not supported.
 
-This page describes `github.com/NARUBROWN/spine/pkg/query` in Spine v0.5.1.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
+This page describes `github.com/NARUBROWN/spine/pkg/query` in Spine v0.6.0.
 
 ## Using It in a CLI Project
 
@@ -295,7 +297,7 @@ An HTTP query can repeat the same key as follows.
 GET /product?tag=go&tag=web&tag=api
 ```
 
-For this request, `q.String("tag")` and `q.Get("tag")` return only `"go"`. In Spine v0.5.1, `query.Values` has no public method for retrieving the full list of values, and app code cannot access the private `values` field directly.
+For this request, `q.String("tag")` and `q.Get("tag")` return only `"go"`. In Spine v0.6.0, `query.Values` has no public method for retrieving the full list of values, and app code cannot access the private `values` field directly.
 
 If you need multiple values, one option is to define the API to accept a single comma-separated string and split it in the app. The following example also requires the `strings` package.
 

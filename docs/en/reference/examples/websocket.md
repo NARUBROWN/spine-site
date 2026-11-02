@@ -11,9 +11,8 @@ Complete [Installation and Your First App](/en/learn/getting-started/first-app) 
 Generate the project and WebSocket handler. Run subsequent commands from `chat-app/`.
 
 ```sh
-spine new chat-app --module example.com/chat-app
+spine new chat-app --layout legacy --module example.com/chat-app
 cd chat-app
-go mod tidy
 spine doctor
 spine generate websocket chat --path /ws/chat --field message:string
 ```

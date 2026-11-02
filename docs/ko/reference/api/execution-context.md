@@ -126,7 +126,7 @@ type WebSocketContext interface {
 
 ### WebSocket 연결 요청 정보 {#websocket-request-context}
 
-v0.5.1은 HTTP 업그레이드 요청 정보를 복사해 보존합니다. 다음 인터페이스로 헤더, 쿼리, 쿠키, 원격 주소, 호스트와 요청 URI를 조회할 수 있습니다.
+v0.6.0은 HTTP 업그레이드 요청 정보를 복사해 보존합니다. 다음 인터페이스로 헤더, 쿼리, 쿠키, 원격 주소, 호스트와 요청 URI를 조회할 수 있습니다.
 
 ```go
 type WebSocketRequestContext interface {
@@ -665,11 +665,11 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 HTTP 컨트롤러의 `context.Context` 매개변수에는 표준 컨텍스트와 요청 범위의 이벤트 버스를 전달하고, `core.ControllerContext` 매개변수에는 `Get()`만 제공하는 뷰를 전달합니다. 컨슈머와 WebSocket의 기본 입력 해석기에는 `ControllerContext` 주입 기능이 없습니다. 런타임의 입력 해석 코드는 다음 소스에서 확인할 수 있습니다.
 
-- [HTTP 경로 매개변수 해석](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/path_int_resolver.go)
-- [표준 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/std_context_resolver.go)
-- [컨트롤러 조회 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/controller_context_resolver.go)
-- [이벤트 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.5.1/internal/event/consumer/resolver)
-- [WebSocket 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.5.1/internal/ws/resolver)
+- [HTTP 경로 매개변수 해석](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/path_int_resolver.go)
+- [표준 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/std_context_resolver.go)
+- [컨트롤러 조회 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/controller_context_resolver.go)
+- [이벤트 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/event/consumer/resolver)
+- [WebSocket 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/ws/resolver)
 
 ## 프로토콜별 동작 차이
 

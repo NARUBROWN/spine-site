@@ -1,8 +1,10 @@
 # Controllers
 
-Add a `GET /user/:id` controller to the CLI-generated `hello-spine` project and return the integer from the request path in a JSON response. Then explore how to accept queries, headers, and request bodies, and how to choose response types.
+Add a `GET /user/:id` controller to the CLI-generated `my-app` project and return the integer from the request path in a JSON response. Then explore how to accept queries, headers, and request bodies, and how to choose response types.
 
-Complete the installation and project creation steps in [Your first app](/en/learn/getting-started/first-app), then work from the project root. If you have already run `spine generate resource user`, skip generation and check the files.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
+Complete the installation and project creation steps in [Your first app](/en/learn/tutorial/1-project-structure), then work from the project root. If you have already run `spine generate resource user`, skip generation and check the files.
 
 ## Generate a controller with the CLI
 
@@ -689,7 +691,7 @@ Accept JSON and form DTOs as struct pointers. Accept queries, paths, and uploade
 
 ## Input error handling considerations
 
-If a path value cannot be converted to an integer or the JSON body cannot be parsed, input binding fails before the controller is called. In Spine v0.5.1, these failures are not always converted to HTTP 400. Invalid JSON and non-integer path values can return HTTP 500 through the default execution path. Implement the error policy you need, then check it with actual requests.
+Spine `v0.6.0` with Echo platform `v0.1.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests.
 
 ## Next steps
 

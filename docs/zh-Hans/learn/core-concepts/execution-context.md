@@ -2,7 +2,9 @@
 
 Spine 为每个请求或消息创建执行上下文，将输入信息和执行状态传给流水线。拦截器通过 `core.ExecutionContext` 读写执行状态，HTTP 控制器则通过语义类型和只读的 `spine.Ctx` 仅接收所需的值。
 
-理解这一区分后，就能将拦截器保存的值传给控制器，并判断 HTTP、事件消费者和 WebSocket 各自可使用哪些输入。本文的接口和行为以 Spine v0.5.1 为准。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+
+理解这一区分后，就能将拦截器保存的值传给控制器，并判断 HTTP、事件消费者和 WebSocket 各自可使用哪些输入。本文的接口和行为以 Spine v0.6.0 为准。
 
 应用处理器示例是对 [CLI 创建的项目](/zh-Hans/learn/tutorial/1-project-structure)的手动扩展。请保留生成的 `BuildApplication`，以及检查错误的 `user.Register(app)` 调用。`core/` 接口是公开契约，无需将 `internal/` 实现复制到应用中。
 
@@ -50,7 +52,7 @@ graph TD
 
 箭头表示契约的包含关系。`ControllerContext` 和 `spine.Ctx` 不会嵌入 `ExecutionContext`，而是仅暴露 `Get()` 的独立接口，用于查询同一个存储区。
 
-实际的 HTTP 适配器同时实现 `ExecutionContext` 和 `HttpRequestContext`。消费者适配器也同时实现 `ExecutionContext` 和 `ConsumerRequestContext`。因此，解析器接收通用上下文后，可以检查是否支持所需的协议契约。
+对于 HTTP，内核 HTTPContext 包装平台输入视图并提供 `ExecutionContext` 和 `HttpRequestContext`。响应 writer 通过独立的 `core.HTTPResponseContext` 访问。`SetRoute` 保存的路由状态与用户 `Set/Get` 存储分离。消费者同时实现 `ExecutionContext` 和 `ConsumerRequestContext`。
 
 ## 通用基础契约
 
@@ -105,6 +107,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -236,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 这段代码是方法签名示例，`CreateUserRequest` 和 `User` 是应用自行定义的类型。表单 DTO 在字段上使用 `form` 标签，上传文件可通过 `pkg/multipart.UploadedFiles` 接收。
 
-如果请求体是无效 JSON，或路径值的数值转换失败，流程就不会到达控制器。在 v0.5.1 中，这类绑定错误可能导致 500，因此不要假定所有输入错误都会自动变为 400。错误转换为响应的顺序参见[执行流水线](/zh-Hans/learn/core-concepts/pipeline#error-responses)。
+Spine `v0.6.0` 配合 Echo 平台 `v0.1.0`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。 [执行流水线](/zh-Hans/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext：解析事件输入
 

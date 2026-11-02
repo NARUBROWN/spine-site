@@ -1,10 +1,13 @@
 # Current releases
 
-This documentation site is based on Spine v0.5.1 and Spine CLI v0.1.4.
+This documentation site is based on Spine v0.6.0 and Spine CLI v0.4.0.
 
-## Spine v0.5.1
+## Spine v0.6.0
 
-The public API and runtime in Spine v0.5.1 provide the following features.
+The public API and runtime in Spine v0.6.0 provide the following features.
+
+- Separate the HTTP contract from Echo and create HTTP apps through `spine-echo-platform`
+- CLI `v0.4.0` installs the platform, checks the static contract, and builds the app through default `new`
 
 - Four interceptor stages, including `BeforeResponse`, and HTTP responses prepared before transmission
 - `App.Validate`, which checks configuration without connecting to the network and returns a structured `boot.ConfigError`
@@ -18,9 +21,9 @@ The public API and runtime in Spine v0.5.1 provide the following features.
 
 See [Security configuration](/en/reference/security-configuration) for production defaults and constraints.
 
-## Spine CLI v0.1.4
+## Spine CLI v0.4.0
 
-The installation and project creation examples use Spine CLI v0.1.4. This CLI version creates projects that use Spine v0.5.1.
+The installation and project creation examples use Spine CLI v0.4.0. This CLI version creates projects that use Spine v0.6.0.
 
 - [Install the CLI](/en/learn/getting-started/installation)
 - [Build your first app](/en/learn/getting-started/first-app)

@@ -2,6 +2,8 @@
 
 Spine is a web framework that lets you register constructors, routes, and interceptors in Go code. The registration code shows which handler receives a request and which tasks run before and after it.
 
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
 If you are getting started, follow [Your First App](/en/learn/getting-started/first-app) to create a project with the CLI and check the `GET /health` response. This page introduces the core concepts used to configure an app.
 
 ## Configuring and Running an App
@@ -12,7 +14,7 @@ The following example shows how to register a user feature you have implemented 
 
 ```go
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
 
     // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
@@ -113,7 +115,7 @@ func (c *UserController) CreateUser(
 ## Getting Started
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 

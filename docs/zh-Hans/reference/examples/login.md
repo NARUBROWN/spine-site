@@ -4,7 +4,7 @@
 
 ## 开始前的准备
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。CLI 0.1.4 不提供 JWT 认证生成器。创建基础项目后，手动添加下方认证代码，并安装 `github.com/golang-jwt/jwt/v5`。
+请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。CLI 0.4.0 不提供 JWT 认证生成器。创建基础项目后，手动添加下方认证代码，并安装 `github.com/golang-jwt/jwt/v5`。
 
 本示例使用内存存储库、明文密码比较和硬编码的 JWT 密钥，帮助你了解认证流程。服务器结束后，注册信息会消失。在实际服务中使用前，必须改用密码哈希，并通过环境变量管理 JWT 密钥。
 
@@ -13,9 +13,8 @@
 准备基础应用和 JWT 依赖。后续命令均在 `login-example/` 中运行。
 
 ```sh
-spine new login-example --module example.com/login-example
+spine new login-example --layout legacy --module example.com/login-example
 cd login-example
-go mod tidy
 spine doctor
 go get github.com/golang-jwt/jwt/v5
 ```
@@ -27,6 +26,7 @@ go get github.com/golang-jwt/jwt/v5
 ```text
 login-example/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -327,6 +327,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/login-example/src/controller"
@@ -340,7 +341,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(store.NewUserStore, controller.NewAuthController)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{
@@ -374,6 +375,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```sh
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev

@@ -7,11 +7,11 @@ Go 1.25.5以上が必要です。CLIの推奨バージョンはGo 1.27.3です�
 ## 1. CLIのインストールとコマンドの確認
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 
-`spine version`は`spine-cli 0.1.4`を表示します。コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)でGoの実行ファイルのパス設定を確認してください。
+`spine version`は`spine-cli 0.4.0`を表示します。コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)でGoの実行ファイルのパス設定を確認してください。
 
 ## 2. プロジェクトの生成
 
@@ -20,10 +20,9 @@ spine version
 ```bash
 spine new hello-spine --module example.com/hello-spine
 cd hello-spine
-go mod tidy
 ```
 
-`hello-spine`ディレクトリにプロジェクトファイルが生成されます。CLIは`go.mod`にSpine `v0.5.1`を指定し、`go mod tidy`が必要な依存関係をダウンロードします。
+`new` は Spine `v0.6.0`、Echo プラットフォーム `v0.1.0`、Echo `v5.4.4` をインストールし、静的契約の検査とビルドを完了します。`--skip-install` でファイルだけを生成した場合に限り、別途 `go mod tidy` を実行してください。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
 
 ## 3. 生成された構造の確認
 
@@ -32,11 +31,15 @@ hello-spine/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
-└── internal/application/
-    ├── application.go
-    └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── controller/health_controller.go
+    └── route/route.go
 ```
 
 プロジェクトには、実行の起点となる`main.go`と、アプリの構成コードを含む`internal/application`ディレクトリがあります。`spine.toml`は、モジュールパス、エントリーポイント、アプリの構成コードの場所とポートをCLIに伝えます。
@@ -46,6 +49,8 @@ module = "example.com/hello-spine"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "layered-v1"
+platform = "echo"
 ```
 
 `internal/application/application.go`の`BuildApplication()`は、アプリと実行オプションを返します。生成されたコードは`HealthController`のコンストラクタと`GET /health`を登録し、HTTPの実行オプションとして`boot.HTTPOptions`を明示します。

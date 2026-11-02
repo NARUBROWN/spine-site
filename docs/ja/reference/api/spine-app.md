@@ -1,34 +1,28 @@
 # spine.App
 
-`App`は、コンストラクタ、HTTPルート、インターセプター、イベントコンシューマー、WebSocketハンドラー、ユーザー定義のトランスポートを登録し、アプリケーションを実行するためのエントリーポイントです。このリファレンスでは、Spine v0.5.1の公開APIと起動オプションを扱います。
+`App`は、コンストラクタ、HTTPルート、インターセプター、イベントコンシューマー、WebSocketハンドラー、ユーザー定義のトランスポートを登録し、アプリケーションを実行するためのエントリーポイントです。このリファレンスでは、Spine v0.6.0の公開APIと起動オプションを扱います。
 
 ```go
-import "github.com/NARUBROWN/spine"
+import (
+    "github.com/NARUBROWN/spine"
+    platform "github.com/NARUBROWN/spine-echo-platform"
+)
 ```
 
 ## インターフェース定義
 
 ```go
 type App interface {
-    // 생성자 선언
     Constructor(constructors ...any)
-    // 라우트 선언
     Route(method string, path string, handler any, opts ...router.RouteOption)
-    // 인터셉터 선언
     Interceptor(interceptors ...core.Interceptor)
-    // HTTP/WebSocket 범위를 지정한 전역 인터셉터 선언
     InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
-    // HTTP 서버 확장 (Echo 등)
-    Transport(fn func(any))
-    // 독립 실행되는 사용자 정의 전송 방식 등록
     RegisterTransport(t core.CustomTransport)
-    // 네트워크 연결 없이 설정 검증
     Validate(opts boot.Options) error
-    // 실행
+    Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
     Run(opts boot.Options) error
-    // 이벤트 소비자 레지스트리 반환
+    RunContext(ctx context.Context, opts boot.Options) error
     Consumers() *consumer.Registry
-    // 웹소켓 레지스트리 반환
     WebSocket() *ws.Registry
 }
 ```
@@ -40,8 +34,10 @@ type App interface {
 ### New
 
 ```go
-func New() App
+func New(options ...Option) App
 ```
+
+`spine.New(options ...Option)` は HTTP 実装を選択しないカーネルアプリを作成します。HTTP を使わないワーカーには `spine.New()`、Echo HTTP アプリには `platform.New()` または `spine.New(platform.Option())` を使います。
 
 新しいSpineアプリケーションのインスタンスを作成します。
 
@@ -52,7 +48,7 @@ func New() App
 **例**
 
 ```go
-app := spine.New()
+app := platform.New()
 app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
@@ -232,34 +228,28 @@ app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
 app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ```
 
-### Transport
+### WithEcho
 
 ```go
-Transport(fn func(any))
+platform.WithEcho(fn func(*echo.Echo)) platform.EchoOption
 ```
 
-HTTPサーバーのEchoインスタンスを設定するコールバックを登録します。コールバックでミドルウェアや静的ファイルのパスを追加できます。
-
-**引数**
-
-- `fn` - Echoインスタンスを受け取るコールバック関数
-
-**例**
+Echo の拡張はプラットフォーム作成時に型付きの `WithEcho` オプションで登録します。既存の `app := platform.New()` を以下のコードに置き換え、その後のコンストラクターとルートの登録は維持してください。`App.Transport` は Spine v0.6.0 で削除されました。
 
 ```go
-import "github.com/labstack/echo/v4"
-import "github.com/labstack/echo/v4/middleware"
+import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/labstack/echo/v5"
+    "github.com/labstack/echo/v5/middleware"
+)
 
-app.Transport(func(e any) {
-    echo := e.(*echo.Echo)
-
-    // Echo 미들웨어 추가
-    echo.Use(middleware.RequestID())
-
-    // 정적 파일 서빙
-    echo.Static("/static", "public")
-})
+app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+    e.Use(middleware.RequestID())
+    e.Static("/static", "public")
+}))
 ```
+
+プラットフォームオプションで追加した native Echo ルートは、Spine の HTTP インターセプターと応答 staging を経由せず、静的な Spine ルート契約にも含まれません。実際の動作を別途確認してください。
 
 ### RegisterTransport
 
@@ -323,6 +313,20 @@ func (t *GRPCTransport) Stop(ctx context.Context) error {
 
 app.RegisterTransport(&GRPCTransport{})
 ```
+
+### RunContext / Prepare
+
+```go
+RunContext(ctx context.Context, opts boot.Options) error
+Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
+
+type PreparedApplication interface {
+    Handler() http.Handler
+    Close(ctx context.Context) error
+}
+```
+
+`RunContext` は context のキャンセルで正常終了を開始します。`Prepare` はリスナーなしでアプリを準備し、`Handler()` と `Close(ctx)` を返します。consumer と custom transport の Start は実行しませんが、設定によって broker readiness と custom Init がネットワーク接続を開くことがあります。準備結果の Close と外部 HTTP サーバーの終了は呼び出し元が管理します。
 
 ### Consumers
 
@@ -822,6 +826,7 @@ spine verify
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
 	"os"
 
 	"github.com/NARUBROWN/spine"
@@ -839,7 +844,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := spine.New()
+	app := platform.New()
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -857,7 +862,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 この準備が終わると、コンシューマーとユーザー定義のトランスポートの`Start`を別のゴルーチンで実行し、最後にHTTPサーバーを起動します。HTTPルートは、同じメソッドでパスが曖昧に重なると起動に失敗します。たとえば、`/users/:id`と`/users/me`は重複するパスとして検出します。
 
-終了時は、WebSocketとHTTPへのリクエストの受け入れを先に停止し、コンシューマーの停止を待ってから、ユーザー定義のトランスポートの`Stop`を初期化の逆順に呼び出します。その後、イベントパブリッシャーのリソースを解放します。具体的な実装は、[v0.5.1の起動および終了コード](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/bootstrap/bootstrap.go)を参照してください。
+終了時は、WebSocketとHTTPへのリクエストの受け入れを先に停止し、コンシューマーの停止を待ってから、ユーザー定義のトランスポートの`Stop`を初期化の逆順に呼び出します。その後、イベントパブリッシャーのリソースを解放します。具体的な実装は、[v0.6.0の起動および終了コード](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/bootstrap/bootstrap.go)を参照してください。
 
 ## 制約とエラー
 

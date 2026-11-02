@@ -7,11 +7,11 @@
 ## 1. 安装 CLI 并确认命令
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 
-`spine version` 会输出 `spine-cli 0.1.4`。如果找不到命令，请参阅[安装指南](/zh-Hans/learn/getting-started/installation)中的 Go 可执行文件路径设置。
+`spine version` 会输出 `spine-cli 0.4.0`。如果找不到命令，请参阅[安装指南](/zh-Hans/learn/getting-started/installation)中的 Go 可执行文件路径设置。
 
 ## 2. 创建项目
 
@@ -20,10 +20,9 @@ spine version
 ```bash
 spine new hello-spine --module example.com/hello-spine
 cd hello-spine
-go mod tidy
 ```
 
-项目文件会生成在 `hello-spine` 目录中。CLI 在 `go.mod` 中指定 Spine `v0.5.1`，`go mod tidy` 会下载所需的依赖。
+`new` 会安装 Spine `v0.6.0`、Echo 平台 `v0.1.0` 和 Echo `v5.4.4`，并完成静态契约检查和构建。只有使用 `--skip-install` 仅生成文件时，才需要单独运行 `go mod tidy`。安装过程不会初始化应用、运行测试或启动监听器。
 
 ## 3. 查看生成的结构
 
@@ -32,11 +31,15 @@ hello-spine/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
-└── internal/application/
-    ├── application.go
-    └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── controller/health_controller.go
+    └── route/route.go
 ```
 
 项目包含作为运行入口的 `main.go`，以及存放应用配置代码的 `internal/application` 目录。`spine.toml` 向 CLI 提供模块路径、运行入口、应用配置代码的位置和端口。
@@ -46,6 +49,8 @@ module = "example.com/hello-spine"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "layered-v1"
+platform = "echo"
 ```
 
 `internal/application/application.go` 中的 `BuildApplication()` 返回应用和运行选项。生成的代码注册 `HealthController` 构造函数和 `GET /health`，并显式指定 HTTP 运行选项 `boot.HTTPOptions`。

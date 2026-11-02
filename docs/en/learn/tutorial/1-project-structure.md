@@ -2,7 +2,7 @@
 
 Create a project with the Spine CLI and add a user resource. Read the generated files to learn where to put app configuration code and what controllers, services, and repositories do.
 
-First, complete the [CLI installation](/en/learn/getting-started/installation). If you already created a project by following [Your First App](/en/learn/getting-started/first-app), skip the creation step and continue in that project. Read the module paths in the code below as your own project's module path.
+Complete [CLI installation](/en/learn/getting-started/installation) first. This tutorial uses feature packages, so create `my-app` with `--layout legacy` in a new directory. Its layout differs from the default `layered-v1` app in [Your First App](/en/learn/getting-started/first-app); existing apps are not converted automatically.
 
 ## Create a Project with the CLI
 
@@ -10,9 +10,8 @@ Run these commands in the parent directory where you want to place the project. 
 
 ```sh
 spine version
-spine new my-app --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app
 cd my-app
-go mod tidy
 spine doctor
 spine inspect
 ```
@@ -21,13 +20,14 @@ The `my-app` directory is created and its dependencies are prepared. `doctor` di
 
 ## Generated Base Structure
 
-`spine new` generates the following files. `go.sum` is created later by `go mod tidy`.
+The `new` command above creates the project files including `go.sum`, installs dependencies, and builds the app.
 
 ```text
 my-app/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 └── internal/
@@ -38,13 +38,15 @@ my-app/
 
 ## CLI Configuration
 
-`spine.toml` contains the settings the CLI needs to find and run the project. It supports the four keys below. Manage app settings such as database connections separately.
+`spine.toml` configures the module, entry point, composition root, port, layout, and platform. Keep DB, authentication, and other application settings separate.
 
 ```toml
 module = "example.com/my-app"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "legacy"
+platform = "echo"
 ```
 
 | Key | Purpose |
@@ -53,6 +55,8 @@ port = 8080
 | `entrypoint` | The target to run or build |
 | `composition` | The location where the CLI inspects app configuration and automatically registers generated code |
 | `port` | The port used by the development server |
+| `layout` | Generator file layout (`legacy` or `layered-v1`) |
+| `platform` | HTTP platform (`echo`) |
 
 ## Separate Execution from App Configuration
 
@@ -87,6 +91,7 @@ func main() {
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -103,7 +108,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -153,7 +158,7 @@ For typed creation and lookup examples, use a different name with `spine generat
 
 ## Registration Rules and Validation
 
-To let the CLI inspect the registration code, keep `app := spine.New()` at the top level of the body of `BuildApplication() (spine.App, boot.Options, error)`. Do not move registration code into conditionals, loops, or arbitrary helper functions. You must also check and return errors from `Register(app)`.
+To let the CLI inspect the registration code, keep `app := platform.New()` at the top level of the body of `BuildApplication() (spine.App, boot.Options, error)`. Do not move registration code into conditionals, loops, or arbitrary helper functions. You must also check and return errors from `Register(app)`.
 
 Inspect the app configuration, then run the server.
 

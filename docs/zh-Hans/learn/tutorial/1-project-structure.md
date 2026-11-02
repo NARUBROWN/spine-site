@@ -2,7 +2,7 @@
 
 使用 Spine CLI 创建项目并添加用户资源。通过阅读生成的文件，了解应用配置代码应放在何处，以及控制器、服务和仓储的作用。
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。如果已按照[第一个应用](/zh-Hans/learn/getting-started/first-app)创建项目，可以跳过创建步骤，在已有项目中继续操作。阅读以下代码时，请将模块路径替换为自己的项目路径。
+请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。本教程使用按功能划分的包，因此请在新目录中通过 `--layout legacy` 创建 `my-app`。它与[第一个应用](/zh-Hans/learn/getting-started/first-app)的默认 `layered-v1` 结构不同，不会自动转换现有应用。
 
 ## 通过 CLI 创建项目
 
@@ -10,9 +10,8 @@
 
 ```sh
 spine version
-spine new my-app --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app
 cd my-app
-go mod tidy
 spine doctor
 spine inspect
 ```
@@ -21,13 +20,14 @@ spine inspect
 
 ## 生成的基本结构
 
-`spine new` 生成以下文件。`go.sum` 随后由 `go mod tidy` 创建。
+上述 `new` 命令会创建包括 `go.sum` 在内的项目文件，并完成依赖安装和构建。
 
 ```text
 my-app/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 └── internal/
@@ -38,13 +38,15 @@ my-app/
 
 ## CLI 配置
 
-`spine.toml` 包含 CLI 查找和运行项目所需的配置。支持的键如下，共四个。数据库连接等应用配置应单独管理。
+`spine.toml` 配置模块、入口、应用组装位置、端口、布局和平台。数据库、认证等应用配置应单独管理。
 
 ```toml
 module = "example.com/my-app"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "legacy"
+platform = "echo"
 ```
 
 | 键 | 作用 |
@@ -53,6 +55,8 @@ port = 8080
 | `entrypoint` | 要运行或构建的目标 |
 | `composition` | 检查应用配置并自动注册生成代码的位置 |
 | `port` | 开发服务器使用的端口 |
+| `layout` | 生成器文件布局（`legacy` 或 `layered-v1`） |
+| `platform` | HTTP 平台（`echo`） |
 
 ## 分离运行入口与应用配置
 
@@ -87,6 +91,7 @@ func main() {
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -103,7 +108,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -153,7 +158,7 @@ if err := user.Register(app); err != nil {
 
 ## 注册规则与验证
 
-为使 CLI 能够检查注册代码，请将 `app := spine.New()` 保留在 `BuildApplication() (spine.App, boot.Options, error)` 函数体的顶层。不要将注册代码移入条件语句、循环或任意辅助函数中。还必须检查并返回 `Register(app)` 返回的错误。
+为使 CLI 能够检查注册代码，请将 `app := platform.New()` 保留在 `BuildApplication() (spine.App, boot.Options, error)` 函数体的顶层。不要将注册代码移入条件语句、循环或任意辅助函数中。还必须检查并返回 `Register(app)` 返回的错误。
 
 检查应用配置后，再运行服务器。
 

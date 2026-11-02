@@ -1,10 +1,13 @@
 # 目前版本
 
-此文件網站以 Spine v0.5.1 和 Spine CLI v0.1.4 為準。
+此文件網站以 Spine v0.6.0 和 Spine CLI v0.4.0 為準。
 
-## Spine v0.5.1
+## Spine v0.6.0
 
-Spine v0.5.1 的公開 API 與執行階段提供以下功能。
+Spine v0.6.0 的公開 API 與執行階段提供以下功能。
+
+- 分離 HTTP 契約與 Echo 實作，透過 `spine-echo-platform` 建立 HTTP 應用程式
+- CLI `v0.4.0` 的預設 `new` 完成平台安裝、靜態契約檢查與建置
 
 - 包含 `BeforeResponse` 的 4 階段攔截器，以及在傳送前準備的 HTTP 回應
 - 不連接網路即可檢查設定，並回傳結構化 `boot.ConfigError` 的 `App.Validate`
@@ -18,9 +21,9 @@ Spine v0.5.1 的公開 API 與執行階段提供以下功能。
 
 正式環境的預設值與限制，請參閱[安全性設定](/zh-Hant/reference/security-configuration)。
 
-## Spine CLI v0.1.4
+## Spine CLI v0.4.0
 
-安裝與建立專案的範例以 Spine CLI v0.1.4 為準。此版本的 CLI 會建立使用 Spine v0.5.1 的專案。
+安裝與建立專案的範例以 Spine CLI v0.4.0 為準。此版本的 CLI 會建立使用 Spine v0.6.0 的專案。
 
 - [安裝 CLI](/zh-Hant/learn/getting-started/installation)
 - [建立第一個應用程式](/zh-Hant/learn/getting-started/first-app)

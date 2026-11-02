@@ -15,10 +15,9 @@ const words = {
 }
 const copy = computed(() => words[locale.value as keyof typeof words] || words.en)
 const lines = [
-  'go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4',
+  'go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0',
   'spine new hello-spine --module example.com/hello-spine',
   'cd hello-spine',
-  'go mod tidy',
   'spine contract check',
   'spine verify',
   'spine dev'

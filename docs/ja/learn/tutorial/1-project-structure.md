@@ -2,7 +2,7 @@
 
 Spine CLIでプロジェクトを作成し、ユーザーリソースを追加します。生成されたファイルを確認しながら、アプリの構成コードを置く場所と、コントローラー、サービス、リポジトリの役割を学びます。
 
-まず[CLIのインストール](/ja/learn/getting-started/installation)を完了してください。[最初のアプリ](/ja/learn/getting-started/first-app)に沿ってプロジェクトをすでに作成している場合は、生成手順を省略し、そのプロジェクトで続けられます。以下のコードのモジュールパスは、自分のプロジェクトのパスに読み替えてください。
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。このチュートリアルでは機能別パッケージを使うため、新しいディレクトリで `--layout legacy` を指定して `my-app` を作成します。[最初のアプリ](/ja/learn/getting-started/first-app)の標準 `layered-v1` とは構造が異なり、既存アプリを自動変換することはありません。
 
 ## CLIによるプロジェクトの生成
 
@@ -10,9 +10,8 @@ Spine CLIでプロジェクトを作成し、ユーザーリソースを追加�
 
 ```sh
 spine version
-spine new my-app --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app
 cd my-app
-go mod tidy
 spine doctor
 spine inspect
 ```
@@ -21,13 +20,14 @@ spine inspect
 
 ## 生成される基本構造
 
-`spine new`は次のファイルを生成します。`go.sum`は、その後の`go mod tidy`で作成されます。
+上記の `new` は `go.sum` を含むプロジェクトファイルを作成し、依存関係のインストールとビルドを完了します。
 
 ```text
 my-app/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 └── internal/
@@ -38,13 +38,15 @@ my-app/
 
 ## CLIの設定
 
-`spine.toml`には、CLIがプロジェクトを見つけて実行するために必要な設定を記述します。対応するキーは次の4つです。データベース接続などのアプリ設定は別途管理します。
+`spine.toml` はモジュール、エントリーポイント、アプリ構成の場所、ポート、レイアウト、プラットフォームを設定します。DB や認証などのアプリ設定は別に管理します。
 
 ```toml
 module = "example.com/my-app"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "legacy"
+platform = "echo"
 ```
 
 | キー | 役割 |
@@ -53,6 +55,8 @@ port = 8080
 | `entrypoint` | 実行またはビルドする対象 |
 | `composition` | アプリ構成を検査し、生成したコードを自動登録する場所 |
 | `port` | 開発サーバーで使用するポート |
+| `layout` | 生成ファイルの配置 (`legacy` または `layered-v1`) |
+| `platform` | HTTP プラットフォーム (`echo`) |
 
 ## 実行とアプリ構成の分離
 
@@ -87,6 +91,7 @@ func main() {
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -103,7 +108,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -153,7 +158,7 @@ if err := user.Register(app); err != nil {
 
 ## 登録規則と検証
 
-CLIが登録コードを検査できるように、`BuildApplication() (spine.App, boot.Options, error)`の関数本体の最上位に`app := spine.New()`を維持してください。登録コードを条件分岐、ループ、任意の補助関数の中に移さないでください。`Register(app)`が返したエラーも確認し、返す必要があります。
+CLIが登録コードを検査できるように、`BuildApplication() (spine.App, boot.Options, error)`の関数本体の最上位に`app := platform.New()`を維持してください。登録コードを条件分岐、ループ、任意の補助関数の中に移さないでください。`Register(app)`が返したエラーも確認し、返す必要があります。
 
 アプリ構成を検査してからサーバーを実行します。
 

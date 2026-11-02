@@ -4,7 +4,7 @@
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. 이 예제는 CLI 0.1.4로 만든 기본 앱에 전체 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다. 수정과 삭제는 아래 코드에 포함되어 있습니다.
+[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. 이 예제는 CLI 0.4.0으로 만든 기본 앱에 전체 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다. 수정과 삭제는 아래 코드에 포함되어 있습니다.
 
 저장한 사용자는 서버 프로세스를 종료하면 사라집니다.
 
@@ -27,9 +27,8 @@ graph TD
 기본 앱을 생성하고 의존성과 프로젝트 설정을 확인합니다. 이후 명령은 `crud-example/`에서 실행합니다.
 
 ```sh
-spine new crud-example --module example.com/crud-example
+spine new crud-example --layout legacy --module example.com/crud-example
 cd crud-example
-go mod tidy
 spine doctor
 ```
 
@@ -40,6 +39,7 @@ spine doctor
 ```text
 crud-example/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -443,6 +443,7 @@ func toHTTPError(err error) error {
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/crud-example/src/controller"
@@ -455,7 +456,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
@@ -493,6 +494,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```sh
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev

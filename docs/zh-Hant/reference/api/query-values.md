@@ -228,7 +228,7 @@ func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
 - 不會移除布林值前後的空白。例如，`" true "` 無法辨識，會回傳 `def`。
 - `NewValues` 不會複製傳入的映射。建立後若修改原始映射，查詢結果也會改變。
 
-實作可在[查詢輔助工具](https://github.com/NARUBROWN/spine/blob/v0.5.1/pkg/query/types.go)與[自動注入程式碼](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/query_values_resolver.go)中查看。
+實作可在[查詢輔助工具](https://github.com/NARUBROWN/spine/blob/v0.6.0/pkg/query/types.go)與[自動注入程式碼](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/query_values_resolver.go)中查看。
 
 ## 參考
 

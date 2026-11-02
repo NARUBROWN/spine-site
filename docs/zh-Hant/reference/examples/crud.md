@@ -4,7 +4,7 @@
 
 ## 開始前的準備
 
-請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。此範例會在 CLI 0.1.4 建立的基本應用程式中，手動加入完整的 CRUD 程式碼。CLI 的 `resource` 提供 GET 骨架，`slice --storage memory` 則提供新增和查詢的骨架。以下程式碼包含修改和刪除功能。
+請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。此範例會在 CLI 0.4.0 建立的基本應用程式中，手動加入完整的 CRUD 程式碼。CLI 的 `resource` 提供 GET 骨架，`slice --storage memory` 則提供新增和查詢的骨架。以下程式碼包含修改和刪除功能。
 
 伺服器程序結束後，已儲存的使用者資料就會消失。
 
@@ -27,9 +27,8 @@ graph TD
 建立基本應用程式，並檢查相依套件和專案設定。後續命令均在 `crud-example/` 中執行。
 
 ```sh
-spine new crud-example --module example.com/crud-example
+spine new crud-example --layout legacy --module example.com/crud-example
 cd crud-example
-go mod tidy
 spine doctor
 ```
 
@@ -40,6 +39,7 @@ spine doctor
 ```text
 crud-example/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -443,6 +443,7 @@ func toHTTPError(err error) error {
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/crud-example/src/controller"
@@ -455,7 +456,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
@@ -493,6 +494,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```sh
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev

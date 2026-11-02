@@ -2,9 +2,11 @@
 
 BunでMySQLに接続し、生成された `GET /user/:id` を拡張してデータベースからユーザーを取得します。テーブルを作成するマイグレーションと、リポジトリの基本的なクエリも作成します。
 
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+
 ## CLIプロジェクトの準備
 
-[CLIのインストールと最初のアプリ](/ja/learn/getting-started/first-app)と[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で作成した `example.com/my-app` の続きです。接続先のMySQLデータベースと、テーブルを作成する権限を持つアカウントが必要です。コマンドはプロジェクトルートで実行します。
+[CLIのインストールと最初のアプリ](/ja/learn/tutorial/1-project-structure)と[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で作成した `example.com/my-app` の続きです。接続先のMySQLデータベースと、テーブルを作成する権限を持つアカウントが必要です。コマンドはプロジェクトルートで実行します。
 
 ユーザーリソースがまだない場合は、生成するファイルを確認してから適用します。すでに作成したリソースは再生成しません。
 
@@ -89,6 +91,7 @@ Spineのコンストラクタは戻り値を1つだけサポートするため�
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/database"
@@ -107,7 +110,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController, database.NewDB)
     app.Route("GET", "/health", (*HealthController).Get)
     if err := user.Register(app); err != nil {
@@ -442,6 +445,7 @@ spine dev
 ```text
 my-app/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -472,6 +476,7 @@ my-app/
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/database"
@@ -490,7 +495,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController, database.NewDB)
     app.Route("GET", "/health", (*HealthController).Get)
     if err := user.Register(app); err != nil {
@@ -579,6 +584,7 @@ err := r.db.NewSelect().
 
 ```sh
 go mod tidy
+go mod download all
 gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
 spine contract check
 spine verify

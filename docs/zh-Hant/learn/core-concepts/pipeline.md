@@ -2,7 +2,7 @@
 
 Spine 的執行管線會接收請求、選擇處理器、綁定引數，再將回傳值轉成回應。了解攔截器應在哪個時點執行，以及發生錯誤後會進行到哪個階段時，可以依據這個流程判斷。
 
-本文說明 Spine v0.5.1 的 HTTP 執行順序。HTTP、事件消費者與 WebSocket 使用相同的管線實作，但解析輸入的解析器與回應處理設定各不相同。
+本文說明 Spine v0.6.0 的 HTTP 執行順序。HTTP、事件消費者與 WebSocket 使用相同的管線實作，但解析輸入的解析器與回應處理設定各不相同。
 
 控制器範例是要加入[以 CLI 產生的專案](/zh-Hant/learn/tutorial/1-project-structure)的程式碼。請求 DTO 以指標接收，一般成功回應則以 `github.com/NARUBROWN/spine/pkg/httpx` 的 `httpx.Response[T]` 回傳。建構函式與路由在 `BuildApplication` 中註冊。
 
@@ -258,7 +258,7 @@ type ReturnValueHandler interface {
 | 未另行對應的執行錯誤 | 500，`Internal server error` |
 | 實際回應已提交 | 不會重複寫入回應 |
 
-並非所有綁定錯誤都會對應到 400。在 v0.5.1 中，無效的 JSON 或 `path.Int` 數字解析失敗，都可能導致 500 回應。應用程式設計輸入錯誤的回應時，請區分綁定失敗與處理器明確回傳的 `httperr.BadRequest`。
+Spine `v0.6.0` 搭配 Echo 平台 `v0.1.0`，對格式錯誤的 JSON、數字或布林路徑值轉換失敗回傳 HTTP 400，對不支援的本文 Content-Type 回傳 415，對超過本文大小限制回傳 413。綁定失敗發生在控制器呼叫之前。請區分綁定失敗與業務驗證，並以實際請求確認。
 
 實際傳送回應時若發生錯誤，會納入最終執行錯誤。如果回應尚未提交，會嘗試寫入 500 回應。已傳送的回應無法撤回。
 

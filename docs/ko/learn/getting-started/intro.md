@@ -2,6 +2,8 @@
 
 Spine은 생성자, 라우트, 인터셉터를 Go 코드로 등록하는 웹 프레임워크입니다. 요청을 받을 핸들러와 그 전후에 실행할 작업을 등록 코드에서 확인할 수 있습니다.
 
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+
 처음 시작한다면 [첫 번째 앱](/ko/learn/getting-started/first-app)에서 CLI로 프로젝트를 만들고 `GET /health` 응답을 확인하세요. 이 문서는 앱을 구성할 때 사용하는 핵심 개념을 소개합니다.
 
 ## 앱 구성과 실행
@@ -12,7 +14,7 @@ CLI로 생성한 프로젝트에서는 `internal/application/application.go`의 
 
 ```go
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
 
     // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
@@ -113,7 +115,7 @@ func (c *UserController) CreateUser(
 ## 시작하기
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 

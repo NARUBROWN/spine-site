@@ -4,7 +4,7 @@
 
 ## 開始前的準備
 
-請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。CLI 0.1.4 提供具備型別定義的消費者骨架。Kafka broker 和傳輸設定需要另外準備。
+請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。CLI 0.4.0 提供具備型別定義的消費者骨架。Kafka broker 和傳輸設定需要另外準備。
 
 若要確認訊息傳遞，需要在 `localhost:9092` 執行的 Kafka broker，以及 `order.created` 主題。此範例使用隔離本機環境中的明文連線。庫存消費者會將事件寫入日誌，不會實際變更庫存數量。
 
@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --module example.com/order-app --dry-run
-spine new stock-app --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 確認預覽後，建立兩個應用程式。除非另有說明，後續命令均在 `spine-msa/` 中執行。
 
 ```sh
-spine new order-app --module example.com/order-app
-spine new stock-app --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app
+spine new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. 產生庫存消費者骨架
@@ -48,6 +48,7 @@ spine generate consumer order --root stock-app --topic order.created --field eve
 spine-msa/
 ├── order-app/
 │   ├── go.mod
+├── go.sum
 │   ├── main.go
 │   ├── spine.toml
 │   ├── internal/application/
@@ -58,6 +59,7 @@ spine-msa/
 │       └── controller/order_controller.go
 └── stock-app/
     ├── go.mod
+├── go.sum
     ├── main.go
     ├── spine.toml
     ├── internal/application/
@@ -136,6 +138,7 @@ func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Respon
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/order-app/src/controller"
@@ -144,7 +147,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(controller.NewOrderController)
     app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
 
@@ -217,6 +220,7 @@ func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event Orde
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/stock-app/src/consumer/order"
@@ -225,7 +229,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     if err := order.Register(app); err != nil {
         return nil, boot.Options{}, err
     }
@@ -249,11 +253,13 @@ func BuildApplication() (spine.App, boot.Options, error) {
 cd order-app
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 cd ../stock-app
 go mod edit -require=example.com/order-app@v0.0.0
 go mod edit -replace=example.com/order-app=../order-app
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 cd ..
 spine doctor --root order-app
 spine doctor --root stock-app

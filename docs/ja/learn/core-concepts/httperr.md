@@ -2,7 +2,7 @@
 
 `httperr`は、HTTPステータスコードとクライアントに伝えるエラーメッセージを保持するパッケージです。コントローラーから`httperr.NotFound("사용자를 찾을 수 없습니다")`のようにエラーを返すと、SpineがステータスコードとJSONエラーレスポンスに変換します。コントローラーでEchoなどのレスポンスオブジェクトを直接扱う必要はありません。
 
-このページでは、Spine v0.5.1の`github.com/NARUBROWN/spine/pkg/httperr`を基準に説明します。
+このページでは、Spine v0.6.0の`github.com/NARUBROWN/spine/pkg/httperr`を基準に説明します。
 
 ## CLIプロジェクトで使用する
 
@@ -78,7 +78,7 @@ func (e *HTTPError) Error() string {
 
 ## 標準のヘルパー関数
 
-Spine v0.5.1は、次の4つのヘルパーを提供します。すべて`msg string`を受け取り、`error`を返します。
+Spine v0.6.0は、次の4つのヘルパーを提供します。すべて`msg string`を受け取り、`error`を返します。
 
 | 関数 | ステータスコード | 使用する状況 |
 | --- | --- | --- |
@@ -277,7 +277,7 @@ if err != nil {
 }
 ```
 
-`HTTPError`には`Unwrap()`メソッドがありません。`Cause`に入れたエラーが自動的にGoのエラーチェーンにつながるわけではないため、原因を確認するには`errors.As`で`HTTPError`を取得してから`Cause`を読み取ってください。
+`HTTPError.Unwrap()` は `Cause` を返します。`errors.Is` と `errors.As` で原因の連鎖を調べるか、`Cause` を直接参照できます。原因エラーは JSON レスポンスに含まれません。
 
 インターセプターの`AfterCompletion`では、リクエスト終了後に原因を記録できます。次のコードは、このメソッドだけを抜粋した例で、`core`、`httperr`、`errors`、`log`パッケージを使用します。登録可能な実装には、`PreHandle`、`PostHandle`、`BeforeResponse`も必要です。
 
@@ -305,6 +305,6 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 | リクエスト本文のサイズ制限を超過 | 413、`"Request entity too large"`で応答 |
 | 実際のレスポンスがすでに書き込まれている | 追加のエラーレスポンスを書かず、二重応答を防ぐ |
 
-Spine v0.5.1は、レスポンス前の処理を終えてから、準備したレスポンスを実際の転送層に反映します。`BeforeResponse`でエラーが発生すると、準備中の成功レスポンスがエラーレスポンスに変わる場合があります。`AfterCompletion`はレスポンス処理の後に実行されるため、この段階では新たなエラーレスポンスを作成しようとせず、エラーと転送結果を記録してください。
+Spine v0.6.0は、レスポンス前の処理を終えてから、準備したレスポンスを実際の転送層に反映します。`BeforeResponse`でエラーが発生すると、準備中の成功レスポンスがエラーレスポンスに変わる場合があります。`AfterCompletion`はレスポンス処理の後に実行されるため、この段階では新たなエラーレスポンスを作成しようとせず、エラーと転送結果を記録してください。
 
 エラーはGoの戻り値で伝えてください。`panic`を、通常の入力検証や業務上の失敗を表す手段として使用しないでください。インターセプターによる中断と終了処理は、[インターセプターチュートリアル](/ja/learn/tutorial/4-interceptor)を参照してください。

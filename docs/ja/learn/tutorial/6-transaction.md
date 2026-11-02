@@ -2,11 +2,13 @@
 
 1つのHTTPリクエストで実行する複数のINSERTを、1つのトランザクションにまとめます。リクエストが成功したらコミットし、途中で失敗したら先に実行したINSERTもロールバックするインターセプターを作成します。
 
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+
 [データベース](/ja/learn/tutorial/5-database)の `example.com/my-app` の続きです。先に `src/database`、`src/entity`、`src/user` とマイグレーションを準備してください。以下のトランザクションのコードは手動で追加します。CLIにはBunのトランザクションやoutboxの生成機能はありません。
 
 ## 実行順序
 
-Spine v0.5.1では、`PreHandle` でトランザクションを開始し、`BeforeResponse` でコミットまたはロールバックします。レスポンスのシリアライズ、ステータスコードとCookieの検証、イベントの発行など、レスポンスの準備中に発生したエラーもロールバックの条件に含まれます。`AfterCompletion` は、完了後にログを記録したり、リソースを解放したりする際に使用します。
+Spine v0.6.0では、`PreHandle` でトランザクションを開始し、`BeforeResponse` でコミットまたはロールバックします。レスポンスのシリアライズ、ステータスコードとCookieの検証、イベントの発行など、レスポンスの準備中に発生したエラーもロールバックの条件に含まれます。`AfterCompletion` は、完了後にログを記録したり、リソースを解放したりする際に使用します。
 
 ```text
 PreHandle: トランザクション開始
@@ -232,6 +234,7 @@ if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" 
 ```bash
 gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
 go mod tidy
+go mod download all
 spine doctor
 spine inspect
 spine contract check

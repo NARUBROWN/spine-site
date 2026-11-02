@@ -2,7 +2,7 @@
 
 `httperr` 是用于保存 HTTP 状态码和向客户端传递的错误消息的包。控制器返回 `httperr.NotFound("사용자를 찾을 수 없습니다")` 这样的错误时，Spine 会将其转换为状态码和 JSON 错误响应。控制器无需直接操作 Echo 等框架的响应对象。
 
-本页以 Spine v0.5.1 的 `github.com/NARUBROWN/spine/pkg/httperr` 为准。
+本页以 Spine v0.6.0 的 `github.com/NARUBROWN/spine/pkg/httperr` 为准。
 
 ## 在 CLI 项目中使用
 
@@ -78,7 +78,7 @@ func (e *HTTPError) Error() string {
 
 ## 基础辅助函数
 
-Spine v0.5.1 提供以下四个辅助函数，都接收 `msg string` 并返回 `error`。
+Spine v0.6.0 提供以下四个辅助函数，都接收 `msg string` 并返回 `error`。
 
 | 函数 | 状态码 | 适用情况 |
 | --- | --- | --- |
@@ -277,7 +277,7 @@ if err != nil {
 }
 ```
 
-`HTTPError` 没有 `Unwrap()` 方法。放入 `Cause` 的错误不会自动接入 Go 的错误链，因此要查看原始错误，请先通过 `errors.As` 找到 `HTTPError`，再读取 `Cause`。
+`HTTPError.Unwrap()` 返回 `Cause`。可使用 `errors.Is` 和 `errors.As` 检查原因链，也可直接读取 `Cause` 字段。原因错误不会包含在 JSON 响应中。
 
 在拦截器的 `AfterCompletion` 中，可以在请求结束后记录原始错误。下面仅摘录了该方法作为示例，使用了 `core`、`httperr`、`errors` 和 `log` 包。要将实现注册到应用中，还需要 `PreHandle`、`PostHandle` 和 `BeforeResponse` 方法。
 
@@ -305,6 +305,6 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 | 超出请求正文大小限制 | 413，`"Request entity too large"` 响应 |
 | 实际响应已经写入 | 不再写入额外错误响应，避免重复响应 |
 
-Spine v0.5.1 会在完成响应前处理后，将准备好的响应写入实际传输层。如果 `BeforeResponse` 中发生错误，正在准备的成功响应可能会变为错误响应。`AfterCompletion` 在响应处理之后执行，因此在此阶段应记录错误和传输结果，而非尝试写入新的错误响应。
+Spine v0.6.0 会在完成响应前处理后，将准备好的响应写入实际传输层。如果 `BeforeResponse` 中发生错误，正在准备的成功响应可能会变为错误响应。`AfterCompletion` 在响应处理之后执行，因此在此阶段应记录错误和传输结果，而非尝试写入新的错误响应。
 
 请通过 Go 返回值传递错误。不要使用 `panic` 表达正常的输入验证失败或业务失败。拦截器的中断和收尾处理请参阅[拦截器教程](/zh-Hans/learn/tutorial/4-interceptor)。

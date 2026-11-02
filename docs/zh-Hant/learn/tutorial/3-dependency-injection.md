@@ -2,7 +2,9 @@
 
 以[控制器](/zh-Hant/learn/tutorial/2-controller)中建立的 `src/user` 資源為基礎，說明建構函式註冊與相依性注入（DI）。完成後，您可以串接控制器、服務與儲存庫，並確認是否存在循環相依性或缺少建構函式。
 
-請準備好[第一個應用程式](/zh-Hant/learn/getting-started/first-app)的專案，並在 `hello-spine` 根目錄操作。後面的資料庫與包裝型別範例是獨立擴充，不會自動包含在基本資源中。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+
+請準備好[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)的專案，並在 `my-app` 根目錄操作。後面的資料庫與包裝型別範例是獨立擴充，不會自動包含在基本資源中。
 
 
 ## 核心概念
@@ -20,7 +22,7 @@ func NewUserService(repository *UserRepository) *UserService {
 
 ## CLI 產生的相依性
 
-若尚未產生，請在 `hello-spine` 根目錄執行。若已產生，請勿重複執行。
+若尚未產生，請在 `my-app` 根目錄執行。若已產生，請勿重複執行。
 
 ```bash
 spine generate resource user --dry-run

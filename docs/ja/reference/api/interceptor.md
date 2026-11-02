@@ -1,6 +1,6 @@
 # core.Interceptor
 
-コントローラーの実行前後に、認証、ログ出力、CORS、トランザクション処理を追加するインターフェースです。Spine v0.5.1では、事前処理、成功後の処理、レスポンス前の処理、最終的なクリーンアップをそれぞれ実装します。
+コントローラーの実行前後に、認証、ログ出力、CORS、トランザクション処理を追加するインターフェースです。Spine v0.6.0では、事前処理、成功後の処理、レスポンス前の処理、最終的なクリーンアップをそれぞれ実装します。
 
 ## インターフェース
 
@@ -61,7 +61,7 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
 
 レスポンスを実際のトランスポート層に書き込む前に、逆順で実行します。`executionErr`には、事前処理、ルーティング、入力値の解釈、コントローラー、レスポンスの準備、実行後フックで、この時点までに発生したエラーが渡されます。先に実行した`BeforeResponse`が返したエラーもまとめて、次のインターセプターに渡します。
 
-リクエストスコープのトランザクションは、この段階でコミットまたはロールバックしてください。v0.5.1はレスポンスのシリアライズと、Cookieおよびステータスコードの検証を先に行うため、レスポンスの準備に失敗した場合にロールバックできます。
+リクエストスコープのトランザクションは、この段階でコミットまたはロールバックしてください。v0.6.0はレスポンスのシリアライズと、Cookieおよびステータスコードの検証を先に行うため、レスポンスの準備に失敗した場合にロールバックできます。
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -168,7 +168,7 @@ Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
 - `core.ErrAbortPipeline`で中断する場合は、インターセプターが必要なレスポンスを準備する必要があります。コントローラーと、それ以降の成功時の処理段階は実行しません。
 - DBコミット後に、実際のレスポンス送信が失敗する場合があります。`BeforeResponse`は、DBとネットワーク送信を原子的にまとめるものではありません。
 
-具体的な早期終了とエラーの伝播は[v0.5.1のパイプライン実装](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/pipeline/pipeline.go)、接続前処理の順序は[WebSocketランタイムの実装](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/ws/runtime.go)を参照してください。
+具体的な早期終了とエラーの伝播は[v0.6.0のパイプライン実装](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/pipeline/pipeline.go)、接続前処理の順序は[WebSocketランタイムの実装](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/ws/runtime.go)を参照してください。
 
 ## 関連情報
 

@@ -2,7 +2,9 @@
 
 Spine はリクエストやメッセージごとに実行コンテキストを作成し、入力情報と実行状態をパイプラインに渡します。インターセプターは `core.ExecutionContext` で実行状態を読み書きし、HTTP コントローラーは意味を表す型と読み取り専用の `spine.Ctx` で必要な値だけを受け取ります。
 
-この区別を理解すると、インターセプターが保存した値をコントローラーに渡し、HTTP、イベントコンシューマー、WebSocket で利用できる入力を判断できます。このドキュメントのインターフェースと動作は、Spine v0.5.1 を基準にしています。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+
+この区別を理解すると、インターセプターが保存した値をコントローラーに渡し、HTTP、イベントコンシューマー、WebSocket で利用できる入力を判断できます。このドキュメントのインターフェースと動作は、Spine v0.6.0 を基準にしています。
 
 アプリのハンドラー例は、[CLI で作成したプロジェクト](/ja/learn/tutorial/1-project-structure)に手動で追加する拡張です。生成された `BuildApplication` と、エラーを確認する `user.Register(app)` の呼び出しは維持してください。`core/` のインターフェースは公開契約なので、`internal/` の実装をアプリにコピーする必要はありません。
 
@@ -50,7 +52,7 @@ graph TD
 
 矢印は、契約の包含関係を表します。`ControllerContext` と `spine.Ctx` は `ExecutionContext` を埋め込みません。同じストアを参照できるように、`Get()` だけを公開する別のインターフェースです。
 
-実際の HTTP アダプターは、`ExecutionContext` と `HttpRequestContext` の両方を実装します。コンシューマーアダプターも、`ExecutionContext` と `ConsumerRequestContext` の両方を実装します。そのため、リゾルバーは共通コンテキストを受け取った後に、必要なプロトコルの契約を確認できます。
+HTTP ではカーネルの HTTPContext がプラットフォームの入力ビューを包み、`ExecutionContext` と `HttpRequestContext` を提供します。応答 writer には独立した `core.HTTPResponseContext` でアクセスします。`SetRoute` のルーティング状態はユーザーの `Set/Get` ストアと分離されます。コンシューマーは `ExecutionContext` と `ConsumerRequestContext` を実装します。
 
 ## 共通の基盤となる契約
 
@@ -105,6 +107,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -236,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 このコードはメソッドシグネチャの例で、`CreateUserRequest` と `User` はアプリで定義する型です。フォーム DTO はフィールドに `form` タグを使い、アップロードファイルは `pkg/multipart.UploadedFiles` で受け取れます。
 
-本文が不正な JSON の場合や、パスの値の数値変換が失敗した場合は、コントローラーまで到達しません。v0.5.1 では、このようなバインディングエラーが 500 につながる場合があるため、すべての入力エラーが自動的に 400 になると想定しないでください。エラーがレスポンスに変わる順序は、[実行パイプライン](/ja/learn/core-concepts/pipeline#error-responses)で説明します。
+Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。 [実行パイプライン](/ja/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: イベント入力の解釈
 

@@ -11,9 +11,8 @@
 建立專案並產生 WebSocket 處理器。後續命令均在 `chat-app/` 中執行。
 
 ```sh
-spine new chat-app --module example.com/chat-app
+spine new chat-app --layout legacy --module example.com/chat-app
 cd chat-app
-go mod tidy
 spine doctor
 spine generate websocket chat --path /ws/chat --field message:string
 ```

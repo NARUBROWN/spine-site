@@ -2,7 +2,9 @@
 
 Export an OpenAPI file with the CLI, then add Swaggo documentation and Swagger UI if you want to send requests from a browser. The CLI's static OpenAPI export and the Swaggo UI setup are separate workflows.
 
-Use the `example.com/hello-spine` project from [Your first app](/en/learn/getting-started/first-app). First generate `src/user` with `spine generate resource user` from [Controllers](/en/learn/tutorial/2-controller). If you used a different module path, replace only the `example.com/hello-spine` prefix in the import path below with your module path and keep the `/docs` suffix. Run commands from the project root.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
+Use the `example.com/my-app` project from [Your first app](/en/learn/tutorial/1-project-structure). First generate `src/user` with `spine generate resource user` from [Controllers](/en/learn/tutorial/2-controller). If you used a different module path, replace only the `example.com/my-app` prefix in the import path below with your module path and keep the `/docs` suffix. Run commands from the project root.
 
 ## Export OpenAPI with the CLI
 
@@ -80,7 +82,7 @@ func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
 
 ### 4. Generate the docs package first
 
-Generate the documentation package with the following command. Do not import `example.com/hello-spine/docs` before it has been generated. `--parseInternal` includes the internal package that contains the API metadata.
+Generate the documentation package with the following command. Do not import `example.com/my-app/docs` before it has been generated. `--parseInternal` includes the internal package that contains the API metadata.
 
 ```bash
 swag init -g internal/application/application.go --parseInternal
@@ -94,19 +96,18 @@ Add these imports to the import block in `internal/application/application.go`.
 
 ```go
 import (
-    _ "example.com/hello-spine/docs"
-    "github.com/labstack/echo/v4"
+    _ "example.com/my-app/docs"
+    "github.com/labstack/echo/v5"
     httpSwagger "github.com/swaggo/http-swagger"
 )
 ```
 
-In `BuildApplication()` in the same file, add the following code after `app := spine.New()` and before `return`. Keep the existing health and user registrations.
+Register Echo extensions through the typed `WithEcho` option when constructing the platform. Replace the existing `app := platform.New()` with the code below and keep the constructor and route registrations that follow. `App.Transport` was removed in Spine v0.6.0.
 
 ```go
-app.Transport(func(transport any) {
-    e := transport.(*echo.Echo)
+app := platform.New(platform.WithEcho(func(e *echo.Echo) {
     e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-})
+}))
 ```
 
 ### 6. Verify and run
@@ -114,6 +115,7 @@ app.Transport(func(transport any) {
 ```bash
 gofmt -w internal/application/application.go src/user/user_controller.go
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev
@@ -121,7 +123,7 @@ spine dev
 
 Open `http://localhost:8080/swagger/index.html` in a browser and check that the GET route appears. `/swagger/doc.json` should return the generated Swagger 2.0 document. Use Try it out in the UI to request `/user/1`; the response should be HTTP 200 with `{"id":1}`.
 
-Echo routes added directly through `app.Transport` are not included in the CLI's static Spine route contract. Even if the contract checks pass, check the UI and documentation routes separately.
+Native Echo routes added through platform options bypass Spine HTTP interceptors and response staging, and are outside the static Spine route contract. Check their actual behavior separately.
 
 ## Annotations and DTOs for additional features
 

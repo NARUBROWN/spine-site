@@ -4,7 +4,7 @@ Create an order HTTP service and a stock consumer service, and pass `order.creat
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.1.4 provides a consumer scaffold with a defined message type. Prepare the Kafka broker and transport configuration separately.
+Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.4.0 provides a consumer scaffold with a defined message type. Prepare the Kafka broker and transport configuration separately.
 
 To test message delivery, you need a Kafka broker at `localhost:9092` and an `order.created` topic. This example uses a plaintext connection in an isolated local environment. The stock consumer logs events; it does not change actual stock quantities.
 
@@ -15,15 +15,15 @@ Create a working directory and preview the files to be generated.
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --module example.com/order-app --dry-run
-spine new stock-app --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 Review the preview, then create both apps. Run subsequent commands from `spine-msa/` unless instructed otherwise.
 
 ```sh
-spine new order-app --module example.com/order-app
-spine new stock-app --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app
+spine new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. Generate the Stock Consumer Scaffold
@@ -48,6 +48,7 @@ After adding the shared event and order controller and replacing the generated c
 spine-msa/
 ├── order-app/
 │   ├── go.mod
+├── go.sum
 │   ├── main.go
 │   ├── spine.toml
 │   ├── internal/application/
@@ -58,6 +59,7 @@ spine-msa/
 │       └── controller/order_controller.go
 └── stock-app/
     ├── go.mod
+├── go.sum
     ├── main.go
     ├── spine.toml
     ├── internal/application/
@@ -136,6 +138,7 @@ func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Respon
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/order-app/src/controller"
@@ -144,7 +147,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(controller.NewOrderController)
     app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
 
@@ -217,6 +220,7 @@ func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event Orde
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/stock-app/src/consumer/order"
@@ -225,7 +229,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     if err := order.Register(app); err != nil {
         return nil, boot.Options{}, err
     }
@@ -249,11 +253,13 @@ Each service has its own `go.mod` and `spine.toml`. The following commands start
 cd order-app
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 cd ../stock-app
 go mod edit -require=example.com/order-app@v0.0.0
 go mod edit -replace=example.com/order-app=../order-app
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 cd ..
 spine doctor --root order-app
 spine doctor --root stock-app

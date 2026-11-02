@@ -4,7 +4,7 @@ Build an HTTP API to create, list, retrieve, update, and delete users. The examp
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. This example adds the full CRUD implementation to a basic app created with CLI 0.1.4. The CLI's `resource` command provides a GET scaffold, and `slice --storage memory` provides a scaffold for creating and retrieving records. The code below includes updates and deletions.
+Complete [CLI installation](/en/learn/getting-started/installation) first. This example adds the full CRUD implementation to a basic app created with CLI 0.4.0. The CLI's `resource` command provides a GET scaffold, and `slice --storage memory` provides a scaffold for creating and retrieving records. The code below includes updates and deletions.
 
 Stored users disappear when the server process stops.
 
@@ -27,9 +27,8 @@ graph TD
 Create a basic app and check its dependencies and project configuration. Run subsequent commands from `crud-example/`.
 
 ```sh
-spine new crud-example --module example.com/crud-example
+spine new crud-example --layout legacy --module example.com/crud-example
 cd crud-example
-go mod tidy
 spine doctor
 ```
 
@@ -40,6 +39,7 @@ In the next steps, add five files under `src/` and replace the generated `intern
 ```text
 crud-example/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -443,6 +443,7 @@ Replace the entire contents of `internal/application/application.go` with the fo
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/crud-example/src/controller"
@@ -455,7 +456,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
@@ -493,6 +494,7 @@ From the project root, format the code, check dependencies and code, and start t
 ```sh
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev

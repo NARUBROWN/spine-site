@@ -2,7 +2,9 @@
 
 ユーザーの取得に失敗した原因に応じてHTTP 400または404を返し、予期しないエラーの内部情報をレスポンスに公開しないようにします。
 
-[最初のアプリ](/ja/learn/getting-started/first-app)と[コントローラー](/ja/learn/tutorial/2-controller)のCLIプロジェクトを使用します。`spine generate resource user` で生成した `src/user` が必要です。以下では、GETハンドラーを読み取り専用のメモリ内検索に置き換えるため、データベースのチュートリアルとは別に適用してください。ドメインエラーとHTTPステータスを対応付けるコードは手動で作成します。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+
+[最初のアプリ](/ja/learn/tutorial/1-project-structure)と[コントローラー](/ja/learn/tutorial/2-controller)のCLIプロジェクトを使用します。`spine generate resource user` で生成した `src/user` が必要です。以下では、GETハンドラーを読み取り専用のメモリ内検索に置き換えるため、データベースのチュートリアルとは別に適用してください。ドメインエラーとHTTPステータスを対応付けるコードは手動で作成します。
 
 ## HTTPエラーとレスポンス
 
@@ -120,7 +122,7 @@ flowchart LR
 
 ## HTTPErrorとその他のステータス
 
-HTTP 403や409のように専用の関数がないステータスは、`HTTPError` で表します。`Cause` は原因となったエラーを保持し、JSONレスポンスには含まれません。v0.5.1の `HTTPError` は `Unwrap()` を実装していないため、`errors.As` で `HTTPError` を見つけてから `Cause` フィールドを読み取ります。以下は `HTTPError` の構造とメソッドです。アプリで再定義する必要はありません。
+`HTTPError.Unwrap()` は `Cause` を返します。`errors.Is` と `errors.As` で原因の連鎖を調べるか、`Cause` を直接参照できます。原因エラーは JSON レスポンスに含まれません。
 
 ```go
 type HTTPError struct {
@@ -130,6 +132,7 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string { return e.Message }
+func (e *HTTPError) Unwrap() error { return e.Cause }
 ```
 
 ```go
@@ -228,6 +231,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 ```bash
 gofmt -w src/user
 go mod tidy
+go mod download all
 spine doctor
 spine contract check
 spine verify

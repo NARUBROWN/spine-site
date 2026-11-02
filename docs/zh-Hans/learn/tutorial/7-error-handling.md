@@ -2,7 +2,9 @@
 
 根据用户查询失败的原因返回 HTTP 400 或 404，并在响应中隐藏意外错误的内部详情。
 
-使用[第一个应用](/zh-Hans/learn/getting-started/first-app)和[控制器](/zh-Hans/learn/tutorial/2-controller)中的 CLI 项目。需要通过 `spine generate resource user` 生成的 `src/user`。以下步骤将 GET 处理器替换为只读的内存查询，请与数据库教程分开应用。将领域错误映射到 HTTP 状态的代码需要手动编写。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+
+使用[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)和[控制器](/zh-Hans/learn/tutorial/2-controller)中的 CLI 项目。需要通过 `spine generate resource user` 生成的 `src/user`。以下步骤将 GET 处理器替换为只读的内存查询，请与数据库教程分开应用。将领域错误映射到 HTTP 状态的代码需要手动编写。
 
 ## HTTP 错误与响应
 
@@ -120,7 +122,7 @@ flowchart LR
 
 ## HTTPError 与其他状态
 
-HTTP 403 或 409 等没有专用函数的状态，可以用 `HTTPError` 表示。`Cause` 保存导致错误的原因，不会包含在 JSON 响应中。v0.5.1 的 `HTTPError` 未实现 `Unwrap()`，因此需要先用 `errors.As` 找到 `HTTPError`，再读取 `Cause` 字段。以下是 `HTTPError` 的结构和方法，无需在应用中重新定义。
+`HTTPError.Unwrap()` 返回 `Cause`。可使用 `errors.Is` 和 `errors.As` 检查原因链，也可直接读取 `Cause` 字段。原因错误不会包含在 JSON 响应中。
 
 ```go
 type HTTPError struct {
@@ -130,6 +132,7 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string { return e.Message }
+func (e *HTTPError) Unwrap() error { return e.Cause }
 ```
 
 ```go
@@ -228,6 +231,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 ```bash
 gofmt -w src/user
 go mod tidy
+go mod download all
 spine doctor
 spine contract check
 spine verify

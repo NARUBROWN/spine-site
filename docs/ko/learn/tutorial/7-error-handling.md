@@ -2,7 +2,9 @@
 
 사용자 조회가 실패한 원인에 따라 HTTP 400이나 404를 반환하고, 예상하지 못한 오류의 내부 내용을 응답에서 숨깁니다.
 
-[첫 번째 앱](/ko/learn/getting-started/first-app)과 [컨트롤러](/ko/learn/tutorial/2-controller)의 CLI 프로젝트를 사용합니다. `spine generate resource user`로 생성한 `src/user`가 필요합니다. 아래에서는 GET 핸들러를 읽기 전용 메모리 조회로 교체하므로, 데이터베이스 튜토리얼과 별도로 적용하세요. 도메인 오류와 HTTP 상태를 연결하는 코드는 직접 작성합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+
+[첫 번째 앱](/ko/learn/tutorial/1-project-structure)과 [컨트롤러](/ko/learn/tutorial/2-controller)의 CLI 프로젝트를 사용합니다. `spine generate resource user`로 생성한 `src/user`가 필요합니다. 아래에서는 GET 핸들러를 읽기 전용 메모리 조회로 교체하므로, 데이터베이스 튜토리얼과 별도로 적용하세요. 도메인 오류와 HTTP 상태를 연결하는 코드는 직접 작성합니다.
 
 ## HTTP 오류와 응답
 
@@ -120,7 +122,7 @@ flowchart LR
 
 ## HTTPError와 추가 상태
 
-HTTP 403이나 409처럼 전용 함수가 없는 상태는 `HTTPError`로 표현합니다. `Cause`에는 원인 오류를 보관하며 JSON 응답에는 포함되지 않습니다. v0.5.1의 `HTTPError`는 `Unwrap()`을 구현하지 않으므로, `errors.As`로 `HTTPError`를 찾은 뒤 `Cause` 필드를 읽습니다. 다음은 `HTTPError`의 구조와 메서드입니다. 앱에 다시 정의할 필요는 없습니다.
+`HTTPError.Unwrap()`은 `Cause`를 반환합니다. `errors.Is`와 `errors.As`로 원인 오류를 추적할 수 있으며, `Cause` 필드도 직접 읽을 수 있습니다. 원인 오류는 JSON 응답에 포함되지 않습니다.
 
 ```go
 type HTTPError struct {
@@ -130,6 +132,7 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string { return e.Message }
+func (e *HTTPError) Unwrap() error { return e.Cause }
 ```
 
 ```go
@@ -228,6 +231,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 ```bash
 gofmt -w src/user
 go mod tidy
+go mod download all
 spine doctor
 spine contract check
 spine verify

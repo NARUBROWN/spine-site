@@ -1,34 +1,28 @@
 # spine.App
 
-`App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.5.1.
+`App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.6.0.
 
 ```go
-import "github.com/NARUBROWN/spine"
+import (
+    "github.com/NARUBROWN/spine"
+    platform "github.com/NARUBROWN/spine-echo-platform"
+)
 ```
 
 ## Interface definition
 
 ```go
 type App interface {
-    // 생성자 선언
     Constructor(constructors ...any)
-    // 라우트 선언
     Route(method string, path string, handler any, opts ...router.RouteOption)
-    // 인터셉터 선언
     Interceptor(interceptors ...core.Interceptor)
-    // HTTP/WebSocket 범위를 지정한 전역 인터셉터 선언
     InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
-    // HTTP 서버 확장 (Echo 등)
-    Transport(fn func(any))
-    // 독립 실행되는 사용자 정의 전송 방식 등록
     RegisterTransport(t core.CustomTransport)
-    // 네트워크 연결 없이 설정 검증
     Validate(opts boot.Options) error
-    // 실행
+    Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
     Run(opts boot.Options) error
-    // 이벤트 소비자 레지스트리 반환
+    RunContext(ctx context.Context, opts boot.Options) error
     Consumers() *consumer.Registry
-    // 웹소켓 레지스트리 반환
     WebSocket() *ws.Registry
 }
 ```
@@ -40,8 +34,10 @@ Pass options to `Route` using functions from `pkg/route` in your application cod
 ### New
 
 ```go
-func New() App
+func New(options ...Option) App
 ```
+
+`spine.New(options ...Option)` creates a kernel app without selecting an HTTP implementation. Use `spine.New()` for HTTP-less workers, and `platform.New()` or `spine.New(platform.Option())` for Echo HTTP apps.
 
 Creates a new Spine application instance.
 
@@ -52,7 +48,7 @@ Creates a new Spine application instance.
 **Example**
 
 ```go
-app := spine.New()
+app := platform.New()
 app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
@@ -232,34 +228,28 @@ app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
 app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ```
 
-### Transport
+### WithEcho
 
 ```go
-Transport(fn func(any))
+platform.WithEcho(fn func(*echo.Echo)) platform.EchoOption
 ```
 
-Registers a callback that configures the HTTP server's Echo instance. Use the callback to add middleware or static file paths.
-
-**Parameters**
-
-- `fn` - Callback function that receives an Echo instance
-
-**Example**
+Register Echo extensions through the typed `WithEcho` option when constructing the platform. Replace the existing `app := platform.New()` with the code below and keep the constructor and route registrations that follow. `App.Transport` was removed in Spine v0.6.0.
 
 ```go
-import "github.com/labstack/echo/v4"
-import "github.com/labstack/echo/v4/middleware"
+import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/labstack/echo/v5"
+    "github.com/labstack/echo/v5/middleware"
+)
 
-app.Transport(func(e any) {
-    echo := e.(*echo.Echo)
-
-    // Echo 미들웨어 추가
-    echo.Use(middleware.RequestID())
-
-    // 정적 파일 서빙
-    echo.Static("/static", "public")
-})
+app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+    e.Use(middleware.RequestID())
+    e.Static("/static", "public")
+}))
 ```
+
+Native Echo routes added through platform options bypass Spine HTTP interceptors and response staging, and are outside the static Spine route contract. Check their actual behavior separately.
 
 ### RegisterTransport
 
@@ -323,6 +313,20 @@ func (t *GRPCTransport) Stop(ctx context.Context) error {
 
 app.RegisterTransport(&GRPCTransport{})
 ```
+
+### RunContext / Prepare
+
+```go
+RunContext(ctx context.Context, opts boot.Options) error
+Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
+
+type PreparedApplication interface {
+    Handler() http.Handler
+    Close(ctx context.Context) error
+}
+```
+
+`RunContext` starts graceful shutdown when its context is canceled. `Prepare` prepares an app without a listener and returns `Handler()` and `Close(ctx)`. It does not start consumers or custom transports, but broker readiness and custom Init may open network connections depending on configuration. The caller owns closing the prepared result and shutting down the external HTTP server.
 
 ### Consumers
 
@@ -822,6 +826,7 @@ The following is the default structure of the generated `BuildApplication`.
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
 	"os"
 
 	"github.com/NARUBROWN/spine"
@@ -839,7 +844,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := spine.New()
+	app := platform.New()
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -857,7 +862,7 @@ After validating options, `Run` configures the dependency injection container an
 
 Once this preparation is complete, it runs consumers and custom transports' `Start` in separate goroutines, then starts the HTTP server last. Startup fails if HTTP route paths overlap ambiguously for the same method. For example, `/users/:id` and `/users/me` are treated as overlapping paths.
 
-During shutdown, it first stops incoming WebSocket and HTTP requests, waits for consumers to stop, and then calls custom transports' `Stop` in reverse initialization order. It then releases event publisher resources. For the implementation, see the [v0.5.1 startup and shutdown code](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/bootstrap/bootstrap.go).
+During shutdown, it first stops incoming WebSocket and HTTP requests, waits for consumers to stop, and then calls custom transports' `Stop` in reverse initialization order. It then releases event publisher resources. For the implementation, see the [v0.6.0 startup and shutdown code](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/bootstrap/bootstrap.go).
 
 ## Constraints and errors
 

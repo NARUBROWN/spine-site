@@ -1,6 +1,6 @@
 # core.Interceptor
 
-在控制器執行前後加入驗證、日誌記錄、CORS 與交易處理的介面。在 Spine v0.5.1 中，分別實作前置處理、成功後處理、回應前處理與最終清理。
+在控制器執行前後加入驗證、日誌記錄、CORS 與交易處理的介面。在 Spine v0.6.0 中，分別實作前置處理、成功後處理、回應前處理與最終清理。
 
 ## 介面
 
@@ -61,7 +61,7 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
 
 在將回應寫入實際傳輸層前，依反向順序執行。`executionErr` 會收到前置處理、路由比對、輸入值解析、控制器、回應準備與執行後掛鉤截至此時發生的錯誤。先前執行的 `BeforeResponse` 所回傳的錯誤也會合併，並傳給下一個攔截器。
 
-請在此階段提交或回滾請求範圍的交易。v0.5.1 會先進行回應序列化、Cookie 與狀態碼驗證，因此回應準備失敗時可以回滾。
+請在此階段提交或回滾請求範圍的交易。v0.6.0 會先進行回應序列化、Cookie 與狀態碼驗證，因此回應準備失敗時可以回滾。
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -168,7 +168,7 @@ Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
 - 透過 `core.ErrAbortPipeline` 中止時，攔截器必須準備所需的回應。控制器與後續的成功處理階段不會執行。
 - DB 提交後，實際回應傳送仍可能失敗。`BeforeResponse` 不會將 DB 與網路傳輸結合為原子操作。
 
-具體的提早結束與錯誤傳遞行為，請參閱 [v0.5.1 管線實作](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/pipeline/pipeline.go)；連線前處理順序請參閱 [WebSocket 執行階段實作](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/ws/runtime.go)。
+具體的提早結束與錯誤傳遞行為，請參閱 [v0.6.0 管線實作](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/pipeline/pipeline.go)；連線前處理順序請參閱 [WebSocket 執行階段實作](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/ws/runtime.go)。
 
 ## 參考
 

@@ -4,7 +4,7 @@
 
 ## 事前準備
 
-先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI 0.1.4 は、型を定義したコンシューマーのひな形を提供します。Kafka ブローカーとトランスポートの設定は別途準備します。
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI 0.4.0 は、型を定義したコンシューマーのひな形を提供します。Kafka ブローカーとトランスポートの設定は別途準備します。
 
 メッセージの配信を確認するには、`localhost:9092` の Kafka ブローカーと `order.created` トピックが必要です。この例では、隔離されたローカル環境の平文接続を使用します。在庫コンシューマーはイベントをログに記録し、実際の在庫数は変更しません。
 
@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --module example.com/order-app --dry-run
-spine new stock-app --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 プレビューを確認してから 2 つのアプリを作成します。以降のコマンドは、別途指定がなければ `spine-msa/` で実行します。
 
 ```sh
-spine new order-app --module example.com/order-app
-spine new stock-app --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app
+spine new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. 在庫コンシューマーのひな形を生成する
@@ -48,6 +48,7 @@ spine generate consumer order --root stock-app --topic order.created --field eve
 spine-msa/
 ├── order-app/
 │   ├── go.mod
+├── go.sum
 │   ├── main.go
 │   ├── spine.toml
 │   ├── internal/application/
@@ -58,6 +59,7 @@ spine-msa/
 │       └── controller/order_controller.go
 └── stock-app/
     ├── go.mod
+├── go.sum
     ├── main.go
     ├── spine.toml
     ├── internal/application/
@@ -136,6 +138,7 @@ func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Respon
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/order-app/src/controller"
@@ -144,7 +147,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(controller.NewOrderController)
     app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
 
@@ -217,6 +220,7 @@ func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event Orde
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/stock-app/src/consumer/order"
@@ -225,7 +229,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     if err := order.Register(app); err != nil {
         return nil, boot.Options{}, err
     }
@@ -249,11 +253,13 @@ func BuildApplication() (spine.App, boot.Options, error) {
 cd order-app
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 cd ../stock-app
 go mod edit -require=example.com/order-app@v0.0.0
 go mod edit -replace=example.com/order-app=../order-app
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 cd ..
 spine doctor --root order-app
 spine doctor --root stock-app

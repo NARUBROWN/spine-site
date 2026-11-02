@@ -2,7 +2,7 @@
 
 Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. 생성된 파일을 살펴보면서 앱 구성 코드를 둘 위치와 컨트롤러, 서비스, 리포지토리의 역할을 익힙니다.
 
-먼저 [CLI 설치](/ko/learn/getting-started/installation)를 완료하세요. [첫 번째 앱](/ko/learn/getting-started/first-app)을 따라 프로젝트를 이미 만들었다면 생성 단계는 건너뛰고 해당 프로젝트에서 이어서 진행할 수 있습니다. 아래 코드의 모듈 경로는 자신의 프로젝트 경로로 바꿔 읽으세요.
+먼저 [CLI 설치](/ko/learn/getting-started/installation)를 완료하세요. 이 튜토리얼은 기능별 패키지를 사용하므로 새 디렉터리에서 `--layout legacy`로 `my-app`을 생성합니다. [첫 번째 앱](/ko/learn/getting-started/first-app)의 기본 `layered-v1` 앱과 구조가 다르며, 기존 앱을 자동 변환하지 않습니다.
 
 ## CLI로 프로젝트 생성
 
@@ -10,9 +10,8 @@ Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. �
 
 ```sh
 spine version
-spine new my-app --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app
 cd my-app
-go mod tidy
 spine doctor
 spine inspect
 ```
@@ -21,13 +20,14 @@ spine inspect
 
 ## 생성되는 기본 구조
 
-`spine new`는 다음 파일을 생성합니다. `go.sum`은 이후 `go mod tidy`에서 만들어집니다.
+위에서 실행한 `new`는 `go.sum`을 포함한 프로젝트 파일을 만들고 의존성 설치와 빌드를 완료합니다.
 
 ```text
 my-app/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 └── internal/
@@ -38,13 +38,15 @@ my-app/
 
 ## CLI 설정
 
-`spine.toml`은 CLI가 프로젝트를 찾고 실행하는 데 필요한 설정을 담습니다. 지원하는 키는 아래 네 개이며, 데이터베이스 연결 같은 앱 설정은 별도로 관리합니다.
+`spine.toml`은 모듈, 진입점, 앱 구성 위치, 포트, 레이아웃과 플랫폼을 설정합니다. DB와 인증 등 앱 설정은 별도로 관리합니다.
 
 ```toml
 module = "example.com/my-app"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "legacy"
+platform = "echo"
 ```
 
 | 키 | 역할 |
@@ -53,6 +55,8 @@ port = 8080
 | `entrypoint` | 실행하거나 빌드할 대상 |
 | `composition` | 앱 구성을 검사하고 생성한 코드를 자동으로 등록할 위치 |
 | `port` | 개발 서버에서 사용할 포트 |
+| `layout` | 생성기의 파일 배치 (`legacy` 또는 `layered-v1`) |
+| `platform` | HTTP 플랫폼 (`echo`) |
 
 ## 실행과 앱 구성 분리
 
@@ -87,6 +91,7 @@ func main() {
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -103,7 +108,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -153,7 +158,7 @@ if err := user.Register(app); err != nil {
 
 ## 등록 규칙과 검증
 
-CLI가 등록 코드를 검사할 수 있도록 `BuildApplication() (spine.App, boot.Options, error)` 함수 본문의 최상위에 `app := spine.New()`를 유지하세요. 등록 코드를 조건문, 반복문, 임의의 보조 함수 안으로 옮기지 않습니다. `Register(app)`가 반환한 오류도 확인해 반환해야 합니다.
+CLI가 등록 코드를 검사할 수 있도록 `BuildApplication() (spine.App, boot.Options, error)` 함수 본문의 최상위에 `app := platform.New()`를 유지하세요. 등록 코드를 조건문, 반복문, 임의의 보조 함수 안으로 옮기지 않습니다. `Register(app)`가 반환한 오류도 확인해 반환해야 합니다.
 
 앱 구성을 검사한 뒤 서버를 실행합니다.
 

@@ -2,7 +2,9 @@
 
 使用 CLI 匯出 OpenAPI 檔案，並視需要新增 Swaggo 文件與 Swagger UI，以便從瀏覽器傳送請求。CLI 的靜態 OpenAPI 匯出，以及使用 Swaggo 的 UI 設定，分別進行。
 
-使用[第一個應用程式](/zh-Hant/learn/getting-started/first-app)中建立的 `example.com/hello-spine` 專案。請先按照[控制器](/zh-Hant/learn/tutorial/2-controller)使用 `spine generate resource user` 產生 `src/user`。若使用不同的模組路徑，請只將下方 import 路徑中的 `example.com/hello-spine` 部分替換為該模組路徑，並保留 `/docs` 後綴。請在專案根目錄執行命令。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+
+使用[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)中建立的 `example.com/my-app` 專案。請先按照[控制器](/zh-Hant/learn/tutorial/2-controller)使用 `spine generate resource user` 產生 `src/user`。若使用不同的模組路徑，請只將下方 import 路徑中的 `example.com/my-app` 部分替換為該模組路徑，並保留 `/docs` 後綴。請在專案根目錄執行命令。
 
 ## 使用 CLI 匯出 OpenAPI
 
@@ -80,7 +82,7 @@ func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
 
 ### 4. 先產生 docs 套件
 
-使用以下命令產生文件套件。產生前，請勿 import 尚不存在的 `example.com/hello-spine/docs`。`--parseInternal` 指定一併讀取包含 API 基本資訊的 internal 套件。
+使用以下命令產生文件套件。產生前，請勿 import 尚不存在的 `example.com/my-app/docs`。`--parseInternal` 指定一併讀取包含 API 基本資訊的 internal 套件。
 
 ```bash
 swag init -g internal/application/application.go --parseInternal
@@ -94,19 +96,18 @@ swag init -g internal/application/application.go --parseInternal
 
 ```go
 import (
-    _ "example.com/hello-spine/docs"
-    "github.com/labstack/echo/v4"
+    _ "example.com/my-app/docs"
+    "github.com/labstack/echo/v5"
     httpSwagger "github.com/swaggo/http-swagger"
 )
 ```
 
-在同一檔案的 `BuildApplication()` 中，於 `app := spine.New()` 之後、`return` 之前新增以下程式碼。請保留既有的 health 與 user 註冊。
+建立平台時，透過具有明確型別的 `WithEcho` 選項註冊 Echo 擴充。以下列程式碼取代既有的 `app := platform.New()`，保留後續的建構函式與路由註冊。Spine v0.6.0 已移除 `App.Transport`。
 
 ```go
-app.Transport(func(transport any) {
-    e := transport.(*echo.Echo)
+app := platform.New(platform.WithEcho(func(e *echo.Echo) {
     e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-})
+}))
 ```
 
 ### 6. 驗證並執行
@@ -114,6 +115,7 @@ app.Transport(func(transport any) {
 ```bash
 gofmt -w internal/application/application.go src/user/user_controller.go
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev
@@ -121,7 +123,7 @@ spine dev
 
 在瀏覽器開啟 `http://localhost:8080/swagger/index.html`，確認 GET 路徑是否顯示。`/swagger/doc.json` 應回傳產生的 Swagger 2.0 文件。在 UI 中使用 Try it out 向 `/user/1` 傳送請求，應回傳 HTTP 200 與 `{"id":1}`。
 
-透過 `app.Transport` 直接新增的 Echo 路徑不在 CLI 的靜態 Spine 路由契約內，因此即使通過契約檢查，仍須另外確認 UI 與文件路徑。
+透過平台選項新增的原生 Echo 路由不會經過 Spine HTTP 攔截器與回應 staging，也不包含在靜態 Spine 路由契約中。請另外檢查實際行為。
 
 ## 擴充功能時使用的註解與 DTO
 

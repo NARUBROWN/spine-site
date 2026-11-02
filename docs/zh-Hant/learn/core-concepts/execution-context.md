@@ -2,7 +2,9 @@
 
 Spine 會為每個請求或訊息建立執行內容，將輸入資訊與執行狀態傳給管線。攔截器透過 `core.ExecutionContext` 讀寫執行狀態，HTTP 控制器則透過語意型別與唯讀的 `spine.Ctx`，僅接收所需的值。
 
-理解這項區分後，就能將攔截器儲存的值傳給控制器，並判斷 HTTP、事件消費者與 WebSocket 可使用的輸入。本文的介面與行為以 Spine v0.5.1 為準。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+
+理解這項區分後，就能將攔截器儲存的值傳給控制器，並判斷 HTTP、事件消費者與 WebSocket 可使用的輸入。本文的介面與行為以 Spine v0.6.0 為準。
 
 應用程式處理器範例是手動加入[以 CLI 建立的專案](/zh-Hant/learn/tutorial/1-project-structure)的擴充程式碼。請保留產生的 `BuildApplication`，以及會檢查錯誤的 `user.Register(app)` 呼叫。`core/` 介面是公開契約，應用程式不需要複製 `internal/` 實作。
 
@@ -50,7 +52,7 @@ graph TD
 
 箭頭表示契約之間的包含關係。`ControllerContext` 與 `spine.Ctx` 並未嵌入 `ExecutionContext`，而是只公開 `Get()` 的獨立介面，讓使用者能查詢同一個儲存區。
 
-實際的 HTTP 配接器同時實作 `ExecutionContext` 與 `HttpRequestContext`。消費者配接器也同時實作 `ExecutionContext` 與 `ConsumerRequestContext`。因此，解析器收到共用的內容物件後，可以確認是否支援所需的協定契約。
+對於 HTTP，核心 HTTPContext 包裝平台輸入檢視並提供 `ExecutionContext` 和 `HttpRequestContext`。回應 writer 透過獨立的 `core.HTTPResponseContext` 存取。`SetRoute` 儲存的路由狀態與使用者 `Set/Get` 儲存空間分離。消費者同時實作 `ExecutionContext` 與 `ConsumerRequestContext`。
 
 ## 共用的基礎契約
 
@@ -105,6 +107,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -236,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 這段程式碼是方法簽章範例，`CreateUserRequest` 與 `User` 是由應用程式定義的型別。表單 DTO 的欄位使用 `form` 標籤，上傳檔案則可以用 `pkg/multipart.UploadedFiles` 接收。
 
-如果主體是無效的 JSON，或路徑值轉換成數字時失敗，就不會進入控制器。在 v0.5.1 中，這類綁定錯誤可能導致 500，因此不應假設所有輸入錯誤都會自動變成 400。錯誤轉成回應的順序請參閱[執行管線](/zh-Hant/learn/core-concepts/pipeline#error-responses)。
+Spine `v0.6.0` 搭配 Echo 平台 `v0.1.0`，對格式錯誤的 JSON、數字或布林路徑值轉換失敗回傳 HTTP 400，對不支援的本文 Content-Type 回傳 415，對超過本文大小限制回傳 413。綁定失敗發生在控制器呼叫之前。請區分綁定失敗與業務驗證，並以實際請求確認。 [執行管線](/zh-Hant/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext：解析事件輸入
 

@@ -2,9 +2,11 @@
 
 Connect to MySQL with Bun and extend the generated `GET /user/:id` handler to look up users in the database. You will also write a migration to create the table and basic repository queries.
 
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
 ## Prepare the CLI project
 
-Continue with `example.com/my-app` from [Install the CLI and create your first app](/en/learn/getting-started/first-app) and [Project structure](/en/learn/tutorial/1-project-structure). You need a MySQL database and an account with permission to create tables. Run commands from the project root.
+Continue with `example.com/my-app` from [Install the CLI and create your first app](/en/learn/tutorial/1-project-structure) and [Project structure](/en/learn/tutorial/1-project-structure). You need a MySQL database and an account with permission to create tables. Run commands from the project root.
 
 If you have not created the user resource, review the files to be generated before applying the change. Do not generate an existing resource again.
 
@@ -89,6 +91,7 @@ Spine constructors support only one return value, so do not register a function 
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/database"
@@ -107,7 +110,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController, database.NewDB)
     app.Route("GET", "/health", (*HealthController).Get)
     if err := user.Register(app); err != nil {
@@ -442,6 +445,7 @@ spine dev
 ```text
 my-app/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -472,6 +476,7 @@ Check the app's registrations so it can use the files you added. `BuildApplicati
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/database"
@@ -490,7 +495,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController, database.NewDB)
     app.Route("GET", "/health", (*HealthController).Get)
     if err := user.Register(app); err != nil {
@@ -579,6 +584,7 @@ Run the static contract checks and local Go checks. `verify` does not test the a
 
 ```sh
 go mod tidy
+go mod download all
 gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
 spine contract check
 spine verify

@@ -2,6 +2,8 @@
 
 Spine 是一个通过 Go 代码注册构造函数、路由和拦截器的 Web 框架。通过注册代码，可以了解由哪个处理器接收请求，以及在处理器调用前后执行哪些操作。
 
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+
 如果是第一次使用，请先按照[第一个应用](/zh-Hans/learn/getting-started/first-app)通过 CLI 创建项目，并确认 `GET /health` 的响应。本文介绍构建应用时使用的核心概念。
 
 ## 应用配置与运行
@@ -12,7 +14,7 @@ Spine 是一个通过 Go 代码注册构造函数、路由和拦截器的 Web �
 
 ```go
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
 
     // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
@@ -113,7 +115,7 @@ func (c *UserController) CreateUser(
 ## 开始使用
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 

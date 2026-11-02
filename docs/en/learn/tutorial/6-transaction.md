@@ -2,11 +2,13 @@
 
 Group multiple INSERTs from one HTTP request into a single transaction. Write an interceptor that commits when the request succeeds and rolls back earlier INSERTs if a later operation fails.
 
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
 Continue with `example.com/my-app` from [Database](/en/learn/tutorial/5-database). Prepare `src/database`, `src/entity`, `src/user`, and the migrations first. Add the transaction code below yourself; the CLI does not provide a Bun transaction or outbox generator.
 
 ## Execution order
 
-In Spine v0.5.1, start the transaction in `PreHandle` and commit or roll it back in `BeforeResponse`. Errors during response preparation, including response serialization, status code and cookie validation, and event publication, also trigger a rollback. Use `AfterCompletion` to log results or clean up resources after completion.
+In Spine v0.6.0, start the transaction in `PreHandle` and commit or roll it back in `BeforeResponse`. Errors during response preparation, including response serialization, status code and cookie validation, and event publication, also trigger a rollback. Use `AfterCompletion` to log results or clean up resources after completion.
 
 ```text
 PreHandle: Begin the transaction
@@ -232,6 +234,7 @@ if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" 
 ```bash
 gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
 go mod tidy
+go mod download all
 spine doctor
 spine inspect
 spine contract check

@@ -2,6 +2,8 @@
 
 Spineは、コンストラクタ、ルート、インターセプターをGoコードで登録するWebフレームワークです。リクエストを受け取るハンドラーと、その前後に実行する処理を登録コードで確認できます。
 
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+
 初めて使う場合は、[最初のアプリ](/ja/learn/getting-started/first-app)でCLIからプロジェクトを作成し、`GET /health`のレスポンスを確認してください。このページでは、アプリの構成に使う基本的な概念を紹介します。
 
 ## アプリの構成と実行
@@ -12,7 +14,7 @@ CLIで生成したプロジェクトでは、アプリの構成コードを`inte
 
 ```go
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
 
     // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
@@ -113,7 +115,7 @@ func (c *UserController) CreateUser(
 ## 始める
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 

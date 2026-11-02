@@ -4,7 +4,7 @@
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. CLI 0.1.4는 JWT 인증 생성기를 제공하지 않습니다. 기본 프로젝트를 만든 뒤 아래 인증 코드를 직접 추가하고 `github.com/golang-jwt/jwt/v5`를 설치합니다.
+[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. CLI 0.4.0은 JWT 인증 생성기를 제공하지 않습니다. 기본 프로젝트를 만든 뒤 아래 인증 코드를 직접 추가하고 `github.com/golang-jwt/jwt/v5`를 설치합니다.
 
 이 예제는 인증 흐름을 익히기 위해 메모리 저장소, 평문 비밀번호 비교, 코드에 고정한 JWT 비밀키를 사용합니다. 서버를 종료하면 가입 정보가 사라집니다. 실제 서비스에 적용하기 전에는 비밀번호 해시와 환경변수로 관리하는 JWT 비밀키를 사용해야 합니다.
 
@@ -13,9 +13,8 @@
 기본 앱과 JWT 의존성을 준비합니다. 이후 명령은 `login-example/`에서 실행합니다.
 
 ```sh
-spine new login-example --module example.com/login-example
+spine new login-example --layout legacy --module example.com/login-example
 cd login-example
-go mod tidy
 spine doctor
 go get github.com/golang-jwt/jwt/v5
 ```
@@ -27,6 +26,7 @@ go get github.com/golang-jwt/jwt/v5
 ```text
 login-example/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -327,6 +327,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/login-example/src/controller"
@@ -340,7 +341,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(store.NewUserStore, controller.NewAuthController)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{
@@ -374,6 +375,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```sh
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev

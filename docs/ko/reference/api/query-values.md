@@ -228,7 +228,7 @@ func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
 - 불리언 값의 앞뒤 공백은 제거하지 않습니다. 예를 들어 `" true "`는 인식할 수 없어 `def`를 반환합니다.
 - `NewValues`는 전달받은 맵을 복사하지 않습니다. 생성 후 원본 맵을 바꾸면 조회 결과도 달라집니다.
 
-구현은 [쿼리 헬퍼](https://github.com/NARUBROWN/spine/blob/v0.5.1/pkg/query/types.go)와 [자동 주입 코드](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/query_values_resolver.go)에서 확인할 수 있습니다.
+구현은 [쿼리 헬퍼](https://github.com/NARUBROWN/spine/blob/v0.6.0/pkg/query/types.go)와 [자동 주입 코드](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/query_values_resolver.go)에서 확인할 수 있습니다.
 
 ## 참고
 

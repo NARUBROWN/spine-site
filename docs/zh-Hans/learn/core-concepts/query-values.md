@@ -2,7 +2,9 @@
 
 使用 `query.Values` 可以读取 HTTP 查询参数并指定默认值。在控制器参数中声明 `q query.Values` 后，即可按需将键对应的值读取为字符串、整数或布尔值。不支持将查询参数自动映射到任意 DTO。
 
-本页以 Spine v0.5.1 的 `github.com/NARUBROWN/spine/pkg/query` 为准。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+
+本页以 Spine v0.6.0 的 `github.com/NARUBROWN/spine/pkg/query` 为准。
 
 ## 在 CLI 项目中使用
 
@@ -295,7 +297,7 @@ HTTP 查询可以像下面这样重复同一个键。
 GET /product?tag=go&tag=web&tag=api
 ```
 
-对于此请求，`q.String("tag")` 和 `q.Get("tag")` 只返回 `"go"`。Spine v0.5.1 的 `query.Values` 没有获取完整值列表的公开方法，应用也无法直接访问私有字段 `values`。
+对于此请求，`q.String("tag")` 和 `q.Get("tag")` 只返回 `"go"`。Spine v0.6.0 的 `query.Values` 没有获取完整值列表的公开方法，应用也无法直接访问私有字段 `values`。
 
 如果需要接收多个值，一种方法是将 API 定义为接收一个用逗号分隔的字符串，再由应用拆分。下面的示例还需要 `strings` 包。
 

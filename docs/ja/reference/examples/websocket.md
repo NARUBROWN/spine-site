@@ -11,9 +11,8 @@
 プロジェクトと WebSocket ハンドラーを生成します。以降のコマンドは `chat-app/` で実行します。
 
 ```sh
-spine new chat-app --module example.com/chat-app
+spine new chat-app --layout legacy --module example.com/chat-app
 cd chat-app
-go mod tidy
 spine doctor
 spine generate websocket chat --path /ws/chat --field message:string
 ```

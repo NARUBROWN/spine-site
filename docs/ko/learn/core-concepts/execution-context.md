@@ -2,7 +2,9 @@
 
 Spine은 요청이나 메시지마다 실행 컨텍스트를 만들어 입력 정보와 실행 상태를 파이프라인에 전달합니다. 인터셉터는 `core.ExecutionContext`로 실행 상태를 읽고 쓰며, HTTP 컨트롤러는 의미 타입과 읽기 전용 `spine.Ctx`로 필요한 값만 받습니다.
 
-이 구분을 이해하면 인터셉터에서 저장한 값을 컨트롤러로 전달하고, HTTP, 이벤트 컨슈머, WebSocket에서 사용할 수 있는 입력을 판단할 수 있습니다. 이 문서의 인터페이스와 동작은 Spine v0.5.1을 기준으로 합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+
+이 구분을 이해하면 인터셉터에서 저장한 값을 컨트롤러로 전달하고, HTTP, 이벤트 컨슈머, WebSocket에서 사용할 수 있는 입력을 판단할 수 있습니다. 이 문서의 인터페이스와 동작은 Spine v0.6.0을 기준으로 합니다.
 
 앱 핸들러 예제는 [CLI로 만든 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 수동 확장입니다. 생성된 `BuildApplication`과 오류를 확인하는 `user.Register(app)` 호출을 유지하세요. `core/` 인터페이스는 공개 계약이며, `internal/` 구현을 앱에 복사할 필요는 없습니다.
 
@@ -50,7 +52,7 @@ graph TD
 
 화살표는 포함하는 계약의 관계를 나타냅니다. `ControllerContext`와 `spine.Ctx`는 `ExecutionContext`를 임베딩하지 않습니다. 같은 저장소를 조회할 수 있도록 `Get()`만 노출한 별도 인터페이스입니다.
 
-실제 HTTP 어댑터는 `ExecutionContext`와 `HttpRequestContext`를 모두 구현합니다. 컨슈머 어댑터도 `ExecutionContext`와 `ConsumerRequestContext`를 모두 구현합니다. 따라서 리졸버는 공통 컨텍스트를 받은 뒤 필요한 프로토콜 계약을 확인할 수 있습니다.
+HTTP에서는 커널의 HTTPContext가 플랫폼 입력 뷰를 감싸 `ExecutionContext`와 `HttpRequestContext`를 제공합니다. 응답 writer는 별도 `core.HTTPResponseContext`로 접근합니다. `SetRoute`는 라우터 상태를 저장하며 사용자 `Set/Get` 저장소와 분리됩니다. 컨슈머는 `ExecutionContext`와 `ConsumerRequestContext`를 함께 구현합니다.
 
 ## 공통 기반 계약
 
@@ -105,6 +107,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -236,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 이 코드는 메서드 시그니처의 예이며, `CreateUserRequest`와 `User`는 앱에서 정의하는 타입입니다. 폼 DTO는 필드에 `form` 태그를 사용하며, 업로드 파일은 `pkg/multipart.UploadedFiles`로 받을 수 있습니다.
 
-본문이 잘못된 JSON이거나 경로 값의 숫자 변환이 실패하면 컨트롤러까지 도달하지 않습니다. v0.5.1에서는 이런 바인딩 오류가 500으로 이어질 수 있으므로, 모든 입력 오류가 자동으로 400이 된다고 가정하지 마세요. 오류가 응답으로 바뀌는 순서는 [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)에서 설명합니다.
+Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요. [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: 이벤트 입력 해석
 

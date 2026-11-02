@@ -1,34 +1,28 @@
 # spine.App
 
-`App` 是注册构造函数、HTTP 路由、拦截器、事件消费者、WebSocket 处理器和自定义传输方式，并运行应用程序的入口。本参考介绍 Spine v0.5.1 的公开 API 和启动选项。
+`App` 是注册构造函数、HTTP 路由、拦截器、事件消费者、WebSocket 处理器和自定义传输方式，并运行应用程序的入口。本参考介绍 Spine v0.6.0 的公开 API 和启动选项。
 
 ```go
-import "github.com/NARUBROWN/spine"
+import (
+    "github.com/NARUBROWN/spine"
+    platform "github.com/NARUBROWN/spine-echo-platform"
+)
 ```
 
 ## 接口定义
 
 ```go
 type App interface {
-    // 생성자 선언
     Constructor(constructors ...any)
-    // 라우트 선언
     Route(method string, path string, handler any, opts ...router.RouteOption)
-    // 인터셉터 선언
     Interceptor(interceptors ...core.Interceptor)
-    // HTTP/WebSocket 범위를 지정한 전역 인터셉터 선언
     InterceptorFor(scope boot.InterceptorScope, interceptors ...core.Interceptor)
-    // HTTP 서버 확장 (Echo 등)
-    Transport(fn func(any))
-    // 독립 실행되는 사용자 정의 전송 방식 등록
     RegisterTransport(t core.CustomTransport)
-    // 네트워크 연결 없이 설정 검증
     Validate(opts boot.Options) error
-    // 실행
+    Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
     Run(opts boot.Options) error
-    // 이벤트 소비자 레지스트리 반환
+    RunContext(ctx context.Context, opts boot.Options) error
     Consumers() *consumer.Registry
-    // 웹소켓 레지스트리 반환
     WebSocket() *ws.Registry
 }
 ```
@@ -40,8 +34,10 @@ type App interface {
 ### New
 
 ```go
-func New() App
+func New(options ...Option) App
 ```
+
+`spine.New(options ...Option)` 创建不选择 HTTP 实现的内核应用。无 HTTP 的 worker 使用 `spine.New()`，Echo HTTP 应用使用 `platform.New()` 或 `spine.New(platform.Option())`。
 
 创建新的 Spine 应用程序实例。
 
@@ -52,7 +48,7 @@ func New() App
 **示例**
 
 ```go
-app := spine.New()
+app := platform.New()
 app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
@@ -232,34 +228,28 @@ app.InterceptorFor(boot.InterceptorWebSocket, wsAuthInterceptor)
 app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ```
 
-### Transport
+### WithEcho
 
 ```go
-Transport(fn func(any))
+platform.WithEcho(fn func(*echo.Echo)) platform.EchoOption
 ```
 
-注册用于配置 HTTP 服务器 Echo 实例的回调。可以在回调中添加中间件或静态文件路径。
-
-**参数**
-
-- `fn` - 接收 Echo 实例的回调函数
-
-**示例**
+创建平台时，通过具有明确类型的 `WithEcho` 选项注册 Echo 扩展。用以下代码替换现有的 `app := platform.New()`，保留后续的构造函数和路由注册。Spine v0.6.0 已移除 `App.Transport`。
 
 ```go
-import "github.com/labstack/echo/v4"
-import "github.com/labstack/echo/v4/middleware"
+import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/labstack/echo/v5"
+    "github.com/labstack/echo/v5/middleware"
+)
 
-app.Transport(func(e any) {
-    echo := e.(*echo.Echo)
-
-    // Echo 미들웨어 추가
-    echo.Use(middleware.RequestID())
-
-    // 정적 파일 서빙
-    echo.Static("/static", "public")
-})
+app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+    e.Use(middleware.RequestID())
+    e.Static("/static", "public")
+}))
 ```
+
+通过平台选项添加的原生 Echo 路由不会经过 Spine HTTP 拦截器和响应 staging，也不包含在静态 Spine 路由契约中。请单独检查其实际行为。
 
 ### RegisterTransport
 
@@ -323,6 +313,20 @@ func (t *GRPCTransport) Stop(ctx context.Context) error {
 
 app.RegisterTransport(&GRPCTransport{})
 ```
+
+### RunContext / Prepare
+
+```go
+RunContext(ctx context.Context, opts boot.Options) error
+Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
+
+type PreparedApplication interface {
+    Handler() http.Handler
+    Close(ctx context.Context) error
+}
+```
+
+`RunContext` 在 context 取消时开始正常关闭。`Prepare` 在不启动监听器的情况下准备应用，返回 `Handler()` 和 `Close(ctx)`。它不会启动 consumer 或 custom transport，但根据配置，broker readiness 和 custom Init 可能建立网络连接。调用方负责关闭准备结果和外部 HTTP 服务器。
 
 ### Consumers
 
@@ -822,6 +826,7 @@ spine verify
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
 	"os"
 
 	"github.com/NARUBROWN/spine"
@@ -839,7 +844,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := spine.New()
+	app := platform.New()
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -857,7 +862,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 准备完成后，在单独的 goroutine 中执行消费者和自定义传输方式的 `Start`，最后启动 HTTP 服务器。对于同一 HTTP 方法，如果路由路径存在歧义重叠，启动会失败。例如，`/users/:id` 和 `/users/me` 会被判定为重叠路径。
 
-关闭时，首先停止接收 WebSocket 和 HTTP 请求，等待消费者停止，再按初始化的相反顺序调用自定义传输方式的 `Stop`。随后释放事件发布器的资源。具体实现请参阅 [v0.5.1 启动和关闭代码](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/bootstrap/bootstrap.go)。
+关闭时，首先停止接收 WebSocket 和 HTTP 请求，等待消费者停止，再按初始化的相反顺序调用自定义传输方式的 `Stop`。随后释放事件发布器的资源。具体实现请参阅 [v0.6.0 启动和关闭代码](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/bootstrap/bootstrap.go)。
 
 ## 约束和错误
 

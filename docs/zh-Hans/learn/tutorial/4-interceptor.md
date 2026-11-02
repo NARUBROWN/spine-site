@@ -2,9 +2,11 @@
 
 为用户查询请求添加日志记录和演示认证，并确认请求经过拦截器的顺序。拦截器负责多个处理器共用的认证、权限检查、日志记录和事务处理。
 
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+
 ## 从 CLI 项目开始
 
-使用[第一个应用](/zh-Hans/learn/getting-started/first-app)和[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中创建的项目。示例代码使用模块路径 `example.com/my-app`；如果创建项目时使用了其他模块路径，请按项目实际情况修改。
+使用[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)和[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中创建的项目。示例代码使用模块路径 `example.com/my-app`；如果创建项目时使用了其他模块路径，请按项目实际情况修改。
 
 如果还没有用户资源，请在项目根目录生成。如果已经创建，请跳过生成步骤。
 
@@ -25,7 +27,7 @@ CLI 会生成 `src/user` 下的文件，以及 `BuildApplication` 中的 `user.R
 
 ## 拦截器生命周期
 
-在 Spine v0.5.1 中，HTTP 请求依次经过全局拦截器、路由匹配与输入绑定、路由拦截器和控制器。拦截器必须实现全部四个生命周期方法。
+在 Spine v0.6.0 中，HTTP 请求依次经过全局拦截器、路由匹配与输入绑定、路由拦截器和控制器。拦截器必须实现全部四个生命周期方法。
 
 ```mermaid
 graph TD
@@ -138,6 +140,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -156,7 +159,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})
@@ -263,6 +266,7 @@ CORS 配置为允许来自 `https://app.example.com` 的请求。请检查 `cors
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -282,7 +286,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})

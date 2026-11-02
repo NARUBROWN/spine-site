@@ -7,11 +7,11 @@ Go 1.25.5 이상이 필요하며, CLI의 권장 버전은 Go 1.27.3입니다. �
 ## 1. CLI 설치와 명령 확인
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 
-`spine version`은 `spine-cli 0.1.4`를 출력합니다. 명령을 찾지 못하면 [설치 안내](/ko/learn/getting-started/installation)에서 Go 실행 파일 경로 설정을 확인하세요.
+`spine version`은 `spine-cli 0.4.0`를 출력합니다. 명령을 찾지 못하면 [설치 안내](/ko/learn/getting-started/installation)에서 Go 실행 파일 경로 설정을 확인하세요.
 
 ## 2. 프로젝트 생성
 
@@ -20,10 +20,9 @@ spine version
 ```bash
 spine new hello-spine --module example.com/hello-spine
 cd hello-spine
-go mod tidy
 ```
 
-`hello-spine` 디렉터리에 프로젝트 파일이 생성됩니다. CLI는 `go.mod`에 Spine `v0.5.1`을 지정하며, `go mod tidy`가 필요한 의존성을 다운로드합니다.
+`new`는 Spine `v0.6.0`, Echo 플랫폼 `v0.1.0`과 Echo `v5.4.4`를 설치하고 정적 계약 검사와 빌드까지 마칩니다. `--skip-install`로 파일만 생성했을 때는 `go mod tidy`를 별도로 실행하세요. 설치 과정에서는 앱 초기화, 테스트나 리스너를 실행하지 않습니다.
 
 ## 3. 생성된 구조 확인
 
@@ -32,11 +31,15 @@ hello-spine/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
-└── internal/application/
-    ├── application.go
-    └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── controller/health_controller.go
+    └── route/route.go
 ```
 
 프로젝트에는 실행을 시작하는 `main.go`와 앱 구성 코드를 담은 `internal/application` 디렉터리가 있습니다. `spine.toml`은 모듈 경로, 실행 진입점, 앱 구성 코드의 위치와 포트를 CLI에 알려줍니다.
@@ -46,6 +49,8 @@ module = "example.com/hello-spine"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "layered-v1"
+platform = "echo"
 ```
 
 `internal/application/application.go`의 `BuildApplication()`은 앱과 실행 옵션을 반환합니다. 생성된 코드는 `HealthController` 생성자와 `GET /health`를 등록하고, HTTP 실행 옵션인 `boot.HTTPOptions`를 명시합니다.

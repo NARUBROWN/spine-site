@@ -2,7 +2,9 @@
 
 CLIでOpenAPIファイルをエクスポートし、必要に応じてSwaggoのドキュメントとSwagger UIを追加して、ブラウザーからリクエストを送信します。CLIによる静的なOpenAPIのエクスポートと、Swaggoを使用するUIの構成は、それぞれ別に行います。
 
-[最初のアプリ](/ja/learn/getting-started/first-app)で作成した `example.com/hello-spine` プロジェクトを使用します。先に[コントローラー](/ja/learn/tutorial/2-controller)の `spine generate resource user` で `src/user` を生成してください。別のモジュールパスを使用した場合は、以下のimportパスの `example.com/hello-spine` の部分だけをそのモジュールパスに置き換え、末尾の `/docs` は残してください。コマンドはプロジェクトルートで実行します。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+
+[最初のアプリ](/ja/learn/tutorial/1-project-structure)で作成した `example.com/my-app` プロジェクトを使用します。先に[コントローラー](/ja/learn/tutorial/2-controller)の `spine generate resource user` で `src/user` を生成してください。別のモジュールパスを使用した場合は、以下のimportパスの `example.com/my-app` の部分だけをそのモジュールパスに置き換え、末尾の `/docs` は残してください。コマンドはプロジェクトルートで実行します。
 
 ## CLIによるOpenAPIのエクスポート
 
@@ -80,7 +82,7 @@ func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
 
 ### 4. 先にdocsパッケージを生成
 
-次のコマンドでドキュメントのパッケージを生成します。生成前は、まだ存在しない `example.com/hello-spine/docs` をインポートしないでください。`--parseInternal` は、APIの基本情報があるinternalパッケージも読み取るように指定します。
+次のコマンドでドキュメントのパッケージを生成します。生成前は、まだ存在しない `example.com/my-app/docs` をインポートしないでください。`--parseInternal` は、APIの基本情報があるinternalパッケージも読み取るように指定します。
 
 ```bash
 swag init -g internal/application/application.go --parseInternal
@@ -94,19 +96,18 @@ swag init -g internal/application/application.go --parseInternal
 
 ```go
 import (
-    _ "example.com/hello-spine/docs"
-    "github.com/labstack/echo/v4"
+    _ "example.com/my-app/docs"
+    "github.com/labstack/echo/v5"
     httpSwagger "github.com/swaggo/http-swagger"
 )
 ```
 
-同じファイルの `BuildApplication()` で、`app := spine.New()` より後、`return` より前に次のコードを追加します。既存のhealthとuserの登録は維持してください。
+Echo の拡張はプラットフォーム作成時に型付きの `WithEcho` オプションで登録します。既存の `app := platform.New()` を以下のコードに置き換え、その後のコンストラクターとルートの登録は維持してください。`App.Transport` は Spine v0.6.0 で削除されました。
 
 ```go
-app.Transport(func(transport any) {
-    e := transport.(*echo.Echo)
+app := platform.New(platform.WithEcho(func(e *echo.Echo) {
     e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-})
+}))
 ```
 
 ### 6. 検証と実行
@@ -114,6 +115,7 @@ app.Transport(func(transport any) {
 ```bash
 gofmt -w internal/application/application.go src/user/user_controller.go
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev
@@ -121,7 +123,7 @@ spine dev
 
 ブラウザーで `http://localhost:8080/swagger/index.html` を開き、GETルートが表示されることを確認します。`/swagger/doc.json` では、生成したSwagger 2.0ドキュメントが返されるはずです。UIのTry it outから `/user/1` にリクエストすると、HTTP 200と `{"id":1}` が返ります。
 
-`app.Transport` で直接追加したEchoのルートは、CLIの静的なSpineルート契約に含まれません。契約検査を通過しても、UIとドキュメントのルートは別途確認する必要があります。
+プラットフォームオプションで追加した native Echo ルートは、Spine の HTTP インターセプターと応答 staging を経由せず、静的な Spine ルート契約にも含まれません。実際の動作を別途確認してください。
 
 ## 機能拡張に使用するコメントとDTO
 

@@ -2,9 +2,11 @@
 
 使用 Bun 連線至 MySQL，並擴充產生的 `GET /user/:id`，讓它從資料庫查詢使用者。同時撰寫建立資料表的遷移檔與儲存庫的基本查詢。
 
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+
 ## 準備 CLI 專案
 
-接續 [安裝 CLI 與第一個應用程式](/zh-Hant/learn/getting-started/first-app)和[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中的 `example.com/my-app`。您需要可連線的 MySQL 資料庫，以及具備建立資料表權限的帳號。請在專案根目錄執行命令。
+接續 [安裝 CLI 與第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)和[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中的 `example.com/my-app`。您需要可連線的 MySQL 資料庫，以及具備建立資料表權限的帳號。請在專案根目錄執行命令。
 
 若尚未建立使用者資源，先確認將產生的檔案，再套用變更。已建立的資源不必重新產生。
 
@@ -89,6 +91,7 @@ Spine 建構函式只支援一個回傳值，因此不要註冊回傳 `(*bun.DB,
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/database"
@@ -107,7 +110,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController, database.NewDB)
     app.Route("GET", "/health", (*HealthController).Get)
     if err := user.Register(app); err != nil {
@@ -442,6 +445,7 @@ spine dev
 ```text
 my-app/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -472,6 +476,7 @@ my-app/
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/database"
@@ -490,7 +495,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController, database.NewDB)
     app.Route("GET", "/health", (*HealthController).Get)
     if err := user.Register(app); err != nil {
@@ -579,6 +584,7 @@ err := r.db.NewSelect().
 
 ```sh
 go mod tidy
+go mod download all
 gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
 spine contract check
 spine verify

@@ -2,7 +2,7 @@
 
 Spine 的执行流水线接收请求、选择处理器、绑定参数，再将返回值转换为响应。要理解拦截器应在哪个时点执行，以及发生错误后流程会进行到哪一步，可以以这条流程为依据。
 
-本文说明 Spine v0.5.1 的 HTTP 执行顺序。HTTP、事件消费者和 WebSocket 使用相同的流水线实现，但解析输入的解析器和响应处理配置各不相同。
+本文说明 Spine v0.6.0 的 HTTP 执行顺序。HTTP、事件消费者和 WebSocket 使用相同的流水线实现，但解析输入的解析器和响应处理配置各不相同。
 
 控制器示例是添加到 [CLI 生成的项目](/zh-Hans/learn/tutorial/1-project-structure)中的代码。请求 DTO 使用指针接收，普通的成功响应使用 `github.com/NARUBROWN/spine/pkg/httpx` 中的 `httpx.Response[T]` 返回。构造函数和路由在 `BuildApplication` 中注册。
 
@@ -258,7 +258,7 @@ type ReturnValueHandler interface {
 | 未单独映射的执行错误 | 500、`Internal server error` |
 | 实际响应已经提交 | 不重复写入响应 |
 
-并非所有绑定错误都会映射为 400。在 v0.5.1 中，无效 JSON 或 `path.Int` 数值解析失败可能导致 500 响应。在应用中设计输入错误的响应时，请区分绑定失败和处理器显式返回的 `httperr.BadRequest`。
+Spine `v0.6.0` 配合 Echo 平台 `v0.1.0`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。
 
 如果实际发送响应时发生错误，该错误会计入最终执行错误。如果响应尚未提交，流水线会尝试写入 500 响应。已经发送的响应无法撤销。
 

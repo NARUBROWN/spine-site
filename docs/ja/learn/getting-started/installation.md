@@ -1,6 +1,6 @@
 # インストール
 
-Spine CLIをインストールし、新しいプロジェクトを作成して、開発サーバーのレスポンスを確認します。このページは、Spine CLI 0.1.4と、CLIが生成するSpine v0.5.1のプロジェクトを対象としています。
+Spine CLIをインストールし、新しいプロジェクトを作成して、開発サーバーのレスポンスを確認します。このページは、Spine CLI 0.4.0と、CLIが生成するSpine v0.6.0のプロジェクトを対象としています。
 
 ## 要件
 
@@ -18,11 +18,11 @@ go version
 次のコマンドでCLIをインストールし、バージョンを確認します。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 
-`spine version`が`spine-cli 0.1.4`を表示すれば、インストールは完了です。
+`spine version`が`spine-cli 0.4.0`を表示すれば、インストールは完了です。
 
 `spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
 
@@ -38,10 +38,9 @@ spine version
 ```bash
 spine new my-app --module example.com/my-app
 cd my-app
-go mod tidy
 ```
 
-`my-app`ディレクトリにプロジェクトファイルが生成されます。CLIは`go.mod`にSpine `v0.5.1`を指定し、`go mod tidy`が必要な依存関係をダウンロードします。
+`new` は Spine `v0.6.0`、Echo プラットフォーム `v0.1.0`、Echo `v5.4.4` をインストールし、静的契約の検査とビルドを完了します。`--skip-install` でファイルだけを生成した場合に限り、別途 `go mod tidy` を実行してください。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
 
 生成される`spine.toml`は次のとおりです。
 
@@ -50,6 +49,8 @@ module = "example.com/my-app"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "layered-v1"
+platform = "echo"
 ```
 
 `internal/application/application.go`の`BuildApplication()`が構成要素と`GET /health`を登録します。生成された`main.go`はこの関数を呼び出し、`app.Validate(options)`で構成を検証してから、`app.Run(options)`でサーバーを実行します。

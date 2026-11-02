@@ -1,10 +1,13 @@
 # 当前版本
 
-本文档站点以 Spine v0.5.1 和 Spine CLI v0.1.4 为基准。
+本文档站点以 Spine v0.6.0 和 Spine CLI v0.4.0 为基准。
 
-## Spine v0.5.1
+## Spine v0.6.0
 
-Spine v0.5.1 的公开 API 和运行时提供以下功能。
+Spine v0.6.0 的公开 API 和运行时提供以下功能。
+
+- 分离 HTTP 契约与 Echo 实现，通过 `spine-echo-platform` 创建 HTTP 应用
+- CLI `v0.4.0` 的默认 `new` 完成平台安装、静态契约检查和构建
 
 - 包含 `BeforeResponse` 的四阶段拦截器，以及在发送前完成准备的 HTTP 响应
 - 无需连接网络即可检查配置，并返回结构化 `boot.ConfigError` 的 `App.Validate`
@@ -18,9 +21,9 @@ Spine v0.5.1 的公开 API 和运行时提供以下功能。
 
 生产环境的默认值和限制请参阅[安全配置](/zh-Hans/reference/security-configuration)。
 
-## Spine CLI v0.1.4
+## Spine CLI v0.4.0
 
-安装和项目创建示例以 Spine CLI v0.1.4 为基准。此版本的 CLI 会创建使用 Spine v0.5.1 的项目。
+安装和项目创建示例以 Spine CLI v0.4.0 为基准。此版本的 CLI 会创建使用 Spine v0.6.0 的项目。
 
 - [安装 CLI](/zh-Hans/learn/getting-started/installation)
 - [创建第一个应用](/zh-Hans/learn/getting-started/first-app)

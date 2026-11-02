@@ -1,6 +1,6 @@
 # core.Interceptor
 
-컨트롤러 실행 전후에 인증, 로깅, CORS와 트랜잭션 처리를 추가하는 인터페이스입니다. Spine v0.5.1에서는 사전 처리, 성공 후 처리, 응답 전 처리와 최종 정리를 각각 구현합니다.
+컨트롤러 실행 전후에 인증, 로깅, CORS와 트랜잭션 처리를 추가하는 인터페이스입니다. Spine v0.6.0에서는 사전 처리, 성공 후 처리, 응답 전 처리와 최종 정리를 각각 구현합니다.
 
 ## 인터페이스
 
@@ -61,7 +61,7 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
 
 응답을 실제 전송 계층에 기록하기 전에 역순으로 실행합니다. `executionErr`에는 사전 처리, 라우팅, 입력값 해석, 컨트롤러, 응답 준비와 실행 후 훅에서 이 시점까지 발생한 오류가 전달됩니다. 앞서 실행한 `BeforeResponse`가 반환한 오류도 합쳐 다음 인터셉터에 전달합니다.
 
-요청 범위의 트랜잭션은 이 단계에서 커밋하거나 롤백하십시오. v0.5.1은 응답 직렬화, 쿠키와 상태 코드 검증을 먼저 수행하므로 응답 준비에 실패하면 롤백할 수 있습니다.
+요청 범위의 트랜잭션은 이 단계에서 커밋하거나 롤백하십시오. v0.6.0은 응답 직렬화, 쿠키와 상태 코드 검증을 먼저 수행하므로 응답 준비에 실패하면 롤백할 수 있습니다.
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -168,7 +168,7 @@ Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
 - `core.ErrAbortPipeline`으로 중단할 때는 인터셉터가 필요한 응답을 준비해야 합니다. 컨트롤러와 이후 성공 처리 단계는 실행하지 않습니다.
 - DB 커밋 뒤 실제 응답 전송이 실패할 수 있습니다. `BeforeResponse`는 DB와 네트워크 전송을 원자적으로 묶지 않습니다.
 
-구체적인 조기 종료와 오류 전파는 [v0.5.1 파이프라인 구현](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/pipeline/pipeline.go), 연결 전 처리 순서는 [WebSocket 런타임 구현](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/ws/runtime.go)을 참고하십시오.
+구체적인 조기 종료와 오류 전파는 [v0.6.0 파이프라인 구현](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/pipeline/pipeline.go), 연결 전 처리 순서는 [WebSocket 런타임 구현](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/ws/runtime.go)을 참고하십시오.
 
 ## 참고
 

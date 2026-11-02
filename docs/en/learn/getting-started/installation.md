@@ -1,6 +1,6 @@
 # Installation
 
-Install the Spine CLI, create a new project, and check the development server's response. This guide uses Spine CLI 0.1.4 and the Spine v0.5.1 project it generates.
+Install the Spine CLI, create a new project, and check the development server's response. This guide uses Spine CLI 0.4.0 and the Spine v0.6.0 project it generates.
 
 ## Requirements
 
@@ -18,11 +18,11 @@ Check that the reported Go version is 1.25.5 or later.
 Run the following commands to install the CLI and check its version.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 
-Installation is complete when `spine version` prints `spine-cli 0.1.4`.
+Installation is complete when `spine version` prints `spine-cli 0.4.0`.
 
 If the `spine` command cannot be found and you have not set `GOBIN` separately, run the following commands in Bash or Zsh to add the directory to the current session's path. To keep using it in future sessions, save the same setting in your shell startup file. If you have set `GOBIN`, add that directory instead.
 
@@ -38,10 +38,9 @@ Run these commands in the parent directory where you want to place the project. 
 ```bash
 spine new my-app --module example.com/my-app
 cd my-app
-go mod tidy
 ```
 
-The project files are created in the `my-app` directory. The CLI specifies Spine `v0.5.1` in `go.mod`, and `go mod tidy` downloads the required dependencies.
+`new` installs Spine `v0.6.0`, Echo platform `v0.1.0`, and Echo `v5.4.4`, then checks the static contract and builds the app. Run `go mod tidy` separately only if you use `--skip-install` to generate files. Installation does not initialize the app, run tests, or open a listener.
 
 The generated `spine.toml` contains the following:
 
@@ -50,6 +49,8 @@ module = "example.com/my-app"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "layered-v1"
+platform = "echo"
 ```
 
 `BuildApplication()` in `internal/application/application.go` registers the components and `GET /health`. The generated `main.go` calls this function, validates the configuration with `app.Validate(options)`, and starts the server with `app.Run(options)`.

@@ -228,7 +228,7 @@ func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
 - Leading and trailing whitespace is not removed from boolean values. For example, `" true "` is unrecognized and returns `def`.
 - `NewValues` does not copy the supplied map. Changing the original map after construction also changes lookup results.
 
-For the implementation, see the [query helper](https://github.com/NARUBROWN/spine/blob/v0.5.1/pkg/query/types.go) and [automatic injection code](https://github.com/NARUBROWN/spine/blob/v0.5.1/internal/resolver/query_values_resolver.go).
+For the implementation, see the [query helper](https://github.com/NARUBROWN/spine/blob/v0.6.0/pkg/query/types.go) and [automatic injection code](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/query_values_resolver.go).
 
 ## See also
 

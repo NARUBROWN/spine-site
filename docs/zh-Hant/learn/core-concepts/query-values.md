@@ -2,7 +2,9 @@
 
 `query.Values` 可用來讀取 HTTP 查詢參數並指定預設值。在控制器引數中宣告 `q query.Values` 後，即可依需求將各鍵的值讀取為字串、整數或布林值。不支援將查詢參數自動對應至任意 DTO。
 
-本頁以 Spine v0.5.1 的 `github.com/NARUBROWN/spine/pkg/query` 為基礎。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+
+本頁以 Spine v0.6.0 的 `github.com/NARUBROWN/spine/pkg/query` 為基礎。
 
 ## 在 CLI 專案中使用
 
@@ -295,7 +297,7 @@ HTTP 查詢可以如下所示，重複使用同一個鍵。
 GET /product?tag=go&tag=web&tag=api
 ```
 
-對這個請求，`q.String("tag")` 和 `q.Get("tag")` 都只會回傳 `"go"`。Spine v0.5.1 的 `query.Values` 沒有可取得完整值清單的公開方法，應用程式也無法直接存取非公開欄位 `values`。
+對這個請求，`q.String("tag")` 和 `q.Get("tag")` 都只會回傳 `"go"`。Spine v0.6.0 的 `query.Values` 沒有可取得完整值清單的公開方法，應用程式也無法直接存取非公開欄位 `values`。
 
 若需要接收多個值，可將 API 設計為接收一個以逗號分隔的字串，再由應用程式拆分。以下範例也需要 `strings` 套件。
 

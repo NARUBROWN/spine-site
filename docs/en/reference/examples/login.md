@@ -4,7 +4,7 @@ Build signup and login APIs, then retrieve your profile using the JWT issued at 
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.1.4 does not provide a JWT authentication generator. Create a basic project, add the authentication code below, and install `github.com/golang-jwt/jwt/v5`.
+Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.4.0 does not provide a JWT authentication generator. Create a basic project, add the authentication code below, and install `github.com/golang-jwt/jwt/v5`.
 
 This example uses an in-memory store, plaintext password comparison, and a JWT secret hardcoded in the source to teach the authentication flow. Registered users disappear when the server stops. Before using this in a real service, use password hashing and a JWT secret managed through environment variables.
 
@@ -13,9 +13,8 @@ This example uses an in-memory store, plaintext password comparison, and a JWT s
 Prepare a basic app and the JWT dependency. Run subsequent commands from `login-example/`.
 
 ```sh
-spine new login-example --module example.com/login-example
+spine new login-example --layout legacy --module example.com/login-example
 cd login-example
-go mod tidy
 spine doctor
 go get github.com/golang-jwt/jwt/v5
 ```
@@ -27,6 +26,7 @@ In the next steps, add four files under `src/` and replace the generated `intern
 ```text
 login-example/
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
 ├── internal/application/
@@ -327,6 +327,7 @@ Replace the entire contents of `internal/application/application.go` with the fo
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/login-example/src/controller"
@@ -340,7 +341,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(store.NewUserStore, controller.NewAuthController)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{
@@ -374,6 +375,7 @@ From the project root, format the code, check dependencies and code, and start t
 ```sh
 gofmt -w src internal/application
 go mod tidy
+go mod download all
 spine contract check
 spine verify
 spine dev

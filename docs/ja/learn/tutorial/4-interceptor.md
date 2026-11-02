@@ -2,9 +2,11 @@
 
 ユーザー取得のリクエストにロギングとデモ用の認証を追加し、リクエストがインターセプターを通過する順序を確認します。インターセプターは、複数のハンドラーで共有する認証、権限チェック、ロギング、トランザクション処理を担当します。
 
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+
 ## CLI プロジェクトから始める
 
-[最初のアプリ](/ja/learn/getting-started/first-app)と[プロジェクト構成](/ja/learn/tutorial/1-project-structure)で作成したプロジェクトを使います。コードのモジュールパスは `example.com/my-app` を基準にしているため、別のモジュールパスで作成した場合は、プロジェクトに合わせて変更してください。
+[最初のアプリ](/ja/learn/tutorial/1-project-structure)と[プロジェクト構成](/ja/learn/tutorial/1-project-structure)で作成したプロジェクトを使います。コードのモジュールパスは `example.com/my-app` を基準にしているため、別のモジュールパスで作成した場合は、プロジェクトに合わせて変更してください。
 
 ユーザーリソースがまだなければ、プロジェクトルートで生成します。すでに作成した場合は、生成手順を省略します。
 
@@ -25,7 +27,7 @@ CLI は `src/user` のファイルと、`BuildApplication` 内の `user.Register
 
 ## インターセプターのライフサイクル
 
-Spine v0.5.1 の HTTP リクエストは、グローバルインターセプター、ルーティングと入力バインディング、ルートインターセプター、コントローラーの順に実行されます。インターセプターは、四つのライフサイクルメソッドをすべて実装する必要があります。
+Spine v0.6.0 の HTTP リクエストは、グローバルインターセプター、ルーティングと入力バインディング、ルートインターセプター、コントローラーの順に実行されます。インターセプターは、四つのライフサイクルメソッドをすべて実装する必要があります。
 
 ```mermaid
 graph TD
@@ -138,6 +140,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -156,7 +159,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})
@@ -263,6 +266,7 @@ CORS は、`https://app.example.com` から送信されたリクエストを許�
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -282,7 +286,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})

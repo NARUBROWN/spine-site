@@ -2,9 +2,11 @@
 
 Add logging and demo authentication to user lookup requests, and check the order in which requests pass through interceptors. Interceptors handle authentication, authorization checks, logging, and transactions shared by multiple handlers.
 
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
 ## Start from a CLI project
 
-Use the project created in [Your first app](/en/learn/getting-started/first-app) and [Project structure](/en/learn/tutorial/1-project-structure). The code uses `example.com/my-app` as its module path. If you created the project with a different module path, adjust it to match your project.
+Use the project created in [Your first app](/en/learn/tutorial/1-project-structure) and [Project structure](/en/learn/tutorial/1-project-structure). The code uses `example.com/my-app` as its module path. If you created the project with a different module path, adjust it to match your project.
 
 If you do not have a user resource yet, generate it from the project root. If you have already created it, skip generation.
 
@@ -25,7 +27,7 @@ Put app-wide registration in `internal/application/application.go` and the authe
 
 ## Interceptor lifecycle
 
-In Spine v0.5.1, HTTP requests run through global interceptors, routing and input binding, route interceptors, and the controller, in that order. Interceptors must implement all four lifecycle methods.
+In Spine v0.6.0, HTTP requests run through global interceptors, routing and input binding, route interceptors, and the controller, in that order. Interceptors must implement all four lifecycle methods.
 
 ```mermaid
 graph TD
@@ -138,6 +140,7 @@ Modify `internal/application/application.go` as follows. Add the logging interce
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -156,7 +159,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})
@@ -263,6 +266,7 @@ Configure CORS to allow requests from `https://app.example.com`. Check configura
 package application
 
 import (
+    platform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -282,7 +286,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New()
+    app := platform.New()
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})

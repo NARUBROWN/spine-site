@@ -2,7 +2,9 @@
 
 `core.HandlerMeta` 保存执行与请求匹配的控制器方法所需的信息，包括控制器类型、方法、路径参数的顺序和路由拦截器。应用通过 `app.Route` 注册处理器，拦截器则可以读取 `HandlerMeta` 来确认执行目标。
 
-本页以 Spine v0.5.1 的公开类型和 HTTP 执行流程为准。应用无需自行编写元数据创建函数或路由器的内部实现。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+
+本页以 Spine v0.6.0 的公开类型和 HTTP 执行流程为准。应用无需自行编写元数据创建函数或路由器的内部实现。
 
 ## 在 CLI 项目中的位置
 

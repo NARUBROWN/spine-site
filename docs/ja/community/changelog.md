@@ -1,10 +1,13 @@
 # 現在のリリース
 
-このドキュメントサイトは、Spine v0.5.1 と Spine CLI v0.1.4 を基準としています。
+このドキュメントサイトは、Spine v0.6.0 と Spine CLI v0.4.0 を基準としています。
 
-## Spine v0.5.1
+## Spine v0.6.0
 
-Spine v0.5.1 の公開 API とランタイムは、次の機能を提供します。
+Spine v0.6.0 の公開 API とランタイムは、次の機能を提供します。
+
+- HTTP 契約と Echo 実装を分離し、`spine-echo-platform` で HTTP アプリを作成
+- CLI `v0.4.0` の標準 `new` でプラットフォームのインストール、静的契約の検査、ビルドを実行
 
 - `BeforeResponse` を含む 4 段階のインターセプターと、送信前に準備する HTTP レスポンス
 - ネットワークに接続せずに設定を検証し、構造化された `boot.ConfigError` を返す `App.Validate`
@@ -18,9 +21,9 @@ Spine v0.5.1 の公開 API とランタイムは、次の機能を提供しま�
 
 本番環境のデフォルト値と制約は、[セキュリティ設定](/ja/reference/security-configuration)を参照してください。
 
-## Spine CLI v0.1.4
+## Spine CLI v0.4.0
 
-インストールとプロジェクト作成の例は、Spine CLI v0.1.4 を基準としています。このバージョンの CLI は、Spine v0.5.1 を使用するプロジェクトを生成します。
+インストールとプロジェクト作成の例は、Spine CLI v0.4.0 を基準としています。このバージョンの CLI は、Spine v0.6.0 を使用するプロジェクトを生成します。
 
 - [CLI のインストール](/ja/learn/getting-started/installation)
 - [最初のアプリを作る](/ja/learn/getting-started/first-app)

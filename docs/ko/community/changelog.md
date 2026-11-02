@@ -1,10 +1,13 @@
 # 현재 릴리스
 
-이 문서 사이트는 Spine v0.5.1과 Spine CLI v0.1.4를 기준으로 합니다.
+이 문서 사이트는 Spine v0.6.0과 Spine CLI v0.4.0를 기준으로 합니다.
 
-## Spine v0.5.1
+## Spine v0.6.0
 
-Spine v0.5.1의 공개 API와 런타임은 다음 기능을 제공합니다.
+Spine v0.6.0의 공개 API와 런타임은 다음 기능을 제공합니다.
+
+- HTTP 계약과 Echo 구현을 분리하고 `spine-echo-platform`으로 HTTP 앱 생성
+- CLI `v0.4.0`의 기본 `new`에서 플랫폼 설치, 정적 계약 검사와 빌드 수행
 
 - `BeforeResponse`를 포함한 4단계 인터셉터와 전송 전에 준비하는 HTTP 응답
 - 네트워크에 연결하지 않고 설정을 검사하며 구조화된 `boot.ConfigError`를 반환하는 `App.Validate`
@@ -18,9 +21,9 @@ Spine v0.5.1의 공개 API와 런타임은 다음 기능을 제공합니다.
 
 운영 환경의 기본값과 제약은 [보안 설정](/ko/reference/security-configuration)에서 확인하세요.
 
-## Spine CLI v0.1.4
+## Spine CLI v0.4.0
 
-설치와 프로젝트 생성 예제는 Spine CLI v0.1.4를 기준으로 합니다. 이 버전의 CLI는 Spine v0.5.1을 사용하는 프로젝트를 생성합니다.
+설치와 프로젝트 생성 예제는 Spine CLI v0.4.0를 기준으로 합니다. 이 버전의 CLI는 Spine v0.6.0을 사용하는 프로젝트를 생성합니다.
 
 - [CLI 설치](/ko/learn/getting-started/installation)
 - [첫 앱 만들기](/ko/learn/getting-started/first-app)

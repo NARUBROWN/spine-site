@@ -7,11 +7,11 @@ Go 1.25.5 or later is required, and the CLI recommends Go 1.27.3. The time neede
 ## 1. Install the CLI and Check the Command
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.1.4
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.0
 spine version
 ```
 
-`spine version` prints `spine-cli 0.1.4`. If the command cannot be found, check the Go executable path setup in the [installation guide](/en/learn/getting-started/installation).
+`spine version` prints `spine-cli 0.4.0`. If the command cannot be found, check the Go executable path setup in the [installation guide](/en/learn/getting-started/installation).
 
 ## 2. Create a Project
 
@@ -20,10 +20,9 @@ Run these commands in the parent directory where you want to place the project. 
 ```bash
 spine new hello-spine --module example.com/hello-spine
 cd hello-spine
-go mod tidy
 ```
 
-The project files are created in the `hello-spine` directory. The CLI specifies Spine `v0.5.1` in `go.mod`, and `go mod tidy` downloads the required dependencies.
+`new` installs Spine `v0.6.0`, Echo platform `v0.1.0`, and Echo `v5.4.4`, then checks the static contract and builds the app. Run `go mod tidy` separately only if you use `--skip-install` to generate files. Installation does not initialize the app, run tests, or open a listener.
 
 ## 3. Inspect the Generated Structure
 
@@ -32,11 +31,15 @@ hello-spine/
 ├── .gitignore
 ├── README.md
 ├── go.mod
+├── go.sum
 ├── main.go
 ├── spine.toml
-└── internal/application/
-    ├── application.go
-    └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/
+    ├── controller/health_controller.go
+    └── route/route.go
 ```
 
 The project contains `main.go`, which starts execution, and the `internal/application` directory, which holds the app configuration code. `spine.toml` tells the CLI the module path, execution entry point, location of the app configuration code, and port.
@@ -46,6 +49,8 @@ module = "example.com/hello-spine"
 entrypoint = "."
 composition = "./internal/application"
 port = 8080
+layout = "layered-v1"
+platform = "echo"
 ```
 
 `BuildApplication()` in `internal/application/application.go` returns the app and its runtime options. The generated code registers the `HealthController` constructor and `GET /health`, and explicitly sets the HTTP runtime options, `boot.HTTPOptions`.

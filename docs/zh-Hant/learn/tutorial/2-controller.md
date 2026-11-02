@@ -1,8 +1,10 @@
 # 控制器
 
-在 CLI 建立的 `hello-spine` 專案中新增 `GET /user/:id` 控制器，將請求路徑中的整數以 JSON 回應傳回。接著說明如何接收查詢參數、標頭和請求主體，以及各種回應型別。
+在 CLI 建立的 `my-app` 專案中新增 `GET /user/:id` 控制器，將請求路徑中的整數以 JSON 回應傳回。接著說明如何接收查詢參數、標頭和請求主體，以及各種回應型別。
 
-完成[第一個應用程式](/zh-Hant/learn/getting-started/first-app)的安裝與專案建立後，請在專案根目錄進行操作。如果已執行過 `spine generate resource user`，請略過產生步驟並確認檔案。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+
+完成[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)的安裝與專案建立後，請在專案根目錄進行操作。如果已執行過 `spine generate resource user`，請略過產生步驟並確認檔案。
 
 ## 使用 CLI 產生控制器
 
@@ -689,7 +691,7 @@ JSON 與表單 DTO 以結構體指標接收。查詢參數、路徑與上傳檔�
 
 ## 處理輸入錯誤時的注意事項
 
-無法將路徑值轉換為整數，或無法解析 JSON 主體時，輸入繫結會在呼叫控制器之前失敗。在 Spine v0.5.1 中，這類失敗不一定會轉換為 HTTP 400。格式錯誤的 JSON 與非整數的路徑值，在預設執行路徑中可能以 HTTP 500 回應，因此請先實作需要的錯誤處理政策，再以實際請求確認。
+無法將路徑值轉換為整數，或無法解析 JSON 主體時，輸入繫結會在呼叫控制器之前失敗。在 Spine v0.6.0 中，這類失敗不一定會轉換為 HTTP 400。格式錯誤的 JSON 與非整數的路徑值，在預設執行路徑中可能以 HTTP 500 回應，因此請先實作需要的錯誤處理政策，再以實際請求確認。
 
 ## 下一步
 

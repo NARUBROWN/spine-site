@@ -2,7 +2,9 @@
 
 Spine creates an execution context for each request or message to pass input information and execution state through the pipeline. Interceptors read and write execution state through `core.ExecutionContext`, while HTTP controllers receive only the values they need through semantic types and read-only `spine.Ctx`.
 
-Understanding this distinction helps you pass values stored by interceptors to controllers and determine which inputs are available in HTTP, event consumers, and WebSocket. The interfaces and behavior in this document are based on Spine v0.5.1.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+
+Understanding this distinction helps you pass values stored by interceptors to controllers and determine which inputs are available in HTTP, event consumers, and WebSocket. The interfaces and behavior in this document are based on Spine v0.6.0.
 
 The app handler examples are manual extensions to a [project created with the CLI](/en/learn/tutorial/1-project-structure). Keep the generated `BuildApplication` and the `user.Register(app)` call that checks for errors. The `core/` interfaces are public contracts; you do not need to copy `internal/` implementations into your app.
 
@@ -50,7 +52,7 @@ graph TD
 
 The arrows show which contracts are embedded. `ControllerContext` and `spine.Ctx` do not embed `ExecutionContext`. They are separate interfaces that expose only `Get()` to read from the same store.
 
-The actual HTTP adapter implements both `ExecutionContext` and `HttpRequestContext`. The consumer adapter likewise implements both `ExecutionContext` and `ConsumerRequestContext`. A resolver can therefore receive the shared context and then check for the protocol contract it needs.
+For HTTP, the kernel HTTPContext wraps the platform input view and provides `ExecutionContext` and `HttpRequestContext`. Access the response writer through the separate `core.HTTPResponseContext`. `SetRoute` stores routing state separately from user `Set/Get` storage. Consumer contexts implement both `ExecutionContext` and `ConsumerRequestContext`.
 
 ## Shared Base Contracts
 
@@ -105,6 +107,7 @@ type ExecutionContext interface {
     Params() map[string]string
     Header(name string) string
     PathKeys() []string
+    SetRoute(params map[string]string, pathKeys []string)
     Queries() map[string][]string
     Set(key string, value any)
     Get(key string) (any, bool)
@@ -236,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 This code is a method signature example; `CreateUserRequest` and `User` are types defined by the app. Form DTOs use `form` tags on their fields, and uploaded files can be received as `pkg/multipart.UploadedFiles`.
 
-If the body contains malformed JSON or numeric conversion of a path value fails, execution does not reach the controller. In v0.5.1, these binding errors can result in 500 responses, so do not assume that all input errors automatically become 400 responses. [Execution Pipeline](/en/learn/core-concepts/pipeline#error-responses) explains the sequence that converts errors into responses.
+Spine `v0.6.0` with Echo platform `v0.1.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests. [Execution Pipeline](/en/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: Interpreting Event Input
 
