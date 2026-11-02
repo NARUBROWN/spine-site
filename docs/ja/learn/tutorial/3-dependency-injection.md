@@ -25,13 +25,13 @@ func NewUserService(repository *UserRepository) *UserService {
 まだ生成していない場合は、`my-app` のルートで実行します。すでに生成した場合は、再実行しないでください。
 
 ```bash
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 プレビューで生成ファイルと登録コードの変更を確認してから、次のコマンドで生成します。
 
 ```bash
-spine-cli generate resource user
+spine generate resource user
 ```
 
 以下は、CLI が同じ `user` パッケージ内に生成したコードから、型とコンストラクタだけを抜粋したものです。既存のファイルをこのコードで上書きしないでください。コントローラーの `Get` メソッドは、生成されたファイル内に残します。
@@ -181,13 +181,13 @@ func NewUserRepository(db bun.IDB) *UserRepository {
 別の機能を CLI で生成すると、各パッケージの `Register` 関数と、アプリを組み立てる `BuildApplication` に接続されます。以下は、独立した `order` リソースを追加する任意の例です。CLI が `order.Register(app)` の呼び出しを追加するため、自分で重複登録しないでください。
 
 ```bash
-spine-cli generate resource order --dry-run
+spine generate resource order --dry-run
 ```
 
 プレビューで生成ファイルと登録コードの変更を確認してから、次のコマンドで生成します。
 
 ```bash
-spine-cli generate resource order
+spine generate resource order
 ```
 
 ### コンストラクタの登録を複数の呼び出しに分ける
@@ -266,14 +266,14 @@ app.Constructor(
 プロジェクトルートで、次のコマンドを実行します。
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine contract check
+spine verify
 ```
 
-`spine-cli contract check` はソースから抽出した DI の契約を検査し、`spine-cli verify` はフォーマット、`go vet`、テストも検査します。`app.Validate(options)` が成功しただけでは、コンストラクタの実行やインスタンスの初期化まで確認したことにはなりません。
+`spine contract check` はソースから抽出した DI の契約を検査し、`spine verify` はフォーマット、`go vet`、テストも検査します。`app.Validate(options)` が成功しただけでは、コンストラクタの実行やインスタンスの初期化まで確認したことにはなりません。
 
-実際の初期化とリクエスト処理は、`spine-cli dev` でアプリを起動してから確認してください。データベースを接続した場合は、実際の接続とクエリも別途確認する必要があります。循環依存やコンストラクタの登録漏れがあると、依存性の解決時にエラーを返します。生成された `main.go` は `Run` のエラーを確認します。
+実際の初期化とリクエスト処理は、`spine dev` でアプリを起動してから確認してください。データベースを接続した場合は、実際の接続とクエリも別途確認する必要があります。循環依存やコンストラクタの登録漏れがあると、依存性の解決時にエラーを返します。生成された `main.go` は `Run` のエラーを確認します。
 
 ## 次のステップ
 

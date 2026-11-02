@@ -27,9 +27,9 @@ graph TD
 基本アプリを作成し、依存関係とプロジェクト設定を確認します。以降のコマンドは `crud-example/` で実行します。
 
 ```sh
-spine-cli new crud-example --layout legacy --module example.com/crud-example
+spine new crud-example --layout legacy --module example.com/crud-example
 cd crud-example
-spine-cli doctor
+spine doctor
 ```
 
 ### ファイル構成
@@ -495,9 +495,9 @@ func BuildApplication() (spine.App, boot.Options, error) {
 gofmt -w src internal/application
 go mod tidy
 go mod download all
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine contract check
+spine verify
+spine dev
 ```
 
 `contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。サーバーが実際にリクエストを処理するかは、次の HTTP リクエストで確認します。

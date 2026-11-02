@@ -35,7 +35,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```
 
 
-The code created by `spine-cli generate resource user` uses different names and paths from the example above. The generated handler is `UserController.Get` in `src/user`, and its route is `GET /user/:id`. Do not register the same constructor or route again if the constructor is already registered. Keep the `user.Register(app)` call added to `BuildApplication` and its error handling. See [Project Structure](/en/learn/tutorial/1-project-structure) for the full procedure.
+The code created by `spine generate resource user` uses different names and paths from the example above. The generated handler is `UserController.Get` in `src/user`, and its route is `GET /user/:id`. Do not register the same constructor or route again if the constructor is already registered. Keep the `user.Register(app)` call added to `BuildApplication` and its error handling. See [Project Structure](/en/learn/tutorial/1-project-structure) for the full procedure.
 
 ## Core Concepts
 
@@ -115,8 +115,8 @@ func (c *UserController) CreateUser(
 ## Getting Started
 
 ```bash
-go install github.com/NARUBROWN/spine-cli@latest
-spine-cli version
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+spine version
 ```
 
 After installing the CLI, follow [Your First App](/en/learn/getting-started/first-app) to create a project and check its HTTP response. If the command cannot be found, see the path setup in the [installation guide](/en/learn/getting-started/installation).

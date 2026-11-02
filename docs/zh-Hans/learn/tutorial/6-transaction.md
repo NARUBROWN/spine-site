@@ -235,11 +235,11 @@ if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" 
 gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
 go mod tidy
 go mod download all
-spine-cli doctor
-spine-cli inspect
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine inspect
+spine contract check
+spine verify
+spine dev
 ```
 
 契约检查和本地检查无法确认实际数据库中的提交与回滚。运行应用需要完成数据库教程中的 `DATABASE_URL` 设置和迁移。下一步将检查成功请求的数据保存和失败请求的回滚。如果提交或回滚本身失败，相应的错误处理需要另行检查。

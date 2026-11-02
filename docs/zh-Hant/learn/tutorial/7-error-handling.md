@@ -4,7 +4,7 @@
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
 
-使用[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)和[控制器](/zh-Hant/learn/tutorial/2-controller)中的 CLI 專案。需要先以 `spine-cli generate resource user` 產生 `src/user`。下方會將 GET 處理器改為唯讀的記憶體查詢，因此請與資料庫教學分開套用。領域錯誤與 HTTP 狀態之間的對應程式碼需要自行撰寫。
+使用[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)和[控制器](/zh-Hant/learn/tutorial/2-controller)中的 CLI 專案。需要先以 `spine generate resource user` 產生 `src/user`。下方會將 GET 處理器改為唯讀的記憶體查詢，因此請與資料庫教學分開套用。領域錯誤與 HTTP 狀態之間的對應程式碼需要自行撰寫。
 
 ## HTTP 錯誤與回應
 
@@ -232,10 +232,10 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 gofmt -w src/user
 go mod tidy
 go mod download all
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
 通過契約與本機檢查後，在另一個終端機確認回應。以下結果是套用唯讀記憶體範例後的行為。

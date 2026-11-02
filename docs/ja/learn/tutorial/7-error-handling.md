@@ -4,7 +4,7 @@
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
 
-[最初のアプリ](/ja/learn/tutorial/1-project-structure)と[コントローラー](/ja/learn/tutorial/2-controller)のCLIプロジェクトを使用します。`spine-cli generate resource user` で生成した `src/user` が必要です。以下では、GETハンドラーを読み取り専用のメモリ内検索に置き換えるため、データベースのチュートリアルとは別に適用してください。ドメインエラーとHTTPステータスを対応付けるコードは手動で作成します。
+[最初のアプリ](/ja/learn/tutorial/1-project-structure)と[コントローラー](/ja/learn/tutorial/2-controller)のCLIプロジェクトを使用します。`spine generate resource user` で生成した `src/user` が必要です。以下では、GETハンドラーを読み取り専用のメモリ内検索に置き換えるため、データベースのチュートリアルとは別に適用してください。ドメインエラーとHTTPステータスを対応付けるコードは手動で作成します。
 
 ## HTTPエラーとレスポンス
 
@@ -232,10 +232,10 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 gofmt -w src/user
 go mod tidy
 go mod download all
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
 契約検査とローカル検査を通過した後、別のターミナルでレスポンスを確認します。以下の結果は、読み取り専用のメモリ内検索の例を適用した場合の動作です。

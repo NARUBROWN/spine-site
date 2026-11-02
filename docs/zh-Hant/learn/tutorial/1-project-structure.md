@@ -9,11 +9,11 @@
 在預計放置專案的上層目錄執行。若已有同名的 `my-app` 目錄，請使用其他名稱。
 
 ```sh
-spine-cli version
-spine-cli new my-app --layout legacy --module example.com/my-app
+spine version
+spine new my-app --layout legacy --module example.com/my-app
 cd my-app
-spine-cli doctor
-spine-cli inspect
+spine doctor
+spine inspect
 ```
 
 `my-app` 目錄會建立完成，相依套件也會準備就緒。`doctor` 會診斷工具與專案設定，而 `inspect` 可用來確認預設路徑 `GET /health` 已註冊。
@@ -125,7 +125,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 在專案根目錄產生使用者資源。若已在現有專案中產生過，請略過此指令。
 
 ```sh
-spine-cli generate resource user
+spine generate resource user
 ```
 
 ```text
@@ -154,7 +154,7 @@ if err := user.Register(app); err != nil {
 
 資源產生器只會產生回傳 ID 的 GET 處理器基本程式碼。資料庫模型與永久儲存資料的功能，都需要自行實作。
 
-若需要具有型別的建立與查詢範例，請使用不同的名稱執行 `spine-cli generate slice order --storage memory --field name:string`。此指令的記憶體儲存庫供開發使用，應用程式結束後資料就會消失。
+若需要具有型別的建立與查詢範例，請使用不同的名稱執行 `spine generate slice order --storage memory --field name:string`。此指令的記憶體儲存庫供開發使用，應用程式結束後資料就會消失。
 
 ## 註冊規則與驗證
 
@@ -163,9 +163,9 @@ if err := user.Register(app); err != nil {
 檢查應用程式設定後，再啟動伺服器。
 
 ```sh
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine contract check
+spine verify
+spine dev
 ```
 
 `contract check` 會檢查從註冊程式碼擷取的執行契約。`verify` 會檢查契約，並執行 `gofmt`、`go vet` 與 Go 測試。兩個指令都執行完畢且未發生錯誤後，`dev` 會啟動開發伺服器。實際 HTTP 行為，以及外部資料庫、訊息代理程式的連線，必須另外在執行環境確認。

@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine-cli new order-app --layout legacy --module example.com/order-app --dry-run
-spine-cli new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 미리보기를 확인한 뒤 두 앱을 생성합니다. 이후 명령은 별도 안내가 없으면 `spine-msa/`에서 실행합니다.
 
 ```sh
-spine-cli new order-app --layout legacy --module example.com/order-app
-spine-cli new stock-app --layout legacy --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app
+spine new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. 재고 소비자 골격 생성
@@ -31,13 +31,13 @@ spine-cli new stock-app --layout legacy --module example.com/stock-app
 `stock-app`에 주문 이벤트를 받을 소비자를 생성합니다. 먼저 미리보기를 확인합니다.
 
 ```sh
-spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
 다음 명령은 소비자 파일을 만들고 `stock-app/internal/application/application.go`에 `order.Register(app)` 호출과 오류 확인 코드를 추가합니다. 생성 직후 핸들러는 미구현 오류를 반환하므로 5단계의 코드로 교체해야 검증을 통과합니다.
 
 ```sh
-spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
 ### 파일 배치
@@ -261,12 +261,12 @@ gofmt -w src internal/application
 go mod tidy
 go mod download all
 cd ..
-spine-cli doctor --root order-app
-spine-cli doctor --root stock-app
-spine-cli contract check --root order-app
-spine-cli contract check --root stock-app
-spine-cli verify --root order-app
-spine-cli verify --root stock-app
+spine doctor --root order-app
+spine doctor --root stock-app
+spine contract check --root order-app
+spine contract check --root stock-app
+spine verify --root order-app
+spine verify --root stock-app
 ```
 
 각 서비스는 로컬 평문 연결을 사용하므로 `INSECURE_TRANSPORT_ENABLED` 경고가 한 개씩 나옵니다. 기본 검사에서는 통과하지만 `--warnings-as-errors`를 사용하면 실패합니다.
@@ -280,13 +280,13 @@ Kafka가 `localhost:9092`에서 실행 중이고 `order.created` 토픽이 있�
 첫 번째 터미널에서 재고 서비스를 실행합니다.
 
 ```sh
-spine-cli run --root stock-app
+spine run --root stock-app
 ```
 
 두 번째 터미널에서 주문 서비스를 실행합니다.
 
 ```sh
-spine-cli run --root order-app
+spine run --root order-app
 ```
 
 세 번째 터미널에서 주문 생성 요청을 보냅니다.

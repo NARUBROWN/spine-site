@@ -11,10 +11,10 @@
 プロジェクトと WebSocket ハンドラーを生成します。以降のコマンドは `chat-app/` で実行します。
 
 ```sh
-spine-cli new chat-app --layout legacy --module example.com/chat-app
+spine new chat-app --layout legacy --module example.com/chat-app
 cd chat-app
-spine-cli doctor
-spine-cli generate websocket chat --path /ws/chat --field message:string
+spine doctor
+spine generate websocket chat --path /ws/chat --field message:string
 ```
 
 `src/websocket/chat/` に `chat_message.go`、`chat_handler.go`、`module.go` が生成されます。`BuildApplication` には、`chatwebsocket.Register(app)` の呼び出しとエラー確認のコードが自動で追加されます。同じパスやコンストラクタを再登録しないでください。
@@ -129,10 +129,10 @@ return app, boot.Options{
 
 ```sh
 gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
-spine-cli contract check
-spine-cli verify
-spine-cli contract export --format asyncapi --output asyncapi.json
-spine-cli dev
+spine contract check
+spine verify
+spine contract export --format asyncapi --output asyncapi.json
+spine dev
 ```
 
 `contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。`contract export` は、登録された WebSocket 契約を `asyncapi.json` に記録します。実際の接続とメッセージ交換は、次の手順で確認します。

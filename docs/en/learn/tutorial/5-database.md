@@ -11,11 +11,11 @@ Continue with `example.com/my-app` from [Install the CLI and create your first a
 If you have not created the user resource, review the files to be generated before applying the change. Do not generate an existing resource again.
 
 ```sh
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 ```sh
-spine-cli generate resource user
+spine generate resource user
 ```
 
 The CLI generates the basic user resource files and registration code. You will add the Bun dependencies, database connection, model, and migrations in the steps below. Keep the generated `main.go`.
@@ -170,7 +170,7 @@ if dsn == "" {
 
 ```bash
 export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
-spine-cli dev
+spine dev
 ```
 
 
@@ -367,7 +367,7 @@ func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, err
 
 ### Write the migration files
 
-Create the SQL files below in `cmd/migrate/migrations`. Migrations run as a separate Go program; there is no `spine-cli migrate` command. The next execution step adds a `users` table to an existing database, so check that the `DATABASE_URL` you set earlier points to a database for this example.
+Create the SQL files below in `cmd/migrate/migrations`. Migrations run as a separate Go program; there is no `spine migrate` command. The next execution step adds a `users` table to an existing database, so check that the `DATABASE_URL` you set earlier points to a database for this example.
 
 ```sql
 -- cmd/migrate/migrations/001_create_users.up.sql
@@ -436,7 +436,7 @@ Run this in the terminal where you set `DATABASE_URL`. If the migrations succeed
 go run ./cmd/migrate
 
 # 서버 실행
-spine-cli dev
+spine dev
 ```
 
 
@@ -586,11 +586,11 @@ Run the static contract checks and local Go checks. `verify` does not test the a
 go mod tidy
 go mod download all
 gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
-spine-cli contract check
-spine-cli verify
+spine contract check
+spine verify
 ```
 
-After running the migrations, start the app with `spine-cli dev` and request `GET /user/:id`. An empty table returns HTTP 404 because the ID does not exist. To save a user before looking it up, apply the POST example in the next tutorial on transactions.
+After running the migrations, start the app with `spine dev` and request `GET /user/:id`. An empty table returns HTTP 404 because the ID does not exist. To save a user before looking it up, apply the POST example in the next tutorial on transactions.
 
 ## Next steps
 

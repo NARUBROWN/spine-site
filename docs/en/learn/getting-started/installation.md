@@ -18,17 +18,17 @@ Check that the reported Go version is 1.25.5 or later.
 Run the following commands to install the CLI and check its version.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli@latest
-spine-cli version
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+spine version
 ```
 
-Use `spine-cli version` to check the installed CLI version.
+Use `spine version` to check the installed CLI version.
 
-If the `spine-cli` command cannot be found and you have not set `GOBIN` separately, run the following commands in Bash or Zsh to add the directory to the current session's path. To keep using it in future sessions, save the same setting in your shell startup file. If you have set `GOBIN`, add that directory instead.
+If the `spine` command cannot be found and you have not set `GOBIN` separately, run the following commands in Bash or Zsh to add the directory to the current session's path. To keep using it in future sessions, save the same setting in your shell startup file. If you have set `GOBIN`, add that directory instead.
 
 ```bash
 export PATH="$(go env GOPATH)/bin:$PATH"
-spine-cli version
+spine version
 ```
 
 ## Create a New Project
@@ -36,7 +36,7 @@ spine-cli version
 Run these commands in the parent directory where you want to place the project. If a `my-app` directory already exists, use a different name.
 
 ```bash
-spine-cli new my-app --module example.com/my-app
+spine new my-app --module example.com/my-app
 cd my-app
 ```
 
@@ -58,27 +58,27 @@ platform = "echo"
 ## Validate and Run
 
 ```bash
-spine-cli doctor
-spine-cli inspect
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine inspect
+spine contract check
+spine verify
 ```
 
 Check that each command completes without errors.
 
 | Command | What it checks |
 | --- | --- |
-| `spine-cli doctor` | Go tools and project settings |
-| `spine-cli inspect` | App configuration registered in code, including routes and dependencies |
-| `spine-cli contract check` | Validity of the execution contract extracted from the registration code |
-| `spine-cli verify` | The execution contract and the results of `gofmt`, `go vet`, and Go tests |
+| `spine doctor` | Go tools and project settings |
+| `spine inspect` | App configuration registered in code, including routes and dependencies |
+| `spine contract check` | Validity of the execution contract extracted from the registration code |
+| `spine verify` | The execution contract and the results of `gofmt`, `go vet`, and Go tests |
 
 The generated `application_test.go` checks `BuildApplication()` and `app.Validate(options)` without starting the server. This step validates the code and app configuration. You will check the actual HTTP response in the next step.
 
-Once the checks pass, run `spine-cli dev` and check the actual HTTP response from another terminal.
+Once the checks pass, run `spine dev` and check the actual HTTP response from another terminal.
 
 ```bash
-spine-cli dev
+spine dev
 ```
 
 ```bash

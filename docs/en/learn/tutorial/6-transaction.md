@@ -235,11 +235,11 @@ if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" 
 gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
 go mod tidy
 go mod download all
-spine-cli doctor
-spine-cli inspect
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine inspect
+spine contract check
+spine verify
+spine dev
 ```
 
 Contract checks and local checks cannot confirm commits and rollbacks in an actual database. To run the app, set `DATABASE_URL` and run the migrations from the database tutorial. The next step checks that successful requests save data and failed requests roll it back. Error handling for failures in the commit and rollback operations themselves requires separate verification.

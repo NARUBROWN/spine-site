@@ -4,18 +4,18 @@ CLI로 만든 `my-app` 프로젝트에 `GET /user/:id` 컨트롤러를 추가하
 
 이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
-[첫 번째 앱](/ko/learn/tutorial/1-project-structure)의 설치와 프로젝트 생성을 마친 뒤 프로젝트 루트에서 진행하세요. 이미 `spine-cli generate resource user`를 실행했다면 생성 단계를 건너뛰고 파일을 확인합니다.
+[첫 번째 앱](/ko/learn/tutorial/1-project-structure)의 설치와 프로젝트 생성을 마친 뒤 프로젝트 루트에서 진행하세요. 이미 `spine generate resource user`를 실행했다면 생성 단계를 건너뛰고 파일을 확인합니다.
 
 ## CLI로 컨트롤러 생성
 
 ```bash
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 미리보기에서 생성 파일과 등록 코드 변경을 확인한 뒤 아래 명령으로 생성합니다.
 
 ```bash
-spine-cli generate resource user
+spine generate resource user
 ```
 
 ### 생성되는 파일
@@ -84,10 +84,10 @@ if err := user.Register(app); err != nil {
 프로젝트 루트에서 계약과 로컬 코드를 검사한 뒤 서버를 실행합니다.
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine doctor
+spine contract check
+spine verify
+spine dev
 ```
 
 다른 터미널에서 생성된 라우트를 호출합니다.
@@ -96,7 +96,7 @@ spine-cli dev
 curl http://localhost:8080/user/1
 ```
 
-`GET /user/1`은 HTTP 200과 `{"id":1}`을 반환해야 합니다. 이 응답은 경로 바인딩과 라우트 실행을 확인하는 결과이며, 데이터베이스에서 사용자를 조회한 결과는 아닙니다. `spine-cli contract check`와 `spine-cli verify`의 성공 여부는 실제 HTTP 응답과 별도로 확인하세요.
+`GET /user/1`은 HTTP 200과 `{"id":1}`을 반환해야 합니다. 이 응답은 경로 바인딩과 라우트 실행을 확인하는 결과이며, 데이터베이스에서 사용자를 조회한 결과는 아닙니다. `spine contract check`와 `spine verify`의 성공 여부는 실제 HTTP 응답과 별도로 확인하세요.
 
 ## 확장 예제의 전제
 

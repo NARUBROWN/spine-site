@@ -1,6 +1,6 @@
 # 현재 릴리스
 
-문서 예제의 검증 기준은 2026-11-02의 Spine v0.6.0과 CLI v0.4.0입니다. 일반 설치는 `@latest`를 사용하며, 실제 CLI 버전과 선택된 의존성은 `spine-cli version`과 생성된 `go.mod`에서 확인합니다.
+문서 예제의 검증 기준은 2026-11-02의 Spine v0.6.0과 CLI v0.4.0입니다. 일반 설치는 `@latest`를 사용하며, 실제 CLI 버전과 선택된 의존성은 `spine version`과 생성된 `go.mod`에서 확인합니다.
 
 ## Spine v0.6.0
 

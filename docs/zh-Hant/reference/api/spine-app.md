@@ -815,9 +815,9 @@ func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) h
 [建立第一個應用程式](/zh-Hant/learn/getting-started/first-app)產生的專案，會在 `internal/application/application.go` 的 `BuildApplication` 中設定應用程式，並在根目錄的 `main.go` 中確認 `Validate` 錯誤後呼叫 `Run`。可使用以下命令檢查專案。
 
 ```sh
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine contract check
+spine verify
 ```
 
 以下是產生的 `BuildApplication` 基本形式。

@@ -35,7 +35,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```
 
 
-CLI의 `spine-cli generate resource user`가 만드는 코드는 위 예시와 이름과 경로가 다릅니다. 생성되는 핸들러는 `src/user`의 `UserController.Get`이며, 경로는 `GET /user/:id`입니다. 생성자가 등록된 상태에서 같은 생성자나 라우트를 다시 등록하지 마세요. `BuildApplication`에 추가된 `user.Register(app)` 호출과 오류 처리도 유지해야 합니다. 자세한 절차는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 확인할 수 있습니다.
+CLI의 `spine generate resource user`가 만드는 코드는 위 예시와 이름과 경로가 다릅니다. 생성되는 핸들러는 `src/user`의 `UserController.Get`이며, 경로는 `GET /user/:id`입니다. 생성자가 등록된 상태에서 같은 생성자나 라우트를 다시 등록하지 마세요. `BuildApplication`에 추가된 `user.Register(app)` 호출과 오류 처리도 유지해야 합니다. 자세한 절차는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 확인할 수 있습니다.
 
 ## 핵심 개념
 
@@ -115,8 +115,8 @@ func (c *UserController) CreateUser(
 ## 시작하기
 
 ```bash
-go install github.com/NARUBROWN/spine-cli@latest
-spine-cli version
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+spine version
 ```
 
 CLI를 설치한 뒤 [첫 번째 앱](/ko/learn/getting-started/first-app)에서 프로젝트를 생성하고 HTTP 응답을 확인하세요. 명령을 찾지 못하면 [설치 안내](/ko/learn/getting-started/installation)의 경로 설정을 참고하세요.

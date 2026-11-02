@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine-cli new order-app --layout legacy --module example.com/order-app --dry-run
-spine-cli new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --dry-run
 ```
 
 确认预览后，创建两个应用。除非另有说明，后续命令均在 `spine-msa/` 中运行。
 
 ```sh
-spine-cli new order-app --layout legacy --module example.com/order-app
-spine-cli new stock-app --layout legacy --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app
+spine new stock-app --layout legacy --module example.com/stock-app
 ```
 
 ## 2. 生成库存消费者骨架
@@ -31,13 +31,13 @@ spine-cli new stock-app --layout legacy --module example.com/stock-app
 在 `stock-app` 中创建用于接收订单事件的消费者。先确认预览。
 
 ```sh
-spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64 --dry-run
 ```
 
 以下命令会创建消费者文件，并在 `stock-app/internal/application/application.go` 中添加 `order.Register(app)` 调用和错误检查代码。刚生成的处理器会返回未实现错误，必须替换为第 5 步中的代码才能通过验证。
 
 ```sh
-spine-cli generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
+spine generate consumer order --root stock-app --topic order.created --field event_id:string --field order_id:int64
 ```
 
 ### 文件布局
@@ -261,12 +261,12 @@ gofmt -w src internal/application
 go mod tidy
 go mod download all
 cd ..
-spine-cli doctor --root order-app
-spine-cli doctor --root stock-app
-spine-cli contract check --root order-app
-spine-cli contract check --root stock-app
-spine-cli verify --root order-app
-spine-cli verify --root stock-app
+spine doctor --root order-app
+spine doctor --root stock-app
+spine contract check --root order-app
+spine contract check --root stock-app
+spine verify --root order-app
+spine verify --root stock-app
 ```
 
 由于各服务使用本地明文连接，每个服务都会产生一条 `INSECURE_TRANSPORT_ENABLED` 警告。默认检查可以通过，但使用 `--warnings-as-errors` 时会失败。
@@ -280,13 +280,13 @@ spine-cli verify --root stock-app
 在第一个终端中启动库存服务。
 
 ```sh
-spine-cli run --root stock-app
+spine run --root stock-app
 ```
 
 在第二个终端中启动订单服务。
 
 ```sh
-spine-cli run --root order-app
+spine run --root order-app
 ```
 
 在第三个终端中发送创建订单的请求。

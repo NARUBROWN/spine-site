@@ -25,13 +25,13 @@ func NewUserService(repository *UserRepository) *UserService {
 If you have not generated the resource yet, run the following command from the `my-app` root. If you have already generated it, do not run it again.
 
 ```bash
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 Review the files to be generated and the registration code changes in the preview, then generate them with the following command.
 
 ```bash
-spine-cli generate resource user
+spine generate resource user
 ```
 
 The following excerpts show only the types and constructors from the code the CLI generated in the same `user` package. Do not overwrite existing files with this code. Keep the controller's `Get` method in the generated file.
@@ -181,13 +181,13 @@ For the implementation and registration of the interceptor's four lifecycle meth
 When you generate another feature with the CLI, it connects the package's `Register` function to `BuildApplication`, which assembles the app. The following optional example adds a separate `order` resource. The CLI adds the `order.Register(app)` call, so do not register it again manually.
 
 ```bash
-spine-cli generate resource order --dry-run
+spine generate resource order --dry-run
 ```
 
 Review the files to be generated and the registration code changes in the preview, then generate them with the following command.
 
 ```bash
-spine-cli generate resource order
+spine generate resource order
 ```
 
 ### Split constructor registration across calls
@@ -266,14 +266,14 @@ app.Constructor(
 Run the following commands from the project root.
 
 ```bash
-spine-cli doctor
-spine-cli contract check
-spine-cli verify
+spine doctor
+spine contract check
+spine verify
 ```
 
-`spine-cli contract check` checks the DI contract extracted from the source. `spine-cli verify` also checks formatting, `go vet`, and tests. A successful `app.Validate(options)` alone does not confirm that constructors execute or instances initialize.
+`spine contract check` checks the DI contract extracted from the source. `spine verify` also checks formatting, `go vet`, and tests. A successful `app.Validate(options)` alone does not confirm that constructors execute or instances initialize.
 
-Run the app with `spine-cli dev` to check actual initialization and request handling. If you connect a database, check the actual connection and queries separately as well. Circular dependencies or missing constructors return errors during dependency resolution, and the generated `main.go` checks errors from `Run`.
+Run the app with `spine dev` to check actual initialization and request handling. If you connect a database, check the actual connection and queries separately as well. Circular dependencies or missing constructors return errors during dependency resolution, and the generated `main.go` checks errors from `Run`.
 
 ## Next steps
 

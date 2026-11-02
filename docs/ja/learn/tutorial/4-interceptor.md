@@ -11,13 +11,13 @@
 ユーザーリソースがまだなければ、プロジェクトルートで生成します。すでに作成した場合は、生成手順を省略します。
 
 ```sh
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 プレビューで生成ファイルと登録コードの変更を確認してから、生成します。
 
 ```sh
-spine-cli generate resource user
+spine generate resource user
 ```
 
 CLI は `src/user` のファイルと、`BuildApplication` 内の `user.Register(app)` の呼び出しを生成します。インターセプターのジェネレーターはないため、`src/interceptor` ディレクトリを作成し、以下のロギングと認証のインターセプターファイルを自分で作成してください。
@@ -316,13 +316,13 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ## ロギングと認証の動作を検証する
 
-基本例のロギング、認証、CORS のコードを適用してから、プロジェクトルートで実行します。`spine-cli contract check` は静的な契約を検査し、`spine-cli verify` はローカルコードを検査します。実際のリクエストの認証とレスポンスは、サーバーを起動して別途確認します。
+基本例のロギング、認証、CORS のコードを適用してから、プロジェクトルートで実行します。`spine contract check` は静的な契約を検査し、`spine verify` はローカルコードを検査します。実際のリクエストの認証とレスポンスは、サーバーを起動して別途確認します。
 
 ```sh
 gofmt -w src/interceptor/*.go src/user/user_route.go internal/application/application.go
-spine-cli contract check
-spine-cli verify
-spine-cli dev
+spine contract check
+spine verify
+spine dev
 ```
 
 別のターミナルから、次のリクエストを送信します。

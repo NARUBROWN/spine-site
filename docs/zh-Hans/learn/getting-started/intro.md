@@ -35,7 +35,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 ```
 
 
-CLI 命令 `spine-cli generate resource user` 生成的代码，其名称和路径与上例不同。生成的处理器是 `src/user` 中的 `UserController.Get`，路径为 `GET /user/:id`。如果构造函数已注册，请勿重复注册相同的构造函数或路由。还应保留添加到 `BuildApplication` 中的 `user.Register(app)` 调用及其错误处理。详细步骤请参阅[项目结构](/zh-Hans/learn/tutorial/1-project-structure)。
+CLI 命令 `spine generate resource user` 生成的代码，其名称和路径与上例不同。生成的处理器是 `src/user` 中的 `UserController.Get`，路径为 `GET /user/:id`。如果构造函数已注册，请勿重复注册相同的构造函数或路由。还应保留添加到 `BuildApplication` 中的 `user.Register(app)` 调用及其错误处理。详细步骤请参阅[项目结构](/zh-Hans/learn/tutorial/1-project-structure)。
 
 ## 核心概念
 
@@ -115,8 +115,8 @@ func (c *UserController) CreateUser(
 ## 开始使用
 
 ```bash
-go install github.com/NARUBROWN/spine-cli@latest
-spine-cli version
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+spine version
 ```
 
 安装 CLI 后，请按照[第一个应用](/zh-Hans/learn/getting-started/first-app)创建项目并确认 HTTP 响应。如果找不到命令，请参阅[安装指南](/zh-Hans/learn/getting-started/installation)中的路径设置。

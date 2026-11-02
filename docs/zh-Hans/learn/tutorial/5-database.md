@@ -11,11 +11,11 @@
 如果尚未创建用户资源，先查看将要生成的文件，再应用变更。已创建的资源无需再次生成。
 
 ```sh
-spine-cli generate resource user --dry-run
+spine generate resource user --dry-run
 ```
 
 ```sh
-spine-cli generate resource user
+spine generate resource user
 ```
 
 CLI 会生成用户资源的基本文件和注册代码。Bun 依赖、数据库连接、模型和迁移需要在以下步骤中手动添加。保留生成的 `main.go`。
@@ -170,7 +170,7 @@ if dsn == "" {
 
 ```bash
 export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
-spine-cli dev
+spine dev
 ```
 
 
@@ -367,7 +367,7 @@ func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, err
 
 ### 编写迁移文件
 
-在 `cmd/migrate/migrations` 中创建以下 SQL 文件。迁移通过独立的 Go 程序执行，不存在 `spine-cli migrate` 命令。接下来的执行步骤会向现有数据库添加 `users` 表，因此请确认之前设置的 `DATABASE_URL` 指向示例数据库。
+在 `cmd/migrate/migrations` 中创建以下 SQL 文件。迁移通过独立的 Go 程序执行，不存在 `spine migrate` 命令。接下来的执行步骤会向现有数据库添加 `users` 表，因此请确认之前设置的 `DATABASE_URL` 指向示例数据库。
 
 ```sql
 -- cmd/migrate/migrations/001_create_users.up.sql
@@ -436,7 +436,7 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 go run ./cmd/migrate
 
 # 서버 실행
-spine-cli dev
+spine dev
 ```
 
 
@@ -586,11 +586,11 @@ err := r.db.NewSelect().
 go mod tidy
 go mod download all
 gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
-spine-cli contract check
-spine-cli verify
+spine contract check
+spine verify
 ```
 
-迁移完成后，使用 `spine-cli dev` 运行应用，并请求 `GET /user/:id`。如果表为空，由于不存在对应的 ID，将返回 HTTP 404。若要先保存用户再查询，请应用下一篇事务教程中的 POST 示例。
+迁移完成后，使用 `spine dev` 运行应用，并请求 `GET /user/:id`。如果表为空，由于不存在对应的 ID，将返回 HTTP 404。若要先保存用户再查询，请应用下一篇事务教程中的 POST 示例。
 
 ## 下一步
 
