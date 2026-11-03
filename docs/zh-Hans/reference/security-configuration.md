@@ -1,6 +1,6 @@
 # 安全配置
 
-Spine v0.6.0 默认对消息代理使用加密连接，并为 HTTP 和 WebSocket 设置大小、时间和连接数限制。请通过本参考了解默认值和配置约束，并为待部署的应用选择来源、认证和消息失败策略。
+Spine 0.6.5 为 HTTP/WebSocket 设置大小、时间和连接数限制。独立的 Kafka/RabbitMQ 平台负责消息代理传输策略。以下平台默认值以 v0.1.0 为基准。
 
 ## 配置验证
 
@@ -15,7 +15,7 @@ if err := app.Run(options); err != nil {
 }
 ```
 
-错误以 `*boot.ConfigError` 返回。`Issues` 中的每个 `ConfigIssue` 提供以下字段。在程序中对错误分类时，请使用 `Code`，不要解析消息。消息代理 URL 中的凭据不会暴露在配置错误中。
+通过 `*boot.ConfigError.Issues` 检查 boot 配置错误。单独检查外部平台 `NewFactory` 返回的配置错误。使用公开错误和代码分类，不解析消息字符串，也不记录消息代理凭据。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -31,10 +31,10 @@ if err := app.Run(options); err != nil {
 | HTTP | 限制读写时间、请求头和请求体大小 | [`boot.HTTPOptions`](/zh-Hans/reference/api/spine-app#boot-options) |
 | Kafka | 对已启用的消费者和发布器使用 TLS 1.2 或更高版本 | `TLS`、`Dialer`、`Transport`。本地明文连接使用 `AllowInsecureTransport: true` |
 | RabbitMQ 连接 | 必须使用 `amqps://` | 本地明文连接使用 `amqp://` 和 `AllowInsecureTransport: true` |
-| RabbitMQ 发布 | 消息持久化、强制路由、发布确认和有限重试 | `PublisherRetry` |
-| RabbitMQ 处理失败 | 拒绝且不重新入队 | `FailurePolicy` |
+| RabbitMQ 发布 | persistent / mandatory / publisher confirm | `OperationTimeout` |
+| RabbitMQ 处理失败 | 拒绝且不重新入队 | `rabbitmqplatform.Config.FailurePolicy` |
 | RabbitMQ 并发处理 | 每个消费者 1 条未确认消息 | 正数 `PrefetchCount` |
-| 消费者传输失败 | 使用指数退避和抖动重新创建读取器 | `ConsumerRetry` |
+| 消费者传输失败 | 使用指数退避和抖动重新创建读取器 | `spine.WithEventConsumerRetry` |
 | WebSocket 来源 | 浏览器请求仅允许协议和主机相同的来源 | `AllowedOrigins` |
 | WebSocket 连接数 | 连接和等待连接的请求合计 1024 个 | 正数 `MaxConnections` 或 `boot.UnlimitedWebSocketConnections` |
 | WebSocket 连接认证 | 仅在升级前执行实现了可选接口的拦截器 | 实现 `core.WebSocketHandshakeInterceptor` |
@@ -44,91 +44,62 @@ if err := app.Run(options); err != nil {
 
 ## Kafka
 
-`boot.KafkaOptions` 的 `Read` 和 `Write` 独立启用。只要设置其中一项，就必须提供 `Brokers`；使用 `Read` 时还必须指定 `GroupID`。未单独配置传输设置时，对消费者和发布器均使用 TLS 1.2 或更高版本。
+导入 `kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`。通过 `Config.Consume` 和 `Config.Publish` 选择角色并设置 `Brokers`。消费者还需要 `GroupID`。以下代码用于 `BuildApplication` 内，同时导入 `echoplatform`、`spine`、`boot` 和 `time`。
 
 ```go
-Kafka: &boot.KafkaOptions{
-    Brokers: []string{"kafka.example:9093"},
-    Read:  &boot.KafkaReadOptions{GroupID: "orders"},
-    Write: &boot.KafkaWriteOptions{},
+factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
+    Brokers: []string{"kafka.example.com:9093"},
+    Consume: true,
+    Publish: true,
+    GroupID: "orders",
+    TopicPrefix: "prod.",
+})
+if err != nil {
+    return nil, boot.Options{}, err
 }
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
+    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+    spine.WithEventSettlementTimeout(5 * time.Second),
+))
 ```
 
-需要自定义 CA、mTLS 或 SASL 时，请配置 `TLS`、`Dialer` 和 `Transport`。如果对已启用的角色同时配置显式 TLS 和 `AllowInsecureTransport`，会发生 `KAFKA_TLS_INSECURE_CONFLICT` 错误。请仅在隔离的本地开发环境中显式允许明文连接。
+Kafka 平台默认应用 TLS 1.2 或更高版本。使用 `TLS`、`Dialer`、`Transport` 配置 CA、mTLS 和 SASL。`AllowInsecureTransport: true` 仅用于隔离的本地明文连接，不能与显式 TLS 同时使用。`NewFactory` 仅检查配置。`Prepare` 和 `Run` 在准备已注册消费者的 reader 时检查消息代理和主题。Kafka 仅发布应用可以在未连接消息代理时启动，因此需要实际发布来单独验证连接和传递。
 
-```go
-Kafka: &boot.KafkaOptions{
-    Brokers:                []string{"localhost:9092"},
-    AllowInsecureTransport: true,
-    Read:                   &boot.KafkaReadOptions{GroupID: "local"},
-}
-```
+`Config.TopicPrefix` 同时为发布名称和消费者订阅添加前缀。两端 factory 都设置 `prod.` 时，应用中注册 `order.created`，在消息代理中准备 `prod.order.created`。前缀需要自行包含分隔符。
 
-读取器出错或 ACK/NACK 失败后，会根据 `ConsumerRetry` 关闭现有读取器并创建新读取器。此选项控制传输层的重新连接，不会改变处理器的消息处理策略。
-
-| `ConsumerRetryOptions` 字段 | 类型 | 默认值 |
-| --- | --- | --- |
-| `InitialDelay` | `time.Duration` | 100ms |
-| `MaxDelay` | `time.Duration` | 5 秒 |
-| `Multiplier` | `float64` | 2 |
-| `Jitter` | `float64` | 0.2，即 20% |
-| `MaxAttempts` | `int` | `0`，无限重试 |
-
-各字段为 `0` 时选择默认值。不允许负数。显式指定的延迟上限必须大于或等于初始延迟，倍数必须大于或等于 1，抖动必须介于 0 和 1 之间。同样的选项也适用于 RabbitMQ 消费者。
-
-Kafka 处理器必须考虑消息重新投递，并实现幂等处理。不会自动跳过永久无法处理的消息，也不会将其发送到独立的失败队列。
+`spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{...})` 控制 reader 和 ACK/NACK 失败后的重连。默认初始延迟 100ms、最大 5s、倍数 2、抖动 0.2，`MaxAttempts: 0` 表示无限次传输重试。它不设置处理器重试次数或 DLQ 策略。`WithEventSettlementTimeout` 的默认 ACK/NACK 限制为 5s。Kafka 不会通过后续 offset 提交跳过失败记录，无法处理的消息可能阻塞分区。
 
 ## RabbitMQ
 
-生产环境 URL 使用 `amqps://`。已启用的 `Read` 和 `Write` 分别需要 `Exchange`。默认失败策略为拒绝且不重新入队。
+导入 `rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"`。设置共用的 `Config.Exchange` 并选择 `Consume`、`Publish`。默认要求 `amqps://`，本地 `amqp://` 需要显式设置 `AllowInsecureTransport: true`。以下代码用于 `BuildApplication` 内。
 
 ```go
-RabbitMQ: &boot.RabbitMqOptions{
-    URL: "amqps://user:pass@rabbit.example/vhost",
-    PublisherRetry: boot.PublisherRetryOptions{
-        InitialDelay:   200 * time.Millisecond,
-        MaxDelay:       5 * time.Second,
-        MaxAttempts:    5,
-        ConfirmTimeout: 5 * time.Second,
+factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
+    URL: "amqps://user:pass@rabbit.example.com/vhost",
+    Exchange: "events",
+    Consume: true,
+    Publish: true,
+    PrefetchCount: 16,
+    FailurePolicy: rabbitmqplatform.FailureReject,
+    DeadLetter: &rabbitmqplatform.DeadLetter{
+        Exchange: "events.dlx",
+        RoutingKey: "events.failed",
     },
-    Read: &boot.RabbitMqReadOptions{
-        Exchange:      "events",
-        PrefetchCount: 16,
-        FailurePolicy: boot.RabbitMqFailureReject,
-        DeadLetter: &boot.RabbitMqDeadLetterOptions{
-            Exchange:   "events.dlx",
-            RoutingKey: "events.failed",
-        },
-    },
-    Write: &boot.RabbitMqWriteOptions{Exchange: "events"},
+    OperationTimeout: 5 * time.Second,
+})
+if err != nil {
+    return nil, boot.Options{}, err
 }
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
 
-| 读取配置 | 默认值和约束 |
-| --- | --- |
-| `PrefetchCount` | 为 `0` 时，每个消费者允许 1 条未确认消息。手动指定时必须为正数 |
-| `FailurePolicy` | 省略时使用 `boot.RabbitMqFailureReject`。如需重新入队，使用 `boot.RabbitMqFailureRequeue` |
-| `DeadLetter` | 默认值为 `nil`。配置时需要预先创建的 DLX 的 `Exchange`，也可指定 `RoutingKey` |
-| `RequeueOnError` | 用于兼容旧版本。为 `true` 时重新入队。与显式指定的 `FailurePolicy` 冲突时返回配置错误 |
+省略 `PrefetchCount` 时每个消费者允许一条未确认消息。默认策略为 `rabbitmqplatform.FailureReject`，`FailureRequeue` 可能无限次重新传递无法处理的消息。使用前先准备 `DeadLetter` 交换机。`TopicPrefix` 应用于发布路由键和订阅绑定，`QueuePrefix` 应用于队列名。
 
-DLX 是接收未能处理消息的交换器。必须由运维人员预先创建；如果没有匹配的 DLX 配置，被拒绝的消息可能被丢弃。如果现有队列的参数与新配置不同，RabbitMQ 可能返回队列声明条件不匹配错误。
-
-使用 `RabbitMqFailureRequeue` 可能导致无法处理的消息被无限次重新投递。新配置请使用拒绝策略和 DLX。`RequeueOnError` 计划弃用，新代码请使用 `FailurePolicy`。用于选择处理器的键是队列绑定的 `RoutingKey`，而非 AMQP `Type`。
-
-发布器使用持久化消息、`mandatory=true` 和发布确认。消息无法路由，或确认被拒绝或丢失时，不会视为成功。确认丢失后重试可能重复发布同一消息，因此消费者必须具备幂等性。
-
-| `PublisherRetryOptions` 字段 | 类型 | 默认值 |
-| --- | --- | --- |
-| `InitialDelay` | `time.Duration` | 100ms |
-| `MaxDelay` | `time.Duration` | 5 秒 |
-| `Multiplier` | `float64` | 2 |
-| `Jitter` | `float64` | 0.2，即 20% |
-| `MaxAttempts` | `int` | 共尝试 3 次 |
-| `ConfirmTimeout` | `time.Duration` | 5 秒 |
-
-各字段为 `0` 时选择默认值。不允许负数，延迟范围、倍数和抖动的约束与 `ConsumerRetryOptions` 相同。增加 `MaxAttempts` 时，还应考虑重复发布的可能性。
+发布器使用持久化消息、mandatory 路由和 publisher confirm。`OperationTimeout` 默认为 5s。没有自动重新发布失败消息的 `PublisherRetry` 选项。确认丢失后应用重试可能造成重复，因此消费者必须幂等。
 
 ## WebSocket
+
+HTTP 选择 Echo，WebSocket 选择独立的 Gorilla 实现。注册 WS 路由需要 HTTP 升级支持和 WS factory。启用验证时将 `playground.New()` 的结果传给 `spine.WithValidator`。
 
 在 `boot.HTTPOptions.WebSocket` 中配置来源、连接数和消息限制。请指定应用使用的确切来源和连接上限。
 
@@ -195,7 +166,7 @@ app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
 ## 生产运行约束
 
-- 监控 `WEBSOCKET_CAPACITY_EXCEEDED`、消费者重新连接尝试耗尽，以及 RabbitMQ 的 `Type` 与 `RoutingKey` 不匹配的情况。
+- 监控 `WEBSOCKET_CAPACITY_EXCEEDED`、消费者重连次数耗尽、reader 和 ACK/NACK 失败以及事件发布失败。
 - Kafka 和 RabbitMQ 消费者应实现幂等处理。还应准备处置 Kafka 无法处理的消息，以及运维 RabbitMQ DLX 的流程。
 - 实际套接字写入和消息代理发布无法与数据库提交合并为原子操作。需要原子性时，请使用事务性发件箱和幂等键。
 - 支持的版本请参阅[当前版本](/zh-Hans/community/changelog)。

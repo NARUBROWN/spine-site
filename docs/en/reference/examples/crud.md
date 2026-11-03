@@ -4,7 +4,7 @@ Build an HTTP API to create, list, retrieve, update, and delete users. The examp
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. This example adds the full CRUD implementation to a basic app created with CLI 0.4.0. The CLI's `resource` command provides a GET scaffold, and `slice --storage memory` provides a scaffold for creating and retrieving records. The code below includes updates and deletions.
+Complete [CLI installation](/en/learn/getting-started/installation) first. This example adds the full CRUD implementation to a basic app created with CLI 0.4.2. The CLI's `resource` command provides a GET scaffold, and `slice --storage memory` provides a scaffold for creating and retrieving records. The code below includes updates and deletions.
 
 Stored users disappear when the server process stops.
 
@@ -443,7 +443,7 @@ Replace the entire contents of `internal/application/application.go` with the fo
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/crud-example/src/controller"
@@ -456,7 +456,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,

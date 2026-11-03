@@ -2,7 +2,7 @@
 
 사용자 조회 요청에 로깅과 데모 인증을 추가하고, 요청이 인터셉터를 통과하는 순서를 확인합니다. 인터셉터는 여러 핸들러가 공유하는 인증, 권한 검사, 로깅, 트랜잭션 처리를 담당합니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
 ## CLI 프로젝트에서 시작
 
@@ -27,7 +27,7 @@ CLI는 `src/user` 파일과 `BuildApplication`의 `user.Register(app)` 호출을
 
 ## 인터셉터 수명주기
 
-Spine v0.6.0의 HTTP 요청은 전역 인터셉터, 라우팅과 입력 바인딩, 라우트 인터셉터, 컨트롤러 순서로 실행됩니다. 인터셉터는 네 수명주기 메서드를 모두 구현해야 합니다.
+Spine v0.6.5의 HTTP 요청은 전역 인터셉터, 라우팅과 입력 바인딩, 라우트 인터셉터, 컨트롤러 순서로 실행됩니다. 인터셉터는 네 수명주기 메서드를 모두 구현해야 합니다.
 
 ```mermaid
 graph TD
@@ -140,7 +140,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -159,7 +159,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})
@@ -266,7 +266,7 @@ CORS는 `https://app.example.com`에서 보낸 요청을 허용하도록 설정�
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -286,7 +286,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})

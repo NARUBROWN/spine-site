@@ -2,7 +2,7 @@
 
 使用 CLI 导出 OpenAPI 文件，按需添加 Swaggo 文档和 Swagger UI，并从浏览器发送请求。CLI 的静态 OpenAPI 导出与使用 Swaggo 的 UI 配置分别进行。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
 
 使用[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)中创建的 `example.com/my-app` 项目。请先按[控制器](/zh-Hans/learn/tutorial/2-controller)教程使用 `spine generate resource user` 生成 `src/user`。如果使用了其他模块路径，请仅将下文 import 路径中的 `example.com/my-app` 部分替换为该模块路径，并保留 `/docs` 后缀。所有命令均在项目根目录执行。
 
@@ -102,12 +102,12 @@ import (
 )
 ```
 
-创建平台时，通过具有明确类型的 `WithEcho` 选项注册 Echo 扩展。用以下代码替换现有的 `app := platform.New()`，保留后续的构造函数和路由注册。Spine v0.6.0 已移除 `App.Transport`。
+创建平台时，通过具有明确类型的 `WithEcho` 选项注册 Echo 扩展。用以下代码替换现有的 `app := spine.New(echoplatform.Option())`，保留后续的构造函数和路由注册。Spine v0.6.0 已移除 `App.Transport`。
 
 ```go
-app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
     e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-}))
+})))
 ```
 
 ### 6. 验证并运行

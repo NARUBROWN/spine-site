@@ -1,6 +1,6 @@
 # core.Interceptor
 
-An interface for adding authentication, logging, CORS, and transaction handling before and after controller execution. In Spine v0.6.0, you implement separate methods for preprocessing, processing after success, processing before the response, and final cleanup.
+An interface for adding authentication, logging, CORS, and transaction handling before and after controller execution. In Spine v0.6.5, you implement separate methods for preprocessing, processing after success, processing before the response, and final cleanup.
 
 ## Interface
 
@@ -61,7 +61,7 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
 
 Runs in reverse order before the response is written to the actual transport layer. `executionErr` contains errors raised up to this point during preprocessing, routing, input resolution, controller execution, response preparation, and post-execution hooks. Errors returned by earlier `BeforeResponse` calls are also combined and passed to the next interceptor.
 
-Commit or roll back request-scoped transactions at this stage. v0.6.0 performs response serialization and cookie and status code validation first, so you can roll back if response preparation fails.
+Commit or roll back request-scoped transactions at this stage. v0.6.5 performs response serialization and cookie and status code validation first, so you can roll back if response preparation fails.
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -168,7 +168,7 @@ Each stage that runs in reverse order starts with route interceptors, then conti
 - When stopping with `core.ErrAbortPipeline`, the interceptor must prepare the required response. The controller and subsequent success processing stages do not run.
 - Sending the actual response can fail after the DB commit. `BeforeResponse` does not make DB operations and network transmission atomic.
 
-For details on early termination and error propagation, see the [v0.6.0 pipeline implementation](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/pipeline/pipeline.go). For the order of processing before connection establishment, see the [WebSocket runtime implementation](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/ws/runtime.go).
+For details on early termination and error propagation, see the [v0.6.5 pipeline implementation](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/pipeline/pipeline.go). For the order of processing before connection establishment, see the [WebSocket runtime implementation](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/ws/runtime.go).
 
 ## See also
 

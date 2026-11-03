@@ -1,11 +1,11 @@
 # spine.App
 
-`App` 是註冊建構函式、HTTP 路由、攔截器、事件消費者、WebSocket 處理器與自訂傳輸方式，並執行應用程式的入口。此參考涵蓋 Spine v0.6.0 的公開 API 與啟動選項。
+`App` 是註冊建構函式、HTTP 路由、攔截器、事件消費者、WebSocket 處理器與自訂傳輸方式，並執行應用程式的入口。此參考涵蓋 Spine v0.6.5 的公開 API 與啟動選項。
 
 ```go
 import (
     "github.com/NARUBROWN/spine"
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
 )
 ```
 
@@ -37,7 +37,7 @@ type App interface {
 func New(options ...Option) App
 ```
 
-`spine.New(options ...Option)` 建立不選擇 HTTP 實作的核心應用程式。沒有 HTTP 的 worker 使用 `spine.New()`；Echo HTTP 應用程式使用 `platform.New()` 或 `spine.New(platform.Option())`。
+將所需實作傳入 `spine.New(options ...Option)`。HTTP 應用程式使用 `spine.New(echoplatform.Option())`。沒有 HTTP 的 worker 省略 HTTP 選項並註冊所需的事件 factory。
 
 建立新的 Spine 應用程式實例。
 
@@ -48,12 +48,25 @@ func New(options ...Option) App
 **範例**
 
 ```go
-app := platform.New()
+app := spine.New(echoplatform.Option())
 app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
 })
 ```
+
+## 實作選擇選項 {#platform-options}
+
+HTTP 選擇 Echo，WebSocket 選擇獨立的 Gorilla 實作。註冊 WS 路由需要 HTTP 升級支援與 WS factory。啟用驗證時將 `playground.New()` 的結果傳給 `spine.WithValidator`。
+
+| 選項 | 實作 |
+| --- | --- |
+| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `contract/http` |
+| `spine.WithWebSocketAdapter(factory)` | `gorillaplatform.Option()` / `contract/websocket` |
+| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / `contract/event` |
+| `spine.WithValidator(validator)` | playground / `contract/validator` |
+
+[選擇平台與 DTO 驗證](/zh-Hant/learn/getting-started/platforms)
 
 ## 方法
 
@@ -231,22 +244,22 @@ app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ### WithEcho
 
 ```go
-platform.WithEcho(fn func(*echo.Echo)) platform.EchoOption
+echoplatform.WithEcho(fn func(*echo.Echo)) echoplatform.EchoOption
 ```
 
-建立平台時，透過具有明確型別的 `WithEcho` 選項註冊 Echo 擴充。以下列程式碼取代既有的 `app := platform.New()`，保留後續的建構函式與路由註冊。Spine v0.6.0 已移除 `App.Transport`。
+建立平台時，透過具有明確型別的 `WithEcho` 選項註冊 Echo 擴充。以下列程式碼取代既有的 `app := spine.New(echoplatform.Option())`，保留後續的建構函式與路由註冊。Spine v0.6.0 已移除 `App.Transport`。
 
 ```go
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "github.com/labstack/echo/v5"
     "github.com/labstack/echo/v5/middleware"
 )
 
-app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
     e.Use(middleware.RequestID())
     e.Static("/static", "public")
-}))
+})))
 ```
 
 透過平台選項新增的原生 Echo 路由不會經過 Spine HTTP 攔截器與回應 staging，也不包含在靜態 Spine 路由契約中。請另外檢查實際行為。
@@ -488,9 +501,9 @@ WebSocket 會將路徑註冊至與 HTTP 伺服器相同的 Echo 實例，因此�
 Validate(opts boot.Options) error
 ```
 
-檢查啟動選項，不會開啟網路連線或啟動伺服器與消費者。檢查項目包含 Kafka 與 RabbitMQ 的連線設定、HTTP 與 WebSocket 的限制值，以及全域攔截器是否為 nil 和其套用範圍。`Run` 也會在啟動前執行相同檢查。
+在不連接網路的情況下檢查 HTTP/WebSocket 限制、事件 factory 契約與通用政策以及驗證器註冊。`Run` 也執行相同檢查。平台的 `NewFactory` 先檢查具體訊息代理 `Config`，因此也要檢查建立錯誤。
 
-若有錯誤，會回傳 `*boot.ConfigError`。`Issues` 的各個項目包含設定位置 `Path`、錯誤分類 `Code`、說明 `Message` 與修正提示 `Hint`。選項有效時回傳 `nil`。
+boot 選項錯誤透過 `*boot.ConfigError.Issues` 的 `Path`、`Code`、`Message`、`Hint` 檢查。也可能傳回事件、HTTP、WebSocket factory 或驗證器契約錯誤，使用 `errors.Is` 與 `errors.As` 檢查公開錯誤。有效設定傳回 `nil`。
 
 `Validate` 不會建立建構函式的相依物件，也不會連線至訊息代理。因此，通過驗證不代表建構函式與路由適用、DI 組態正確，或已成功連線至實際基礎設施。
 
@@ -523,7 +536,7 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
-指定伺服器執行與外部基礎設施的使用方式。`HTTP`、`Kafka` 或 `RabbitMQ` 為 `nil` 時，不會設定對應功能。
+`boot.Options` 設定 HTTP 執行與關閉政策。執行 HTTP 時設定 `HTTP`。事件連線與角色透過外部平台 `Config` 與 `spine.WithEventAdapter` 選擇。
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/boot"
@@ -536,8 +549,6 @@ type Options struct {
     Address                string
     EnableGracefulShutdown bool
     ShutdownTimeout        time.Duration
-    Kafka                  *KafkaOptions
-    RabbitMQ               *RabbitMqOptions
     HTTP                   *HTTPOptions
 }
 
@@ -559,8 +570,6 @@ type HTTPOptions struct {
 | `Address` | HTTP 伺服器監聽的位址。例如 `":8080"` |
 | `EnableGracefulShutdown` | 為 `true` 時，HTTP 伺服器收到 `SIGINT`、`SIGTERM` 後正常關閉。預設為 `false` |
 | `ShutdownTimeout` | 關閉 HTTP 與自訂傳輸方式時的等待時間。`0` 表示 10 秒，不得為負數 |
-| `Kafka` | Kafka 發布與消費設定。`nil` 表示停用 |
-| `RabbitMQ` | RabbitMQ 發布與消費設定。`nil` 表示停用 |
 | `HTTP` | HTTP 與 WebSocket 設定。`nil` 表示停用 HTTP 伺服器 |
 
 | `HTTPOptions` 欄位 | 為 `0` 或省略時 | 限制 |
@@ -634,129 +643,66 @@ HTTP: &boot.HTTPOptions{
 
 ## Kafka 設定
 
-### KafkaOptions
+### 建立並註冊 factory
 
-`Read` 與 `Write` 彼此獨立。只要啟用其中一項，就需要 `Brokers`；使用 `Read` 時也需要 `GroupID`。若未另行設定傳輸方式，會套用 TLS 1.2 以上版本。
-
-```go
-type KafkaOptions struct {
-    // Kafka 브로커 주소 목록
-    Brokers []string
-
-    // 사용자 정의 TLS, 리더 Dialer, 라이터 Transport
-    TLS *tls.Config
-    Dialer *kafka.Dialer
-    Transport *kafka.Transport
-
-    // 격리된 로컬 환경의 평문 연결 명시적 허용
-    AllowInsecureTransport bool
-
-    // 리더 오류와 ACK/NACK 실패 뒤 재연결 정책
-    ConsumerRetry ConsumerRetryOptions
-
-    // 이벤트 소비 설정
-    // nil이면 Kafka 소비자를 활성화하지 않음
-    Read *KafkaReadOptions
-
-    // 이벤트 발행 설정
-    // nil이면 Kafka로 이벤트를 발행하지 않음
-    Write *KafkaWriteOptions
-}
-
-type KafkaReadOptions struct {
-    // Kafka 소비자 그룹 ID
-    GroupID string
-}
-
-type KafkaWriteOptions struct {
-    // 이벤트 이름 앞에 붙일 토픽 접두사
-    TopicPrefix string
-}
-```
-
-### 範例
+匯入 `kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`。透過 `Config.Consume` 與 `Config.Publish` 選擇角色並設定 `Brokers`。消費者還需要 `GroupID`。以下程式碼用於 `BuildApplication` 內，同時匯入 `echoplatform`、`spine`、`boot` 與 `time`。
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    Kafka: &boot.KafkaOptions{
-        Brokers: []string{"localhost:9092"},
-        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
-        Read: &boot.KafkaReadOptions{
-            GroupID: "my-consumer-group",
-        },
-        Write: &boot.KafkaWriteOptions{
-            TopicPrefix: "myapp.",
-        },
-    },
-    HTTP: &boot.HTTPOptions{},
+factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
+    Brokers: []string{"kafka.example.com:9093"},
+    Consume: true,
+    Publish: true,
+    GroupID: "orders",
+    TopicPrefix: "prod.",
 })
+if err != nil {
+    return nil, boot.Options{}, err
+}
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
+    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+    spine.WithEventSettlementTimeout(5 * time.Second),
+))
 ```
+
+### 政策與限制
+
+Kafka 平台預設使用 TLS 1.2 以上。使用 `TLS`、`Dialer`、`Transport` 設定 CA、mTLS 與 SASL。`AllowInsecureTransport: true` 僅用於隔離的本地明文連線，不能與明確指定的 TLS 同時使用。`NewFactory` 僅檢查設定。`Prepare` 與 `Run` 在準備已註冊消費者的 reader 時檢查訊息代理與主題。Kafka 僅發布應用程式可以在未連接訊息代理時啟動，因此需要實際發布來另外驗證連線與傳遞。
+
+`Config.TopicPrefix` 同時為發布名稱與消費者訂閱加入前綴。兩端 factory 都設定 `prod.` 時，應用程式中註冊 `order.created`，在訊息代理中準備 `prod.order.created`。前綴需要自行包含分隔符。
+
+`spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{...})` 控制 reader 與 ACK/NACK 失敗後的重新連線。預設初始延遲 100ms、最大 5s、倍率 2、抖動 0.2，`MaxAttempts: 0` 表示無限次傳輸重試。它不設定處理器重試次數或 DLQ 政策。`WithEventSettlementTimeout` 的預設 ACK/NACK 限制為 5s。Kafka 不會透過後續 offset 提交跳過失敗記錄，無法處理的訊息可能阻塞分區。
 
 ## RabbitMQ 設定
 
-### RabbitMqOptions
+### 建立並註冊 factory
 
-`Read` 與 `Write` 彼此獨立。為每個啟用的角色指定 `Exchange`。預設要求使用 `amqps://` URL；僅在隔離的開發環境中，才明確允許使用明文 `amqp://`。
-
-```go
-type RabbitMqOptions struct {
-    // RabbitMQ AMQP 연결 문자열
-    // 예: amqp://guest:guest@localhost:5672/
-    URL string
-
-    // 로컬 amqp:// 연결 명시적 허용
-    AllowInsecureTransport bool
-
-    ConsumerRetry  ConsumerRetryOptions
-    PublisherRetry PublisherRetryOptions
-
-    // 이벤트 소비 설정
-    // nil이면 RabbitMQ 소비자를 활성화하지 않음
-    Read *RabbitMqReadOptions
-
-    // 이벤트 발행 설정
-    // nil이면 RabbitMQ로 이벤트를 발행하지 않음
-    Write *RabbitMqWriteOptions
-}
-
-type RabbitMqReadOptions struct {
-    // 큐를 바인딩할 교환기 이름
-    Exchange string
-    PrefetchCount int
-    FailurePolicy RabbitMqFailurePolicy
-    DeadLetter *RabbitMqDeadLetterOptions
-
-    // Deprecated: FailurePolicy 사용 권장
-    RequeueOnError bool
-}
-
-type RabbitMqWriteOptions struct {
-    // 이벤트를 발행할 교환기 이름
-    Exchange string
-}
-```
-
-失敗政策與重試預設值請參閱[安全性設定](/zh-Hant/reference/security-configuration#rabbitmq)。`RequeueOnError` 用於相容舊版，新程式碼請使用 `FailurePolicy`。
-
-### 範例
+匯入 `rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"`。設定共用的 `Config.Exchange` 並選擇 `Consume`、`Publish`。預設要求 `amqps://`，本地 `amqp://` 需要明確設定 `AllowInsecureTransport: true`。以下程式碼用於 `BuildApplication` 內。
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    RabbitMQ: &boot.RabbitMqOptions{
-        URL:                    "amqp://guest:guest@localhost:5672/",
-        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
-        Read: &boot.RabbitMqReadOptions{
-            Exchange: "stock-exchange",
-        },
-        Write: &boot.RabbitMqWriteOptions{
-            Exchange: "stock-exchange",
-        },
+factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
+    URL: "amqps://user:pass@rabbit.example.com/vhost",
+    Exchange: "events",
+    Consume: true,
+    Publish: true,
+    PrefetchCount: 16,
+    FailurePolicy: rabbitmqplatform.FailureReject,
+    DeadLetter: &rabbitmqplatform.DeadLetter{
+        Exchange: "events.dlx",
+        RoutingKey: "events.failed",
     },
-    HTTP: &boot.HTTPOptions{},
+    OperationTimeout: 5 * time.Second,
 })
+if err != nil {
+    return nil, boot.Options{}, err
+}
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
+
+### 政策與限制
+
+省略 `PrefetchCount` 時每個消費者允許一則未確認訊息。預設政策為 `rabbitmqplatform.FailureReject`，`FailureRequeue` 可能無限次重新傳遞無法處理的訊息。使用前先準備 `DeadLetter` 交換器。`TopicPrefix` 套用於發布路由鍵與訂閱綁定，`QueuePrefix` 套用於佇列名稱。
+
+發布器使用持久化訊息、mandatory 路由與 publisher confirm。`OperationTimeout` 預設為 5s。沒有自動重新發布失敗訊息的 `PublisherRetry` 選項。確認遺失後應用程式重試可能造成重複，因此消費者必須具冪等性。
 
 ## 事件發布 {#event-publishing}
 
@@ -826,7 +772,7 @@ spine verify
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
 	"os"
 
 	"github.com/NARUBROWN/spine"
@@ -844,7 +790,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := platform.New()
+	app := spine.New(echoplatform.Option())
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -862,7 +808,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 完成準備後，在各自的 goroutine 中執行消費者與自訂傳輸方式的 `Start`，最後啟動 HTTP 伺服器。若同一個 HTTP 方法的路由路徑存在模糊重疊，啟動會失敗。例如，`/users/:id` 與 `/users/me` 會被判定為重疊路徑。
 
-關閉時，先停止接收 WebSocket 與 HTTP 請求，等待消費者停止後，再依初始化的反向順序呼叫自訂傳輸方式的 `Stop`。最後清理事件發布器的資源。具體實作請參閱 [v0.6.0 啟動與關閉程式碼](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/bootstrap/bootstrap.go)。
+關閉時，先停止接收 WebSocket 與 HTTP 請求，等待消費者停止後，再依初始化的反向順序呼叫自訂傳輸方式的 `Stop`。最後清理事件發布器的資源。具體實作請參閱 [v0.6.5 啟動與關閉程式碼](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/bootstrap/bootstrap.go)。
 
 ## 限制與錯誤
 

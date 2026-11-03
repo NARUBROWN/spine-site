@@ -4,7 +4,7 @@
 
 ## 事前準備
 
-先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI 0.4.0 は JWT 認証のジェネレーターを提供していません。基本プロジェクトを作成した後、以下の認証コードを手動で追加し、`github.com/golang-jwt/jwt/v5` をインストールします。
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI 0.4.2 は JWT 認証のジェネレーターを提供していません。基本プロジェクトを作成した後、以下の認証コードを手動で追加し、`github.com/golang-jwt/jwt/v5` をインストールします。
 
 この例では、認証フローを学ぶために、メモリ上のストア、平文のパスワード比較、コードに固定した JWT の秘密鍵を使用します。サーバーを終了すると登録情報は失われます。実際のサービスに適用する前に、パスワードハッシュと、環境変数で管理する JWT の秘密鍵を使用する必要があります。
 
@@ -327,7 +327,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/login-example/src/controller"
@@ -341,7 +341,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(store.NewUserStore, controller.NewAuthController)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{

@@ -2,7 +2,7 @@
 
 [コントローラー](/ja/learn/tutorial/2-controller)で作成した `src/user` リソースを使い、コンストラクタの登録と依存性注入（DI）を確認します。この手順を終えると、コントローラー、サービス、リポジトリを接続し、循環依存やコンストラクタの登録漏れを確認できるようになります。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
 
 [最初のアプリ](/ja/learn/tutorial/1-project-structure)のプロジェクトを用意し、`my-app` のルートで進めてください。後半のデータベースとラッパー型の例は、基本リソースに自動で含まれるものではなく、個別の拡張です。
 

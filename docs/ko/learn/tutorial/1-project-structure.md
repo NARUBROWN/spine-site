@@ -47,6 +47,9 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 | 키 | 역할 |
@@ -56,7 +59,11 @@ platform = "echo"
 | `composition` | 앱 구성을 검사하고 생성한 코드를 자동으로 등록할 위치 |
 | `port` | 개발 서버에서 사용할 포트 |
 | `layout` | 생성기의 파일 배치 (`legacy` 또는 `layered-v1`) |
-| `platform` | HTTP 플랫폼 (`echo`) |
+| `platform` | HTTP 플랫폼 (`echo` 또는 `none`) |
+| `recipe` | 호환 의존성 조합을 선택하는 레시피 |
+| `websocket_platform` | WebSocket 구현 (`none` 또는 `gorilla`) |
+| `validator` | DTO 검증 구현 (`none` 또는 `playground`) |
+| `event_platforms` | 이름과 종류로 선택한 이벤트 플랫폼 목록 |
 
 ## 실행과 앱 구성 분리
 
@@ -91,7 +98,7 @@ func main() {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -108,7 +115,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -158,7 +165,7 @@ if err := user.Register(app); err != nil {
 
 ## 등록 규칙과 검증
 
-CLI가 등록 코드를 검사할 수 있도록 `BuildApplication() (spine.App, boot.Options, error)` 함수 본문의 최상위에 `app := platform.New()`를 유지하세요. 등록 코드를 조건문, 반복문, 임의의 보조 함수 안으로 옮기지 않습니다. `Register(app)`가 반환한 오류도 확인해 반환해야 합니다.
+CLI가 등록 코드를 검사할 수 있도록 `BuildApplication() (spine.App, boot.Options, error)` 함수 본문의 최상위에 `app := spine.New(echoplatform.Option())`를 유지하세요. 등록 코드를 조건문, 반복문, 임의의 보조 함수 안으로 옮기지 않습니다. `Register(app)`가 반환한 오류도 확인해 반환해야 합니다.
 
 앱 구성을 검사한 뒤 서버를 실행합니다.
 

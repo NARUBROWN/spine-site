@@ -2,7 +2,7 @@
 
 CLIでOpenAPIファイルをエクスポートし、必要に応じてSwaggoのドキュメントとSwagger UIを追加して、ブラウザーからリクエストを送信します。CLIによる静的なOpenAPIのエクスポートと、Swaggoを使用するUIの構成は、それぞれ別に行います。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
 
 [最初のアプリ](/ja/learn/tutorial/1-project-structure)で作成した `example.com/my-app` プロジェクトを使用します。先に[コントローラー](/ja/learn/tutorial/2-controller)の `spine generate resource user` で `src/user` を生成してください。別のモジュールパスを使用した場合は、以下のimportパスの `example.com/my-app` の部分だけをそのモジュールパスに置き換え、末尾の `/docs` は残してください。コマンドはプロジェクトルートで実行します。
 
@@ -102,12 +102,12 @@ import (
 )
 ```
 
-Echo の拡張はプラットフォーム作成時に型付きの `WithEcho` オプションで登録します。既存の `app := platform.New()` を以下のコードに置き換え、その後のコンストラクターとルートの登録は維持してください。`App.Transport` は Spine v0.6.0 で削除されました。
+Echo の拡張はプラットフォーム作成時に型付きの `WithEcho` オプションで登録します。既存の `app := spine.New(echoplatform.Option())` を以下のコードに置き換え、その後のコンストラクターとルートの登録は維持してください。`App.Transport` は Spine v0.6.0 で削除されました。
 
 ```go
-app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
     e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-}))
+})))
 ```
 
 ### 6. 検証と実行

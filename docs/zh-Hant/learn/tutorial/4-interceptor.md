@@ -2,7 +2,7 @@
 
 在使用者查詢請求中加入日誌記錄與示範驗證，並確認請求通過攔截器的順序。攔截器負責多個處理器共用的身分驗證、權限檢查、日誌記錄與交易處理。
 
-本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
 
 ## 從 CLI 專案開始
 
@@ -27,7 +27,7 @@ CLI 會產生 `src/user` 檔案與 `BuildApplication` 中的 `user.Register(app)
 
 ## 攔截器生命週期
 
-Spine v0.6.0 的 HTTP 請求會依序執行全域攔截器、路由比對與輸入繫結、路由攔截器、控制器。攔截器必須實作全部四個生命週期方法。
+Spine v0.6.5 的 HTTP 請求會依序執行全域攔截器、路由比對與輸入繫結、路由攔截器、控制器。攔截器必須實作全部四個生命週期方法。
 
 ```mermaid
 graph TD
@@ -140,7 +140,7 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -159,7 +159,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})
@@ -266,7 +266,7 @@ CORS 設定為允許來自 `https://app.example.com` 的請求。請檢查 `cors
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "example.com/my-app/src/interceptor"
@@ -286,7 +286,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
     app.Interceptor(&interceptor.LoggingInterceptor{})

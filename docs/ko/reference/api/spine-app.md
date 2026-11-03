@@ -1,11 +1,11 @@
 # spine.App
 
-`App`은 생성자, HTTP 라우트, 인터셉터, 이벤트 소비자, WebSocket 핸들러와 사용자 정의 전송 방식을 등록하고 애플리케이션을 실행하는 진입점입니다. 이 참조는 Spine v0.6.0의 공개 API와 부트 옵션을 다룹니다.
+`App`은 생성자, HTTP 라우트, 인터셉터, 이벤트 소비자, WebSocket 핸들러와 사용자 정의 전송 방식을 등록하고 애플리케이션을 실행하는 진입점입니다. 이 참조는 Spine v0.6.5의 공개 API와 부트 옵션을 다룹니다.
 
 ```go
 import (
     "github.com/NARUBROWN/spine"
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
 )
 ```
 
@@ -37,7 +37,7 @@ type App interface {
 func New(options ...Option) App
 ```
 
-`spine.New(options ...Option)`는 HTTP 구현을 선택하지 않는 커널 앱을 만듭니다. HTTP 없는 워커는 `spine.New()`를 사용하고, Echo HTTP 앱은 `platform.New()` 또는 `spine.New(platform.Option())`로 생성합니다.
+`spine.New(options ...Option)`에 필요한 구현을 전달합니다. HTTP 앱은 `spine.New(echoplatform.Option())`를 사용합니다. HTTP 없는 워커는 HTTP 옵션을 생략하고 필요한 이벤트 factory를 등록합니다.
 
 새로운 Spine 애플리케이션 인스턴스를 생성합니다.
 
@@ -48,12 +48,25 @@ func New(options ...Option) App
 **예시**
 
 ```go
-app := platform.New()
+app := spine.New(echoplatform.Option())
 app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
 })
 ```
+
+## 구현 선택 옵션 {#platform-options}
+
+HTTP는 Echo, WebSocket은 독립 Gorilla 구현을 선택해야 합니다. WS 등록이 있으면 HTTP의 업그레이드 지원과 WS factory가 모두 필요합니다. 검증기를 선택하려면 `playground.New()`의 결과를 `spine.WithValidator`로 전달합니다.
+
+| 옵션 | 연결하는 구현 |
+| --- | --- |
+| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `contract/http` |
+| `spine.WithWebSocketAdapter(factory)` | `gorillaplatform.Option()` / `contract/websocket` |
+| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / `contract/event` |
+| `spine.WithValidator(validator)` | playground / `contract/validator` |
+
+[플랫폼과 DTO 검증 선택](/ko/learn/getting-started/platforms)
 
 ## 메서드
 
@@ -231,22 +244,22 @@ app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ### WithEcho
 
 ```go
-platform.WithEcho(fn func(*echo.Echo)) platform.EchoOption
+echoplatform.WithEcho(fn func(*echo.Echo)) echoplatform.EchoOption
 ```
 
-Echo 확장은 플랫폼 생성 시 `*echo.Echo` 타입을 받는 `WithEcho` 옵션으로 등록합니다. 아래 코드로 기존 `app := platform.New()`를 교체하고 기존 생성자와 라우트 등록은 이어서 유지합니다. `App.Transport`는 Spine v0.6.0에서 제거되었습니다.
+Echo 확장은 플랫폼 생성 시 `*echo.Echo` 타입을 받는 `WithEcho` 옵션으로 등록합니다. 아래 코드로 기존 `app := spine.New(echoplatform.Option())`를 교체하고 기존 생성자와 라우트 등록은 이어서 유지합니다. `App.Transport`는 Spine v0.6.0에서 제거되었습니다.
 
 ```go
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "github.com/labstack/echo/v5"
     "github.com/labstack/echo/v5/middleware"
 )
 
-app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
     e.Use(middleware.RequestID())
     e.Static("/static", "public")
-}))
+})))
 ```
 
 플랫폼 옵션으로 추가한 native Echo 경로는 Spine의 HTTP 인터셉터와 응답 staging을 거치지 않으며 CLI의 정적 Spine 라우트 계약에도 포함되지 않습니다. 실제 경로는 별도로 확인하세요.
@@ -488,9 +501,9 @@ WebSocket은 HTTP 서버와 같은 Echo 인스턴스에 경로를 등록하므�
 Validate(opts boot.Options) error
 ```
 
-네트워크 연결을 열거나 서버와 소비자를 시작하지 않고 부트 옵션을 검사합니다. Kafka와 RabbitMQ의 연결 설정, HTTP와 WebSocket의 제한값, 전역 인터셉터의 nil 여부와 범위 등을 확인합니다. `Run`도 시작 전에 같은 검사를 수행합니다.
+네트워크 연결 없이 HTTP와 WebSocket 제한, 이벤트 factory 계약과 공통 정책, 검증기 등록을 검사합니다. `Run`도 같은 사전 검사를 수행합니다. 구체 브로커 `Config`는 플랫폼의 `NewFactory`에서 먼저 검사하므로 생성 오류도 확인해야 합니다.
 
-오류가 있으면 `*boot.ConfigError`를 반환합니다. `Issues`의 각 항목에는 설정 위치인 `Path`, 오류 분류인 `Code`, 설명인 `Message`와 수정 안내인 `Hint`가 있습니다. 유효한 옵션이면 `nil`입니다.
+부트 옵션 오류는 `*boot.ConfigError`의 `Issues`에서 `Path`, `Code`, `Message`, `Hint`를 확인합니다. 이벤트, HTTP, WebSocket factory와 검증기 계약 오류도 반환할 수 있으므로 공개 오류에 `errors.Is`와 `errors.As`를 사용합니다. 유효한 구성이면 `nil`입니다.
 
 `Validate`는 생성자의 의존성을 만들거나 브로커에 접속하지 않습니다. 생성자와 라우트의 적합성, DI 구성, 실제 인프라 연결까지 성공했다고 볼 수는 없습니다.
 
@@ -523,7 +536,7 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
-서버 실행과 외부 인프라 사용 여부를 지정합니다. `HTTP`, `Kafka`, `RabbitMQ`가 `nil`이면 해당 기능을 구성하지 않습니다.
+`boot.Options`는 HTTP 실행과 종료 정책을 지정합니다. HTTP를 실행할 때 `HTTP`를 지정합니다. 이벤트 연결과 역할은 외부 플랫폼 `Config`와 `spine.WithEventAdapter`에서 선택합니다.
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/boot"
@@ -536,8 +549,6 @@ type Options struct {
     Address                string
     EnableGracefulShutdown bool
     ShutdownTimeout        time.Duration
-    Kafka                  *KafkaOptions
-    RabbitMQ               *RabbitMqOptions
     HTTP                   *HTTPOptions
 }
 
@@ -559,8 +570,6 @@ type HTTPOptions struct {
 | `Address` | HTTP 서버가 수신할 주소. 예: `":8080"` |
 | `EnableGracefulShutdown` | `true`이면 HTTP 서버에서 `SIGINT`, `SIGTERM`을 받아 정상 종료. 기본값 `false` |
 | `ShutdownTimeout` | HTTP 종료와 사용자 정의 전송 방식 종료 시 사용할 대기 시간. `0`이면 10초. 음수 불가 |
-| `Kafka` | Kafka 발행과 소비 설정. `nil`이면 비활성화 |
-| `RabbitMQ` | RabbitMQ 발행과 소비 설정. `nil`이면 비활성화 |
 | `HTTP` | HTTP와 WebSocket 설정. `nil`이면 HTTP 서버 비활성화 |
 
 | `HTTPOptions` 필드 | `0` 또는 생략했을 때 | 제약 |
@@ -634,129 +643,66 @@ HTTP: &boot.HTTPOptions{
 
 ## Kafka 설정
 
-### KafkaOptions
+### factory 생성과 등록
 
-`Read`와 `Write`는 독립적입니다. 하나라도 활성화하면 `Brokers`가 필요하며, `Read`를 사용하면 `GroupID`도 필요합니다. 별도 전송 설정이 없으면 TLS 1.2 이상을 적용합니다.
-
-```go
-type KafkaOptions struct {
-    // Kafka 브로커 주소 목록
-    Brokers []string
-
-    // 사용자 정의 TLS, 리더 Dialer, 라이터 Transport
-    TLS *tls.Config
-    Dialer *kafka.Dialer
-    Transport *kafka.Transport
-
-    // 격리된 로컬 환경의 평문 연결 명시적 허용
-    AllowInsecureTransport bool
-
-    // 리더 오류와 ACK/NACK 실패 뒤 재연결 정책
-    ConsumerRetry ConsumerRetryOptions
-
-    // 이벤트 소비 설정
-    // nil이면 Kafka 소비자를 활성화하지 않음
-    Read *KafkaReadOptions
-
-    // 이벤트 발행 설정
-    // nil이면 Kafka로 이벤트를 발행하지 않음
-    Write *KafkaWriteOptions
-}
-
-type KafkaReadOptions struct {
-    // Kafka 소비자 그룹 ID
-    GroupID string
-}
-
-type KafkaWriteOptions struct {
-    // 이벤트 이름 앞에 붙일 토픽 접두사
-    TopicPrefix string
-}
-```
-
-### 예시
+`kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`을 import합니다. `Config.Consume`과 `Config.Publish`로 역할을 선택하며 `Brokers`가 필요합니다. 소비자는 `GroupID`도 지정합니다. 다음 코드는 `BuildApplication` 안에서 사용하며 `echoplatform`, `spine`, `boot`, `time`도 import합니다.
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    Kafka: &boot.KafkaOptions{
-        Brokers: []string{"localhost:9092"},
-        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
-        Read: &boot.KafkaReadOptions{
-            GroupID: "my-consumer-group",
-        },
-        Write: &boot.KafkaWriteOptions{
-            TopicPrefix: "myapp.",
-        },
-    },
-    HTTP: &boot.HTTPOptions{},
+factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
+    Brokers: []string{"kafka.example.com:9093"},
+    Consume: true,
+    Publish: true,
+    GroupID: "orders",
+    TopicPrefix: "prod.",
 })
+if err != nil {
+    return nil, boot.Options{}, err
+}
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
+    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+    spine.WithEventSettlementTimeout(5 * time.Second),
+))
 ```
+
+### 정책과 제약
+
+Kafka 플랫폼은 별도 설정이 없으면 TLS 1.2 이상을 적용합니다. `TLS`, `Dialer`, `Transport`로 CA, mTLS, SASL을 설정합니다. `AllowInsecureTransport: true`는 격리된 로컬 평문 연결에만 사용하며 명시적 TLS와 함께 지정할 수 없습니다. `NewFactory`는 설정만 검사합니다. `Prepare`와 `Run`은 등록된 소비자의 reader를 준비할 때 브로커와 토픽을 확인합니다. Kafka 발행 전용 앱은 브로커 연결 없이 기동할 수 있으므로 실제 발행으로 연결과 전달을 별도로 확인하세요.
+
+`Config.TopicPrefix`는 발행 이름과 소비 구독 모두에 접두사를 붙입니다. 양쪽 factory에 `prod.`를 설정하면 앱에는 `order.created`를 등록하고 브로커 토픽은 `prod.order.created`로 준비합니다. 접두사에는 구분자를 직접 포함합니다.
+
+`spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{...})`는 리더와 ACK/NACK 실패 뒤 재연결을 제어합니다. 기본값은 최초 100ms, 최대 5초, 배수 2, 지터 0.2, `MaxAttempts: 0`의 무제한 전송 재시도입니다. 핸들러 재시도 횟수나 DLQ 정책은 지정하지 않습니다. `WithEventSettlementTimeout`의 기본 ACK/NACK 제한은 5초입니다. Kafka의 처리 실패는 뒤의 offset 커밋으로 건너뛰지 않으며 영구 실패 메시지가 파티션을 막을 수 있습니다.
 
 ## RabbitMQ 설정
 
-### RabbitMqOptions
+### factory 생성과 등록
 
-`Read`와 `Write`는 독립적입니다. 활성화한 역할마다 `Exchange`를 지정합니다. `amqps://` URL을 기본으로 요구하며, 평문 `amqp://`는 격리된 개발 환경에서만 명시적으로 허용합니다.
-
-```go
-type RabbitMqOptions struct {
-    // RabbitMQ AMQP 연결 문자열
-    // 예: amqp://guest:guest@localhost:5672/
-    URL string
-
-    // 로컬 amqp:// 연결 명시적 허용
-    AllowInsecureTransport bool
-
-    ConsumerRetry  ConsumerRetryOptions
-    PublisherRetry PublisherRetryOptions
-
-    // 이벤트 소비 설정
-    // nil이면 RabbitMQ 소비자를 활성화하지 않음
-    Read *RabbitMqReadOptions
-
-    // 이벤트 발행 설정
-    // nil이면 RabbitMQ로 이벤트를 발행하지 않음
-    Write *RabbitMqWriteOptions
-}
-
-type RabbitMqReadOptions struct {
-    // 큐를 바인딩할 교환기 이름
-    Exchange string
-    PrefetchCount int
-    FailurePolicy RabbitMqFailurePolicy
-    DeadLetter *RabbitMqDeadLetterOptions
-
-    // Deprecated: FailurePolicy 사용 권장
-    RequeueOnError bool
-}
-
-type RabbitMqWriteOptions struct {
-    // 이벤트를 발행할 교환기 이름
-    Exchange string
-}
-```
-
-실패 정책과 재시도 기본값은 [보안 설정](/ko/reference/security-configuration#rabbitmq)을 참고하십시오. `RequeueOnError`는 이전 버전과의 호환용이며 새 코드에서는 `FailurePolicy`를 사용합니다.
-
-### 예시
+`rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"`을 import합니다. 공통 `Config.Exchange`와 `Consume`, `Publish`를 설정합니다. 기본 URL은 `amqps://`이며 로컬 `amqp://`는 `AllowInsecureTransport: true`로 명시적으로 허용합니다. 다음 코드는 `BuildApplication` 안에서 사용합니다.
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    RabbitMQ: &boot.RabbitMqOptions{
-        URL:                    "amqp://guest:guest@localhost:5672/",
-        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
-        Read: &boot.RabbitMqReadOptions{
-            Exchange: "stock-exchange",
-        },
-        Write: &boot.RabbitMqWriteOptions{
-            Exchange: "stock-exchange",
-        },
+factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
+    URL: "amqps://user:pass@rabbit.example.com/vhost",
+    Exchange: "events",
+    Consume: true,
+    Publish: true,
+    PrefetchCount: 16,
+    FailurePolicy: rabbitmqplatform.FailureReject,
+    DeadLetter: &rabbitmqplatform.DeadLetter{
+        Exchange: "events.dlx",
+        RoutingKey: "events.failed",
     },
-    HTTP: &boot.HTTPOptions{},
+    OperationTimeout: 5 * time.Second,
 })
+if err != nil {
+    return nil, boot.Options{}, err
+}
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
+
+### 정책과 제약
+
+`PrefetchCount`를 생략하면 소비자당 미확인 메시지는 1개입니다. 실패 정책의 기본값은 `rabbitmqplatform.FailureReject`이며 `FailureRequeue`는 처리 불가능한 메시지를 무기한 다시 전달할 수 있습니다. `DeadLetter`에 지정할 교환기는 먼저 준비해야 합니다. `TopicPrefix`는 발행 라우팅 키와 구독 바인딩에 적용하고 `QueuePrefix`는 큐 이름에 적용합니다.
+
+발행기는 영속 메시지, mandatory 라우팅과 publisher confirm을 사용합니다. `OperationTimeout` 기본값은 5초입니다. 실패한 메시지를 자동 재발행하는 `PublisherRetry` 옵션은 없습니다. 확인 유실 뒤 앱이 재시도하면 중복이 생길 수 있으므로 소비자는 멱등하게 구현합니다.
 
 ## 이벤트 발행 {#event-publishing}
 
@@ -826,7 +772,7 @@ spine verify
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
 	"os"
 
 	"github.com/NARUBROWN/spine"
@@ -844,7 +790,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := platform.New()
+	app := spine.New(echoplatform.Option())
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -862,7 +808,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 이 준비가 끝난 뒤 소비자와 사용자 정의 전송 방식의 `Start`를 별도 고루틴에서 실행하고, 마지막에 HTTP 서버를 시작합니다. HTTP 라우트는 같은 메서드에서 경로가 모호하게 겹치면 시작에 실패합니다. 예를 들어 `/users/:id`와 `/users/me`는 겹치는 경로로 검사합니다.
 
-종료 시에는 WebSocket과 HTTP로 들어오는 요청을 먼저 닫고, 소비자가 멈출 때까지 기다린 뒤 사용자 정의 전송 방식의 `Stop`을 초기화 역순으로 호출합니다. 이후 이벤트 발행기의 자원을 정리합니다. 구체적인 구현은 [v0.6.0 시작 및 종료 코드](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/bootstrap/bootstrap.go)를 참고하십시오.
+종료 시에는 WebSocket과 HTTP로 들어오는 요청을 먼저 닫고, 소비자가 멈출 때까지 기다린 뒤 사용자 정의 전송 방식의 `Stop`을 초기화 역순으로 호출합니다. 이후 이벤트 발행기의 자원을 정리합니다. 구체적인 구현은 [v0.6.5 시작 및 종료 코드](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/bootstrap/bootstrap.go)를 참고하십시오.
 
 ## 제약과 오류
 

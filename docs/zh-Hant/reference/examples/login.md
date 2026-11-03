@@ -4,7 +4,7 @@
 
 ## 開始前的準備
 
-請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。CLI 0.4.0 未提供 JWT 驗證產生器。建立基本專案後，請手動加入以下驗證程式碼，並安裝 `github.com/golang-jwt/jwt/v5`。
+請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。CLI 0.4.2 未提供 JWT 驗證產生器。建立基本專案後，請手動加入以下驗證程式碼，並安裝 `github.com/golang-jwt/jwt/v5`。
 
 此範例為了說明驗證流程，使用記憶體儲存庫、明文密碼比對，以及寫死在程式碼中的 JWT 密鑰。伺服器結束後，註冊資訊就會消失。套用於實際服務前，必須使用密碼雜湊，並透過環境變數管理 JWT 密鑰。
 
@@ -327,7 +327,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/login-example/src/controller"
@@ -341,7 +341,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(store.NewUserStore, controller.NewAuthController)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{

@@ -1,6 +1,6 @@
 ---
 layout: home
-description: "用熟悉的开发方式构建更快的服务器。通过控制器、服务、构造函数注入和拦截器组织 Go 应用，并查看内部实验室测得的吞吐量和内存使用量。"
+description: "Spine 是提供 HTTP、WebSocket、事件和 DTO 验证公共契约的 Go 后端框架。通过 CLI 选择独立实现、创建项目并检查应用执行契约。"
 
 hero:
   name: "Spine"

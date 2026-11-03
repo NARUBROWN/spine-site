@@ -5,7 +5,7 @@ import { localizeMarkdownUi, themeUi } from './localized-ui'
 // https://vitepress.dev/reference/site-config
 export default withMermaid(defineConfig({
     title: "Spine",
-    description: "Spine is a web framework that lets you register constructors, routes, and interceptors in Go code. Use the CLI to create a project, validate the app configuration, and start HTTP and message processing.",
+    description: "Spine is a Go backend framework with public HTTP, WebSocket, event, and DTO validation contracts. Use the CLI to select independent implementations, create projects, and verify application contracts.",
     head: [
         ['link', { rel: 'icon', href: '/logo.png' }],
         ['meta', { property: 'og:image', content: 'https://spine.na2ru2.me/og-image.png' }],
@@ -30,7 +30,7 @@ export default withMermaid(defineConfig({
             label: 'English',
             lang: 'en',
             link: '/en/',
-            description: 'Spine is a web framework that lets you register constructors, routes, and interceptors in Go code. Use the CLI to create a project, validate the app configuration, and start HTTP and message processing.',
+            description: 'Spine is a Go backend framework with public HTTP, WebSocket, event, and DTO validation contracts. Use the CLI to select independent implementations, create projects, and verify application contracts.',
             themeConfig: {
                 ...themeUi('en'),
                 outlineTitle: 'On this page',
@@ -51,7 +51,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: 'Introduction', link: '/en/learn/getting-started/intro' },
                                 { text: 'Installation', link: '/en/learn/getting-started/installation' },
-                                { text: 'First App', link: '/en/learn/getting-started/first-app' }
+                                { text: 'First App', link: '/en/learn/getting-started/first-app' },
+                                { text: 'Select platforms and DTO validation', link: '/en/learn/getting-started/platforms' }
                             ]
                         },
                         {
@@ -121,7 +122,7 @@ export default withMermaid(defineConfig({
             label: '한국어',
             lang: 'ko',
             link: '/ko/',
-            description: 'Spine은 생성자, 라우트, 인터셉터를 Go 코드로 등록하는 웹 프레임워크입니다. CLI로 프로젝트를 만들고 앱 구성을 검증한 뒤 HTTP와 메시지 처리를 실행합니다.',
+            description: 'Spine은 HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 제공하는 Go 백엔드 프레임워크입니다. CLI로 독립 구현을 선택해 프로젝트를 만들고 앱의 실행 계약을 검사합니다.',
             themeConfig: {
                 ...themeUi('ko'),
                 siteTitle: false,
@@ -146,7 +147,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '소개', link: '/ko/learn/getting-started/intro' },
                                 { text: '설치', link: '/ko/learn/getting-started/installation' },
-                                { text: '첫 번째 앱', link: '/ko/learn/getting-started/first-app' }
+                                { text: '첫 번째 앱', link: '/ko/learn/getting-started/first-app' },
+                                { text: '플랫폼과 DTO 검증 선택', link: '/ko/learn/getting-started/platforms' }
                             ]
                         },
                         {
@@ -217,7 +219,7 @@ export default withMermaid(defineConfig({
             label: '日本語',
             lang: 'ja',
             link: '/ja/',
-            description: 'Spineは、コンストラクター、ルート、インターセプターをGoコードで登録するWebフレームワークです。CLIでプロジェクトを作成し、アプリの構成を検証してからHTTPとメッセージの処理を実行します。',
+            description: 'SpineはHTTP、WebSocket、イベント、DTO検証の公開契約を提供するGoバックエンドフレームワークです。CLIで独立実装を選び、プロジェクトの生成とアプリの実行契約の検査を行います。',
             themeConfig: {
                 ...themeUi('ja'),
                 siteTitle: false,
@@ -242,7 +244,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '紹介', link: '/ja/learn/getting-started/intro' },
                                 { text: 'インストール', link: '/ja/learn/getting-started/installation' },
-                                { text: '最初のアプリ', link: '/ja/learn/getting-started/first-app' }
+                                { text: '最初のアプリ', link: '/ja/learn/getting-started/first-app' },
+                                { text: 'プラットフォームとDTO検証の選択', link: '/ja/learn/getting-started/platforms' }
                             ]
                         },
                         {
@@ -312,7 +315,7 @@ export default withMermaid(defineConfig({
             label: '简体中文',
             lang: 'zh-CN',
             link: '/zh-Hans/',
-            description: 'Spine 是一个通过 Go 代码注册构造函数、路由和拦截器的 Web 框架。使用 CLI 创建项目、验证应用配置，然后启动 HTTP 和消息处理。',
+            description: 'Spine 是提供 HTTP、WebSocket、事件和 DTO 验证公共契约的 Go 后端框架。通过 CLI 选择独立实现、创建项目并检查应用执行契约。',
             themeConfig: {
                 ...themeUi('zh-Hans'),
                 siteTitle: false,
@@ -329,7 +332,8 @@ export default withMermaid(defineConfig({
                         { text: '快速开始', items: [
                             { text: '简介', link: '/zh-Hans/learn/getting-started/intro' },
                             { text: '安装', link: '/zh-Hans/learn/getting-started/installation' },
-                            { text: '第一个应用', link: '/zh-Hans/learn/getting-started/first-app' }
+                            { text: '第一个应用', link: '/zh-Hans/learn/getting-started/first-app' },
+                            { text: '选择平台与 DTO 验证', link: '/zh-Hans/learn/getting-started/platforms' }
                         ] },
                         { text: '教程', items: [
                             { text: '1. 项目结构', link: '/zh-Hans/learn/tutorial/1-project-structure' },
@@ -380,7 +384,7 @@ export default withMermaid(defineConfig({
             label: '繁體中文',
             lang: 'zh-TW',
             link: '/zh-Hant/',
-            description: 'Spine 是一個透過 Go 程式碼註冊建構子、路由和攔截器的 Web 框架。使用 CLI 建立專案、驗證應用程式設定，然後啟動 HTTP 和訊息處理。',
+            description: 'Spine 是提供 HTTP、WebSocket、事件與 DTO 驗證公開契約的 Go 後端框架。透過 CLI 選擇獨立實作、建立專案並檢查應用程式執行契約。',
             themeConfig: {
                 ...themeUi('zh-Hant'),
                 siteTitle: false,
@@ -397,7 +401,8 @@ export default withMermaid(defineConfig({
                         { text: '快速開始', items: [
                             { text: '簡介', link: '/zh-Hant/learn/getting-started/intro' },
                             { text: '安裝', link: '/zh-Hant/learn/getting-started/installation' },
-                            { text: '第一個應用程式', link: '/zh-Hant/learn/getting-started/first-app' }
+                            { text: '第一個應用程式', link: '/zh-Hant/learn/getting-started/first-app' },
+                            { text: '選擇平台與 DTO 驗證', link: '/zh-Hant/learn/getting-started/platforms' }
                         ] },
                         { text: '教學', items: [
                             { text: '1. 專案結構', link: '/zh-Hant/learn/tutorial/1-project-structure' },

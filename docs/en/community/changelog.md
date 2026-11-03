@@ -1,6 +1,12 @@
 # Current releases
 
-The examples were verified on 2026-11-02 with Spine v0.6.0 and CLI v0.4.0. General installation uses `@latest`; check `spine version` and the generated `go.mod` for the actual CLI and dependency versions.
+Use `@latest` for general installation. The current documentation targets Spine v0.6.5 and CLI v0.4.2. Check the installed CLI with `spine version` and the actual dependencies in the generated `go.mod`.
+
+## Spine v0.6.5 / CLI v0.4.2
+
+Public HTTP, WebSocket, event, and DTO validation contracts now live under `contract/`. Select independent platforms through `spine.New(...)`; Kafka/RabbitMQ boot options were removed. CLI 0.4.2 generates implementation selections and the v0.6.5 recipe.
+
+[Select platforms and DTO validation](/en/learn/getting-started/platforms)
 
 ## Spine v0.6.0
 

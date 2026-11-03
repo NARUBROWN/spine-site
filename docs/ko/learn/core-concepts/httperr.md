@@ -2,7 +2,7 @@
 
 `httperr`는 HTTP 상태 코드와 클라이언트에게 전달할 오류 메시지를 담는 패키지입니다. 컨트롤러에서 `httperr.NotFound("사용자를 찾을 수 없습니다")`처럼 오류를 반환하면 Spine이 상태 코드와 JSON 오류 응답으로 변환합니다. 컨트롤러가 Echo 등의 응답 객체를 직접 다룰 필요는 없습니다.
 
-이 페이지는 Spine v0.6.0의 `github.com/NARUBROWN/spine/pkg/httperr`를 기준으로 설명합니다.
+이 페이지는 Spine v0.6.5의 `github.com/NARUBROWN/spine/pkg/httperr`를 기준으로 설명합니다.
 
 ## CLI 프로젝트에서 사용하기
 
@@ -78,7 +78,7 @@ func (e *HTTPError) Error() string {
 
 ## 기본 헬퍼 함수
 
-Spine v0.6.0은 다음 네 가지 헬퍼를 제공합니다. 모두 `msg string`을 받아 `error`를 반환합니다.
+Spine v0.6.5는 다음 네 가지 헬퍼를 제공합니다. 모두 `msg string`을 받아 `error`를 반환합니다.
 
 | 함수 | 상태 코드 | 사용할 상황 |
 | --- | --- | --- |
@@ -301,10 +301,11 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 | --- | --- |
 | 일치하는 라우트 없음 | 404 오류 응답 |
 | 실행 중 `HTTPError` 발생 | 지정된 오류 상태 코드와 메시지로 응답 |
+| 선택한 검증기의 DTO 규칙 위반 (`validation.Error`) | 400, `message`와 `fields` 응답 |
 | 일반 실행 오류 발생 | 500, `"Internal server error"` 응답 |
 | 요청 본문 크기 제한 초과 | 413, `"Request entity too large"` 응답 |
 | 실제 응답이 이미 기록됨 | 추가 오류 응답을 쓰지 않아 이중 응답 방지 |
 
-Spine v0.6.0은 응답 전 처리까지 마친 뒤 준비한 응답을 실제 전송 계층에 반영합니다. `BeforeResponse`에서 오류가 발생하면 준비 중이던 성공 응답이 오류 응답으로 바뀔 수 있습니다. `AfterCompletion`은 응답 처리 뒤에 실행되므로, 이 단계에서는 새 오류 응답을 작성하려 하기보다 오류와 전송 결과를 기록하세요.
+Spine v0.6.5는 응답 전 처리까지 마친 뒤 준비한 응답을 실제 전송 계층에 반영합니다. `BeforeResponse`에서 오류가 발생하면 준비 중이던 성공 응답이 오류 응답으로 바뀔 수 있습니다. `AfterCompletion`은 응답 처리 뒤에 실행되므로, 이 단계에서는 새 오류 응답을 작성하려 하기보다 오류와 전송 결과를 기록하세요.
 
 오류는 Go의 반환값으로 전달하세요. `panic`은 정상적인 입력 검증이나 업무 실패를 표현하는 수단으로 사용하지 않습니다. 인터셉터의 중단과 마무리 처리는 [인터셉터 튜토리얼](/ko/learn/tutorial/4-interceptor)을 참고하세요.

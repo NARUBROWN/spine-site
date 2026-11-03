@@ -2,7 +2,7 @@
 
 ユーザーの取得に失敗した原因に応じてHTTP 400または404を返し、予期しないエラーの内部情報をレスポンスに公開しないようにします。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
 
 [最初のアプリ](/ja/learn/tutorial/1-project-structure)と[コントローラー](/ja/learn/tutorial/2-controller)のCLIプロジェクトを使用します。`spine generate resource user` で生成した `src/user` が必要です。以下では、GETハンドラーを読み取り専用のメモリ内検索に置き換えるため、データベースのチュートリアルとは別に適用してください。ドメインエラーとHTTPステータスを対応付けるコードは手動で作成します。
 

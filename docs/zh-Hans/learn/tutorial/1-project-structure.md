@@ -47,6 +47,9 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 | 键 | 作用 |
@@ -56,7 +59,11 @@ platform = "echo"
 | `composition` | 检查应用配置并自动注册生成代码的位置 |
 | `port` | 开发服务器使用的端口 |
 | `layout` | 生成器文件布局（`legacy` 或 `layered-v1`） |
-| `platform` | HTTP 平台（`echo`） |
+| `platform` | HTTP 平台（`echo` 或 `none`） |
+| `recipe` | 选择兼容依赖组合的配方 |
+| `websocket_platform` | WebSocket 实现（`none` 或 `gorilla`） |
+| `validator` | DTO 验证器（`none` 或 `playground`） |
+| `event_platforms` | 选定的事件平台名称和类型 |
 
 ## 分离运行入口与应用配置
 
@@ -91,7 +98,7 @@ func main() {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -108,7 +115,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -158,7 +165,7 @@ if err := user.Register(app); err != nil {
 
 ## 注册规则与验证
 
-为使 CLI 能够检查注册代码，请将 `app := platform.New()` 保留在 `BuildApplication() (spine.App, boot.Options, error)` 函数体的顶层。不要将注册代码移入条件语句、循环或任意辅助函数中。还必须检查并返回 `Register(app)` 返回的错误。
+为使 CLI 能够检查注册代码，请将 `app := spine.New(echoplatform.Option())` 保留在 `BuildApplication() (spine.App, boot.Options, error)` 函数体的顶层。不要将注册代码移入条件语句、循环或任意辅助函数中。还必须检查并返回 `Register(app)` 返回的错误。
 
 检查应用配置后，再运行服务器。
 

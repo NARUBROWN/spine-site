@@ -4,7 +4,7 @@ Create an order HTTP service and a stock consumer service, and pass `order.creat
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.4.0 provides a consumer scaffold with a defined message type. Prepare the Kafka broker and transport configuration separately.
+Complete [CLI installation](/en/learn/getting-started/installation) first. Use CLI 0.4.2 to generate the Kafka platform and consumer skeleton, then assemble the publisher service and HTTP-less worker with the code below.
 
 To test message delivery, you need a Kafka broker at `localhost:9092` and an `order.created` topic. This example uses a plaintext connection in an isolated local environment. The stock consumer logs events; it does not change actual stock quantities.
 
@@ -15,15 +15,15 @@ Create a working directory and preview the files to be generated.
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --dry-run
 ```
 
 Review the preview, then create both apps. Run subsequent commands from `spine-msa/` unless instructed otherwise.
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app
-spine new stock-app --layout legacy --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka
 ```
 
 ## 2. Generate the Stock Consumer Scaffold
@@ -48,28 +48,34 @@ After adding the shared event and order controller and replacing the generated c
 spine-msa/
 ├── order-app/
 │   ├── go.mod
-├── go.sum
+│   ├── go.sum
 │   ├── main.go
 │   ├── spine.toml
 │   ├── internal/application/
 │   │   ├── application.go
-│   │   └── application_test.go
+│   │   ├── application_test.go
+│   │   ├── platform_config.go
+│   │   └── platform_config_test.go
 │   └── src/
 │       ├── events/order_created.go
 │       └── controller/order_controller.go
 └── stock-app/
     ├── go.mod
-├── go.sum
+    ├── go.sum
     ├── main.go
     ├── spine.toml
     ├── internal/application/
     │   ├── application.go
-    │   └── application_test.go
+    │   ├── application_test.go
+    │   ├── platform_config.go
+    │   └── platform_config_test.go
     └── src/consumer/order/
         ├── module.go
         ├── order_handler.go
         └── order_message.go
 ```
+
+Keep the generated `platform_config.go` and both test files. The BuildApplication examples below use the generated `loadKafkaConfig` to validate environment settings, then select publishing only for orders and consumption only for the stock worker. Supply broker and group settings in each runtime terminal.
 
 ## 3. Define the Shared Event
 
@@ -138,16 +144,27 @@ func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Respon
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/order-app/src/controller"
     "github.com/NARUBROWN/spine"
+    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    config, err := loadKafkaConfig("SPINE_KAFKA_")
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    config.Consume = false
+    config.Publish = true
+    factory, err := kafkaplatform.NewFactory(config)
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
     app.Constructor(controller.NewOrderController)
     app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
 
@@ -156,11 +173,6 @@ func BuildApplication() (spine.App, boot.Options, error) {
         EnableGracefulShutdown: true,
         ShutdownTimeout: 10 * time.Second,
         HTTP: &boot.HTTPOptions{},
-        Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
-            AllowInsecureTransport: true,
-            Write: &boot.KafkaWriteOptions{TopicPrefix: ""},
-        },
     }, nil
 }
 ```
@@ -220,27 +232,32 @@ func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event Orde
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/stock-app/src/consumer/order"
     "github.com/NARUBROWN/spine"
+    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    config, err := loadKafkaConfig("SPINE_KAFKA_")
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    config.Consume = true
+    config.Publish = false
+    factory, err := kafkaplatform.NewFactory(config)
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app := spine.New(spine.WithEventAdapter("kafka", factory))
     if err := order.Register(app); err != nil {
         return nil, boot.Options{}, err
     }
     return app, boot.Options{
         EnableGracefulShutdown: true,
         ShutdownTimeout: 10 * time.Second,
-        Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
-            AllowInsecureTransport: true,
-            Read: &boot.KafkaReadOptions{GroupID: "stock-service"},
-        },
     }, nil
 }
 ```
@@ -269,7 +286,7 @@ spine verify --root order-app
 spine verify --root stock-app
 ```
 
-Each service uses a local plaintext connection, so each produces one `INSECURE_TRANSPORT_ENABLED` warning. The default checks pass, but they fail with `--warnings-as-errors`.
+The example factories explicitly allow local plaintext connections. Static CLI contract checks do not execute factory configuration or prove transport security and broker readiness.
 
 `contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. Check broker connectivity and actual message delivery in the next step.
 
@@ -280,13 +297,15 @@ Make sure Kafka is running at `localhost:9092` and the `order.created` topic exi
 Run the stock service in the first terminal.
 
 ```sh
-spine run --root stock-app
+SPINE_KAFKA_BROKERS=localhost:9092 SPINE_KAFKA_GROUP_ID=stock-service \
+SPINE_KAFKA_ALLOW_INSECURE=true spine run --root stock-app
 ```
 
 Run the order service in the second terminal.
 
 ```sh
-spine run --root order-app
+SPINE_KAFKA_BROKERS=localhost:9092 SPINE_KAFKA_GROUP_ID=order-service \
+SPINE_KAFKA_ALLOW_INSECURE=true spine run --root order-app
 ```
 
 Send a create-order request in the third terminal.
@@ -303,13 +322,13 @@ Check that the response returns HTTP 202 with the body `accepted`. Then look for
 
 Use `AllowInsecureTransport: true` only with an isolated local plaintext broker. In production, remove this option and configure TLS/SASL and the broker addresses. The default transport uses TLS 1.2 or later. If you supply your own transport configuration, protect both reads and writes.
 
-`TopicPrefix` prepends the string directly to the topic name. If the publisher configuration uses `prod.`, the consumer's registered topic must also be `prod.order.created`. This example uses `order.created` without a prefix on both sides. Use the same configuration for checks and execution.
+`Config.TopicPrefix` prefixes both published names and consumer subscriptions. With `prod.` in both factories, register `order.created` in the app and provision `prod.order.created` in the broker. Include the separator in the prefix.
 
 ### Duplicate Handling and Failing Messages
 
 Kafka delivers messages at least once, so the same event can arrive again. You need an event ID that stays the same when the event is resent, along with persistent deduplication. This example's deduplication works only within the same process. Implement actual stock changes and persistent deduplication in the same database transaction.
 
-`ConsumerRetry` controls reader and transport reconfiguration; it does not limit retry attempts for the business handler. A message that keeps failing can block a partition. Messages are not automatically skipped or moved to a DLQ.
+`spine.WithEventConsumerRetry` controls reader and transport reconfiguration; it does not limit retry attempts for the business handler. A message that keeps failing can block a partition. Messages are not automatically skipped or moved to a DLQ.
 
 ### Database Changes and Event Publishing
 

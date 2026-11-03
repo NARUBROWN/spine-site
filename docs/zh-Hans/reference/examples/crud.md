@@ -4,7 +4,7 @@
 
 ## 开始前的准备
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。本示例在使用 CLI 0.4.0 创建的基础应用中手动添加完整 CRUD 代码。CLI 的 `resource` 提供 GET 骨架，`slice --storage memory` 提供创建和查询骨架。修改和删除功能包含在下方代码中。
+请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。本示例在使用 CLI 0.4.2 创建的基础应用中手动添加完整 CRUD 代码。CLI 的 `resource` 提供 GET 骨架，`slice --storage memory` 提供创建和查询骨架。修改和删除功能包含在下方代码中。
 
 服务器进程结束后，保存的用户数据会消失。
 
@@ -443,7 +443,7 @@ func toHTTPError(err error) error {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/crud-example/src/controller"
@@ -456,7 +456,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,

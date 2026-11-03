@@ -2,7 +2,7 @@
 
 Export an OpenAPI file with the CLI, then add Swaggo documentation and Swagger UI if you want to send requests from a browser. The CLI's static OpenAPI export and the Swaggo UI setup are separate workflows.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
 
 Use the `example.com/my-app` project from [Your first app](/en/learn/tutorial/1-project-structure). First generate `src/user` with `spine generate resource user` from [Controllers](/en/learn/tutorial/2-controller). If you used a different module path, replace only the `example.com/my-app` prefix in the import path below with your module path and keep the `/docs` suffix. Run commands from the project root.
 
@@ -102,12 +102,12 @@ import (
 )
 ```
 
-Register Echo extensions through the typed `WithEcho` option when constructing the platform. Replace the existing `app := platform.New()` with the code below and keep the constructor and route registrations that follow. `App.Transport` was removed in Spine v0.6.0.
+Register Echo extensions through the typed `WithEcho` option when constructing the platform. Replace the existing `app := spine.New(echoplatform.Option())` with the code below and keep the constructor and route registrations that follow. `App.Transport` was removed in Spine v0.6.0.
 
 ```go
-app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
     e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-}))
+})))
 ```
 
 ### 6. Verify and run

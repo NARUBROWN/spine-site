@@ -2,13 +2,13 @@
 
 将一次 HTTP 请求中执行的多个 INSERT 合并到同一个事务。编写拦截器，在请求成功时提交，中途失败时连同之前的 INSERT 一并回滚。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
 
 在[数据库](/zh-Hans/learn/tutorial/5-database)教程的 `example.com/my-app` 项目上继续操作。请先准备 `src/database`、`src/entity`、`src/user` 和迁移。以下事务代码需要手动添加，CLI 不提供 Bun 事务或 outbox 生成器。
 
 ## 执行顺序
 
-在 Spine v0.6.0 中，在 `PreHandle` 中启动事务，并在 `BeforeResponse` 中提交或回滚。响应序列化、状态码和 Cookie 验证、事件发布等响应准备过程中发生的错误，也会触发回滚。`AfterCompletion` 用于在完成后记录日志或清理资源。
+在 Spine v0.6.5 中，在 `PreHandle` 中启动事务，并在 `BeforeResponse` 中提交或回滚。响应序列化、状态码和 Cookie 验证、事件发布等响应准备过程中发生的错误，也会触发回滚。`AfterCompletion` 用于在完成后记录日志或清理资源。
 
 ```text
 PreHandle: 启动事务

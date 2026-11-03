@@ -2,7 +2,7 @@
 
 CLI로 OpenAPI 파일을 내보내고, 필요하면 Swaggo 문서와 Swagger UI를 추가해 브라우저에서 요청을 보냅니다. CLI의 정적 OpenAPI 내보내기와 Swaggo를 사용하는 UI 구성은 각각 진행합니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
 [첫 번째 앱](/ko/learn/tutorial/1-project-structure)에서 만든 `example.com/my-app` 프로젝트를 사용합니다. [컨트롤러](/ko/learn/tutorial/2-controller)의 `spine generate resource user`로 `src/user`를 먼저 생성하세요. 다른 모듈 경로를 사용했다면 아래 import 경로의 `example.com/my-app` 부분만 해당 모듈 경로로 바꾸고 `/docs` 접미사는 유지합니다. 명령은 프로젝트 루트에서 실행합니다.
 
@@ -102,12 +102,12 @@ import (
 )
 ```
 
-Echo 확장은 플랫폼 생성 시 `*echo.Echo` 타입을 받는 `WithEcho` 옵션으로 등록합니다. 아래 코드로 기존 `app := platform.New()`를 교체하고 기존 생성자와 라우트 등록은 이어서 유지합니다. `App.Transport`는 Spine v0.6.0에서 제거되었습니다.
+Echo 확장은 플랫폼 생성 시 `*echo.Echo` 타입을 받는 `WithEcho` 옵션으로 등록합니다. 아래 코드로 기존 `app := spine.New(echoplatform.Option())`를 교체하고 기존 생성자와 라우트 등록은 이어서 유지합니다. `App.Transport`는 Spine v0.6.0에서 제거되었습니다.
 
 ```go
-app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
     e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-}))
+})))
 ```
 
 ### 6. 검증하고 실행

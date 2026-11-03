@@ -4,7 +4,7 @@
 
 ## Versions and sources
 
-From Spine `v0.6.0`, CLI `new` is the official starting point. Install the CLI with `@latest`; its bundled recipe selects compatible Spine, Echo platform, and Echo versions. Read the generated go.mod for the selected versions. The examples were verified on 2026-11-02 with CLI v0.4.0, Spine v0.6.0, Echo platform v0.1.0, and Echo v5.4.4. Check `spine version`, `spine schema --json`, and `spine capabilities --json`; source and tests are authoritative when prose differs.
+Use `go install github.com/NARUBROWN/spine-cli/cmd/spine@latest` for general installation and CLI upgrades. The current baseline is CLI v0.4.2 with the `platform-contracts-v0.6.5` recipe: Spine v0.6.5 and independent platform/validator v0.1.0 tags. Read the generated go.mod for actual selections. Check `spine version`, `spine schema --json`, and `spine capabilities --json`; source and tests are authoritative when prose differs. Go 1.25.5+ is required; playground apps require Go 1.26+.
 
 - CLI source and full agent contract: https://github.com/NARUBROWN/spine-cli
 - Framework API: https://github.com/NARUBROWN/spine
@@ -13,7 +13,7 @@ From Spine `v0.6.0`, CLI `new` is the official starting point. Install the CLI w
 - Project structure: /ko/learn/tutorial/1-project-structure
 - Other languages use the same paths under `/en`, `/ja`, `/zh-Hans`, and `/zh-Hant`.
 
-Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from an application. HTTP apps use `platform.New()` from `github.com/NARUBROWN/spine-echo-platform`; HTTP-less workers use `spine.New()`.
+Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from an application. HTTP apps use `spine.New(echoplatform.Option())` from `github.com/NARUBROWN/spine-echo-platform`; HTTP-less workers omit HTTP options and register event factories with `spine.WithEventAdapter`. HTTP alone does not add a WebSocket implementation.
 
 ## Install, plan, and generate
 
@@ -49,9 +49,12 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
-These are the six supported `spine.toml` keys. Keep DB, broker, and authentication settings in application code or environment variables.
+The CLI also supports `event_platforms = ["events:kafka"]` for named event selections. These configuration keys describe generation and implementation selection; they are not broker credentials. Keep DB, broker, and authentication settings in application code or environment variables.
 
 If static inspection reports `MODULE_GRAPH_UNAVAILABLE` after a manual dependency change, prepare the full module metadata before retrying:
 
@@ -61,6 +64,35 @@ go mod download all
 spine contract check --json
 spine verify --json
 ```
+
+## Platform selection and DTO validation
+
+The core uses only the standard library. Public contracts are `contract/http`, `contract/websocket`, `contract/event`, and `contract/validator`. In v0.6.5, older `adapter`, `adapter/http`, `adapter/event`, and `wsadapter` paths remain compatibility aliases.
+
+```sh
+spine new chat-app --module example.com/chat-app --websocket-platform gorilla
+spine new worker --module example.com/worker --platform none --event-platform events:kafka
+spine new validated-app --module example.com/validated-app --validator playground
+```
+
+Select `--platform echo|none`, `--websocket-platform none|gorilla`, repeatable `--event-platform [name:]kafka|rabbitmq`, and `--validator none|playground`. Gorilla requires Echo HTTP; `none` HTTP requires an event platform. Review each command with `--dry-run --json`, then apply the same arguments with `--if-match` and the reviewed base hash. Configure broker environment variables according to the generated README. An `events` factory uses the `SPINE_EVENTS_` prefix. Generation installs selected modules and checks static contracts/builds; it does not execute factories or contact brokers.
+
+In BuildApplication, create factories and validators first and check their errors. Compose `spine.New(echoplatform.Option(), gorillaplatform.Option(), spine.WithEventAdapter("events", factory), spine.WithValidator(validator))` with only the required options. Concrete modules are `spine-echo-platform`, `spine-gorilla-platform`, `spine-kafka-platform`, `spine-rabbitmq-platform`, and `spine-validator-playground`.
+
+Create the optional validator with `playground.New()` and register it with `spine.WithValidator`. Bound HTTP JSON/form DTOs and decoded WebSocket/consumer message DTOs are validated before handlers. Without it, `validate` tags are not checked automatically. Rule failures produce HTTP 400 with `message`/`fields`, WS close 1008, or consumer NACK policy; validator execution failures produce HTTP 500 or WS 1011. `fields[].field` uses JSON Pointer and rejected values are not exposed automatically. Explicit nil validators fail preflight.
+
+CLI upgrades rerun `go install ...@latest`. `spine update` updates project dependencies for the selected recipe only; it does not rewrite source, switch implementation choices, or automatically move an existing recipe. Migrate existing assembly/configuration manually, then review an update dry-run and apply with its base hash. Kafka/RabbitMQ boot options were removed in v0.6.5.
+
+For an existing v0.6.0 app with no recipe, upgrading the CLI alone keeps `echo-v0.1.0-spine-v0.6.0` targets. Explicitly change or add the following selection keys in spine.toml while preserving module, entrypoint, composition, port, and layout. This example selects HTTP only; match websocket_platform, validator, and event_platforms to the actual assembly when selecting other implementations.
+
+```toml
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
+event_platforms = []
+```
+
+Then migrate application assembly/source, run `spine update --dry-run --json`, review changes/diff/base_hash, and apply the same command with `--if-match` and that hash. Check the resolved go.mod and run contract check/verify. Changing recipe/configuration after a dry-run requires a new plan and hash.
 
 ## Extend the generated project
 
@@ -83,7 +115,7 @@ spine contract snapshot
 spine contract diff
 ```
 
-Use a separate fresh base_hash for each matching command pair. The legacy resource generates src/user/user_route.go, user_repository.go, user_service.go, and user_controller.go, registers user.Register(app), and provides GET /user/:id. Legacy slice --storage memory is development-only. Consumer and WebSocket skeletons return not-implemented errors until implemented. Bun, brokers, authentication, and outbox require explicit application code.
+Use a separate fresh base_hash for each matching command pair. The legacy resource generates src/user/user_route.go, user_repository.go, user_service.go, and user_controller.go, registers user.Register(app), and provides GET /user/:id. Legacy slice --storage memory is development-only. Consumer and WebSocket skeletons return not-implemented errors until implemented. Kafka and RabbitMQ factory/configuration code can be selected by `new`; broker provisioning, Bun persistence, authentication, and outbox still require application decisions.
 
 Keep main.go as BuildApplication → Validate → Run, and keep registrations direct and unconditional. Read analysis_complete and diagnostics; do not treat inspect as a validation gate. Never duplicate generated registration calls.
 
@@ -94,7 +126,7 @@ Keep main.go as BuildApplication → Validate → Run, and keep registrations di
 - doctor is offline; DB, broker, authentication, listener, and deployed behavior need separate integration/E2E evidence.
 - Arbitrary dynamic registrations remain unsupported. The CLI recognizes supported direct os.Getenv inputs; use the same inputs during inspection and runtime.
 
-The runtime notes below use Spine v0.6.0. Full inline HealthController examples use the explicit legacy layout; the default layered layout keeps health code under src/controller and src/route. Historical external demo snapshots are labeled separately.
+The runtime notes below use Spine v0.6.5. Full inline HealthController examples use the explicit legacy layout; the default layered layout keeps health code under src/controller and src/route. Historical external demo snapshots are labeled separately.
 
 ## Mental model
 
@@ -116,7 +148,7 @@ constructors + routes + interceptors + transport registrations
          consumers/custom transports, then HTTP listener
 ```
 
-For Spine `v0.6.0`, which the CLI-generated project pins, a successful HTTP request follows this framework-controlled order:
+For Spine `v0.6.5`, which the CLI-generated project pins, a successful HTTP request follows this framework-controlled order:
 
 ```text
 global PreHandle
@@ -134,7 +166,7 @@ global PreHandle
 
 A failure before event dispatch skips the remaining success stages; eligible `BeforeResponse` callbacks, error rendering, transport write, and `AfterCompletion` finish the failure path. A later `BeforeResponse` failure can replace the staged success response, but it cannot undo events already dispatched.
 
-Global `PreHandle` runs before route selection and receives empty `HandlerMeta`. In `v0.6.0`, body, multipart, and path argument resolution runs before route `PreHandle`; malformed input can therefore fail before route-level authentication executes. Use an HTTP-scoped global interceptor for authentication or rejection that must happen before binding, and route interceptors for route-specific checks after binding. Global checks cannot depend on resolved route metadata.
+Global `PreHandle` runs before route selection and receives empty `HandlerMeta`. In `v0.6.5`, body, multipart, and path argument resolution runs before route `PreHandle`; malformed input can therefore fail before route-level authentication executes. Use an HTTP-scoped global interceptor for authentication or rejection that must happen before binding, and route interceptors for route-specific checks after binding. Global checks cannot depend on resolved route metadata.
 
 ## Non-negotiable rules
 
@@ -161,7 +193,7 @@ import (
 	"os"
 
 	"github.com/NARUBROWN/spine"
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 )
@@ -176,7 +208,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 composition root입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := platform.New()
+	app := spine.New(echoplatform.Option())
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -228,7 +260,7 @@ if errors.As(err, &configErr) {
 }
 ```
 
-`Validate` checks supported static options and registrations without network access. DI construction and broker readiness occur later in `Run`/`RunContext`, before the HTTP listener is opened.
+`Validate` checks supported static options and registrations without network access. DI construction and registered consumer reader readiness occur later in `Run`/`RunContext`, before the HTTP listener is opened. Kafka publisher-only startup does not connect to the broker; actual publication is required to verify connectivity and delivery.
 
 ## Dependency injection
 
@@ -294,9 +326,9 @@ app.Route(
 | Handler parameter | Value supplied by Spine | Important rule |
 |---|---|---|
 | `context.Context` | Request context plus request-scoped event publisher | Use this with `publish.Event` and database calls. |
-| `path.Int` | Parsed `int64` from the next `:segment` | Read `.Value`; invalid numeric values return HTTP 400 in v0.6.0. |
+| `path.Int` | Parsed `int64` from the next `:segment` | Read `.Value`; invalid numeric values return HTTP 400 in v0.6.5. |
 | `path.String` | Raw string from the next `:segment` | Read `.Value`. |
-| `path.Boolean` | Parsed boolean from the next `:segment` | Accepts true/false forms supported by Spine; invalid boolean values return HTTP 400 in v0.6.0. |
+| `path.Boolean` | Parsed boolean from the next `:segment` | Accepts true/false forms supported by Spine; invalid boolean values return HTTP 400 in v0.6.5. |
 | `query.Values` | All query values | `Int(key, default)` falls back on missing or invalid input; validate business ranges yourself. |
 | `query.Pagination` | `page` and `size` | Defaults to page 1 and size 20; validate non-positive or excessive values yourself. |
 | `header.Values` | HTTP headers | Use `Get` and `Has`. |
@@ -411,13 +443,13 @@ Response serialization, cookie validation, event dispatch, and post-processing h
 
 ## Swagger and transport extensions
 
-The framework does not generate OpenAPI by itself. Export the static HTTP contract with `spine contract export --format openapi --output openapi.json`. To mount Swagger UI in v0.6.0, import native Echo v5 and construct the app with `platform.New(platform.WithEcho(func(e *echo.Echo) { e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler)) }))`. Preserve the following constructor and route registrations. Native Echo routes bypass Spine interceptors and staging. The historical Bun demo snapshot below uses the removed App.Transport hook; use typed WithEcho for current code.
+The framework does not generate OpenAPI by itself. Export the static HTTP contract with `spine contract export --format openapi --output openapi.json`. To mount Swagger UI in v0.6.5, import native Echo v5 and construct the app with `spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) { e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler)) })))`. Preserve the following constructor and route registrations. Native Echo routes bypass Spine interceptors and staging. The historical Bun demo snapshot below uses the removed App.Transport hook; use typed WithEcho for current code.
 
 Use `App.RegisterTransport` only for an independent custom transport implementing `core.CustomTransport` (`Init`, `Start`, and `Stop`).
 
 ## WebSocket
 
-Register WebSocket handlers with method expressions and check the registration error:
+Select the independent Gorilla implementation first (`--websocket-platform gorilla` or `spine.New(echoplatform.Option(), gorillaplatform.Option())`). HTTP upgrade support, a WS factory, and non-nil boot HTTP options are required. Register handlers with method expressions and check the registration error:
 
 ```go
 app.Constructor(NewChatController)
@@ -436,7 +468,7 @@ Supported WebSocket handler inputs are:
 - raw `[]byte`
 - a non-pointer struct decoded from the JSON message
 
-Prefer `func (c *ChatController) OnMessage(ctx context.Context, id ws.ConnectionID, command ChatCommand) error`. Use `ws.Send(ctx, ws.TextMessage, encoded)` for the current connection. A non-nil handler error closes with WebSocket code 1011; to keep the socket open for invalid application input, send a typed error event and return nil.
+Prefer `func (c *ChatController) OnMessage(ctx context.Context, id ws.ConnectionID, command ChatCommand) error`. Use `ws.Send(ctx, ws.TextMessage, encoded)` for the current connection. A non-nil handler error closes with WebSocket code 1011; DTO validation rule failures close with 1008; to keep the socket open for invalid application input, send a typed error event and return nil.
 
 `ws.Send` sends only to the current connection. For broadcast or rooms, obtain `ws.Sender` from `ctx.Value(ws.SenderKey)`, store senders in shared controller state, copy recipients while locked, then send after releasing the lock.
 
@@ -497,43 +529,34 @@ publish.Event(ctx, OrderCreated{
 })
 ```
 
-`publish.Event` adds the event to the current execution context. Spine dispatches queued events only after the handler succeeds and, for HTTP, after response preparation succeeds. The function returns no error. If no writer is configured, the handler can still succeed while nothing is delivered externally, so every publishing process must enable `Kafka.Write` or `RabbitMQ.Write` deliberately.
+`publish.Event` adds the event to the current execution context. Spine dispatches queued events only after the handler succeeds and, for HTTP, after response preparation succeeds. The function returns no error. If no writer is configured, the handler can still succeed while nothing is delivered externally, so every publishing process must register a platform factory with `Config.Publish: true` deliberately.
 
 Use a consumer signature such as `func (c *OrderConsumer) OnCreated(ctx context.Context, eventName string, event OrderCreated) error`. Register `NewOrderConsumer` with `app.Constructor`, then check the error from `app.Consumers().Register("order.created", (*OrderConsumer).OnCreated)`. Consumer inputs are `context.Context`, event name `string`, raw `[]byte`, and a non-pointer struct decoded from JSON. A topic can have only one registered handler; make it idempotent by stable event ID.
 
 ### Kafka configuration
 
-Producer and consumer in one process:
+Import `kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`. Inside BuildApplication:
 
 ```go
-Kafka: &boot.KafkaOptions{
-	Brokers: []string{"kafka.example.com:9093"},
-	Read: &boot.KafkaReadOptions{
-		GroupID: "order-service",
-	},
-	Write: &boot.KafkaWriteOptions{
-		TopicPrefix: "prod.",
-	},
+factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
+    Brokers: []string{"kafka.example.com:9093"},
+    Consume: true,
+    Publish: true,
+    GroupID: "order-service",
+    TopicPrefix: "prod.",
+})
+if err != nil {
+    return nil, boot.Options{}, err
 }
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
+    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+    spine.WithEventSettlementTimeout(5 * time.Second),
+))
 ```
 
-Spine creates TLS 1.2+ transport by default. `TLS` is shared, `Dialer` configures consumer/read transport, and `Transport` configures publisher/write transport. A process that both reads and writes must secure both directions when using custom SASL/TLS. Use this only for an isolated plaintext development broker:
+Kafka Config owns brokers, roles, GroupID, TopicPrefix, TLS, Dialer, Transport, StartupTimeout, and WriteTimeout. Default TLS is 1.2+. Use AllowInsecureTransport only for isolated local plaintext brokers; explicit TLS conflicts with that option. TopicPrefix maps both publication and subscription names: register `order.created` in the app and provision `prod.order.created` for both factories using `prod.`.
 
-```go
-AllowInsecureTransport: true
-```
-
-`KafkaWriteOptions.TopicPrefix` is simple string concatenation and adds no separator. If a producer uses `demo.`, register the consumer topic as `demo.order.created` yourself.
-
-Kafka behavior:
-
-- Framework-managed writes require acknowledgements from all in-sync replicas.
-- Consumption is at least once; use a stable event ID and durable deduplication.
-- A handler error causes NACK/reconstruction behavior and can redeliver the event.
-- `ConsumerRetry` controls transport/reader reconstruction, not an application handler retry budget.
-- A permanently failing poison record can block the partition. Spine does not automatically skip it or choose a retry topic/DLQ.
-- A consumer-only process may leave `HTTP` nil and still handles `SIGINT`/`SIGTERM`.
-- Shutdown waits for active handlers, ACK/NACK work, and readers to drain.
+Common ConsumerRetry defaults are 100ms initial delay, 5s maximum delay, multiplier 2, jitter 0.2, and unlimited transport retries with MaxAttempts 0. It controls reader reconstruction, not handler retry budgets. SettlementTimeout defaults to 5s for ACK/NACK. ACK follows handler/post-hook success; failures NACK. Kafka failed-offset protection prevents later commits from skipping a failed record. Poison records can block a partition; automatic DLQ selection is not provided. Prepare checks broker/topic readiness for registered consumer readers, and Run starts those same readers. Kafka publisher-only Prepare/startup is not evidence of a broker connection; verify actual publication separately. A consumer-only process omits HTTP and handles SIGINT/SIGTERM.
 
 ### Transactional outbox boundary
 
@@ -550,23 +573,24 @@ The MSA demo's `scenarios/outbox` illustrates the boundary with a JSON-file stor
 
 ## RabbitMQ variant
 
-The same `publish.Event` and `Consumers().Register` APIs use RabbitMQ when `boot.Options.RabbitMQ` configures `RabbitMqReadOptions` and/or `RabbitMqWriteOptions` with a named exchange.
+Use `rabbitmqplatform.NewFactory(rabbitmqplatform.Config{URL: ..., Exchange: ..., Consume: true, Publish: true})`, check the error, and register it with `spine.WithEventAdapter`. Event publication and consumer registration APIs are unchanged.
 
-- `amqps://` is required by default; `amqp://` needs local-only `AllowInsecureTransport: true`.
-- Default prefetch is 1.
-- Default handler failure policy rejects without requeue.
-- Provision the dead-letter exchange before referencing it.
-- Publisher confirms and retries are still at least once; consumers must remain idempotent.
-- If Kafka and RabbitMQ writers are both enabled, a queued event is dispatched to both.
+- AMQPS is required by default. Local AMQP needs explicit AllowInsecureTransport.
+- PrefetchCount defaults to 1. FailurePolicy defaults to rabbitmqplatform.FailureReject; FailureRequeue can repeat indefinitely.
+- DeadLetter uses rabbitmqplatform.DeadLetter; provision its exchange first.
+- TopicPrefix maps published routing keys and subscription bindings; QueuePrefix maps queue names.
+- Persistent messages, mandatory routing, and publisher confirms are enabled. OperationTimeout defaults to 5s.
+- There is no automatic failed-message republishing via PublisherRetry. Application retries after lost confirmation can duplicate delivery.
+- Multiple publish-capable event adapters receive each queued event. Keep consumers idempotent.
 
 ## Runtime and security defaults
 
-Zero values select bounded defaults for HTTP timeouts, header size, request body size, WebSocket size/timeouts/capacity, and shutdown timeout. Broker retry delays are bounded by default, but Kafka/RabbitMQ consumer `MaxAttempts: 0` means unlimited transport retries; RabbitMQ publisher zero values use a bounded three-attempt default.
+Zero values select bounded defaults for HTTP timeouts, header size, request body size, WebSocket size/timeouts/capacity, and shutdown timeout. Consumer retry delays are bounded by default, while `MaxAttempts: 0` means unlimited transport retries. RabbitMQ OperationTimeout defaults to 5s and does not add automatic message republishing.
 
 Important exceptions and rules:
 
 - `HTTPOptions.MaxBodyBytes < 0` explicitly disables the request-body limit.
-- Spine v0.6.0 with Echo platform v0.1.0 returns HTTP 400 for malformed JSON and invalid path values, and 415 for unsupported body Content-Type. Business validation remains application-owned.
+- Spine v0.6.5 with Echo platform v0.1.0 returns HTTP 400 for malformed JSON and invalid path values, and 415 for unsupported body Content-Type. Business rules remain application-owned; optional DTO validation runs only when a validator is selected.
 - Request bodies above the configured maximum produce HTTP 413.
 - `DisableRecover: false` (the zero value) keeps recovery enabled.
 - Use `EnableGracefulShutdown: true` for signal-driven HTTP shutdown.

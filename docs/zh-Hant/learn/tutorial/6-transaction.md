@@ -2,13 +2,13 @@
 
 將單一 HTTP 請求中執行的多次 INSERT 包在同一個交易中。撰寫攔截器，在請求成功時提交，若中途失敗則將先前的 INSERT 一併回滾。
 
-本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
 
 接續[資料庫](/zh-Hant/learn/tutorial/5-database)中的 `example.com/my-app`。請先準備 `src/database`、`src/entity`、`src/user` 與遷移。以下交易程式碼需要自行新增，CLI 並未提供 Bun 交易或 outbox 產生器。
 
 ## 執行順序
 
-在 Spine v0.6.0 中，於 `PreHandle` 開始交易，並在 `BeforeResponse` 提交或回滾。回應序列化、狀態碼與 Cookie 驗證、事件發布等回應準備過程中發生的錯誤，也屬於回滾條件。`AfterCompletion` 用於在完成後記錄日誌或清理資源。
+在 Spine v0.6.5 中，於 `PreHandle` 開始交易，並在 `BeforeResponse` 提交或回滾。回應序列化、狀態碼與 Cookie 驗證、事件發布等回應準備過程中發生的錯誤，也屬於回滾條件。`AfterCompletion` 用於在完成後記錄日誌或清理資源。
 
 ```text
 PreHandle: 開始交易

@@ -4,7 +4,7 @@
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. 이 예제는 CLI 0.4.0으로 만든 기본 앱에 전체 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다. 수정과 삭제는 아래 코드에 포함되어 있습니다.
+[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. 이 예제는 CLI 0.4.2로 만든 기본 앱에 전체 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다. 수정과 삭제는 아래 코드에 포함되어 있습니다.
 
 저장한 사용자는 서버 프로세스를 종료하면 사라집니다.
 
@@ -443,7 +443,7 @@ func toHTTPError(err error) error {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/crud-example/src/controller"
@@ -456,7 +456,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,

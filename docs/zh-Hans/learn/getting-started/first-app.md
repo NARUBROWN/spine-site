@@ -51,6 +51,9 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 `internal/application/application.go` 中的 `BuildApplication()` 返回应用和运行选项。生成的代码注册 `HealthController` 构造函数和 `GET /health`，并显式指定 HTTP 运行选项 `boot.HTTPOptions`。

@@ -1,6 +1,6 @@
 ---
 layout: home
-description: "익숙한 개발 방식으로 더 빠른 서버를 만드세요. 컨트롤러와 서비스, 생성자 주입과 인터셉터로 Go 앱을 구성하고, 내부 랩에서 측정한 처리량과 메모리 사용량을 확인할 수 있습니다."
+description: "Spine은 HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 제공하는 Go 백엔드 프레임워크입니다. CLI로 독립 구현을 선택해 프로젝트를 만들고 앱의 실행 계약을 검사합니다."
 
 hero:
   name: "Spine"

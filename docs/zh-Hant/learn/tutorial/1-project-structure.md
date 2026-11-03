@@ -47,6 +47,9 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 | 鍵 | 用途 |
@@ -56,7 +59,11 @@ platform = "echo"
 | `composition` | 檢查應用程式設定及自動註冊產生的程式碼的位置 |
 | `port` | 開發伺服器使用的連接埠 |
 | `layout` | 產生器檔案布局（`legacy` 或 `layered-v1`） |
-| `platform` | HTTP 平台（`echo`） |
+| `platform` | HTTP 平台（`echo` 或 `none`） |
+| `recipe` | 選擇相容相依套件組合的配方 |
+| `websocket_platform` | WebSocket 實作（`none` 或 `gorilla`） |
+| `validator` | DTO 驗證器（`none` 或 `playground`） |
+| `event_platforms` | 選取的事件平台名稱與種類 |
 
 ## 分開處理執行與應用程式設定
 
@@ -91,7 +98,7 @@ func main() {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -108,7 +115,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -158,7 +165,7 @@ if err := user.Register(app); err != nil {
 
 ## 註冊規則與驗證
 
-為了讓 CLI 能檢查註冊程式碼，請保留位於 `BuildApplication() (spine.App, boot.Options, error)` 函式本體最外層的 `app := platform.New()`。請勿將註冊程式碼移入條件判斷、迴圈或任意輔助函式中。也必須檢查並回傳 `Register(app)` 所回傳的錯誤。
+為了讓 CLI 能檢查註冊程式碼，請保留位於 `BuildApplication() (spine.App, boot.Options, error)` 函式本體最外層的 `app := spine.New(echoplatform.Option())`。請勿將註冊程式碼移入條件判斷、迴圈或任意輔助函式中。也必須檢查並回傳 `Register(app)` 所回傳的錯誤。
 
 檢查應用程式設定後，再啟動伺服器。
 

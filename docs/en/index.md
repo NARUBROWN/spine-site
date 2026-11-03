@@ -1,6 +1,6 @@
 ---
 layout: home
-description: "Build faster servers with familiar development patterns. Structure Go apps with controllers, services, constructor injection, and interceptors, and explore throughput and memory usage measured in our internal lab."
+description: "Spine is a Go backend framework with public HTTP, WebSocket, event, and DTO validation contracts. Use the CLI to select independent implementations, create projects, and verify application contracts."
 
 hero:
   name: "Spine"

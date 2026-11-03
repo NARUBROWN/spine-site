@@ -2,7 +2,7 @@
 
 Add a `GET /user/:id` controller to the CLI-generated `my-app` project and return the integer from the request path in a JSON response. Then explore how to accept queries, headers, and request bodies, and how to choose response types.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
 
 Complete the installation and project creation steps in [Your first app](/en/learn/tutorial/1-project-structure), then work from the project root. If you have already run `spine generate resource user`, skip generation and check the files.
 
@@ -691,7 +691,7 @@ Accept JSON and form DTOs as struct pointers. Accept queries, paths, and uploade
 
 ## Input error handling considerations
 
-Spine `v0.6.0` with Echo platform `v0.1.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests.
+Spine `v0.6.5` with Echo platform `v0.1.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests.
 
 ## Next steps
 

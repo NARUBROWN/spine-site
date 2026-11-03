@@ -4,7 +4,7 @@
 
 ## 事前準備
 
-先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。この例では、CLI 0.4.0 で作成した基本アプリに CRUD 全体のコードを手動で追加します。CLI の `resource` は GET のひな形を、`slice --storage memory` は作成と取得のひな形を生成します。更新と削除は以下のコードに含まれています。
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。この例では、CLI 0.4.2 で作成した基本アプリに CRUD 全体のコードを手動で追加します。CLI の `resource` は GET のひな形を、`slice --storage memory` は作成と取得のひな形を生成します。更新と削除は以下のコードに含まれています。
 
 保存したユーザーは、サーバープロセスを終了すると失われます。
 
@@ -443,7 +443,7 @@ func toHTTPError(err error) error {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/crud-example/src/controller"
@@ -456,7 +456,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,

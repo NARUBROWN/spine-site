@@ -2,9 +2,9 @@
 
 `query.Values`でHTTPクエリパラメーターを読み取り、デフォルト値を指定できます。コントローラーの引数に`q query.Values`を宣言し、必要なキーを文字列、整数、真偽値として取得して使用します。クエリパラメーターを任意のDTOに自動でマッピングする方法はサポートしていません。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
 
-このページでは、Spine v0.6.0の`github.com/NARUBROWN/spine/pkg/query`を基準に説明します。
+このページでは、Spine v0.6.5の`github.com/NARUBROWN/spine/pkg/query`を基準に説明します。
 
 ## CLIプロジェクトで使用する
 
@@ -297,7 +297,7 @@ HTTPクエリでは、次のように同じキーを繰り返すことができ�
 GET /product?tag=go&tag=web&tag=api
 ```
 
-このリクエストで`q.String("tag")`と`q.Get("tag")`は、`"go"`だけを返します。Spine v0.6.0の`query.Values`には、値の一覧全体を取得する公開メソッドがなく、アプリから非公開フィールドの`values`に直接アクセスすることもできません。
+このリクエストで`q.String("tag")`と`q.Get("tag")`は、`"go"`だけを返します。Spine v0.6.5の`query.Values`には、値の一覧全体を取得する公開メソッドがなく、アプリから非公開フィールドの`values`に直接アクセスすることもできません。
 
 複数の値を受け取る必要がある場合は、APIでカンマ区切りの文字列を1つ受け取り、アプリで分割する方法があります。次の例では、`strings`パッケージも必要です。
 

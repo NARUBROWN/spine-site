@@ -228,7 +228,7 @@ func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
 - 真偽値の前後の空白は取り除きません。たとえば、`" true "`は認識できないため`def`を返します。
 - `NewValues`は、受け取ったマップをコピーしません。生成後に元のマップを変更すると、取得結果も変わります。
 
-実装は、[クエリヘルパー](https://github.com/NARUBROWN/spine/blob/v0.6.0/pkg/query/types.go)と[自動注入のコード](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/query_values_resolver.go)で確認できます。
+実装は、[クエリヘルパー](https://github.com/NARUBROWN/spine/blob/v0.6.5/pkg/query/types.go)と[自動注入のコード](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/query_values_resolver.go)で確認できます。
 
 ## 関連情報
 

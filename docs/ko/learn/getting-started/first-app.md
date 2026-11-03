@@ -51,6 +51,9 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 `internal/application/application.go`의 `BuildApplication()`은 앱과 실행 옵션을 반환합니다. 생성된 코드는 `HealthController` 생성자와 `GET /health`를 등록하고, HTTP 실행 옵션인 `boot.HTTPOptions`를 명시합니다.

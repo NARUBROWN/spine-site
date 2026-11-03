@@ -4,7 +4,7 @@ Build signup and login APIs, then retrieve your profile using the JWT issued at 
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.4.0 does not provide a JWT authentication generator. Create a basic project, add the authentication code below, and install `github.com/golang-jwt/jwt/v5`.
+Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.4.2 does not provide a JWT authentication generator. Create a basic project, add the authentication code below, and install `github.com/golang-jwt/jwt/v5`.
 
 This example uses an in-memory store, plaintext password comparison, and a JWT secret hardcoded in the source to teach the authentication flow. Registered users disappear when the server stops. Before using this in a real service, use password hashing and a JWT secret managed through environment variables.
 
@@ -327,7 +327,7 @@ Replace the entire contents of `internal/application/application.go` with the fo
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/login-example/src/controller"
@@ -341,7 +341,7 @@ import (
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(store.NewUserStore, controller.NewAuthController)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{

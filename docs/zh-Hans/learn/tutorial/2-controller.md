@@ -2,7 +2,7 @@
 
 在使用 CLI 创建的 `my-app` 项目中添加 `GET /user/:id` 控制器，并将请求路径中的整数作为 JSON 响应返回。随后了解如何接收查询参数、请求头和请求体，以及如何选择响应类型。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
 
 完成[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)中的安装和项目创建后，请在项目根目录中继续操作。如果已经运行过 `spine generate resource user`，请跳过生成步骤，直接检查文件。
 
@@ -691,7 +691,7 @@ JSON 和表单 DTO 通过结构体指针接收。查询参数、路径参数和�
 
 ## 处理输入错误时的注意事项
 
-Spine `v0.6.0` 配合 Echo 平台 `v0.1.0`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。
+Spine `v0.6.5` 配合 Echo 平台 `v0.1.0`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。
 
 ## 后续步骤
 

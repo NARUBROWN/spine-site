@@ -22,9 +22,9 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-CLI 自体を更新する場合は、上の `go install` コマンドを再実行します。`spine update` は現在のプロジェクトの Spine と Echo プラットフォームの依存関係を更新するコマンドであり、CLI 実行ファイルは更新しません。
+CLI自体を更新する場合は、上の `go install` コマンドを再実行します。`spine update` は選択したレシピのプロジェクト依存関係を更新し、CLI実行ファイルやアプリのソースは変更しません。
 
-`spine version` でインストール済み CLI のバージョンを確認してください。
+`spine version` でインストール済み CLI のバージョンを確認してください。0.6.5レシピにはCLI 0.4.2以上に更新してください。
 
 `spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
 
@@ -53,6 +53,9 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 `internal/application/application.go`の`BuildApplication()`が構成要素と`GET /health`を登録します。生成された`main.go`はこの関数を呼び出し、`app.Validate(options)`で構成を検証してから、`app.Run(options)`でサーバーを実行します。
@@ -99,6 +102,8 @@ go mod download all
 spine contract check
 spine verify
 ```
+
+[プラットフォームとDTO検証の選択](/ja/learn/getting-started/platforms)
 
 ## 次のステップ
 

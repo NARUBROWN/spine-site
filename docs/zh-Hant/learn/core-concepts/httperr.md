@@ -2,7 +2,7 @@
 
 `httperr` 套件用來儲存 HTTP 狀態碼和要傳給用戶端的錯誤訊息。控制器回傳 `httperr.NotFound("사용자를 찾을 수 없습니다")` 之類的錯誤時，Spine 會將其轉換為對應的狀態碼和 JSON 錯誤回應。控制器不需要直接操作 Echo 等框架的回應物件。
 
-本頁以 Spine v0.6.0 的 `github.com/NARUBROWN/spine/pkg/httperr` 為基礎。
+本頁以 Spine v0.6.5 的 `github.com/NARUBROWN/spine/pkg/httperr` 為基礎。
 
 ## 在 CLI 專案中使用
 
@@ -78,7 +78,7 @@ func (e *HTTPError) Error() string {
 
 ## 基本輔助函式
 
-Spine v0.6.0 提供以下四個輔助函式，皆接收 `msg string` 並回傳 `error`。
+Spine v0.6.5 提供以下四個輔助函式，皆接收 `msg string` 並回傳 `error`。
 
 | 函式 | 狀態碼 | 使用情況 |
 | --- | --- | --- |
@@ -301,10 +301,11 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 | --- | --- |
 | 沒有符合的路由 | 404 錯誤回應 |
 | 執行期間發生 `HTTPError` | 以指定的錯誤狀態碼和訊息回應 |
+| 所選驗證器的 DTO 規則違反（`validation.Error`） | 包含 `message` 與 `fields` 的 400 回應 |
 | 發生一般執行錯誤 | 回應 500 和 `"Internal server error"` |
 | 超過請求主體大小限制 | 回應 413 和 `"Request entity too large"` |
 | 實際回應已寫入 | 不再寫入額外的錯誤回應，避免重複回應 |
 
-Spine v0.6.0 會先完成回應前處理，再將準備好的回應寫入實際傳輸層。若 `BeforeResponse` 發生錯誤，準備中的成功回應可能會改為錯誤回應。`AfterCompletion` 在回應處理後執行，因此在這個階段應記錄錯誤和傳輸結果，而不是嘗試寫入新的錯誤回應。
+Spine v0.6.5 會先完成回應前處理，再將準備好的回應寫入實際傳輸層。若 `BeforeResponse` 發生錯誤，準備中的成功回應可能會改為錯誤回應。`AfterCompletion` 在回應處理後執行，因此在這個階段應記錄錯誤和傳輸結果，而不是嘗試寫入新的錯誤回應。
 
 請透過 Go 的回傳值傳遞錯誤。請勿使用 `panic` 表達一般輸入驗證失敗或業務失敗。攔截器的中止與收尾處理，請參閱[攔截器教學](/zh-Hant/learn/tutorial/4-interceptor)。

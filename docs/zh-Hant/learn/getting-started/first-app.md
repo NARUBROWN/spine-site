@@ -51,6 +51,9 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 `internal/application/application.go` 中的 `BuildApplication()` 會回傳應用程式與執行選項。產生的程式碼會註冊 `HealthController` 建構函式與 `GET /health`，並明確指定 HTTP 執行選項 `boot.HTTPOptions`。

@@ -2,9 +2,9 @@
 
 Spine はリクエストやメッセージごとに実行コンテキストを作成し、入力情報と実行状態をパイプラインに渡します。インターセプターは `core.ExecutionContext` で実行状態を読み書きし、HTTP コントローラーは意味を表す型と読み取り専用の `spine.Ctx` で必要な値だけを受け取ります。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.0` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
 
-この区別を理解すると、インターセプターが保存した値をコントローラーに渡し、HTTP、イベントコンシューマー、WebSocket で利用できる入力を判断できます。このドキュメントのインターフェースと動作は、Spine v0.6.0 を基準にしています。
+この区別を理解すると、インターセプターが保存した値をコントローラーに渡し、HTTP、イベントコンシューマー、WebSocket で利用できる入力を判断できます。このドキュメントのインターフェースと動作は、Spine v0.6.5 を基準にしています。
 
 アプリのハンドラー例は、[CLI で作成したプロジェクト](/ja/learn/tutorial/1-project-structure)に手動で追加する拡張です。生成された `BuildApplication` と、エラーを確認する `user.Register(app)` の呼び出しは維持してください。`core/` のインターフェースは公開契約なので、`internal/` の実装をアプリにコピーする必要はありません。
 
@@ -239,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 このコードはメソッドシグネチャの例で、`CreateUserRequest` と `User` はアプリで定義する型です。フォーム DTO はフィールドに `form` タグを使い、アップロードファイルは `pkg/multipart.UploadedFiles` で受け取れます。
 
-Spine `v0.6.0` と Echo プラットフォーム `v0.1.0` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。 [実行パイプライン](/ja/learn/core-concepts/pipeline#error-responses)
+Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。 [実行パイプライン](/ja/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: イベント入力の解釈
 

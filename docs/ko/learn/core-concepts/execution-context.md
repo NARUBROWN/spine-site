@@ -2,9 +2,9 @@
 
 Spine은 요청이나 메시지마다 실행 컨텍스트를 만들어 입력 정보와 실행 상태를 파이프라인에 전달합니다. 인터셉터는 `core.ExecutionContext`로 실행 상태를 읽고 쓰며, HTTP 컨트롤러는 의미 타입과 읽기 전용 `spine.Ctx`로 필요한 값만 받습니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
-이 구분을 이해하면 인터셉터에서 저장한 값을 컨트롤러로 전달하고, HTTP, 이벤트 컨슈머, WebSocket에서 사용할 수 있는 입력을 판단할 수 있습니다. 이 문서의 인터페이스와 동작은 Spine v0.6.0을 기준으로 합니다.
+이 구분을 이해하면 인터셉터에서 저장한 값을 컨트롤러로 전달하고, HTTP, 이벤트 컨슈머, WebSocket에서 사용할 수 있는 입력을 판단할 수 있습니다. 이 문서의 인터페이스와 동작은 Spine v0.6.5를 기준으로 합니다.
 
 앱 핸들러 예제는 [CLI로 만든 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 수동 확장입니다. 생성된 `BuildApplication`과 오류를 확인하는 `user.Register(app)` 호출을 유지하세요. `core/` 인터페이스는 공개 계약이며, `internal/` 구현을 앱에 복사할 필요는 없습니다.
 
@@ -239,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 이 코드는 메서드 시그니처의 예이며, `CreateUserRequest`와 `User`는 앱에서 정의하는 타입입니다. 폼 DTO는 필드에 `form` 태그를 사용하며, 업로드 파일은 `pkg/multipart.UploadedFiles`로 받을 수 있습니다.
 
-Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요. [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)
+Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요. [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: 이벤트 입력 해석
 

@@ -1,6 +1,12 @@
 # 現在のリリース
 
-ドキュメントの例は 2026-11-02 に Spine v0.6.0 と CLI v0.4.0 で検証しました。通常のインストールには `@latest` を使い、実際の CLI と依存関係のバージョンは `spine version` と生成された `go.mod` で確認してください。
+通常のインストールには `@latest` を使います。現在の文書はSpine v0.6.5とCLI v0.4.2を対象とします。CLIは `spine version`、実際の依存関係は生成した `go.mod` で確認します。
+
+## Spine v0.6.5 / CLI v0.4.2
+
+HTTP、WebSocket、イベント、DTO検証の公開契約を `contract/` に統合しました。`spine.New(...)` で独立プラットフォームを選び、Kafka、RabbitMQのbootオプションは削除しました。CLI 0.4.2は実装の選択とv0.6.5レシピを生成します。
+
+[プラットフォームとDTO検証の選択](/ja/learn/getting-started/platforms)
 
 ## Spine v0.6.0
 

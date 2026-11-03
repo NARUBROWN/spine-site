@@ -2,9 +2,9 @@
 
 Spine 會為每個請求或訊息建立執行內容，將輸入資訊與執行狀態傳給管線。攔截器透過 `core.ExecutionContext` 讀寫執行狀態，HTTP 控制器則透過語意型別與唯讀的 `spine.Ctx`，僅接收所需的值。
 
-本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
 
-理解這項區分後，就能將攔截器儲存的值傳給控制器，並判斷 HTTP、事件消費者與 WebSocket 可使用的輸入。本文的介面與行為以 Spine v0.6.0 為準。
+理解這項區分後，就能將攔截器儲存的值傳給控制器，並判斷 HTTP、事件消費者與 WebSocket 可使用的輸入。本文的介面與行為以 Spine v0.6.5 為準。
 
 應用程式處理器範例是手動加入[以 CLI 建立的專案](/zh-Hant/learn/tutorial/1-project-structure)的擴充程式碼。請保留產生的 `BuildApplication`，以及會檢查錯誤的 `user.Register(app)` 呼叫。`core/` 介面是公開契約，應用程式不需要複製 `internal/` 實作。
 
@@ -239,7 +239,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 這段程式碼是方法簽章範例，`CreateUserRequest` 與 `User` 是由應用程式定義的型別。表單 DTO 的欄位使用 `form` 標籤，上傳檔案則可以用 `pkg/multipart.UploadedFiles` 接收。
 
-Spine `v0.6.0` 搭配 Echo 平台 `v0.1.0`，對格式錯誤的 JSON、數字或布林路徑值轉換失敗回傳 HTTP 400，對不支援的本文 Content-Type 回傳 415，對超過本文大小限制回傳 413。綁定失敗發生在控制器呼叫之前。請區分綁定失敗與業務驗證，並以實際請求確認。 [執行管線](/zh-Hant/learn/core-concepts/pipeline#error-responses)
+Spine `v0.6.5` 搭配 Echo 平台 `v0.1.0`，對格式錯誤的 JSON、數字或布林路徑值轉換失敗回傳 HTTP 400，對不支援的本文 Content-Type 回傳 415，對超過本文大小限制回傳 413。綁定失敗發生在控制器呼叫之前。請區分綁定失敗與業務驗證，並以實際請求確認。 [執行管線](/zh-Hant/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext：解析事件輸入
 

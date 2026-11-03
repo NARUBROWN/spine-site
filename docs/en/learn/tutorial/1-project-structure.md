@@ -47,6 +47,9 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 | Key | Purpose |
@@ -56,7 +59,11 @@ platform = "echo"
 | `composition` | The location where the CLI inspects app configuration and automatically registers generated code |
 | `port` | The port used by the development server |
 | `layout` | Generator file layout (`legacy` or `layered-v1`) |
-| `platform` | HTTP platform (`echo`) |
+| `platform` | HTTP platform (`echo` or `none`) |
+| `recipe` | Recipe selecting compatible dependencies |
+| `websocket_platform` | WebSocket implementation (`none` or `gorilla`) |
+| `validator` | DTO validator (`none` or `playground`) |
+| `event_platforms` | Selected event platform names and providers |
 
 ## Separate Execution from App Configuration
 
@@ -91,7 +98,7 @@ func main() {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -108,7 +115,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -158,7 +165,7 @@ For typed creation and lookup examples, use a different name with `spine generat
 
 ## Registration Rules and Validation
 
-To let the CLI inspect the registration code, keep `app := platform.New()` at the top level of the body of `BuildApplication() (spine.App, boot.Options, error)`. Do not move registration code into conditionals, loops, or arbitrary helper functions. You must also check and return errors from `Register(app)`.
+To let the CLI inspect the registration code, keep `app := spine.New(echoplatform.Option())` at the top level of the body of `BuildApplication() (spine.App, boot.Options, error)`. Do not move registration code into conditionals, loops, or arbitrary helper functions. You must also check and return errors from `Register(app)`.
 
 Inspect the app configuration, then run the server.
 

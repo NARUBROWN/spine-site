@@ -1,11 +1,11 @@
 # spine.App
 
-`App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.6.0.
+`App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.6.5.
 
 ```go
 import (
     "github.com/NARUBROWN/spine"
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
 )
 ```
 
@@ -37,7 +37,7 @@ Pass options to `Route` using functions from `pkg/route` in your application cod
 func New(options ...Option) App
 ```
 
-`spine.New(options ...Option)` creates a kernel app without selecting an HTTP implementation. Use `spine.New()` for HTTP-less workers, and `platform.New()` or `spine.New(platform.Option())` for Echo HTTP apps.
+Pass the required implementations to `spine.New(options ...Option)`. Use `spine.New(echoplatform.Option())` for HTTP apps. HTTP-less workers omit the HTTP option and register the required event factories.
 
 Creates a new Spine application instance.
 
@@ -48,12 +48,25 @@ Creates a new Spine application instance.
 **Example**
 
 ```go
-app := platform.New()
+app := spine.New(echoplatform.Option())
 app.Run(boot.Options{
     Address: ":8080",
     HTTP: &boot.HTTPOptions{},
 })
 ```
+
+## Implementation selection options {#platform-options}
+
+Select Echo for HTTP and the independent Gorilla implementation for WebSocket. Registered WS routes require both HTTP upgrade support and a WS factory. To enable validation, pass the result of `playground.New()` to `spine.WithValidator`.
+
+| Option | Implementation |
+| --- | --- |
+| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `contract/http` |
+| `spine.WithWebSocketAdapter(factory)` | `gorillaplatform.Option()` / `contract/websocket` |
+| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / `contract/event` |
+| `spine.WithValidator(validator)` | playground / `contract/validator` |
+
+[Select platforms and DTO validation](/en/learn/getting-started/platforms)
 
 ## Methods
 
@@ -231,22 +244,22 @@ app.InterceptorFor(boot.InterceptorAll, loggingInterceptor)
 ### WithEcho
 
 ```go
-platform.WithEcho(fn func(*echo.Echo)) platform.EchoOption
+echoplatform.WithEcho(fn func(*echo.Echo)) echoplatform.EchoOption
 ```
 
-Register Echo extensions through the typed `WithEcho` option when constructing the platform. Replace the existing `app := platform.New()` with the code below and keep the constructor and route registrations that follow. `App.Transport` was removed in Spine v0.6.0.
+Register Echo extensions through the typed `WithEcho` option when constructing the platform. Replace the existing `app := spine.New(echoplatform.Option())` with the code below and keep the constructor and route registrations that follow. `App.Transport` was removed in Spine v0.6.0.
 
 ```go
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "github.com/labstack/echo/v5"
     "github.com/labstack/echo/v5/middleware"
 )
 
-app := platform.New(platform.WithEcho(func(e *echo.Echo) {
+app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
     e.Use(middleware.RequestID())
     e.Static("/static", "public")
-}))
+})))
 ```
 
 Native Echo routes added through platform options bypass Spine HTTP interceptors and response staging, and are outside the static Spine route contract. Check their actual behavior separately.
@@ -488,9 +501,9 @@ WebSocket registers paths on the same Echo instance as the HTTP server, so it re
 Validate(opts boot.Options) error
 ```
 
-Checks boot options without opening network connections or starting servers and consumers. It checks Kafka and RabbitMQ connection settings, HTTP and WebSocket limits, and global interceptor nil values and scopes, among other settings. `Run` performs the same checks before startup.
+Without network access, validate HTTP/WebSocket limits, event factory contracts and common policies, and validator registration. `Run` performs the same checks. Platform `NewFactory` functions check concrete broker configuration first; check their creation errors too.
 
-Returns `*boot.ConfigError` if any errors are found. Each item in `Issues` contains the configuration location in `Path`, the error category in `Code`, a description in `Message`, and guidance for fixing it in `Hint`. Returns `nil` for valid options.
+For boot option errors, inspect `Path`, `Code`, `Message`, and `Hint` in `*boot.ConfigError.Issues`. Event, HTTP, WebSocket factory, and validator contract errors can also be returned; use `errors.Is` and `errors.As` with public errors. Valid configuration returns `nil`.
 
 `Validate` does not construct dependencies or connect to brokers. Success does not establish that constructors, routes, the DI configuration, or actual infrastructure connections will work.
 
@@ -523,7 +536,7 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
-Specifies how the server runs and whether to use external infrastructure. If `HTTP`, `Kafka`, or `RabbitMQ` is `nil`, the corresponding feature is not configured.
+`boot.Options` configures HTTP execution and shutdown policy. Set `HTTP` when running HTTP. Select event connections and roles through external platform `Config` values and `spine.WithEventAdapter`.
 
 ```go
 import "github.com/NARUBROWN/spine/pkg/boot"
@@ -536,8 +549,6 @@ type Options struct {
     Address                string
     EnableGracefulShutdown bool
     ShutdownTimeout        time.Duration
-    Kafka                  *KafkaOptions
-    RabbitMQ               *RabbitMqOptions
     HTTP                   *HTTPOptions
 }
 
@@ -559,8 +570,6 @@ type HTTPOptions struct {
 | `Address` | Address on which the HTTP server listens. Example: `":8080"` |
 | `EnableGracefulShutdown` | If `true`, the HTTP server handles `SIGINT` and `SIGTERM` for graceful shutdown. Default: `false` |
 | `ShutdownTimeout` | Wait time for HTTP shutdown and custom transport shutdown. `0` means 10 seconds. Must not be negative |
-| `Kafka` | Kafka publishing and consumer settings. Disabled if `nil` |
-| `RabbitMQ` | RabbitMQ publishing and consumer settings. Disabled if `nil` |
 | `HTTP` | HTTP and WebSocket settings. The HTTP server is disabled if `nil` |
 
 | `HTTPOptions` field | When `0` or omitted | Constraint |
@@ -634,129 +643,66 @@ HTTP: &boot.HTTPOptions{
 
 ## Kafka configuration
 
-### KafkaOptions
+### Create and register the factory
 
-`Read` and `Write` are independent. Enabling either requires `Brokers`, and using `Read` also requires `GroupID`. TLS 1.2 or later is used unless separate transport settings are provided.
-
-```go
-type KafkaOptions struct {
-    // Kafka 브로커 주소 목록
-    Brokers []string
-
-    // 사용자 정의 TLS, 리더 Dialer, 라이터 Transport
-    TLS *tls.Config
-    Dialer *kafka.Dialer
-    Transport *kafka.Transport
-
-    // 격리된 로컬 환경의 평문 연결 명시적 허용
-    AllowInsecureTransport bool
-
-    // 리더 오류와 ACK/NACK 실패 뒤 재연결 정책
-    ConsumerRetry ConsumerRetryOptions
-
-    // 이벤트 소비 설정
-    // nil이면 Kafka 소비자를 활성화하지 않음
-    Read *KafkaReadOptions
-
-    // 이벤트 발행 설정
-    // nil이면 Kafka로 이벤트를 발행하지 않음
-    Write *KafkaWriteOptions
-}
-
-type KafkaReadOptions struct {
-    // Kafka 소비자 그룹 ID
-    GroupID string
-}
-
-type KafkaWriteOptions struct {
-    // 이벤트 이름 앞에 붙일 토픽 접두사
-    TopicPrefix string
-}
-```
-
-### Example
+Import `kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`. Select roles with `Config.Consume` and `Config.Publish`, and provide `Brokers`. Consumers also require `GroupID`. Use this code inside `BuildApplication`, importing `echoplatform`, `spine`, `boot`, and `time` as well.
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    Kafka: &boot.KafkaOptions{
-        Brokers: []string{"localhost:9092"},
-        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
-        Read: &boot.KafkaReadOptions{
-            GroupID: "my-consumer-group",
-        },
-        Write: &boot.KafkaWriteOptions{
-            TopicPrefix: "myapp.",
-        },
-    },
-    HTTP: &boot.HTTPOptions{},
+factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
+    Brokers: []string{"kafka.example.com:9093"},
+    Consume: true,
+    Publish: true,
+    GroupID: "orders",
+    TopicPrefix: "prod.",
 })
+if err != nil {
+    return nil, boot.Options{}, err
+}
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
+    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+    spine.WithEventSettlementTimeout(5 * time.Second),
+))
 ```
+
+### Policies and constraints
+
+The Kafka platform applies TLS 1.2 or later by default. Use `TLS`, `Dialer`, and `Transport` for CA, mTLS, and SASL configuration. Use `AllowInsecureTransport: true` only for an isolated local plaintext broker; it cannot be combined with explicit TLS. `NewFactory` checks configuration only. `Prepare` and `Run` check broker and topic readiness when preparing registered consumer readers. A Kafka publisher-only app can start without a broker connection; verify connectivity and delivery with an actual publication.
+
+`Config.TopicPrefix` prefixes both published names and consumer subscriptions. With `prod.` in both factories, register `order.created` in the app and provision `prod.order.created` in the broker. Include the separator in the prefix.
+
+`spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{...})` controls reconnection after reader and ACK/NACK failures. Defaults are 100ms initial delay, 5s maximum delay, multiplier 2, jitter 0.2, and unlimited transport retries with `MaxAttempts: 0`. It does not set a handler retry budget or DLQ policy. `WithEventSettlementTimeout` defaults to a 5s ACK/NACK limit. Failed Kafka records are not skipped by later offset commits; a poison record can block a partition.
 
 ## RabbitMQ configuration
 
-### RabbitMqOptions
+### Create and register the factory
 
-`Read` and `Write` are independent. Specify `Exchange` for each enabled role. An `amqps://` URL is required by default; explicitly allow plaintext `amqp://` only in an isolated development environment.
-
-```go
-type RabbitMqOptions struct {
-    // RabbitMQ AMQP 연결 문자열
-    // 예: amqp://guest:guest@localhost:5672/
-    URL string
-
-    // 로컬 amqp:// 연결 명시적 허용
-    AllowInsecureTransport bool
-
-    ConsumerRetry  ConsumerRetryOptions
-    PublisherRetry PublisherRetryOptions
-
-    // 이벤트 소비 설정
-    // nil이면 RabbitMQ 소비자를 활성화하지 않음
-    Read *RabbitMqReadOptions
-
-    // 이벤트 발행 설정
-    // nil이면 RabbitMQ로 이벤트를 발행하지 않음
-    Write *RabbitMqWriteOptions
-}
-
-type RabbitMqReadOptions struct {
-    // 큐를 바인딩할 교환기 이름
-    Exchange string
-    PrefetchCount int
-    FailurePolicy RabbitMqFailurePolicy
-    DeadLetter *RabbitMqDeadLetterOptions
-
-    // Deprecated: FailurePolicy 사용 권장
-    RequeueOnError bool
-}
-
-type RabbitMqWriteOptions struct {
-    // 이벤트를 발행할 교환기 이름
-    Exchange string
-}
-```
-
-For failure policies and retry defaults, see [security configuration](/en/reference/security-configuration#rabbitmq). `RequeueOnError` exists for compatibility with earlier versions; use `FailurePolicy` in new code.
-
-### Example
+Import `rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"`. Configure the shared `Config.Exchange` and select `Consume`/`Publish`. URLs require `amqps://` by default; local `amqp://` requires explicit `AllowInsecureTransport: true`. Use this code inside `BuildApplication`.
 
 ```go
-app.Run(boot.Options{
-    Address: ":8080",
-    RabbitMQ: &boot.RabbitMqOptions{
-        URL:                    "amqp://guest:guest@localhost:5672/",
-        AllowInsecureTransport: true, // 격리된 로컬 개발 환경 전용
-        Read: &boot.RabbitMqReadOptions{
-            Exchange: "stock-exchange",
-        },
-        Write: &boot.RabbitMqWriteOptions{
-            Exchange: "stock-exchange",
-        },
+factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
+    URL: "amqps://user:pass@rabbit.example.com/vhost",
+    Exchange: "events",
+    Consume: true,
+    Publish: true,
+    PrefetchCount: 16,
+    FailurePolicy: rabbitmqplatform.FailureReject,
+    DeadLetter: &rabbitmqplatform.DeadLetter{
+        Exchange: "events.dlx",
+        RoutingKey: "events.failed",
     },
-    HTTP: &boot.HTTPOptions{},
+    OperationTimeout: 5 * time.Second,
 })
+if err != nil {
+    return nil, boot.Options{}, err
+}
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
+
+### Policies and constraints
+
+Omitting `PrefetchCount` permits one unacknowledged message per consumer. The default policy is `rabbitmqplatform.FailureReject`; `FailureRequeue` can redeliver an unprocessable message indefinitely. Provision a `DeadLetter` exchange before using it. `TopicPrefix` applies to published routing keys and subscription bindings; `QueuePrefix` applies to queue names.
+
+Publishers use persistent messages, mandatory routing, and publisher confirms. `OperationTimeout` defaults to 5s. There is no `PublisherRetry` option that automatically republishes failed messages. Application retries after lost confirmation can duplicate delivery, so consumers must be idempotent.
 
 ## Event publishing {#event-publishing}
 
@@ -826,7 +772,7 @@ The following is the default structure of the generated `BuildApplication`.
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
 	"os"
 
 	"github.com/NARUBROWN/spine"
@@ -844,7 +790,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 
 // BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
-	app := platform.New()
+	app := spine.New(echoplatform.Option())
 	app.Constructor(NewHealthController)
 	app.Route("GET", "/health", (*HealthController).Get)
 
@@ -862,7 +808,7 @@ After validating options, `Run` configures the dependency injection container an
 
 Once this preparation is complete, it runs consumers and custom transports' `Start` in separate goroutines, then starts the HTTP server last. Startup fails if HTTP route paths overlap ambiguously for the same method. For example, `/users/:id` and `/users/me` are treated as overlapping paths.
 
-During shutdown, it first stops incoming WebSocket and HTTP requests, waits for consumers to stop, and then calls custom transports' `Stop` in reverse initialization order. It then releases event publisher resources. For the implementation, see the [v0.6.0 startup and shutdown code](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/bootstrap/bootstrap.go).
+During shutdown, it first stops incoming WebSocket and HTTP requests, waits for consumers to stop, and then calls custom transports' `Stop` in reverse initialization order. It then releases event publisher resources. For the implementation, see the [v0.6.5 startup and shutdown code](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/bootstrap/bootstrap.go).
 
 ## Constraints and errors
 

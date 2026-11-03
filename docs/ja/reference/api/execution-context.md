@@ -138,7 +138,7 @@ type WebSocketContext interface {
 
 ### WebSocketの接続リクエスト情報 {#websocket-request-context}
 
-v0.6.0はHTTPアップグレードリクエストの情報をコピーして保持します。次のインターフェースで、ヘッダー、クエリ、Cookie、リモートアドレス、ホスト、リクエストURIを取得できます。
+v0.6.5はHTTPアップグレードリクエストの情報をコピーして保持します。次のインターフェースで、ヘッダー、クエリ、Cookie、リモートアドレス、ホスト、リクエストURIを取得できます。
 
 ```go
 type WebSocketRequestContext interface {
@@ -687,11 +687,11 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 HTTPコントローラーの`context.Context`引数には標準コンテキストとリクエストスコープのイベントバスを渡し、`core.ControllerContext`引数には`Get()`だけを提供するビューを渡します。コンシューマーとWebSocketの標準入力リゾルバーには、`ControllerContext`を注入する機能がありません。ランタイムの入力解釈コードは、次のソースで確認できます。
 
-- [HTTPパスパラメータの解釈](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/path_int_resolver.go)
-- [標準コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/std_context_resolver.go)
-- [コントローラーの取得用コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/controller_context_resolver.go)
-- [イベント入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/event/consumer/resolver)
-- [WebSocket入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/ws/resolver)
+- [HTTPパスパラメータの解釈](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
+- [標準コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
+- [コントローラーの取得用コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
+- [イベント入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
+- [WebSocket入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
 
 ## プロトコルごとの動作の違い
 

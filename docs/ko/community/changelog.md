@@ -1,6 +1,12 @@
 # 현재 릴리스
 
-문서 예제의 검증 기준은 2026-11-02의 Spine v0.6.0과 CLI v0.4.0입니다. 일반 설치는 `@latest`를 사용하며, 실제 CLI 버전과 선택된 의존성은 `spine version`과 생성된 `go.mod`에서 확인합니다.
+일반 설치는 `@latest`를 사용합니다. 현재 문서 기준은 Spine v0.6.5와 CLI v0.4.2입니다. 설치된 CLI는 `spine version`, 실제 의존성은 생성된 `go.mod`에서 확인하세요.
+
+## Spine v0.6.5 / CLI v0.4.2
+
+HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 `contract/`로 통합했습니다. `spine.New(...)`에서 독립 플랫폼을 선택하며 Kafka, RabbitMQ boot 옵션은 제거했습니다. CLI 0.4.2는 구현 선택과 v0.6.5 레시피를 생성합니다.
+
+[플랫폼과 DTO 검증 선택](/ko/learn/getting-started/platforms)
 
 ## Spine v0.6.0
 

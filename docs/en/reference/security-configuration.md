@@ -1,6 +1,6 @@
 # Security configuration
 
-Spine v0.6.0 applies encrypted broker connections and HTTP and WebSocket size, time, and connection limits by default. Use this reference to check defaults and configuration constraints, then choose the origins, authentication, and message failure policies for your deployed application.
+Spine 0.6.5 uses HTTP/WebSocket size, time, and connection limits. Independent Kafka/RabbitMQ platforms own broker transport policies. The platform defaults below refer to v0.1.0.
 
 ## Configuration validation
 
@@ -15,7 +15,7 @@ if err := app.Run(options); err != nil {
 }
 ```
 
-Errors are returned as `*boot.ConfigError`. Each `ConfigIssue` in `Issues` provides the following fields. Use `Code` to classify errors programmatically instead of parsing the message. Credentials in broker URLs are not exposed in configuration errors.
+Inspect boot configuration failures through `*boot.ConfigError.Issues`. Check configuration errors returned by external platform `NewFactory` calls separately. Classify failures using public errors and codes rather than message strings, and do not log broker credentials.
 
 | Field | Meaning |
 | --- | --- |
@@ -31,10 +31,10 @@ Errors are returned as `*boot.ConfigError`. Each `ConfigIssue` in `Issues` provi
 | HTTP | Read and write timeouts, header and body size limits | [`boot.HTTPOptions`](/en/reference/api/spine-app#boot-options) |
 | Kafka | TLS 1.2 or later for enabled consumers and publishers | `TLS`, `Dialer`, `Transport`. For local plaintext connections, use `AllowInsecureTransport: true` |
 | RabbitMQ connections | `amqps://` required | For local plaintext connections, use `amqp://` and `AllowInsecureTransport: true` |
-| RabbitMQ publishing | Persistent messages, mandatory routing, publisher confirms, finite retries | `PublisherRetry` |
-| RabbitMQ processing failures | Reject without requeueing | `FailurePolicy` |
+| RabbitMQ publishing | persistent / mandatory / publisher confirm | `OperationTimeout` |
+| RabbitMQ processing failures | Reject without requeueing | `rabbitmqplatform.Config.FailurePolicy` |
 | RabbitMQ concurrent processing | 1 unacknowledged message per consumer | Positive `PrefetchCount` |
-| Consumer transport failures | Recreate the reader with exponential backoff and jitter | `ConsumerRetry` |
+| Consumer transport failures | Recreate the reader with exponential backoff and jitter | `spine.WithEventConsumerRetry` |
 | WebSocket origins | Browser requests allowed only from the same scheme and host | `AllowedOrigins` |
 | WebSocket connections | 1024 established connections and pending connection requests combined | Positive `MaxConnections` or `boot.UnlimitedWebSocketConnections` |
 | WebSocket connection authentication | Only interceptors implementing the optional interface run before the upgrade | Implement `core.WebSocketHandshakeInterceptor` |
@@ -44,91 +44,62 @@ Errors are returned as `*boot.ConfigError`. Each `ConfigIssue` in `Issues` provi
 
 ## Kafka
 
-Enable `Read` and `Write` in `boot.KafkaOptions` independently. Configuring either requires `Brokers`; using `Read` also requires `GroupID`. TLS 1.2 or later is applied to both consumers and publishers unless separate transport settings are provided.
+Import `kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`. Select roles with `Config.Consume` and `Config.Publish`, and provide `Brokers`. Consumers also require `GroupID`. Use this code inside `BuildApplication`, importing `echoplatform`, `spine`, `boot`, and `time` as well.
 
 ```go
-Kafka: &boot.KafkaOptions{
-    Brokers: []string{"kafka.example:9093"},
-    Read:  &boot.KafkaReadOptions{GroupID: "orders"},
-    Write: &boot.KafkaWriteOptions{},
+factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
+    Brokers: []string{"kafka.example.com:9093"},
+    Consume: true,
+    Publish: true,
+    GroupID: "orders",
+    TopicPrefix: "prod.",
+})
+if err != nil {
+    return nil, boot.Options{}, err
 }
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
+    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+    spine.WithEventSettlementTimeout(5 * time.Second),
+))
 ```
 
-Configure `TLS`, `Dialer`, and `Transport` if you need a custom CA, mTLS, or SASL. Configuring both explicit TLS and `AllowInsecureTransport` for an enabled role produces a `KAFKA_TLS_INSECURE_CONFLICT` error. Explicitly allow plaintext connections only in an isolated local development environment.
+The Kafka platform applies TLS 1.2 or later by default. Use `TLS`, `Dialer`, and `Transport` for CA, mTLS, and SASL configuration. Use `AllowInsecureTransport: true` only for an isolated local plaintext broker; it cannot be combined with explicit TLS. `NewFactory` checks configuration only. `Prepare` and `Run` check broker and topic readiness when preparing registered consumer readers. A Kafka publisher-only app can start without a broker connection; verify connectivity and delivery with an actual publication.
 
-```go
-Kafka: &boot.KafkaOptions{
-    Brokers:                []string{"localhost:9092"},
-    AllowInsecureTransport: true,
-    Read:                   &boot.KafkaReadOptions{GroupID: "local"},
-}
-```
+`Config.TopicPrefix` prefixes both published names and consumer subscriptions. With `prod.` in both factories, register `order.created` in the app and provision `prod.order.created` in the broker. Include the separator in the prefix.
 
-After a reader error or ACK/NACK failure, the existing reader is closed and a new one is created according to `ConsumerRetry`. This option controls transport reconnection; it does not change the handler's message processing policy.
-
-| `ConsumerRetryOptions` field | Type | Default |
-| --- | --- | --- |
-| `InitialDelay` | `time.Duration` | 100ms |
-| `MaxDelay` | `time.Duration` | 5 seconds |
-| `Multiplier` | `float64` | 2 |
-| `Jitter` | `float64` | 0.2, or 20% |
-| `MaxAttempts` | `int` | `0`, unlimited retries |
-
-`0` selects the default for each field. Negative values are not allowed. An explicit maximum delay must be at least the initial delay; the multiplier must be at least 1, and jitter must be between 0 and 1. The same options apply to RabbitMQ consumers.
-
-Implement Kafka handlers idempotently to account for redelivery. Permanently unprocessable messages are not automatically skipped or sent to a separate failure queue.
+`spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{...})` controls reconnection after reader and ACK/NACK failures. Defaults are 100ms initial delay, 5s maximum delay, multiplier 2, jitter 0.2, and unlimited transport retries with `MaxAttempts: 0`. It does not set a handler retry budget or DLQ policy. `WithEventSettlementTimeout` defaults to a 5s ACK/NACK limit. Failed Kafka records are not skipped by later offset commits; a poison record can block a partition.
 
 ## RabbitMQ
 
-Use `amqps://` for production URLs. Each enabled `Read` and `Write` requires `Exchange`. The default failure policy rejects messages without requeueing.
+Import `rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"`. Configure the shared `Config.Exchange` and select `Consume`/`Publish`. URLs require `amqps://` by default; local `amqp://` requires explicit `AllowInsecureTransport: true`. Use this code inside `BuildApplication`.
 
 ```go
-RabbitMQ: &boot.RabbitMqOptions{
-    URL: "amqps://user:pass@rabbit.example/vhost",
-    PublisherRetry: boot.PublisherRetryOptions{
-        InitialDelay:   200 * time.Millisecond,
-        MaxDelay:       5 * time.Second,
-        MaxAttempts:    5,
-        ConfirmTimeout: 5 * time.Second,
+factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
+    URL: "amqps://user:pass@rabbit.example.com/vhost",
+    Exchange: "events",
+    Consume: true,
+    Publish: true,
+    PrefetchCount: 16,
+    FailurePolicy: rabbitmqplatform.FailureReject,
+    DeadLetter: &rabbitmqplatform.DeadLetter{
+        Exchange: "events.dlx",
+        RoutingKey: "events.failed",
     },
-    Read: &boot.RabbitMqReadOptions{
-        Exchange:      "events",
-        PrefetchCount: 16,
-        FailurePolicy: boot.RabbitMqFailureReject,
-        DeadLetter: &boot.RabbitMqDeadLetterOptions{
-            Exchange:   "events.dlx",
-            RoutingKey: "events.failed",
-        },
-    },
-    Write: &boot.RabbitMqWriteOptions{Exchange: "events"},
+    OperationTimeout: 5 * time.Second,
+})
+if err != nil {
+    return nil, boot.Options{}, err
 }
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
 
-| Read setting | Default and constraints |
-| --- | --- |
-| `PrefetchCount` | `0` means 1 unacknowledged message per consumer. Must be positive when explicitly set |
-| `FailurePolicy` | `boot.RabbitMqFailureReject` if omitted. Use `boot.RabbitMqFailureRequeue` to requeue |
-| `DeadLetter` | Default: `nil`. When configured, requires `Exchange` for a pre-created DLX; `RoutingKey` is also optional |
-| `RequeueOnError` | Compatibility with earlier versions. `true` requeues. A conflict with an explicit `FailurePolicy` produces a configuration error |
+Omitting `PrefetchCount` permits one unacknowledged message per consumer. The default policy is `rabbitmqplatform.FailureReject`; `FailureRequeue` can redeliver an unprocessable message indefinitely. Provision a `DeadLetter` exchange before using it. `TopicPrefix` applies to published routing keys and subscription bindings; `QueuePrefix` applies to queue names.
 
-A DLX is an exchange that receives messages that could not be processed. An operator must create it first. Without a matching DLX configuration, rejected messages may be discarded. If an existing queue's arguments differ from the new settings, RabbitMQ may return a queue declaration precondition failure.
-
-`RabbitMqFailureRequeue` can redeliver unprocessable messages indefinitely. Use the reject policy and a DLX for new configurations. `RequeueOnError` is planned for deprecation; use `FailurePolicy` in new code. Handlers are selected by the `RoutingKey` used to bind the queue, rather than the AMQP `Type`.
-
-The publisher uses persistent messages, `mandatory=true`, and publisher confirms. It does not treat publishing as successful if a message cannot be routed or a confirm is rejected or lost. Retrying after a lost confirm can publish the same message more than once, so consumers must be idempotent.
-
-| `PublisherRetryOptions` field | Type | Default |
-| --- | --- | --- |
-| `InitialDelay` | `time.Duration` | 100ms |
-| `MaxDelay` | `time.Duration` | 5 seconds |
-| `Multiplier` | `float64` | 2 |
-| `Jitter` | `float64` | 0.2, or 20% |
-| `MaxAttempts` | `int` | 3 attempts in total |
-| `ConfirmTimeout` | `time.Duration` | 5 seconds |
-
-`0` selects the default for each field. Negative values are not allowed. Delay range, multiplier, and jitter constraints are the same as for `ConsumerRetryOptions`. Consider the possibility of duplicate publishing when increasing `MaxAttempts`.
+Publishers use persistent messages, mandatory routing, and publisher confirms. `OperationTimeout` defaults to 5s. There is no `PublisherRetry` option that automatically republishes failed messages. Application retries after lost confirmation can duplicate delivery, so consumers must be idempotent.
 
 ## WebSocket
+
+Select Echo for HTTP and the independent Gorilla implementation for WebSocket. Registered WS routes require both HTTP upgrade support and a WS factory. To enable validation, pass the result of `playground.New()` to `spine.WithValidator`.
 
 Configure origin, connection, and message limits in `boot.HTTPOptions.WebSocket`. Specify the exact origins and connection limit for your application.
 
@@ -195,7 +166,7 @@ If a cookie's name, value, path, domain, `SameSite`, or `Priority` is invalid, J
 
 ## Operational constraints
 
-- Monitor `WEBSOCKET_CAPACITY_EXCEEDED`, exhausted consumer reconnection attempts, and RabbitMQ `Type` and `RoutingKey` mismatches.
+- Monitor `WEBSOCKET_CAPACITY_EXCEEDED`, exhausted consumer reconnection attempts, reader and ACK/NACK failures, and event publishing failures.
 - Implement Kafka and RabbitMQ consumers idempotently. Prepare operational procedures for unprocessable Kafka messages and RabbitMQ DLXs as well.
 - Actual socket writes and broker publishing are not atomic with DB commits. If atomicity is required, use a transactional outbox and idempotency keys.
 - Check supported versions in the [current release](/en/community/changelog).

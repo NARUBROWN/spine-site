@@ -47,6 +47,9 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 | キー | 役割 |
@@ -56,7 +59,11 @@ platform = "echo"
 | `composition` | アプリ構成を検査し、生成したコードを自動登録する場所 |
 | `port` | 開発サーバーで使用するポート |
 | `layout` | 生成ファイルの配置 (`legacy` または `layered-v1`) |
-| `platform` | HTTP プラットフォーム (`echo`) |
+| `platform` | HTTPプラットフォーム (`echo` または `none`) |
+| `recipe` | 互換依存関係を選ぶレシピ |
+| `websocket_platform` | WebSocket実装 (`none` または `gorilla`) |
+| `validator` | DTO検証器 (`none` または `playground`) |
+| `event_platforms` | 選択したイベントの名前と種類 |
 
 ## 実行とアプリ構成の分離
 
@@ -91,7 +98,7 @@ func main() {
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "os"
 
     "github.com/NARUBROWN/spine"
@@ -108,7 +115,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 }
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    app := spine.New(echoplatform.Option())
     app.Constructor(NewHealthController)
     app.Route("GET", "/health", (*HealthController).Get)
 
@@ -158,7 +165,7 @@ if err := user.Register(app); err != nil {
 
 ## 登録規則と検証
 
-CLIが登録コードを検査できるように、`BuildApplication() (spine.App, boot.Options, error)`の関数本体の最上位に`app := platform.New()`を維持してください。登録コードを条件分岐、ループ、任意の補助関数の中に移さないでください。`Register(app)`が返したエラーも確認し、返す必要があります。
+CLIが登録コードを検査できるように、`BuildApplication() (spine.App, boot.Options, error)`の関数本体の最上位に`app := spine.New(echoplatform.Option())`を維持してください。登録コードを条件分岐、ループ、任意の補助関数の中に移さないでください。`Register(app)`が返したエラーも確認し、返す必要があります。
 
 アプリ構成を検査してからサーバーを実行します。
 

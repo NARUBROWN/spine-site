@@ -4,7 +4,7 @@
 
 ## 事前準備
 
-先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI 0.4.0 は、型を定義したコンシューマーのひな形を提供します。Kafka ブローカーとトランスポートの設定は別途準備します。
+先に [CLIのインストール](/ja/learn/getting-started/installation) を完了します。CLI 0.4.2でKafkaプラットフォームとコンシューマーの雛形を生成し、以下のコードで発行サービスとHTTPを使わないワーカーを構成します。
 
 メッセージの配信を確認するには、`localhost:9092` の Kafka ブローカーと `order.created` トピックが必要です。この例では、隔離されたローカル環境の平文接続を使用します。在庫コンシューマーはイベントをログに記録し、実際の在庫数は変更しません。
 
@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --dry-run
 ```
 
 プレビューを確認してから 2 つのアプリを作成します。以降のコマンドは、別途指定がなければ `spine-msa/` で実行します。
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app
-spine new stock-app --layout legacy --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka
 ```
 
 ## 2. 在庫コンシューマーのひな形を生成する
@@ -48,28 +48,34 @@ spine generate consumer order --root stock-app --topic order.created --field eve
 spine-msa/
 ├── order-app/
 │   ├── go.mod
-├── go.sum
+│   ├── go.sum
 │   ├── main.go
 │   ├── spine.toml
 │   ├── internal/application/
 │   │   ├── application.go
-│   │   └── application_test.go
+│   │   ├── application_test.go
+│   │   ├── platform_config.go
+│   │   └── platform_config_test.go
 │   └── src/
 │       ├── events/order_created.go
 │       └── controller/order_controller.go
 └── stock-app/
     ├── go.mod
-├── go.sum
+    ├── go.sum
     ├── main.go
     ├── spine.toml
     ├── internal/application/
     │   ├── application.go
-    │   └── application_test.go
+    │   ├── application_test.go
+    │   ├── platform_config.go
+    │   └── platform_config_test.go
     └── src/consumer/order/
         ├── module.go
         ├── order_handler.go
         └── order_message.go
 ```
+
+生成した `platform_config.go` と2つのテストファイルを保持します。以下のBuildApplicationは生成された `loadKafkaConfig` で環境設定を検査し、注文サービスは発行のみ、在庫ワーカーは消費のみを選びます。実行する各ターミナルでブローカーとグループを指定します。
 
 ## 3. 共有イベントを定義する
 
@@ -138,16 +144,27 @@ func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Respon
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/order-app/src/controller"
     "github.com/NARUBROWN/spine"
+    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    config, err := loadKafkaConfig("SPINE_KAFKA_")
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    config.Consume = false
+    config.Publish = true
+    factory, err := kafkaplatform.NewFactory(config)
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
     app.Constructor(controller.NewOrderController)
     app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
 
@@ -156,11 +173,6 @@ func BuildApplication() (spine.App, boot.Options, error) {
         EnableGracefulShutdown: true,
         ShutdownTimeout: 10 * time.Second,
         HTTP: &boot.HTTPOptions{},
-        Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
-            AllowInsecureTransport: true,
-            Write: &boot.KafkaWriteOptions{TopicPrefix: ""},
-        },
     }, nil
 }
 ```
@@ -220,27 +232,32 @@ func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event Orde
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/stock-app/src/consumer/order"
     "github.com/NARUBROWN/spine"
+    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    config, err := loadKafkaConfig("SPINE_KAFKA_")
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    config.Consume = true
+    config.Publish = false
+    factory, err := kafkaplatform.NewFactory(config)
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app := spine.New(spine.WithEventAdapter("kafka", factory))
     if err := order.Register(app); err != nil {
         return nil, boot.Options{}, err
     }
     return app, boot.Options{
         EnableGracefulShutdown: true,
         ShutdownTimeout: 10 * time.Second,
-        Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
-            AllowInsecureTransport: true,
-            Read: &boot.KafkaReadOptions{GroupID: "stock-service"},
-        },
     }, nil
 }
 ```
@@ -269,7 +286,7 @@ spine verify --root order-app
 spine verify --root stock-app
 ```
 
-各サービスはローカルの平文接続を使用するため、`INSECURE_TRANSPORT_ENABLED` の警告が 1 件ずつ出ます。通常の検査は通過しますが、`--warnings-as-errors` を使用すると失敗します。
+この例のfactoryはローカル平文接続を明示的に許可します。CLIの静的契約検査はfactory設定を実行せず、転送の安全性やブローカーの準備状態を証明しません。
 
 `contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。ブローカー接続と実際のメッセージ配信は、次の手順で確認します。
 
@@ -280,13 +297,15 @@ Kafka が `localhost:9092` で起動しており、`order.created` トピック�
 1 つ目のターミナルで在庫サービスを起動します。
 
 ```sh
-spine run --root stock-app
+SPINE_KAFKA_BROKERS=localhost:9092 SPINE_KAFKA_GROUP_ID=stock-service \
+SPINE_KAFKA_ALLOW_INSECURE=true spine run --root stock-app
 ```
 
 2 つ目のターミナルで注文サービスを起動します。
 
 ```sh
-spine run --root order-app
+SPINE_KAFKA_BROKERS=localhost:9092 SPINE_KAFKA_GROUP_ID=order-service \
+SPINE_KAFKA_ALLOW_INSECURE=true spine run --root order-app
 ```
 
 3 つ目のターミナルで注文作成リクエストを送信します。
@@ -303,13 +322,13 @@ HTTP 202 と本文 `accepted` が返されることを確認します。続け�
 
 `AllowInsecureTransport: true` は、隔離されたローカルの平文ブローカーにのみ使用します。本番環境ではこのオプションを削除し、TLS/SASL とブローカーアドレスを設定します。既定のトランスポートは TLS 1.2 以上を使用します。トランスポート設定を直接指定する場合は、読み取りと書き込みの両方を保護する必要があります。
 
-`TopicPrefix` は、トピック名の先頭に文字列をそのまま付加します。発行設定に `prod.` を使用する場合、コンシューマーの登録トピックも `prod.order.created` に合わせる必要があります。この例では、両方ともプレフィックスなしの `order.created` を使用します。検査と実行で同じ設定を使用してください。
+`Config.TopicPrefix` は発行名と消費側の購読の両方に接頭辞を付けます。両factoryに `prod.` を設定する場合、アプリには `order.created` を登録し、ブローカーに `prod.order.created` を準備します。区切り文字は接頭辞に含めます。
 
 ### 重複処理と失敗するメッセージ
 
 Kafka はメッセージを少なくとも 1 回配信するため、同じイベントが再度届くことがあります。同じイベントを再送する際にも維持されるイベント ID と、永続的な重複処理の防止が必要です。この例の重複処理の防止は、同じプロセス内でのみ有効です。実際の在庫変更と永続的な重複処理の防止は、同じ DB トランザクションで実装する必要があります。
 
-`ConsumerRetry` はリーダーとトランスポート層の再構成を調整するもので、業務ハンドラーの再試行回数は制限しません。失敗し続けるメッセージは、パーティションの処理を止める可能性があります。メッセージを自動的にスキップしたり、DLQ に移動したりはしません。
+`spine.WithEventConsumerRetry` はリーダーとトランスポート層の再構成を調整するもので、業務ハンドラーの再試行回数は制限しません。失敗し続けるメッセージは、パーティションの処理を止める可能性があります。メッセージを自動的にスキップしたり、DLQ に移動したりはしません。
 
 ### DB の変更とイベントの発行
 

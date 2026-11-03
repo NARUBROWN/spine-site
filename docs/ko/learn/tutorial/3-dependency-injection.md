@@ -2,7 +2,7 @@
 
 [컨트롤러](/ko/learn/tutorial/2-controller)에서 만든 `src/user` 리소스를 기준으로 생성자 등록과 의존성 주입(DI)을 살펴봅니다. 이 과정을 마치면 컨트롤러, 서비스, 저장소를 연결하고 순환 의존성이나 누락된 생성자를 확인할 수 있습니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
 [첫 번째 앱](/ko/learn/tutorial/1-project-structure)의 프로젝트를 준비하고 `my-app` 루트에서 진행하세요. 뒤의 데이터베이스와 래퍼 타입 예제는 기본 리소스에 자동으로 포함되지 않는 별도 확장입니다.
 

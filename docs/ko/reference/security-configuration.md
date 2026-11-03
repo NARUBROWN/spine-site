@@ -1,6 +1,6 @@
 # 보안 설정
 
-Spine v0.6.0은 브로커의 암호화된 연결과 HTTP 및 WebSocket의 크기, 시간, 연결 수 제한을 기본으로 적용합니다. 이 참조에서 기본값과 설정 제약을 확인하고, 배포할 앱의 출처, 인증과 메시지 실패 정책을 선택하십시오.
+Spine 0.6.5의 HTTP와 WebSocket은 크기, 시간과 연결 수 제한을 사용합니다. 브로커 전송 정책은 독립 Kafka, RabbitMQ 플랫폼이 소유합니다. 아래 기본값은 각 플랫폼 v0.1.0을 기준으로 합니다.
 
 ## 설정 검증
 
@@ -15,7 +15,7 @@ if err := app.Run(options); err != nil {
 }
 ```
 
-오류는 `*boot.ConfigError`로 반환합니다. `Issues`의 각 `ConfigIssue`는 다음 필드를 제공합니다. 프로그램에서 오류를 분류할 때는 메시지를 파싱하지 않고 `Code`를 사용하십시오. 브로커 URL의 자격 증명은 설정 오류에 노출하지 않습니다.
+부트 설정 오류는 `*boot.ConfigError`의 `Issues`로 확인합니다. 외부 플랫폼의 `NewFactory`가 반환하는 설정 오류는 별도로 확인하세요. 오류 분류에는 메시지 문자열 대신 공개 오류와 코드를 사용하고 브로커 자격 증명을 로그에 남기지 않습니다.
 
 | 필드 | 의미 |
 | --- | --- |
@@ -31,10 +31,10 @@ if err := app.Run(options); err != nil {
 | HTTP | 읽기와 쓰기 시간, 헤더와 본문 크기 제한 | [`boot.HTTPOptions`](/ko/reference/api/spine-app#boot-options) |
 | Kafka | 활성화한 소비자와 발행기에 TLS 1.2 이상 적용 | `TLS`, `Dialer`, `Transport`. 로컬 평문 연결은 `AllowInsecureTransport: true` |
 | RabbitMQ 연결 | `amqps://` 필수 | 로컬 평문 연결은 `amqp://`와 `AllowInsecureTransport: true` |
-| RabbitMQ 발행 | 메시지 영속화, 필수 라우팅, 발행 확인, 유한 재시도 | `PublisherRetry` |
-| RabbitMQ 처리 실패 | 재큐잉하지 않고 거부 | `FailurePolicy` |
+| RabbitMQ 발행 | persistent / mandatory / publisher confirm | `OperationTimeout` |
+| RabbitMQ 처리 실패 | 재큐잉하지 않고 거부 | `rabbitmqplatform.Config.FailurePolicy` |
 | RabbitMQ 동시 처리 | 소비자당 미확인 메시지 1개 | 양의 `PrefetchCount` |
-| 소비자 전송 실패 | 지수 백오프와 지터를 적용해 리더 재생성 | `ConsumerRetry` |
+| 소비자 전송 실패 | 지수 백오프와 지터를 적용해 리더 재생성 | `spine.WithEventConsumerRetry` |
 | WebSocket 출처 | 브라우저 요청은 프로토콜과 호스트가 같은 출처만 허용 | `AllowedOrigins` |
 | WebSocket 연결 수 | 연결과 연결 대기 요청을 합쳐 1024개 | 양의 `MaxConnections` 또는 `boot.UnlimitedWebSocketConnections` |
 | WebSocket 연결 인증 | 선택적 인터페이스를 구현한 인터셉터만 업그레이드 전에 실행 | `core.WebSocketHandshakeInterceptor` 구현 |
@@ -44,91 +44,62 @@ if err := app.Run(options); err != nil {
 
 ## Kafka
 
-`boot.KafkaOptions`의 `Read`와 `Write`는 독립적으로 활성화합니다. 둘 중 하나라도 설정하면 `Brokers`가 필요하고, `Read`를 사용하면 `GroupID`도 지정해야 합니다. 별도 전송 설정이 없으면 소비자와 발행기 모두에 TLS 1.2 이상을 적용합니다.
+`kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`을 import합니다. `Config.Consume`과 `Config.Publish`로 역할을 선택하며 `Brokers`가 필요합니다. 소비자는 `GroupID`도 지정합니다. 다음 코드는 `BuildApplication` 안에서 사용하며 `echoplatform`, `spine`, `boot`, `time`도 import합니다.
 
 ```go
-Kafka: &boot.KafkaOptions{
-    Brokers: []string{"kafka.example:9093"},
-    Read:  &boot.KafkaReadOptions{GroupID: "orders"},
-    Write: &boot.KafkaWriteOptions{},
+factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
+    Brokers: []string{"kafka.example.com:9093"},
+    Consume: true,
+    Publish: true,
+    GroupID: "orders",
+    TopicPrefix: "prod.",
+})
+if err != nil {
+    return nil, boot.Options{}, err
 }
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
+    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+    spine.WithEventSettlementTimeout(5 * time.Second),
+))
 ```
 
-사용자 정의 CA, mTLS, SASL이 필요하면 `TLS`, `Dialer`, `Transport`를 설정합니다. 활성화한 역할에 명시적 TLS와 `AllowInsecureTransport`를 함께 설정하면 `KAFKA_TLS_INSECURE_CONFLICT` 오류가 발생합니다. 평문 연결은 격리된 로컬 개발 환경에서만 명시적으로 허용하십시오.
+Kafka 플랫폼은 별도 설정이 없으면 TLS 1.2 이상을 적용합니다. `TLS`, `Dialer`, `Transport`로 CA, mTLS, SASL을 설정합니다. `AllowInsecureTransport: true`는 격리된 로컬 평문 연결에만 사용하며 명시적 TLS와 함께 지정할 수 없습니다. `NewFactory`는 설정만 검사합니다. `Prepare`와 `Run`은 등록된 소비자의 reader를 준비할 때 브로커와 토픽을 확인합니다. Kafka 발행 전용 앱은 브로커 연결 없이 기동할 수 있으므로 실제 발행으로 연결과 전달을 별도로 확인하세요.
 
-```go
-Kafka: &boot.KafkaOptions{
-    Brokers:                []string{"localhost:9092"},
-    AllowInsecureTransport: true,
-    Read:                   &boot.KafkaReadOptions{GroupID: "local"},
-}
-```
+`Config.TopicPrefix`는 발행 이름과 소비 구독 모두에 접두사를 붙입니다. 양쪽 factory에 `prod.`를 설정하면 앱에는 `order.created`를 등록하고 브로커 토픽은 `prod.order.created`로 준비합니다. 접두사에는 구분자를 직접 포함합니다.
 
-리더 오류나 ACK/NACK 실패 뒤에는 `ConsumerRetry`에 따라 기존 리더를 닫고 새 리더를 만듭니다. 이 옵션은 전송 계층의 재연결을 제어하며, 핸들러의 메시지 처리 정책을 바꾸지 않습니다.
-
-| `ConsumerRetryOptions` 필드 | 타입 | 기본값 |
-| --- | --- | --- |
-| `InitialDelay` | `time.Duration` | 100ms |
-| `MaxDelay` | `time.Duration` | 5초 |
-| `Multiplier` | `float64` | 2 |
-| `Jitter` | `float64` | 0.2, 즉 20% |
-| `MaxAttempts` | `int` | `0`, 무제한 재시도 |
-
-각 필드의 `0`은 기본값을 선택합니다. 음수는 허용하지 않습니다. 명시한 지연 상한은 최초 지연 이상이어야 하며, 배수는 1 이상, 지터는 0에서 1 사이여야 합니다. 같은 옵션을 RabbitMQ 소비자에도 적용합니다.
-
-Kafka 핸들러는 재전달을 고려해 멱등하게 구현해야 합니다. 영구적으로 처리할 수 없는 메시지를 자동으로 건너뛰거나 별도 실패 큐로 보내지는 않습니다.
+`spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{...})`는 리더와 ACK/NACK 실패 뒤 재연결을 제어합니다. 기본값은 최초 100ms, 최대 5초, 배수 2, 지터 0.2, `MaxAttempts: 0`의 무제한 전송 재시도입니다. 핸들러 재시도 횟수나 DLQ 정책은 지정하지 않습니다. `WithEventSettlementTimeout`의 기본 ACK/NACK 제한은 5초입니다. Kafka의 처리 실패는 뒤의 offset 커밋으로 건너뛰지 않으며 영구 실패 메시지가 파티션을 막을 수 있습니다.
 
 ## RabbitMQ
 
-운영 URL은 `amqps://`를 사용합니다. 활성화한 `Read`와 `Write`에는 각각 `Exchange`가 필요합니다. 기본 실패 정책은 재큐잉 없는 거부입니다.
+`rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"`을 import합니다. 공통 `Config.Exchange`와 `Consume`, `Publish`를 설정합니다. 기본 URL은 `amqps://`이며 로컬 `amqp://`는 `AllowInsecureTransport: true`로 명시적으로 허용합니다. 다음 코드는 `BuildApplication` 안에서 사용합니다.
 
 ```go
-RabbitMQ: &boot.RabbitMqOptions{
-    URL: "amqps://user:pass@rabbit.example/vhost",
-    PublisherRetry: boot.PublisherRetryOptions{
-        InitialDelay:   200 * time.Millisecond,
-        MaxDelay:       5 * time.Second,
-        MaxAttempts:    5,
-        ConfirmTimeout: 5 * time.Second,
+factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
+    URL: "amqps://user:pass@rabbit.example.com/vhost",
+    Exchange: "events",
+    Consume: true,
+    Publish: true,
+    PrefetchCount: 16,
+    FailurePolicy: rabbitmqplatform.FailureReject,
+    DeadLetter: &rabbitmqplatform.DeadLetter{
+        Exchange: "events.dlx",
+        RoutingKey: "events.failed",
     },
-    Read: &boot.RabbitMqReadOptions{
-        Exchange:      "events",
-        PrefetchCount: 16,
-        FailurePolicy: boot.RabbitMqFailureReject,
-        DeadLetter: &boot.RabbitMqDeadLetterOptions{
-            Exchange:   "events.dlx",
-            RoutingKey: "events.failed",
-        },
-    },
-    Write: &boot.RabbitMqWriteOptions{Exchange: "events"},
+    OperationTimeout: 5 * time.Second,
+})
+if err != nil {
+    return nil, boot.Options{}, err
 }
+app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
 
-| 읽기 설정 | 기본값과 제약 |
-| --- | --- |
-| `PrefetchCount` | `0`이면 소비자당 미확인 메시지 1개. 직접 지정할 때는 양수 |
-| `FailurePolicy` | 생략하면 `boot.RabbitMqFailureReject`. 재큐잉하려면 `boot.RabbitMqFailureRequeue` |
-| `DeadLetter` | 기본값 `nil`. 설정할 때는 사전에 생성한 DLX의 `Exchange`가 필요하며 `RoutingKey`도 지정 가능 |
-| `RequeueOnError` | 이전 버전과의 호환용. `true`이면 재큐잉. 명시한 `FailurePolicy`와 충돌하면 설정 오류 |
+`PrefetchCount`를 생략하면 소비자당 미확인 메시지는 1개입니다. 실패 정책의 기본값은 `rabbitmqplatform.FailureReject`이며 `FailureRequeue`는 처리 불가능한 메시지를 무기한 다시 전달할 수 있습니다. `DeadLetter`에 지정할 교환기는 먼저 준비해야 합니다. `TopicPrefix`는 발행 라우팅 키와 구독 바인딩에 적용하고 `QueuePrefix`는 큐 이름에 적용합니다.
 
-DLX는 처리하지 못한 메시지를 받는 교환기입니다. 운영자가 먼저 생성해야 하며, 일치하는 DLX 구성이 없으면 거부한 메시지가 폐기될 수 있습니다. 기존 큐의 인자와 새 설정이 다르면 RabbitMQ가 큐 선언 조건 불일치 오류를 반환할 수 있습니다.
-
-`RabbitMqFailureRequeue`를 사용하면 처리할 수 없는 메시지를 무기한 다시 전달할 수 있습니다. 새 구성에는 거부 정책과 DLX를 사용하십시오. `RequeueOnError`는 사용 중단 예정이며 새 코드에서는 `FailurePolicy`를 사용합니다. 핸들러를 선택하는 키는 AMQP `Type`이 아니라 큐를 바인딩한 `RoutingKey`입니다.
-
-발행기는 영속 메시지, `mandatory=true`와 발행 확인을 사용합니다. 메시지를 라우팅할 수 없거나 확인이 거부 또는 유실되면 성공으로 처리하지 않습니다. 확인 유실 뒤 재시도하면 같은 메시지를 중복 발행할 수 있으므로 소비자는 멱등해야 합니다.
-
-| `PublisherRetryOptions` 필드 | 타입 | 기본값 |
-| --- | --- | --- |
-| `InitialDelay` | `time.Duration` | 100ms |
-| `MaxDelay` | `time.Duration` | 5초 |
-| `Multiplier` | `float64` | 2 |
-| `Jitter` | `float64` | 0.2, 즉 20% |
-| `MaxAttempts` | `int` | 총 3회 시도 |
-| `ConfirmTimeout` | `time.Duration` | 5초 |
-
-각 필드의 `0`은 기본값을 선택합니다. 음수는 허용하지 않으며, 지연 범위와 배수 및 지터의 제약은 `ConsumerRetryOptions`와 같습니다. `MaxAttempts`를 늘리면 발행 중복 가능성도 고려해야 합니다.
+발행기는 영속 메시지, mandatory 라우팅과 publisher confirm을 사용합니다. `OperationTimeout` 기본값은 5초입니다. 실패한 메시지를 자동 재발행하는 `PublisherRetry` 옵션은 없습니다. 확인 유실 뒤 앱이 재시도하면 중복이 생길 수 있으므로 소비자는 멱등하게 구현합니다.
 
 ## WebSocket
+
+HTTP는 Echo, WebSocket은 독립 Gorilla 구현을 선택해야 합니다. WS 등록이 있으면 HTTP의 업그레이드 지원과 WS factory가 모두 필요합니다. 검증기를 선택하려면 `playground.New()`의 결과를 `spine.WithValidator`로 전달합니다.
 
 `boot.HTTPOptions.WebSocket`에서 출처, 연결 수와 메시지 제한을 설정합니다. 앱에서 사용할 정확한 출처와 연결 상한을 지정하십시오.
 
@@ -195,7 +166,7 @@ app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
 ## 운영 시 제약
 
-- `WEBSOCKET_CAPACITY_EXCEEDED`, 소비자 재연결 시도 소진과 RabbitMQ `Type` 및 `RoutingKey` 불일치를 감시합니다.
+- `WEBSOCKET_CAPACITY_EXCEEDED`, 소비자 재연결 시도 소진, reader 및 ACK/NACK 실패와 이벤트 발행 실패를 감시합니다.
 - Kafka와 RabbitMQ 소비자는 멱등하게 구현합니다. Kafka에서 처리할 수 없는 메시지와 RabbitMQ DLX를 운영하는 절차도 준비합니다.
 - 실제 소켓 쓰기와 브로커 발행은 DB 커밋과 원자적으로 묶이지 않습니다. 원자성이 필요하면 트랜잭셔널 아웃박스와 멱등 키를 사용합니다.
 - 지원 버전은 [현재 릴리스](/ko/community/changelog)에서 확인하십시오.

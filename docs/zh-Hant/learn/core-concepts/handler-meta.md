@@ -2,9 +2,9 @@
 
 `core.HandlerMeta` 包含執行對應請求的控制器方法所需的資訊，包括控制器型別、方法、路徑參數順序，以及路由攔截器。應用程式使用 `app.Route` 註冊處理器，並可在攔截器中讀取 `HandlerMeta`，確認即將執行的對象。
 
-本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
 
-本頁以 Spine v0.6.0 的公開型別和 HTTP 執行流程為基礎。應用程式不需要自行編寫建立中繼資料的函式或路由器內部實作。
+本頁以 Spine v0.6.5 的公開型別和 HTTP 執行流程為基礎。應用程式不需要自行編寫建立中繼資料的函式或路由器內部實作。
 
 ## 在 CLI 專案中的位置
 

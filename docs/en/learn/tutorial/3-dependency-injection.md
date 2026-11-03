@@ -2,7 +2,7 @@
 
 Explore constructor registration and dependency injection (DI) using the `src/user` resource created in [Controllers](/en/learn/tutorial/2-controller). By the end, you can connect controllers, services, and repositories, and identify circular dependencies or missing constructors.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
 
 Prepare the project from [Your first app](/en/learn/tutorial/1-project-structure) and work from the `my-app` root. The database and wrapper type examples later in this page are separate extensions that are not included automatically in the basic resource.
 

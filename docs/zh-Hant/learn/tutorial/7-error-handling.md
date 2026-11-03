@@ -2,7 +2,7 @@
 
 依照使用者查詢失敗的原因回傳 HTTP 400 或 404，並在回應中隱藏未預期錯誤的內部資訊。
 
-本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.0` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.0` 與 Echo 平台 `v0.1.0`。
+本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
 
 使用[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)和[控制器](/zh-Hant/learn/tutorial/2-controller)中的 CLI 專案。需要先以 `spine generate resource user` 產生 `src/user`。下方會將 GET 處理器改為唯讀的記憶體查詢，因此請與資料庫教學分開套用。領域錯誤與 HTTP 狀態之間的對應程式碼需要自行撰寫。
 

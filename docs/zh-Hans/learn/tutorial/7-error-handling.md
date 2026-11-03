@@ -2,7 +2,7 @@
 
 根据用户查询失败的原因返回 HTTP 400 或 404，并在响应中隐藏意外错误的内部详情。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.0` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.0` 和 Echo 平台 `v0.1.0`。
+本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
 
 使用[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)和[控制器](/zh-Hans/learn/tutorial/2-controller)中的 CLI 项目。需要通过 `spine generate resource user` 生成的 `src/user`。以下步骤将 GET 处理器替换为只读的内存查询，请与数据库教程分开应用。将领域错误映射到 HTTP 状态的代码需要手动编写。
 

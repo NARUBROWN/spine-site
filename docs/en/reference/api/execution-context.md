@@ -138,7 +138,7 @@ type WebSocketContext interface {
 
 ### WebSocket connection request information {#websocket-request-context}
 
-v0.6.0 copies and preserves HTTP upgrade request information. The following interfaces provide access to headers, queries, cookies, the remote address, the host, and the request URI.
+v0.6.5 copies and preserves HTTP upgrade request information. The following interfaces provide access to headers, queries, cookies, the remote address, the host, and the request URI.
 
 ```go
 type WebSocketRequestContext interface {
@@ -687,11 +687,11 @@ Input resolution components receive `core.ExecutionContext` and assert it to the
 
 For an HTTP controller's `context.Context` parameter, the runtime passes the standard context with a request-scoped event bus. For its `core.ControllerContext` parameter, it passes a view that provides only `Get()`. The default consumer and WebSocket input resolvers do not inject `ControllerContext`. The runtime's input resolution code is available in the following sources.
 
-- [HTTP path parameter resolution](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/path_int_resolver.go)
-- [Standard context injection](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/std_context_resolver.go)
-- [Controller read context injection](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/controller_context_resolver.go)
-- [Event input resolution](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/event/consumer/resolver)
-- [WebSocket input resolution](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/ws/resolver)
+- [HTTP path parameter resolution](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
+- [Standard context injection](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
+- [Controller read context injection](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
+- [Event input resolution](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
+- [WebSocket input resolution](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
 
 ## Behavior by protocol
 

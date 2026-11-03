@@ -2,9 +2,9 @@
 
 `core.HandlerMeta` contains the information needed to execute the controller method for a request: the controller type, method, order of path parameters, and route interceptors. Register handlers with `app.Route`, then read `HandlerMeta` in an interceptor to identify the handler being executed.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.0` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.0` and Echo platform `v0.1.0`.
+The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
 
-This page describes the public types and HTTP execution flow in Spine v0.6.0. You do not need to implement metadata creation functions or router internals in your app.
+This page describes the public types and HTTP execution flow in Spine v0.6.5. You do not need to implement metadata creation functions or router internals in your app.
 
 ## Where It Fits in a CLI Project
 

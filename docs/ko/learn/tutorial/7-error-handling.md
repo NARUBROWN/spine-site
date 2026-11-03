@@ -2,7 +2,7 @@
 
 사용자 조회가 실패한 원인에 따라 HTTP 400이나 404를 반환하고, 예상하지 못한 오류의 내부 내용을 응답에서 숨깁니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
 [첫 번째 앱](/ko/learn/tutorial/1-project-structure)과 [컨트롤러](/ko/learn/tutorial/2-controller)의 CLI 프로젝트를 사용합니다. `spine generate resource user`로 생성한 `src/user`가 필요합니다. 아래에서는 GET 핸들러를 읽기 전용 메모리 조회로 교체하므로, 데이터베이스 튜토리얼과 별도로 적용하세요. 도메인 오류와 HTTP 상태를 연결하는 코드는 직접 작성합니다.
 

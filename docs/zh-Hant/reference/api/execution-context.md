@@ -138,7 +138,7 @@ type WebSocketContext interface {
 
 ### WebSocket 連線請求資訊 {#websocket-request-context}
 
-v0.6.0 會複製並保留 HTTP 升級請求資訊。可透過以下介面查詢標頭、查詢參數、Cookie、遠端位址、主機與請求 URI。
+v0.6.5 會複製並保留 HTTP 升級請求資訊。可透過以下介面查詢標頭、查詢參數、Cookie、遠端位址、主機與請求 URI。
 
 ```go
 type WebSocketRequestContext interface {
@@ -687,11 +687,11 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 HTTP 控制器的 `context.Context` 參數會收到標準內容物件與請求範圍的事件匯流排；`core.ControllerContext` 參數則會收到只提供 `Get()` 的檢視。消費者與 WebSocket 的預設輸入解析器不提供 `ControllerContext` 注入功能。執行階段的輸入解析程式碼可在以下原始碼中查看。
 
-- [HTTP 路徑參數解析](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/path_int_resolver.go)
-- [傳遞標準內容物件](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/std_context_resolver.go)
-- [傳遞控制器查詢內容物件](https://github.com/NARUBROWN/spine/blob/v0.6.0/internal/resolver/controller_context_resolver.go)
-- [事件輸入解析](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/event/consumer/resolver)
-- [WebSocket 輸入解析](https://github.com/NARUBROWN/spine/tree/v0.6.0/internal/ws/resolver)
+- [HTTP 路徑參數解析](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
+- [傳遞標準內容物件](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
+- [傳遞控制器查詢內容物件](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
+- [事件輸入解析](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
+- [WebSocket 輸入解析](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
 
 ## 各通訊協定的行為差異
 

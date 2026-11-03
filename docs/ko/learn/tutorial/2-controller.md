@@ -2,7 +2,7 @@
 
 CLI로 만든 `my-app` 프로젝트에 `GET /user/:id` 컨트롤러를 추가하고, 요청 경로의 정수를 JSON 응답으로 반환합니다. 이어서 쿼리, 헤더, 요청 본문을 받는 방법과 응답 타입을 살펴봅니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
 [첫 번째 앱](/ko/learn/tutorial/1-project-structure)의 설치와 프로젝트 생성을 마친 뒤 프로젝트 루트에서 진행하세요. 이미 `spine generate resource user`를 실행했다면 생성 단계를 건너뛰고 파일을 확인합니다.
 
@@ -691,7 +691,7 @@ JSON과 폼 DTO는 구조체 포인터로 받습니다. 쿼리, 경로, 업로�
 
 ## 입력 오류 처리 시 주의사항
 
-Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요.
+Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요.
 
 ## 다음 단계
 

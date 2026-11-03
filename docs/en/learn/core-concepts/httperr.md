@@ -2,7 +2,7 @@
 
 `httperr` contains HTTP status codes and error messages to send to clients. When a controller returns an error such as `httperr.NotFound("사용자를 찾을 수 없습니다")`, Spine converts it to a status code and a JSON error response. Controllers do not need to work directly with response objects from Echo or similar frameworks.
 
-This page describes `github.com/NARUBROWN/spine/pkg/httperr` in Spine v0.6.0.
+This page describes `github.com/NARUBROWN/spine/pkg/httperr` in Spine v0.6.5.
 
 ## Using It in a CLI Project
 
@@ -78,7 +78,7 @@ The helper functions return the `error` interface type, but the concrete value i
 
 ## Built-in Helper Functions
 
-Spine v0.6.0 provides the following four helpers. Each accepts `msg string` and returns `error`.
+Spine v0.6.5 provides the following four helpers. Each accepts `msg string` and returns `error`.
 
 | Function | Status Code | When to Use It |
 | --- | --- | --- |
@@ -301,10 +301,11 @@ Errors can occur during routing, argument conversion, controller invocation, or 
 | --- | --- |
 | No matching route | 404 error response |
 | `HTTPError` occurs during execution | Responds with the specified error status code and message |
+| DTO rule violation from the selected validator (`validation.Error`) | 400 response with `message` and `fields` |
 | Regular execution error occurs | Responds with 500 and `"Internal server error"` |
 | Request body exceeds the size limit | Responds with 413 and `"Request entity too large"` |
 | An actual response has already been written | Does not write another error response, preventing a double response |
 
-Spine v0.6.0 applies the prepared response to the actual transport layer after pre-response processing is complete. An error in `BeforeResponse` can replace the pending success response with an error response. Since `AfterCompletion` runs after response processing, use this stage to log errors and transmission results rather than attempting to write a new error response.
+Spine v0.6.5 applies the prepared response to the actual transport layer after pre-response processing is complete. An error in `BeforeResponse` can replace the pending success response with an error response. Since `AfterCompletion` runs after response processing, use this stage to log errors and transmission results rather than attempting to write a new error response.
 
 Pass errors through Go return values. Do not use `panic` for normal input validation or business failures. See the [Interceptor Tutorial](/en/learn/tutorial/4-interceptor) for interceptor termination and cleanup behavior.

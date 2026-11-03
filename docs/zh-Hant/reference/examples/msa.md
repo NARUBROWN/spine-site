@@ -4,7 +4,7 @@
 
 ## 開始前的準備
 
-請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。CLI 0.4.0 提供具備型別定義的消費者骨架。Kafka broker 和傳輸設定需要另外準備。
+先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。使用 CLI 0.4.2 產生 Kafka 平台與消費者骨架，再用以下程式碼組裝發布服務與沒有 HTTP 的 worker。
 
 若要確認訊息傳遞，需要在 `localhost:9092` 執行的 Kafka broker，以及 `order.created` 主題。此範例使用隔離本機環境中的明文連線。庫存消費者會將事件寫入日誌，不會實際變更庫存數量。
 
@@ -15,15 +15,15 @@
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --dry-run
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --dry-run
 ```
 
 確認預覽後，建立兩個應用程式。除非另有說明，後續命令均在 `spine-msa/` 中執行。
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app
-spine new stock-app --layout legacy --module example.com/stock-app
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka
 ```
 
 ## 2. 產生庫存消費者骨架
@@ -48,28 +48,34 @@ spine generate consumer order --root stock-app --topic order.created --field eve
 spine-msa/
 ├── order-app/
 │   ├── go.mod
-├── go.sum
+│   ├── go.sum
 │   ├── main.go
 │   ├── spine.toml
 │   ├── internal/application/
 │   │   ├── application.go
-│   │   └── application_test.go
+│   │   ├── application_test.go
+│   │   ├── platform_config.go
+│   │   └── platform_config_test.go
 │   └── src/
 │       ├── events/order_created.go
 │       └── controller/order_controller.go
 └── stock-app/
     ├── go.mod
-├── go.sum
+    ├── go.sum
     ├── main.go
     ├── spine.toml
     ├── internal/application/
     │   ├── application.go
-    │   └── application_test.go
+    │   ├── application_test.go
+    │   ├── platform_config.go
+    │   └── platform_config_test.go
     └── src/consumer/order/
         ├── module.go
         ├── order_handler.go
         └── order_message.go
 ```
+
+保留產生的 `platform_config.go` 與兩個測試檔案。以下 BuildApplication 使用產生的 `loadKafkaConfig` 驗證環境設定，再為訂單服務選擇僅發布、為庫存 worker 選擇僅消費。在各執行終端傳入訊息代理與群組設定。
 
 ## 3. 定義共用事件
 
@@ -138,16 +144,27 @@ func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Respon
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/order-app/src/controller"
     "github.com/NARUBROWN/spine"
+    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    config, err := loadKafkaConfig("SPINE_KAFKA_")
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    config.Consume = false
+    config.Publish = true
+    factory, err := kafkaplatform.NewFactory(config)
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
     app.Constructor(controller.NewOrderController)
     app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
 
@@ -156,11 +173,6 @@ func BuildApplication() (spine.App, boot.Options, error) {
         EnableGracefulShutdown: true,
         ShutdownTimeout: 10 * time.Second,
         HTTP: &boot.HTTPOptions{},
-        Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
-            AllowInsecureTransport: true,
-            Write: &boot.KafkaWriteOptions{TopicPrefix: ""},
-        },
     }, nil
 }
 ```
@@ -220,27 +232,32 @@ func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event Orde
 package application
 
 import (
-    platform "github.com/NARUBROWN/spine-echo-platform"
     "time"
 
     "example.com/stock-app/src/consumer/order"
     "github.com/NARUBROWN/spine"
+    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := platform.New()
+    config, err := loadKafkaConfig("SPINE_KAFKA_")
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    config.Consume = true
+    config.Publish = false
+    factory, err := kafkaplatform.NewFactory(config)
+    if err != nil {
+        return nil, boot.Options{}, err
+    }
+    app := spine.New(spine.WithEventAdapter("kafka", factory))
     if err := order.Register(app); err != nil {
         return nil, boot.Options{}, err
     }
     return app, boot.Options{
         EnableGracefulShutdown: true,
         ShutdownTimeout: 10 * time.Second,
-        Kafka: &boot.KafkaOptions{
-            Brokers: []string{"localhost:9092"},
-            AllowInsecureTransport: true,
-            Read: &boot.KafkaReadOptions{GroupID: "stock-service"},
-        },
     }, nil
 }
 ```
@@ -269,7 +286,7 @@ spine verify --root order-app
 spine verify --root stock-app
 ```
 
-由於兩個服務都使用本機明文連線，因此各會出現一個 `INSECURE_TRANSPORT_ENABLED` 警告。預設檢查仍會通過，但使用 `--warnings-as-errors` 時會失敗。
+本例 factory 明確允許本地明文連線。CLI 靜態契約檢查不執行 factory 設定，也不證明傳輸安全性或訊息代理就緒狀態。
 
 `contract check` 檢查靜態契約。`verify` 檢查靜態契約，並執行 gofmt、go vet 和 Go 測試。broker 連線和實際訊息傳遞會在下一步確認。
 
@@ -280,13 +297,15 @@ spine verify --root stock-app
 在第一個終端機啟動庫存服務。
 
 ```sh
-spine run --root stock-app
+SPINE_KAFKA_BROKERS=localhost:9092 SPINE_KAFKA_GROUP_ID=stock-service \
+SPINE_KAFKA_ALLOW_INSECURE=true spine run --root stock-app
 ```
 
 在第二個終端機啟動訂單服務。
 
 ```sh
-spine run --root order-app
+SPINE_KAFKA_BROKERS=localhost:9092 SPINE_KAFKA_GROUP_ID=order-service \
+SPINE_KAFKA_ALLOW_INSECURE=true spine run --root order-app
 ```
 
 在第三個終端機傳送建立訂單的請求。
@@ -303,13 +322,13 @@ curl -i -X POST http://localhost:8080/orders/12345
 
 `AllowInsecureTransport: true` 僅適用於隔離的本機明文 broker。正式環境應移除此選項，並設定 TLS/SASL 和 broker 位址。預設傳輸使用 TLS 1.2 以上版本。若自行指定傳輸設定，必須同時保護讀取和寫入。
 
-`TopicPrefix` 會將字串直接加在主題名稱前方。若發布設定使用 `prod.`，消費者註冊的主題也必須設為 `prod.order.created`。此範例兩端都使用不含前綴的 `order.created`。檢查和執行時請使用相同設定。
+`Config.TopicPrefix` 同時為發布名稱與消費者訂閱加入前綴。兩端 factory 都設定 `prod.` 時，應用程式中註冊 `order.created`，在訊息代理中準備 `prod.order.created`。前綴需要自行包含分隔符。
 
 ### 重複處理和失敗訊息
 
 Kafka 至少傳遞每則訊息一次，因此同一事件可能再次送達。需要使用重新傳送時仍維持不變的事件 ID，並以持久儲存防止重複處理。此範例的重複處理防護僅在同一程序內有效。實際庫存變更和持久化的重複處理防護，必須在同一個 DB 交易中實作。
 
-`ConsumerRetry` 會調整讀取器和傳輸層的重新設定，不會限制業務處理器的重試次數。持續失敗的訊息可能阻塞分割區。系統不會自動略過訊息或將訊息移至 DLQ。
+`spine.WithEventConsumerRetry` 會調整讀取器和傳輸層的重新設定，不會限制業務處理器的重試次數。持續失敗的訊息可能阻塞分割區。系統不會自動略過訊息或將訊息移至 DLQ。
 
 ### DB 變更與事件發布
 

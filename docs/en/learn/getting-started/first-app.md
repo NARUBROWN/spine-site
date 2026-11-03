@@ -51,6 +51,9 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
+recipe = "platform-contracts-v0.6.5"
+websocket_platform = "none"
+validator = "none"
 ```
 
 `BuildApplication()` in `internal/application/application.go` returns the app and its runtime options. The generated code registers the `HealthController` constructor and `GET /health`, and explicitly sets the HTTP runtime options, `boot.HTTPOptions`.

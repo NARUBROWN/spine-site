@@ -1,6 +1,12 @@
 # 目前版本
 
-文件範例於 2026-11-02 使用 Spine v0.6.0 與 CLI v0.4.0 驗證。一般安裝使用 `@latest`；實際 CLI 與相依套件版本請透過 `spine version` 及產生的 `go.mod` 確認。
+一般安裝使用 `@latest`。目前文件以 Spine v0.6.5 與 CLI v0.4.2 為基準。使用 `spine version` 檢查 CLI，在產生的 `go.mod` 中確認實際相依套件。
+
+## Spine v0.6.5 / CLI v0.4.2
+
+HTTP、WebSocket、事件與 DTO 驗證的公開契約統一到 `contract/`。透過 `spine.New(...)` 選擇獨立平台；Kafka/RabbitMQ boot 選項已移除。CLI 0.4.2 產生實作選擇與 v0.6.5 配方。
+
+[選擇平台與 DTO 驗證](/zh-Hant/learn/getting-started/platforms)
 
 ## Spine v0.6.0
 

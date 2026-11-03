@@ -11,7 +11,7 @@
 프로젝트와 WebSocket 핸들러를 생성합니다. 이후 명령은 `chat-app/`에서 실행합니다.
 
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app
+spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla
 cd chat-app
 spine doctor
 spine generate websocket chat --path /ws/chat --field message:string

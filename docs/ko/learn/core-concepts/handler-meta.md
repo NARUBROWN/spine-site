@@ -2,9 +2,9 @@
 
 `core.HandlerMeta`는 요청에 맞는 컨트롤러 메서드를 실행하는 데 필요한 정보입니다. 컨트롤러 타입, 메서드, 경로 매개변수의 순서, 라우트 인터셉터를 담습니다. 앱에서는 `app.Route`로 핸들러를 등록하고, 인터셉터에서 `HandlerMeta`를 읽어 실행 대상을 확인할 수 있습니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.0`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.0`과 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
 
-이 페이지는 Spine v0.6.0의 공개 타입과 HTTP 실행 흐름을 기준으로 설명합니다. 앱에서 메타데이터 생성 함수나 라우터 내부 구현을 직접 작성할 필요는 없습니다.
+이 페이지는 Spine v0.6.5의 공개 타입과 HTTP 실행 흐름을 기준으로 설명합니다. 앱에서 메타데이터 생성 함수나 라우터 내부 구현을 직접 작성할 필요는 없습니다.
 
 ## CLI 프로젝트에서의 위치
 
