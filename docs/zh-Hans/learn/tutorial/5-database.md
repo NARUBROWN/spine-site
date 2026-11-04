@@ -1,5 +1,13 @@
 # 数据库连接
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 使用 Bun 连接 MySQL，并扩展生成的 `GET /user/:id`，使其从数据库查询用户。同时编写用于建表的迁移和仓储的基本查询。
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
@@ -29,14 +37,14 @@ CLI 会生成用户资源的基本文件和注册代码。Bun 依赖、数据库
 ## 安装
 
 ```bash
-# Bun 코어
+# Bun 核心
 go get github.com/uptrace/bun@v1.2.16
 
-# MySQL 드라이버 + 방언
+# MySQL 驱动 + 方言
 go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
-# PostgreSQL을 사용한다면
+# 如果使用 PostgreSQL
 # go get github.com/uptrace/bun/dialect/pgdialect
 # go get github.com/jackc/pgx/v5/stdlib
 ```
@@ -161,7 +169,7 @@ func NewDB() *bun.DB {
 上述 `NewDB` 从环境变量 `DATABASE_URL` 读取连接字符串。
 
 ```go
-// src/database/db.go의 NewDB 내부 발췌
+// 摘自 src/database/db.go 中的 NewDB
 dsn := os.Getenv("DATABASE_URL")
 if dsn == "" {
     panic("DATABASE_URL is required")
@@ -222,7 +230,7 @@ import (
 )
 
 type UserRepository struct {
-    db bun.IDB  // *bun.DB 또는 bun.Tx 모두 가능
+    db bun.IDB  // *bun.DB 或 bun.Tx 均可
 }
 
 func NewUserRepository(db *bun.DB) *UserRepository {
@@ -432,10 +440,10 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 在已设置 `DATABASE_URL` 的终端中执行。迁移成功后会输出 `Migrations applied successfully.`，随后即可启动服务器。
 
 ```bash
-# 마이그레이션 실행
+# 运行迁移
 go run ./cmd/migrate
 
-# 서버 실행
+# 启动服务器
 spine dev
 ```
 
@@ -512,7 +520,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ```go
 // src/user/user_repository.go
-// DI는 구체 타입 *bun.DB를 받고 내부 쿼리 필드는 bun.IDB로 유지합니다.
+// DI 接收具体类型 *bun.DB，内部查询字段保持为 bun.IDB。
 func NewUserRepository(db *bun.DB) *UserRepository {
     return &UserRepository{db: db}
 }

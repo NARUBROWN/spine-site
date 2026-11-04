@@ -14,7 +14,7 @@ Spine 會根據已註冊建構函式的參數型別，先建立需要的物件�
 在下列建構函式中，`*UserRepository` 是 `UserService` 需要的相依性。
 
 ```go
-// 파라미터 타입을 보고 자동으로 의존성 주입
+// 根據參數型別自動注入相依性
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
@@ -82,7 +82,7 @@ app.Route("GET", "/user/:id", (*UserController).Get)
 即使如下變更註冊順序，相依性解析的順序也相同。
 
 ```go
-// user_route.go의 기존 Constructor 호출을 대체하는 예시입니다.
+// 替換 user_route.go 中既有 Constructor 呼叫的範例。
 app.Constructor(NewUserController, NewUserService, NewUserRepository)
 ```
 
@@ -101,13 +101,13 @@ graph LR
 以下範例僅顯示簽章。在實際程式碼中，需要實作各函式的主體與回傳型別。
 
 ```go
-// 저장소 의존성 선언
+// 宣告 Repository 相依性
 func NewUserService(repo *UserRepository) *UserService
 
-// 여러 의존성 선언
+// 宣告多個相依性
 func NewUserController(svc *UserService, logger *Logger) *UserController
 
-// 의존성 없는 생성자
+// 無相依性的建構函式
 func NewLogger() *Logger
 ```
 
@@ -143,16 +143,16 @@ app.Constructor(database.NewDB)
 若將儲存庫欄位固定為 `*bun.DB`，就無法將 `bun.Tx` 放入該欄位。
 
 ```go
-// 이 필드에는 *bun.DB만 저장할 수 있음
+// 此欄位只能儲存 *bun.DB
 type UserRepository struct {
-    db *bun.DB  // bun.Tx를 받을 수 없음
+    db *bun.DB  // 無法接收 bun.Tx
 }
 ```
 
 使用 `*bun.DB` 和 `bun.Tx` 都實作的 `bun.IDB`，即可透過相同契約處理這兩種型別。下列程式碼示範儲存庫建構函式如何接收 `bun.IDB` 相依性。
 
 ```go
-// *bun.DB와 bun.Tx는 모두 bun.IDB를 구현
+// *bun.DB 與 bun.Tx 均實作 bun.IDB
 type UserRepository struct {
     db bun.IDB
 }
@@ -208,10 +208,10 @@ app.Constructor(NewUserController)
 以下是獨立的儲存庫設計範例。`App`、`UserRepository` 的 `writer` 與 `reader` 欄位，以及 `connectToPrimary`、`connectToReplica` 都需要依照應用程式實作。
 
 ```go
-// 파라미터 이름만으로 인스턴스를 구분할 수 없음
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 어떤 게 어떤 건지?
+// 無法僅憑參數名稱區分執行個體
+func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 如何區分這兩個參數？
 
-// 서로 다른 래퍼 타입으로 구분
+// 透過不同的包裝型別區分
 type PrimaryDB struct{ *bun.DB }
 type ReplicaDB struct{ *bun.DB }
 
@@ -238,11 +238,11 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
 若 `A` 需要 `B`，而 `B` 又需要 `A`，就無法先建立其中任何一個物件。下列虛擬碼顯示這種關係。
 
 ```go
-// A → B → A 순환
+// A → B → A 循環相依
 func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
-// 부팅 시 에러 발생
+// 啟動時發生錯誤
 // circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
@@ -251,13 +251,13 @@ func NewB(a *A) *B { ... }
 若沒有提供所需型別的建構函式，相依性解析就會失敗。以下是省略 `NewUserRepository` 註冊的情況。
 
 ```go
-// UserRepository를 등록하지 않으면
+// 如果未註冊 UserRepository
 app.Constructor(
-    NewUserService,     // *UserRepository 필요
+    NewUserService,     // 需要 *UserRepository
     NewUserController,
 )
 
-// 부팅 시 에러 발생
+// 啟動時發生錯誤
 // no constructor registered for *user.UserRepository
 ```
 

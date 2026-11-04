@@ -1,5 +1,13 @@
 # コントローラー
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 CLI で作成した `my-app` プロジェクトに `GET /user/:id` のコントローラーを追加し、リクエストパスの整数を JSON レスポンスとして返します。続いて、クエリ、ヘッダー、リクエストボディの受け取り方とレスポンスの型を確認します。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
@@ -147,9 +155,9 @@ func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
 ) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64, 기본값 0
+    id := q.Int("id", 0)                      // int64、デフォルト値 0
     name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool, 기본값 false
+    active := q.GetBoolByKey("active", false) // bool、デフォルト値 false
     _ = name
     _ = active
 
@@ -180,8 +188,8 @@ func (c *UserController) ListUsers(
     ctx context.Context,
     page query.Pagination,
 ) httpx.Response[[]UserResponse] {
-    // page.Page = 2 (기본값: 1)
-    // page.Size = 10 (기본값: 20)
+    // page.Page = 2 (デフォルト値: 1)
+    // page.Size = 10 (デフォルト値: 20)
     users, _ := c.service.List(ctx, page.Page, page.Size)
     return httpx.Response[[]UserResponse]{Body: users}
 }
@@ -262,7 +270,7 @@ DTO に `form` タグが一つでもあると、フォーム DTO に分類され
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *CreateUserRequest,  // ← 포인터로 선언
+    req *CreateUserRequest,  // ← ポインターとして宣言
 ) httpx.Response[UserResponse] {
     user, _ := c.service.Create(ctx, req.Name, req.Email)
     return httpx.Response[UserResponse]{
@@ -295,7 +303,7 @@ func (c *UserController) GetUser(
     userId path.Int,
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
-    // 인터셉터에서 Set한 값 조회
+    // インターセプターが Set で保存した値を取得
     if v, ok := spineCtx.Get("userRole"); ok {
         role := v.(string)
         // ...
@@ -328,7 +336,7 @@ func (c *UserController) GetUser(
     user, _ := c.service.Get(ctx, int(userId.Value))
 
     return httpx.Response[UserResponse]{
-        Body: user,  // 200 OK (기본값)
+        Body: user,  // 200 OK (デフォルト)
     }
 }
 ```
@@ -446,7 +454,7 @@ func (c *AuthController) OAuthCallback(
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
-        Location: "/dashboard",  // 302 Found (기본값)
+        Location: "/dashboard",  // 302 Found (デフォルト)
     }
 }
 ```

@@ -1,5 +1,13 @@
 # query.Values
 
+::: warning v0.7.0 미리보기 입력 API 전환
+이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+
+새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
+
+적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+:::
+
 `query.Values`는 HTTP 쿼리 매개변수를 읽는 헬퍼입니다. 컨트롤러 매개변수에 값 타입인 `query.Values`를 선언하면 런타임이 요청의 쿼리 값을 주입합니다.
 
 ```go

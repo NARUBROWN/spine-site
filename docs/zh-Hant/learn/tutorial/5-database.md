@@ -1,5 +1,13 @@
 # 資料庫連線
 
+::: warning v0.7.0 Preview 輸入 API 移轉
+本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
+
+新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
+
+適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+:::
+
 使用 Bun 連線至 MySQL，並擴充產生的 `GET /user/:id`，讓它從資料庫查詢使用者。同時撰寫建立資料表的遷移檔與儲存庫的基本查詢。
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
@@ -29,14 +37,14 @@ CLI 會產生使用者資源的基本檔案與註冊程式碼。Bun 相依套件
 ## 安裝
 
 ```bash
-# Bun 코어
+# Bun 核心
 go get github.com/uptrace/bun@v1.2.16
 
-# MySQL 드라이버 + 방언
+# MySQL 驅動程式 + 方言
 go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
-# PostgreSQL을 사용한다면
+# 如果使用 PostgreSQL
 # go get github.com/uptrace/bun/dialect/pgdialect
 # go get github.com/jackc/pgx/v5/stdlib
 ```
@@ -161,7 +169,7 @@ func NewDB() *bun.DB {
 上方的 `NewDB` 從環境變數 `DATABASE_URL` 讀取連線字串。
 
 ```go
-// src/database/db.go의 NewDB 내부 발췌
+// 節錄自 src/database/db.go 中的 NewDB
 dsn := os.Getenv("DATABASE_URL")
 if dsn == "" {
     panic("DATABASE_URL is required")
@@ -222,7 +230,7 @@ import (
 )
 
 type UserRepository struct {
-    db bun.IDB  // *bun.DB 또는 bun.Tx 모두 가능
+    db bun.IDB  // *bun.DB 或 bun.Tx 均可
 }
 
 func NewUserRepository(db *bun.DB) *UserRepository {
@@ -432,10 +440,10 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 在已設定 `DATABASE_URL` 的終端機中執行。遷移成功後會輸出 `Migrations applied successfully.`，接著即可啟動伺服器。
 
 ```bash
-# 마이그레이션 실행
+# 執行移轉
 go run ./cmd/migrate
 
-# 서버 실행
+# 啟動伺服器
 spine dev
 ```
 
@@ -512,7 +520,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ```go
 // src/user/user_repository.go
-// DI는 구체 타입 *bun.DB를 받고 내부 쿼리 필드는 bun.IDB로 유지합니다.
+// DI 接收具體型別 *bun.DB，內部查詢欄位維持為 bun.IDB。
 func NewUserRepository(db *bun.DB) *UserRepository {
     return &UserRepository{db: db}
 }

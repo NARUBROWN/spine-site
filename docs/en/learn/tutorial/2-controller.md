@@ -1,5 +1,13 @@
 # Controllers
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Add a `GET /user/:id` controller to the CLI-generated `my-app` project and return the integer from the request path in a JSON response. Then explore how to accept queries, headers, and request bodies, and how to choose response types.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
@@ -147,9 +155,9 @@ func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
 ) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64, 기본값 0
+    id := q.Int("id", 0)                      // int64, default 0
     name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool, 기본값 false
+    active := q.GetBoolByKey("active", false) // bool, default false
     _ = name
     _ = active
 
@@ -180,8 +188,8 @@ func (c *UserController) ListUsers(
     ctx context.Context,
     page query.Pagination,
 ) httpx.Response[[]UserResponse] {
-    // page.Page = 2 (기본값: 1)
-    // page.Size = 10 (기본값: 20)
+    // page.Page = 2 (default: 1)
+    // page.Size = 10 (default: 20)
     users, _ := c.service.List(ctx, page.Page, page.Size)
     return httpx.Response[[]UserResponse]{Body: users}
 }
@@ -262,7 +270,7 @@ A DTO with even one `form` tag is classified as a form DTO. The request's `Conte
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *CreateUserRequest,  // ← 포인터로 선언
+    req *CreateUserRequest,  // ← Declare as a pointer
 ) httpx.Response[UserResponse] {
     user, _ := c.service.Create(ctx, req.Name, req.Email)
     return httpx.Response[UserResponse]{
@@ -295,7 +303,7 @@ func (c *UserController) GetUser(
     userId path.Int,
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
-    // 인터셉터에서 Set한 값 조회
+    // Read the value set by the interceptor
     if v, ok := spineCtx.Get("userRole"); ok {
         role := v.(string)
         // ...
@@ -328,7 +336,7 @@ func (c *UserController) GetUser(
     user, _ := c.service.Get(ctx, int(userId.Value))
 
     return httpx.Response[UserResponse]{
-        Body: user,  // 200 OK (기본값)
+        Body: user,  // 200 OK (default)
     }
 }
 ```
@@ -446,7 +454,7 @@ func (c *AuthController) OAuthCallback(
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
-        Location: "/dashboard",  // 302 Found (기본값)
+        Location: "/dashboard",  // 302 Found (default)
     }
 }
 ```

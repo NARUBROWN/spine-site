@@ -444,7 +444,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 以下は、認証インターセプターが保存した `currentUser` を監査インターセプターが読み取る部分だけを抜粋した例です。監査インターセプターを追加するには、`AuditInterceptor` 型と四つのライフサイクルメソッドを実装し、認証インターセプターの後に登録してください。既存の認証インターセプターの `PreHandle` と重複して宣言しないでください。
 
 ```go
-// AuthInterceptor — 사용자 정보 저장
+// AuthInterceptor — ユーザー情報を保存
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     user, err := validateToken(token)
@@ -455,8 +455,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     return nil
 }
 
-// 컨트롤러에서는 읽기 전용 spine.Ctx로 조회
-// 또는 다른 인터셉터에서 조회
+// コントローラーでは読み取り専用の spine.Ctx で取得
+// または別のインターセプターから取得
 func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     user, ok := ctx.Get("currentUser")
     if ok {
@@ -562,7 +562,7 @@ app.Constructor(
 )
 
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),  // 타입으로 참조
+    (*interceptor.TxInterceptor)(nil),  // 型で参照
 )
 ```
 
@@ -580,7 +580,7 @@ app.Route(
     "POST",
     "/orders",
     (*OrderController).CreateOrder,
-    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 타입으로 참조
+    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 型で参照
 )
 ```
 

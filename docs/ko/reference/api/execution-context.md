@@ -1,5 +1,13 @@
 # core.ExecutionContext
 
+::: warning v0.7.0 미리보기 입력 API 전환
+이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+
+새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
+
+적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+:::
+
 `ExecutionContext`는 인터셉터와 실행 파이프라인에서 요청 정보를 읽고 처리 단계 사이에 값을 공유하는 인터페이스입니다. HTTP 요청, 이벤트, WebSocket 메시지에 공통으로 사용하며, 전송 방식마다 별도 인터페이스로 추가 정보를 제공합니다.
 
 ```go

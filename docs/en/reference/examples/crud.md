@@ -1,5 +1,13 @@
 # Build a User CRUD API
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Build an HTTP API to create, list, retrieve, update, and delete users. The example uses an in-memory repository without an ORM, so you can run it without setting up a database.
 
 ## Prerequisites
@@ -195,7 +203,7 @@ import (
     "example.com/crud-example/src/model"
 )
 
-// 요청 DTO
+// Request DTO
 
 type CreateUserRequest struct {
     Name  string `json:"name"`
@@ -207,7 +215,7 @@ type UpdateUserRequest struct {
     Email string `json:"email"`
 }
 
-// 응답 DTO
+// Response DTO
 
 type UserResponse struct {
     ID        int64     `json:"id"`
@@ -222,7 +230,7 @@ type UserListResponse struct {
     Total int            `json:"total"`
 }
 
-// 변환 함수
+// Conversion function
 
 func ToUserResponse(user *model.User) UserResponse {
     return UserResponse{
@@ -284,7 +292,7 @@ func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
-    // 이메일 중복 체크
+    // Check for duplicate emails
     if s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -305,7 +313,7 @@ func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.Use
         return nil, err
     }
 
-    // 이메일 변경 시 중복 체크
+    // Check for duplicates when the email changes
     if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -421,7 +429,7 @@ func (c *UserController) Delete(id path.Int) error {
     return nil
 }
 
-// Repository 에러를 HTTP 에러로 변환
+// Convert repository errors to HTTP errors
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
@@ -600,7 +608,7 @@ curl -X DELETE http://localhost:8080/users/1
 Retrieving an ID that is absent from the repository returns HTTP 404 and the following error message.
 
 ```bash
-# 존재하지 않는 사용자
+# User does not exist
 curl http://localhost:8080/users/999
 ```
 
@@ -616,7 +624,7 @@ Since you deleted the user in the previous step, first create a user with the sa
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{"name": "홍길동", "email": "hong@example.com"}'
-# 중복 이메일
+# Duplicate email
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{"name": "김철수", "email": "hong@example.com"}'
@@ -635,10 +643,10 @@ curl -X POST http://localhost:8080/users \
 The controller accepts semantic types such as `path.Int` as arguments instead of an HTTP request object. It represents errors with `httperr`.
 
 ```go
-// 의미 타입으로 입력 받음
+// Receive input through semantic types
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
-// httperr로 의미만 표현
+// Express the error through httperr
 return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 ```
 
@@ -647,11 +655,11 @@ return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을
 Spine connects the repository, service, and controller dependencies based on the argument types of the registered constructors.
 
 ```go
-// 생성자 등록만으로 의존성 자동 해결
+// Registering constructors resolves dependencies automatically
 app.Constructor(
-    repository.NewUserRepository,  // 의존성 없음
-    service.NewUserService,        // Repository 의존
-    controller.NewUserController,  // Service 의존
+    repository.NewUserRepository,  // No dependencies
+    service.NewUserService,        // Depends on the repository
+    controller.NewUserController,  // Depends on the service
 )
 ```
 

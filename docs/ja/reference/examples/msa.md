@@ -1,5 +1,13 @@
 # Kafka で注文サービスと在庫サービスを接続する
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 注文用の HTTP サービスと在庫のコンシューマーサービスをそれぞれ作成し、Kafka で `order.created` イベントを渡します。注文リクエストを送信した後、在庫サービスの処理ログまで確認します。在庫サービスは HTTP リスナーなしで実行します。
 
 ## 事前準備

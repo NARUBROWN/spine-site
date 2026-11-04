@@ -14,7 +14,7 @@ Spine inspects the parameter types of registered constructors, creates the requi
 In the constructor below, `*UserRepository` is a dependency required by `UserService`.
 
 ```go
-// 파라미터 타입을 보고 자동으로 의존성 주입
+// Inject dependencies automatically by parameter type
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
@@ -82,7 +82,7 @@ Constructor registration order does not determine object creation order. Creatin
 The dependency resolution order stays the same even if you change the registration order as follows.
 
 ```go
-// user_route.go의 기존 Constructor 호출을 대체하는 예시입니다.
+// This example replaces the existing Constructor call in user_route.go.
 app.Constructor(NewUserController, NewUserService, NewUserRepository)
 ```
 
@@ -101,13 +101,13 @@ A constructor that provides each parameter type must be registered. Omit paramet
 The following example shows signatures only. In actual code, you must implement each function's body and return type.
 
 ```go
-// 저장소 의존성 선언
+// Declare a repository dependency
 func NewUserService(repo *UserRepository) *UserService
 
-// 여러 의존성 선언
+// Declare multiple dependencies
 func NewUserController(svc *UserService, logger *Logger) *UserController
 
-// 의존성 없는 생성자
+// Constructor without dependencies
 func NewLogger() *Logger
 ```
 
@@ -143,16 +143,16 @@ The following extension example applies to an app with the [database](/en/learn/
 If a repository field has the fixed type `*bun.DB`, you cannot assign a `bun.Tx` to it.
 
 ```go
-// 이 필드에는 *bun.DB만 저장할 수 있음
+// This field can only hold *bun.DB
 type UserRepository struct {
-    db *bun.DB  // bun.Tx를 받을 수 없음
+    db *bun.DB  // Cannot accept bun.Tx
 }
 ```
 
 Use `bun.IDB`, implemented by both `*bun.DB` and `bun.Tx`, to handle the two types through the same contract. The following code shows a repository constructor that accepts `bun.IDB` as a dependency.
 
 ```go
-// *bun.DB와 bun.Tx는 모두 bun.IDB를 구현
+// Both *bun.DB and bun.Tx implement bun.IDB
 type UserRepository struct {
     db bun.IDB
 }
@@ -208,10 +208,10 @@ If you register primary and replica databases with the same type, parameter name
 The following is a separate repository design example. You must implement `App`, the `writer` and `reader` fields of `UserRepository`, `connectToPrimary`, and `connectToReplica` for your app.
 
 ```go
-// 파라미터 이름만으로 인스턴스를 구분할 수 없음
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 어떤 게 어떤 건지?
+// Parameter names alone cannot distinguish instances
+func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // Which instance is which?
 
-// 서로 다른 래퍼 타입으로 구분
+// Distinguish instances with separate wrapper types
 type PrimaryDB struct{ *bun.DB }
 type ReplicaDB struct{ *bun.DB }
 
@@ -238,11 +238,11 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
 If `A` needs `B` and `B` needs `A`, neither object can be created first. The pseudocode below illustrates this relationship.
 
 ```go
-// A → B → A 순환
+// A → B → A dependency cycle
 func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
-// 부팅 시 에러 발생
+// An error occurs at startup
 // circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
@@ -251,13 +251,13 @@ func NewB(a *A) *B { ... }
 Dependency resolution fails if no constructor provides a required type. The example below omits registration of `NewUserRepository`.
 
 ```go
-// UserRepository를 등록하지 않으면
+// If UserRepository is not registered
 app.Constructor(
-    NewUserService,     // *UserRepository 필요
+    NewUserService,     // Requires *UserRepository
     NewUserController,
 )
 
-// 부팅 시 에러 발생
+// An error occurs at startup
 // no constructor registered for *user.UserRepository
 ```
 

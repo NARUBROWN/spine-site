@@ -1,5 +1,13 @@
 # Swagger 與 OpenAPI 文件
 
+::: warning v0.7.0 Preview 輸入 API 移轉
+本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
+
+新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
+
+適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+:::
+
 使用 CLI 匯出 OpenAPI 檔案，並視需要新增 Swaggo 文件與 Swagger UI，以便從瀏覽器傳送請求。CLI 的靜態 OpenAPI 匯出，以及使用 Swaggo 的 UI 設定，分別進行。
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
@@ -8,7 +16,7 @@
 
 ## 使用 CLI 匯出 OpenAPI
 
-CLI 會根據已註冊的路徑與處理器簽章產生 OpenAPI 3.1 文件，不需要 Swaggo 註解。
+CLI 會根據已註冊的路徑與處理器簽章產生 OpenAPI 3.1 文件。
 
 ```bash
 spine doctor
@@ -186,16 +194,16 @@ spine dev
 ### 範例
 
 ```go
-// 쿼리 파라미터
+// 查詢參數
 // @Param id query int true "User ID"
 // @Param name query string false "User name"
 // @Param active query bool false "Active status"
 
-// 요청 본문
-// @Param body body CreateUserRequest true "유저 생성 요청"
+// 請求本文
+// @Param body body CreateUserRequest true "建立使用者請求"
 
-// 헤더
-// @Param Authorization header string true "Bearer 토큰"
+// 標頭
+// @Param Authorization header string true "Bearer 權杖"
 ```
 
 
@@ -207,13 +215,13 @@ spine dev
 // src/user/user_request.go
 package user
 
-// CreateUserRequest 유저 생성 요청
+// CreateUserRequest 建立使用者請求
 type CreateUserRequest struct {
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// UpdateUserRequest 유저 수정 요청
+// UpdateUserRequest 更新使用者請求
 type UpdateUserRequest struct {
     Name  string `json:"name" example:"Alice Updated"`
     Email string `json:"email" example:"alice.new@example.com"`
@@ -226,14 +234,14 @@ type UpdateUserRequest struct {
 // src/user/user_response.go
 package user
 
-// UserResponse 유저 응답
+// UserResponse 使用者回應
 type UserResponse struct {
     ID    int    `json:"id" example:"1"`
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// ErrorResponse 에러 응답
+// ErrorResponse 錯誤回應
 type ErrorResponse struct {
     Message string `json:"message" example:"유저를 찾을 수 없습니다."`
 }

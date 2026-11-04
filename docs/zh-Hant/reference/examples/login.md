@@ -50,7 +50,7 @@ package model
 type User struct {
     ID       int64  `json:"id"`
     Email    string `json:"email"`
-    Password string `json:"-"` // JSON 응답에서 제외
+    Password string `json:"-"` // 從 JSON 回應中排除
     Name     string `json:"name"`
 }
 
@@ -102,7 +102,7 @@ func (s *UserStore) Create(email, password, name string) (*model.User, error) {
     s.mu.Lock()
     defer s.mu.Unlock()
 
-    // 이메일 중복 체크
+    // 檢查電子郵件是否重複
     for _, u := range s.users {
         if u.Email == email {
             return nil, errors.New("email already exists")
@@ -161,18 +161,18 @@ import (
     "github.com/golang-jwt/jwt/v5"
 )
 
-var JWTSecret = []byte("your-secret-key") // 실제 환경에서는 환경변수 사용
+var JWTSecret = []byte("your-secret-key") // 實際環境中請使用環境變數
 
 type AuthInterceptor struct{}
 
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // Authorization 헤더에서 토큰 추출
+    // 從 Authorization 標頭中擷取權杖
     authHeader := ctx.Header("Authorization")
     if authHeader == "" {
         return httperr.Unauthorized("토큰이 필요합니다.")
     }
 
-    // "Bearer {token}" 형식 파싱
+    // 解析 "Bearer {token}" 格式
     parts := strings.Split(authHeader, " ")
     if len(parts) != 2 || parts[0] != "Bearer" {
         return httperr.Unauthorized("잘못된 토큰 형식입니다.")
@@ -180,7 +180,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
     tokenString := parts[1]
 
-    // JWT 토큰 검증
+    // 驗證 JWT 權杖
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, httperr.Unauthorized("잘못된 서명 방식입니다.")
@@ -192,7 +192,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
         return httperr.Unauthorized("유효하지 않은 토큰입니다.")
     }
 
-    // 토큰에서 사용자 ID 추출
+    // 從權杖中擷取使用者 ID
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
         return httperr.Unauthorized("토큰 클레임을 읽을 수 없습니다.")
@@ -204,7 +204,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     }
     userID := int64(rawID)
 
-    // ExecutionContext에 사용자 ID 저장
+    // 在 ExecutionContext 中儲存使用者 ID
     ctx.Set("userID", userID)
 
     return nil
@@ -250,7 +250,7 @@ func NewAuthController(userStore *store.UserStore) *AuthController {
     }
 }
 
-// 회원가입 — 인증 불필요
+// 註冊帳號 — 無須身分驗證
 func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
         return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
@@ -264,7 +264,7 @@ func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.
     return httpx.Response[model.User]{Body: *user}, nil
 }
 
-// 로그인 — 인증 불필요
+// 登入 — 無須身分驗證
 func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
         return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
@@ -275,12 +275,12 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
         return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
-    // 비밀번호 확인 (실제로는 bcrypt 등으로 해시 비교)
+    // 檢查密碼（實際應用中使用 bcrypt 等比較雜湊）
     if user.Password != req.Password {
         return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
     }
 
-    // JWT 토큰 생성
+    // 產生 JWT 權杖
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
         "user_id": user.ID,
         "email":   user.Email,
@@ -300,9 +300,9 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
     }, nil
 }
 
-// 내 정보 조회 — 인증 필요
+// 查詢我的資訊 — 需要身分驗證
 func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-    // AuthInterceptor가 저장한 userID 조회
+    // 讀取 AuthInterceptor 儲存的 userID
     userIDValue, ok := ctx.Get("userID")
     if !ok {
         return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")

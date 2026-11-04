@@ -1,5 +1,13 @@
 # httperr 包
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 `httperr` 是用于保存 HTTP 状态码和向客户端传递的错误消息的包。控制器返回 `httperr.NotFound("사용자를 찾을 수 없습니다")` 这样的错误时，Spine 会将其转换为状态码和 JSON 错误响应。控制器无需直接操作 Echo 等框架的响应对象。
 
 本页以 Spine v0.6.5 的 `github.com/NARUBROWN/spine/pkg/httperr` 为准。
@@ -28,15 +36,15 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 如果将此方法注册到 `GET /users/:id`，响应如下。示例假设将存储库的所有查询错误都作为 404 处理。实际应用中，请区分查询结果不存在和数据库故障，再选择相应的状态码。
 
 ```bash
-# 잘못된 ID
+# 无效 ID
 GET /users/-1
 → 400 {"message": "유효하지 않은 사용자 ID입니다"}
 
-# 존재하지 않는 사용자
+# 不存在的用户
 GET /users/999
 → 404 {"message": "사용자를 찾을 수 없습니다"}
 
-# 정상
+# 正常情况
 GET /users/123
 → 200 {"id": 123, "name": "john"}
 ```
@@ -55,12 +63,12 @@ graph TD
 ```go
 // pkg/httperr/types.go
 type HTTPError struct {
-    Status  int    // HTTP 상태 코드
-    Message string // 에러 메시지
-    Cause   error  // 원인 에러 (선택)
+    Status  int    // HTTP 状态码
+    Message string // 错误消息
+    Cause   error  // 原始错误（可选）
 }
 
-// error 인터페이스 구현
+// 实现 error 接口
 func (e *HTTPError) Error() string {
     return e.Message
 }
@@ -224,7 +232,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
         return httperr.BadRequest("삭제할 수 없습니다")
     }
 
-    return nil  // 성공 시 nil 반환
+    return nil  // 成功时返回 nil
 }
 ```
 
@@ -237,7 +245,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
 对于基础辅助函数未提供的状态码，可以直接创建 `HTTPError`。以下函数是由应用定义的示例，不是 `httperr` 提供的函数。
 
 ```go
-// 직접 HTTPError 생성
+// 直接创建 HTTPError
 func Forbidden(msg string) error {
     return &httperr.HTTPError{Status: 403, Message: msg}
 }
@@ -270,7 +278,7 @@ func WithCause(status int, msg string, cause error) error {
     }
 }
 
-// 사용
+// 使用方式
 user, err := c.repo.FindByID(id)
 if err != nil {
     return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)

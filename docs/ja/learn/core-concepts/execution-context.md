@@ -1,5 +1,13 @@
 # 実行コンテキスト (ExecutionContext)
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 Spine はリクエストやメッセージごとに実行コンテキストを作成し、入力情報と実行状態をパイプラインに渡します。インターセプターは `core.ExecutionContext` で実行状態を読み書きし、HTTP コントローラーは意味を表す型と読み取り専用の `spine.Ctx` で必要な値だけを受け取ります。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
@@ -142,10 +150,10 @@ ctx.Queries()  // {"tag": ["go", "web"]}
 インターセプターは、`Set()` で認証結果やリクエスト追跡情報を保存できます。コントローラーは、読み取り専用ビューの `Get()` で同じ値を読み取ります。
 
 ```go
-// 인터셉터에서 저장
+// インターセプターで保存
 ctx.Set("auth.user", authInfo)
 
-// 같은 실행에서 조회
+// 同じ実行内で取得
 value, ok := ctx.Get("auth.user")
 ```
 
@@ -336,7 +344,7 @@ type WebSocketMessageContext interface {
 デフォルト実装の `Header()` と `Queries()` は、このリクエスト情報を参照します。値がない場合もありますが、WebSocket だからといって常に空の値を返すわけではありません。独自の `WebSocketContext` 実装が追加のリクエストビューもサポートしていると想定せず、型を確認してください。
 
 ```go
-// WebSocket 메시지를 처리하는 인터셉터 안에서 조회하는 예
+// WebSocket メッセージを処理するインターセプター内で取得する例
 if requestCtx, ok := ctx.(core.WebSocketMessageContext); ok {
     origin := requestCtx.Header("Origin")
     _ = origin
@@ -398,7 +406,7 @@ WebSocket に適用するために登録した `core.Interceptor` がこの契�
 ```go
 // src/user/user_controller.go
 func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    // context.Context에 연결된 EventBus로 이벤트를 수집합니다.
+    // context.Context に紐付けられた EventBus でイベントを収集します。
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),

@@ -1,5 +1,13 @@
 # httperr Package
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 `httperr` contains HTTP status codes and error messages to send to clients. When a controller returns an error such as `httperr.NotFound("사용자를 찾을 수 없습니다")`, Spine converts it to a status code and a JSON error response. Controllers do not need to work directly with response objects from Echo or similar frameworks.
 
 This page describes `github.com/NARUBROWN/spine/pkg/httperr` in Spine v0.6.5.
@@ -28,15 +36,15 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 If this method is registered for `GET /users/:id`, it responds as follows. The example assumes that every repository lookup error is treated as a 404. In a real app, distinguish a missing result from a database failure when choosing the status code.
 
 ```bash
-# 잘못된 ID
+# Invalid ID
 GET /users/-1
 → 400 {"message": "유효하지 않은 사용자 ID입니다"}
 
-# 존재하지 않는 사용자
+# User does not exist
 GET /users/999
 → 404 {"message": "사용자를 찾을 수 없습니다"}
 
-# 정상
+# Valid request
 GET /users/123
 → 200 {"id": 123, "name": "john"}
 ```
@@ -55,12 +63,12 @@ graph TD
 ```go
 // pkg/httperr/types.go
 type HTTPError struct {
-    Status  int    // HTTP 상태 코드
-    Message string // 에러 메시지
-    Cause   error  // 원인 에러 (선택)
+    Status  int    // HTTP status code
+    Message string // Error message
+    Cause   error  // Underlying error (optional)
 }
 
-// error 인터페이스 구현
+// Implement the error interface
 func (e *HTTPError) Error() string {
     return e.Message
 }
@@ -224,7 +232,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
         return httperr.BadRequest("삭제할 수 없습니다")
     }
 
-    return nil  // 성공 시 nil 반환
+    return nil  // Return nil on success
 }
 ```
 
@@ -237,7 +245,7 @@ For brevity, the example treats existence-check errors as 404 and deletion error
 For status codes without a built-in helper, create an `HTTPError` directly. The following functions are examples defined by the app; they are not provided by `httperr`.
 
 ```go
-// 직접 HTTPError 생성
+// Create an HTTPError directly
 func Forbidden(msg string) error {
     return &httperr.HTTPError{Status: 403, Message: msg}
 }
@@ -270,7 +278,7 @@ func WithCause(status int, msg string, cause error) error {
     }
 }
 
-// 사용
+// Usage
 user, err := c.repo.FindByID(id)
 if err != nil {
     return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)

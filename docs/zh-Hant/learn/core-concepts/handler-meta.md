@@ -1,5 +1,13 @@
 # 處理器中繼資料（HandlerMeta）
 
+::: warning v0.7.0 Preview 輸入 API 移轉
+本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
+
+新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
+
+適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+:::
+
 `core.HandlerMeta` 包含執行對應請求的控制器方法所需的資訊，包括控制器型別、方法、路徑參數順序，以及路由攔截器。應用程式使用 `app.Route` 註冊處理器，並可在攔截器中讀取 `HandlerMeta`，確認即將執行的對象。
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
@@ -11,11 +19,11 @@
 以[CLI 專案結構](/zh-Hant/learn/tutorial/1-project-structure)中建立的 `example.com/my-app` 為例，使用者路由宣告於 `src/user/user_route.go` 的 `Register(app)`。產生的處理器為 `(*UserController).Get`，路徑為 `GET /user/:id`。`internal/application/application.go` 中的 `BuildApplication` 會檢查並回傳 `user.Register(app)` 的錯誤，再由產生的 `main.go` 進行驗證與執行。
 
 ```go
-// src/user/user_route.go의 Register 내부 발췌
+// 節錄自 src/user/user_route.go 中的 Register
 app.Route(
     "GET",
     "/user/:id",
-    (*UserController).Get,  // 메서드 표현식
+    (*UserController).Get,  // 方法運算式
 )
 ```
 
@@ -28,16 +36,16 @@ app.Route(
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    // 컨트롤러 타입 (Container Resolve 대상)
+    // 控制器型別（Container Resolve 的目標）
     ControllerType reflect.Type
 
-    // 호출할 메서드
+    // 要呼叫的方法
     Method reflect.Method
 
-    // 라우트에 선언된 경로 매개변수 키의 순서
+    // 路由中宣告的路徑參數鍵順序
     PathKeys []string
 
-    // 핸들러에 적용된 인터셉터
+    // 套用至處理器的攔截器
     Interceptors []Interceptor
 }
 ```
@@ -58,7 +66,7 @@ meta.ControllerType  // reflect.Type of *UserController
 ```go
 meta.Method.Name           // "GetUser"
 meta.Method.Type           // func(*UserController, path.Int) (httpx.Response[User], error)
-meta.Method.Func           // 호출 가능한 reflect.Value
+meta.Method.Func           // 可呼叫的 reflect.Value
 ```
 
 `PathKeys` 儲存的是路徑參數名稱，並非實際請求值。例如 `/users/:userId/orders/:orderId` 會依序儲存 `userId`、`orderId`，再依此順序對應處理器中 `path` 型別的引數。每次請求可能不同的路徑參數值，則從請求上下文讀取。
@@ -66,7 +74,7 @@ meta.Method.Func           // 호출 가능한 reflect.Value
 `Interceptors` 僅包含路由攔截器。透過 `app.Interceptor` 註冊的全域攔截器，由管線另外管理。
 
 ```go
-meta.Interceptors  // []core.Interceptor (라우트 레벨)
+meta.Interceptors  // []core.Interceptor（路由層級）
 ```
 
 ## 使用方法運算式註冊處理器
@@ -74,9 +82,9 @@ meta.Interceptors  // []core.Interceptor (라우트 레벨)
 向路由傳入 `(*UserController).GetUser` 之類的**方法運算式**。這個運算式是未綁定至特定控制器執行個體的函式，會以控制器指標作為第一個引數。
 
 ```go
-// 메서드 표현식의 실제 타입
+// 方法運算式的實際型別
 func(*UserController, path.Int) (httpx.Response[User], error)
-//   ↑ receiver가 첫 번째 인자로 변환됨
+//   ↑ receiver 轉為第一個參數
 ```
 
 Spine 會據此確認控制器型別和要呼叫的方法。控制器執行個體則依照應用程式註冊的建構函式，從相依性容器取得。
@@ -115,22 +123,22 @@ app.Route(
 需要注入相依性的攔截器，可以使用帶有型別的 nil 指標。此時必須註冊攔截器的建構函式及所需的相依性。若傳入不含型別資訊的 `nil`，路由攔截器的註冊會失敗。
 
 ```go
-// src/user/user_route.go의 Register 내부 발췌
+// 節錄自 src/user/user_route.go 中的 Register
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
-// 라우트 인터셉터와 함께
+// 搭配路由攔截器
 app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil 포인터 → Container에서 Resolve
+    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil 指標 → 在 Container 中 Resolve
 )
 ```
 
 也可以同時使用全域攔截器和路由攔截器。全域攔截器套用至所有請求，路由攔截器則只套用至對應的路由。
 
 ```go
-// 글로벌: 모든 요청에 적용 (라우팅 전 실행)
+// 全域：套用至所有請求（路由比對前執行）
 app.Interceptor(&CORSInterceptor{})
 
-// 라우트: 특정 핸들러에만 적용 (라우팅 후, Controller 호출 전 실행)
+// 路由：僅套用至特定處理器（路由比對後、Controller 呼叫前執行）
 app.Route("GET", "/admin/:id", (*AdminController).Get,
     route.WithInterceptors(&AuthInterceptor{}),
 )

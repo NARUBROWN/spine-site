@@ -1,5 +1,13 @@
 # httperrパッケージ
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 `httperr`は、HTTPステータスコードとクライアントに伝えるエラーメッセージを保持するパッケージです。コントローラーから`httperr.NotFound("사용자를 찾을 수 없습니다")`のようにエラーを返すと、SpineがステータスコードとJSONエラーレスポンスに変換します。コントローラーでEchoなどのレスポンスオブジェクトを直接扱う必要はありません。
 
 このページでは、Spine v0.6.5の`github.com/NARUBROWN/spine/pkg/httperr`を基準に説明します。
@@ -28,15 +36,15 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 このメソッドを`GET /users/:id`に登録した場合、次のように応答します。この例では、リポジトリの検索エラーをすべて404として処理すると仮定しています。実際のアプリでは、検索結果がない場合とデータベース障害を区別してステータスコードを選んでください。
 
 ```bash
-# 잘못된 ID
+# 不正な ID
 GET /users/-1
 → 400 {"message": "유효하지 않은 사용자 ID입니다"}
 
-# 존재하지 않는 사용자
+# 存在しないユーザー
 GET /users/999
 → 404 {"message": "사용자를 찾을 수 없습니다"}
 
-# 정상
+# 正常
 GET /users/123
 → 200 {"id": 123, "name": "john"}
 ```
@@ -55,12 +63,12 @@ graph TD
 ```go
 // pkg/httperr/types.go
 type HTTPError struct {
-    Status  int    // HTTP 상태 코드
-    Message string // 에러 메시지
-    Cause   error  // 원인 에러 (선택)
+    Status  int    // HTTP ステータスコード
+    Message string // エラーメッセージ
+    Cause   error  // 原因となるエラー (任意)
 }
 
-// error 인터페이스 구현
+// error インターフェースを実装
 func (e *HTTPError) Error() string {
     return e.Message
 }
@@ -224,7 +232,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
         return httperr.BadRequest("삭제할 수 없습니다")
     }
 
-    return nil  // 성공 시 nil 반환
+    return nil  // 成功時は nil を返す
 }
 ```
 
@@ -237,7 +245,7 @@ nilを返すと、エラーレスポンスは作成しません。この形式�
 標準のヘルパーにないステータスコードは、`HTTPError`を直接作成して使用できます。次の関数はアプリが定義する例であり、`httperr`が提供する関数ではありません。
 
 ```go
-// 직접 HTTPError 생성
+// HTTPError を直接生成
 func Forbidden(msg string) error {
     return &httperr.HTTPError{Status: 403, Message: msg}
 }
@@ -270,7 +278,7 @@ func WithCause(status int, msg string, cause error) error {
     }
 }
 
-// 사용
+// 使用例
 user, err := c.repo.FindByID(id)
 if err != nil {
     return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)

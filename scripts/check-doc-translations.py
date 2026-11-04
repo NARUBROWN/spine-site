@@ -38,8 +38,73 @@ def link_destinations(text):
     return [re.sub(r"^/(?:ko|en|ja|zh-Hans|zh-Hant)/", "/LOCALE/", link.split("#", 1)[0]) for link in links]
 
 
+def example_code(language, code):
+    """문자열과 지시문은 보존하고 번역 가능한 Go, 셸 주석만 분리합니다."""
+    if language not in {"go", "sh", "bash", "shell"}:
+        return code, []
+    output, comments = [], []
+    position, quote = 0, None
+    shell = language != "go"
+    # heredoc 본문은 셸 주석이 아닌 입력 데이터이므로 블록 전체를 엄격히 비교합니다.
+    if shell and re.search(r"(?<!<)<<-?[ \t]*(?!<)", code):
+        return code, []
+    while position < len(code):
+        char = code[position]
+        if quote:
+            output.append(char)
+            position += 1
+            if char == "\\" and quote != "`" and not (shell and quote == "'") and position < len(code):
+                output.append(code[position])
+                position += 1
+            elif char == quote:
+                quote = None
+            continue
+        if char in "\"'`":
+            quote = char
+        elif char == "\\" and shell and position + 1 < len(code):
+            output.extend(code[position:position + 2])
+            position += 2
+            continue
+        elif (not shell and code.startswith("//", position)) or (shell and char == "#" and (position == 0 or code[position - 1].isspace())):
+            end = code.find("\n", position)
+            if end == -1:
+                end = len(code)
+            comment = code[position + (1 if shell else 2):end]
+            comments.append(comment)
+            directive = comment.strip()
+            if not shell and directive.startswith("@"):
+                # Swaggo 매개변수의 이름, 출처, 타입과 필수 여부는 계속 비교합니다.
+                if directive.startswith("@Param "):
+                    directive = re.sub(r'"(?:\\.|[^"\\])*"', '"DESCRIPTION"', directive, count=1)
+                output.append("// " + directive)
+            elif not shell and re.match(r"(?:go:|line\s|\+build\b|nolint\b|lint:|Code generated\b|SPDX-)", directive):
+                output.append("//" + comment)
+            position = end
+            continue
+        elif not shell and code.startswith("/*", position):
+            end = code.find("*/", position + 2)
+            if end == -1:
+                end = len(code)
+            else:
+                end += 2
+            comment = code[position:end]
+            comments.append(comment)
+            output.append(comment if comment.startswith("/*line ") else " " + "\n" * comment.count("\n"))
+            position = end
+            continue
+        output.append(char)
+        position += 1
+    return "\n".join(line.rstrip() for line in "".join(output).splitlines()), comments
+
+
 def protected_blocks(text):
-    return [(m[1].strip(), m[2]) for m in FENCE.finditer(text) if m[1].strip() in EXECUTABLE]
+    return [(m[1].strip(), example_code(m[1].strip(), m[2])[0]) for m in FENCE.finditer(text) if m[1].strip() in EXECUTABLE]
+
+
+def untranslated_comments(text):
+    return [comment for match in FENCE.finditer(text)
+            for comment in example_code(match[1].strip(), match[2])[1]
+            if re.search(r"[가-힣]", comment)]
 
 
 def fence_kinds(text):
@@ -66,7 +131,7 @@ def page_structure(text):
                 keys.append((len(match[1]), bool(match[2]), match[3]))
                 if match[3] in {"layout", "sidebar", "outline", "theme"}:
                     fixed_values.append((match[3], match[4].strip("\"'")))
-    directives = re.findall(r"^:::\s*([a-zA-Z]*)", FENCE.sub("", text), re.MULTILINE)
+    directives = re.findall(r"^:::[ \t]*([a-zA-Z]*)", FENCE.sub("", text), re.MULTILINE)
     return keys, fixed_values, directives
 
 
@@ -80,6 +145,8 @@ def prepare(locale, paths, destination):
 
         def protect(match):
             if match[1].strip() not in EXECUTABLE:
+                return match[0]
+            if untranslated_comments(match[0]):
                 return match[0]
             marker = f"<!-- SPINE_CODE_{len(blocks):03d} -->"
             blocks.append({"marker": marker, "text": match[0]})
@@ -109,6 +176,8 @@ def apply_bundle(path):
             raise ValueError(f"링크 대상이나 순서가 한국어와 다릅니다: {item['target']}")
         if protected_blocks(source) != protected_blocks(translated):
             raise ValueError(f"실행 예제가 한국어와 다릅니다: {item['target']}")
+        if untranslated_comments(translated):
+            raise ValueError(f"코드 설명 주석에 한국어가 남아 있습니다: {item['target']}")
         if fence_kinds(source) != fence_kinds(translated) or table_shape(source) != table_shape(translated):
             raise ValueError(f"코드 블록이나 표의 구조가 한국어와 다릅니다: {item['target']}")
         if page_structure(source) != page_structure(translated):
@@ -142,6 +211,8 @@ def check():
                 errors.append(f"{target.relative_to(ROOT)}: 링크 대상 또는 순서 불일치")
             if protected_blocks(original) != protected_blocks(translated):
                 errors.append(f"{target.relative_to(ROOT)}: 실행 예제 불일치")
+            if untranslated_comments(translated):
+                errors.append(f"{target.relative_to(ROOT)}: 코드 설명 주석에 한국어가 남아 있음")
             if fence_kinds(original) != fence_kinds(translated) or table_shape(original) != table_shape(translated):
                 errors.append(f"{target.relative_to(ROOT)}: 코드 블록 또는 표 구조 불일치")
             if page_structure(original) != page_structure(translated):

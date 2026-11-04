@@ -1,5 +1,13 @@
 # query.Values
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Use `query.Values` to read HTTP query parameters and specify defaults. Declare `q query.Values` as a controller argument, then read the keys you need as strings, integers, or booleans. Automatically mapping query parameters to an arbitrary DTO is not supported.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
@@ -34,10 +42,10 @@ func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
 When this method is registered for `GET /user`, the request and response are as follows.
 
 ```bash
-# 요청
+# Request
 GET /user?id=123&name=john
 
-# 응답
+# Response
 {
     "id": 123,
     "name": "john"
@@ -115,8 +123,8 @@ q.String("name")  // "john"
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (키 없음 → 기본값)
-q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
+q.Int("offset", 0)  // 0 (missing key, use the default)
+q.Int("page", 1)    // 1 (page=abc cannot be parsed, use the default)
 ```
 
 Negative values and zero are returned as is when conversion succeeds. The app must separately validate values that must be positive, such as page numbers or price ranges.
@@ -139,8 +147,8 @@ Matching is case-insensitive, but whitespace is not trimmed. For example, `" TRU
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (키 없음 → 기본값)
-q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
+q.GetBoolByKey("deleted", false)   // false (missing key, use the default)
+q.GetBoolByKey("active", false)    // false (active=maybe is not recognized, use the default)
 ```
 
 ### Checking Whether a Key Exists
@@ -151,7 +159,7 @@ q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
 // GET /user?status=active&empty=
 
 q.Has("status")  // true
-q.Has("empty")   // true (값은 비었지만 키는 존재)
+q.Has("empty")   // true (empty value, but the key exists)
 q.Has("missing") // false
 ```
 
@@ -226,11 +234,11 @@ func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
 You can also check only the filter names accepted by the app and pass them to the service, as shown below.
 
 ```go
-// 동적 필터 처리
+// Handle dynamic filters
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
 
-    // 어떤 필터가 올지 미리 알 수 없음
+    // The filter keys are not known in advance
     if q.Has("min_price") {
         filters["min_price"] = q.String("min_price")
     }
@@ -279,13 +287,13 @@ GET /user?page=2&size=20&status=active&sort_by=created_at
 You can declare both types for the same request. Since `query.Values` can also read `page` and `size`, choose one source for the page information passed to the service to avoid duplicate handling.
 
 ```go
-// 고정된 페이지네이션만 필요 → query.Pagination
+// Fixed pagination only → query.Pagination
 func List(p query.Pagination) httpx.Response[[]User]
 
-// 동적 필터 + 페이지네이션 → 둘 다 사용
+// Dynamic filters and pagination → use both
 func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
 
-// 완전히 동적인 쿼리 → query.Values만
+// Fully dynamic query → query.Values only
 func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
@@ -302,7 +310,7 @@ For this request, `q.String("tag")` and `q.Get("tag")` return only `"go"`. In Sp
 If you need multiple values, one option is to define the API to accept a single comma-separated string and split it in the app. The following example also requires the `strings` package.
 
 ```go
-// 쉼표 구분 방식
+// Comma-separated values
 // GET /product?tags=go,web,api
 
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {

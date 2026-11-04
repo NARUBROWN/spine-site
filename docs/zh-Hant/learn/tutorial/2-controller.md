@@ -1,5 +1,13 @@
 # 控制器
 
+::: warning v0.7.0 Preview 輸入 API 移轉
+本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
+
+新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
+
+適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+:::
+
 在 CLI 建立的 `my-app` 專案中新增 `GET /user/:id` 控制器，將請求路徑中的整數以 JSON 回應傳回。接著說明如何接收查詢參數、標頭和請求主體，以及各種回應型別。
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
@@ -147,9 +155,9 @@ func (c *UserController) GetUser(
     ctx context.Context,
     q query.Values,
 ) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64, 기본값 0
+    id := q.Int("id", 0)                      // int64，預設值 0
     name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool, 기본값 false
+    active := q.GetBoolByKey("active", false) // bool，預設值 false
     _ = name
     _ = active
 
@@ -180,8 +188,8 @@ func (c *UserController) ListUsers(
     ctx context.Context,
     page query.Pagination,
 ) httpx.Response[[]UserResponse] {
-    // page.Page = 2 (기본값: 1)
-    // page.Size = 10 (기본값: 20)
+    // page.Page = 2（預設值：1）
+    // page.Size = 10（預設值：20）
     users, _ := c.service.List(ctx, page.Page, page.Size)
     return httpx.Response[[]UserResponse]{Body: users}
 }
@@ -262,7 +270,7 @@ DTO 只要有任一個 `form` 標籤，就會歸類為表單 DTO。實際的主�
 
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *CreateUserRequest,  // ← 포인터로 선언
+    req *CreateUserRequest,  // ← 宣告為指標
 ) httpx.Response[UserResponse] {
     user, _ := c.service.Create(ctx, req.Name, req.Email)
     return httpx.Response[UserResponse]{
@@ -295,7 +303,7 @@ func (c *UserController) GetUser(
     userId path.Int,
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
-    // 인터셉터에서 Set한 값 조회
+    // 讀取攔截器透過 Set 儲存的值
     if v, ok := spineCtx.Get("userRole"); ok {
         role := v.(string)
         // ...
@@ -328,7 +336,7 @@ func (c *UserController) GetUser(
     user, _ := c.service.Get(ctx, int(userId.Value))
 
     return httpx.Response[UserResponse]{
-        Body: user,  // 200 OK (기본값)
+        Body: user,  // 200 OK（預設值）
     }
 }
 ```
@@ -446,7 +454,7 @@ func (c *AuthController) OAuthCallback(
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
-        Location: "/dashboard",  // 302 Found (기본값)
+        Location: "/dashboard",  // 302 Found（預設值）
     }
 }
 ```

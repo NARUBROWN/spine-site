@@ -1,5 +1,13 @@
 # データベース接続
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 BunでMySQLに接続し、生成された `GET /user/:id` を拡張してデータベースからユーザーを取得します。テーブルを作成するマイグレーションと、リポジトリの基本的なクエリも作成します。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
@@ -29,14 +37,14 @@ CLIはユーザーリソースの基本ファイルと登録コードを生成�
 ## インストール
 
 ```bash
-# Bun 코어
+# Bun コア
 go get github.com/uptrace/bun@v1.2.16
 
-# MySQL 드라이버 + 방언
+# MySQL ドライバー + 方言
 go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
-# PostgreSQL을 사용한다면
+# PostgreSQL を使用する場合
 # go get github.com/uptrace/bun/dialect/pgdialect
 # go get github.com/jackc/pgx/v5/stdlib
 ```
@@ -161,7 +169,7 @@ func NewDB() *bun.DB {
 上の `NewDB` は、環境変数 `DATABASE_URL` から接続文字列を読み取ります。
 
 ```go
-// src/database/db.go의 NewDB 내부 발췌
+// src/database/db.go の NewDB 内から抜粋
 dsn := os.Getenv("DATABASE_URL")
 if dsn == "" {
     panic("DATABASE_URL is required")
@@ -222,7 +230,7 @@ import (
 )
 
 type UserRepository struct {
-    db bun.IDB  // *bun.DB 또는 bun.Tx 모두 가능
+    db bun.IDB  // *bun.DB と bun.Tx のどちらも使用可能
 }
 
 func NewUserRepository(db *bun.DB) *UserRepository {
@@ -432,10 +440,10 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 `DATABASE_URL` を設定したターミナルで実行します。マイグレーションに成功すると `Migrations applied successfully.` と表示され、その後サーバーを起動できます。
 
 ```bash
-# 마이그레이션 실행
+# マイグレーションを実行
 go run ./cmd/migrate
 
-# 서버 실행
+# サーバーを起動
 spine dev
 ```
 
@@ -512,7 +520,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ```go
 // src/user/user_repository.go
-// DI는 구체 타입 *bun.DB를 받고 내부 쿼리 필드는 bun.IDB로 유지합니다.
+// DI では具象型 *bun.DB を受け取り、内部のクエリフィールドは bun.IDB のまま保持します。
 func NewUserRepository(db *bun.DB) *UserRepository {
     return &UserRepository{db: db}
 }

@@ -1,5 +1,13 @@
 # core.ExecutionContext
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 `ExecutionContext` is an interface for reading request information and sharing values between processing stages in interceptors and the execution pipeline. It is used for HTTP requests, events, and WebSocket messages, with separate interfaces providing additional information for each transport.
 
 ```go
@@ -79,20 +87,20 @@ type HttpRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // 개별 접근
+    // Access individual values
     Param(name string) string
     Query(name string) string
     Header(name string) string
 
-    // 전체 뷰 접근
+    // Access the complete view
     Params() map[string]string
     Queries() map[string][]string
     Headers() map[string][]string
 
-    // 요청 본문
+    // Request body
     Bind(out any) error
 
-    // 멀티파트
+    // Multipart
     MultipartForm() (*multipart.Form, error)
 }
 ```
@@ -225,7 +233,7 @@ Returns the request method.
 ```go
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     if ctx.Method() == "OPTIONS" {
-        // CORS 사전 요청 처리
+        // Handle CORS preflight requests
     }
     return nil
 }
@@ -414,7 +422,7 @@ The following code extends `src/user/user_controller.go` in a [CLI project](/en/
 
 ```go
 func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
-    // 인터셉터가 Set("auth.user", ...)으로 저장한 값 조회
+    // Read the value stored by the interceptor with Set("auth.user", ...)
     if authUser, ok := ctx.Get("auth.user"); ok {
         _ = authUser.(*AuthUser)
         // ...
@@ -507,7 +515,7 @@ if err != nil {
     return err
 }
 for _, file := range form.File["upload"] {
-    // 파일 처리
+    // Handle files
 }
 ```
 
@@ -580,7 +588,7 @@ Returns the WebSocket message type.
 
 ```go
 if ctx.MessageType() == ws.TextMessage {
-    // 텍스트 메시지 처리
+    // Handle text messages
 }
 ```
 

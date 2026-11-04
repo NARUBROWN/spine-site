@@ -1,6 +1,22 @@
 # Current releases
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Use `@latest` for general installation. The current documentation targets Spine v0.6.5 and CLI v0.4.2. Check the installed CLI with `spine version` and the actual dependencies in the generated `go.mod`.
+
+## Spine v0.7.0-preview.1 {#spine-preview}
+
+The published Preview tags are core `v0.7.0-preview.1` and `v0.2.0-preview.1` for each independent platform and playground. Select them explicitly, separately from the stable `v0.6.5` documentation baseline.
+
+This Preview adds source-specific Path, Query, and Header DTOs, marks legacy input APIs as Deprecated, rejects mixed handler inputs during boot, and changes body binding. Enable standard OpenAPI explicitly with `Enabled: true`.
+
+See [Handler input migration](/en/learn/migration/v0.7.0-preview) and [Runtime OpenAPI reference](/en/reference/api/openapi) for versions, compatibility, and usage.
 
 ## Spine v0.6.5 / CLI v0.4.2
 

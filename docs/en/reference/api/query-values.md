@@ -1,5 +1,13 @@
 # query.Values
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 `query.Values` is a helper for reading HTTP query parameters. When you declare the value type `query.Values` as a controller parameter, the runtime injects the request's query values.
 
 ```go
@@ -111,10 +119,10 @@ Converts the first value for the specified key to a decimal `int64`. Returns `de
 // GET /user?page=3&size=20
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (키 없음)
+q.Int("offset", 0)  // 0 (missing key)
 
 // GET /user?page=abc
-q.Int("page", 1)    // 1 (파싱 실패)
+q.Int("page", 1)    // 1 (parse failure)
 ```
 
 ### GetBoolByKey
@@ -151,10 +159,10 @@ Other values return the default.
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (키 없음)
+q.GetBoolByKey("deleted", false)   // false (missing key)
 
 // GET /user?active=maybe
-q.GetBoolByKey("active", false)    // false (인식 불가)
+q.GetBoolByKey("active", false)    // false (unrecognized value)
 ```
 
 ### Has
@@ -178,7 +186,7 @@ Checks whether the specified key exists.
 ```go
 // GET /user?status=active&empty=
 q.Has("status")  // true
-q.Has("empty")   // true (값이 비어도 키는 존재)
+q.Has("empty")   // true (the key exists even when its value is empty)
 q.Has("missing") // false
 ```
 

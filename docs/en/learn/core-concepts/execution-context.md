@@ -1,5 +1,13 @@
 # Execution Context (ExecutionContext)
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Spine creates an execution context for each request or message to pass input information and execution state through the pipeline. Interceptors read and write execution state through `core.ExecutionContext`, while HTTP controllers receive only the values they need through semantic types and read-only `spine.Ctx`.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
@@ -142,10 +150,10 @@ This code illustrates values available to interceptors and similar components. I
 Interceptors can use `Set()` to store authentication results or request tracing information. Controllers read the same values through `Get()` on the read-only view.
 
 ```go
-// 인터셉터에서 저장
+// Store in an interceptor
 ctx.Set("auth.user", authInfo)
 
-// 같은 실행에서 조회
+// Read within the same execution
 value, ok := ctx.Get("auth.user")
 ```
 
@@ -336,7 +344,7 @@ The default WebSocket implementation copies and retains the upgrade request info
 The default implementation's `Header()` and `Queries()` read this request information. Values may be absent, but these methods do not always return empty values simply because the protocol is WebSocket. Check the type rather than assuming that a custom `WebSocketContext` implementation also supports the additional request view.
 
 ```go
-// WebSocket 메시지를 처리하는 인터셉터 안에서 조회하는 예
+// Read the value in an interceptor that handles a WebSocket message
 if requestCtx, ok := ctx.(core.WebSocketMessageContext); ok {
     origin := requestCtx.Header("Origin")
     _ = origin
@@ -398,7 +406,7 @@ In the following excerpt, `publish` is imported from `github.com/NARUBROWN/spine
 ```go
 // src/user/user_controller.go
 func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    // context.Context에 연결된 EventBus로 이벤트를 수집합니다.
+    // Collect events through the EventBus attached to context.Context.
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),

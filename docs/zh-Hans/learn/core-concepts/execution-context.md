@@ -1,5 +1,13 @@
 # 执行上下文（ExecutionContext）
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 Spine 为每个请求或消息创建执行上下文，将输入信息和执行状态传给流水线。拦截器通过 `core.ExecutionContext` 读写执行状态，HTTP 控制器则通过语义类型和只读的 `spine.Ctx` 仅接收所需的值。
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
@@ -142,10 +150,10 @@ ctx.Queries()  // {"tag": ["go", "web"]}
 拦截器可以通过 `Set()` 保存认证结果或请求追踪信息。控制器通过只读视图的 `Get()` 读取相同的值。
 
 ```go
-// 인터셉터에서 저장
+// 在拦截器中保存
 ctx.Set("auth.user", authInfo)
 
-// 같은 실행에서 조회
+// 在同一次执行中读取
 value, ok := ctx.Get("auth.user")
 ```
 
@@ -336,7 +344,7 @@ type WebSocketMessageContext interface {
 默认实现的 `Header()` 和 `Queries()` 查询的就是这些请求信息。值可能不存在，但不会仅仅因为使用 WebSocket 就始终返回空值。对于自行编写的 `WebSocketContext` 实现，请检查类型，不要假定它也支持额外的请求视图。
 
 ```go
-// WebSocket 메시지를 처리하는 인터셉터 안에서 조회하는 예
+// 在处理 WebSocket 消息的拦截器中读取的示例
 if requestCtx, ok := ctx.(core.WebSocketMessageContext); ok {
     origin := requestCtx.Header("Origin")
     _ = origin
@@ -398,7 +406,7 @@ type WebSocketHandshakeInterceptor interface {
 ```go
 // src/user/user_controller.go
 func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
-    // context.Context에 연결된 EventBus로 이벤트를 수집합니다.
+    // 通过关联到 context.Context 的 EventBus 收集事件。
     publish.Event(ctx, OrderCreated{
         OrderID: orderId.Value,
         At:      time.Now(),

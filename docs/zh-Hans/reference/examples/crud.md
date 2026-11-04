@@ -1,5 +1,13 @@
 # 创建用户 CRUD API
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 创建用于新增、列出、查询、修改和删除用户的 HTTP API。示例使用内存存储库，不依赖 ORM，因此无需准备数据库即可运行。
 
 ## 开始前的准备
@@ -195,7 +203,7 @@ import (
     "example.com/crud-example/src/model"
 )
 
-// 요청 DTO
+// 请求 DTO
 
 type CreateUserRequest struct {
     Name  string `json:"name"`
@@ -207,7 +215,7 @@ type UpdateUserRequest struct {
     Email string `json:"email"`
 }
 
-// 응답 DTO
+// 响应 DTO
 
 type UserResponse struct {
     ID        int64     `json:"id"`
@@ -222,7 +230,7 @@ type UserListResponse struct {
     Total int            `json:"total"`
 }
 
-// 변환 함수
+// 转换函数
 
 func ToUserResponse(user *model.User) UserResponse {
     return UserResponse{
@@ -284,7 +292,7 @@ func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
-    // 이메일 중복 체크
+    // 检查邮箱是否重复
     if s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -305,7 +313,7 @@ func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.Use
         return nil, err
     }
 
-    // 이메일 변경 시 중복 체크
+    // 更改邮箱时检查是否重复
     if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -421,7 +429,7 @@ func (c *UserController) Delete(id path.Int) error {
     return nil
 }
 
-// Repository 에러를 HTTP 에러로 변환
+// 将 Repository 错误转换为 HTTP 错误
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
@@ -600,7 +608,7 @@ curl -X DELETE http://localhost:8080/users/1
 查询存储库中不存在的 ID 时，服务器会返回 HTTP 404 和以下错误消息。
 
 ```bash
-# 존재하지 않는 사용자
+# 不存在的用户
 curl http://localhost:8080/users/999
 ```
 
@@ -616,7 +624,7 @@ curl http://localhost:8080/users/999
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{"name": "홍길동", "email": "hong@example.com"}'
-# 중복 이메일
+# 重复邮箱
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{"name": "김철수", "email": "hong@example.com"}'
@@ -635,10 +643,10 @@ curl -X POST http://localhost:8080/users \
 控制器接收 `path.Int` 等语义类型作为参数，代替 HTTP 请求对象。错误通过 `httperr` 表示。
 
 ```go
-// 의미 타입으로 입력 받음
+// 通过语义类型接收输入
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
-// httperr로 의미만 표현
+// 通过 httperr 表达错误含义
 return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 ```
 
@@ -647,11 +655,11 @@ return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을
 根据已注册构造函数的参数类型，连接存储库、服务和控制器之间的依赖。
 
 ```go
-// 생성자 등록만으로 의존성 자동 해결
+// 只需注册构造函数即可自动解析依赖
 app.Constructor(
-    repository.NewUserRepository,  // 의존성 없음
-    service.NewUserService,        // Repository 의존
-    controller.NewUserController,  // Service 의존
+    repository.NewUserRepository,  // 无依赖
+    service.NewUserService,        // 依赖 Repository
+    controller.NewUserController,  // 依赖 Service
 )
 ```
 

@@ -1,5 +1,13 @@
 # spine.App
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 `App` 是注册构造函数、HTTP 路由、拦截器、事件消费者、WebSocket 处理器和自定义传输方式，并运行应用程序的入口。本参考介绍 Spine v0.6.5 的公开 API 和启动选项。
 
 ```go
@@ -91,17 +99,17 @@ Constructor(constructors ...any)
 **示例**
 
 ```go
-// 의존성 없는 생성자
+// 无依赖的构造函数
 func NewUserRepository() *UserRepository {
     return &UserRepository{}
 }
 
-// 의존성 있는 생성자
+// 有依赖的构造函数
 func NewUserController(repo *UserRepository) *UserController {
     return &UserController{repo: repo}
 }
 
-// 이벤트 소비자 생성자
+// 事件消费者构造函数
 func NewOrderConsumer() *OrderConsumer {
     return &OrderConsumer{}
 }
@@ -136,14 +144,14 @@ Route(method string, path string, handler any, opts ...router.RouteOption)
 **示例**
 
 ```go
-// 기본 라우트
+// 基本路由
 app.Route("GET", "/users", (*UserController).List)
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 app.Route("POST", "/users", (*UserController).CreateUser)
 app.Route("PUT", "/users/:id", (*UserController).UpdateUser)
 app.Route("DELETE", "/users/:id", (*UserController).DeleteUser)
 
-// 중첩 경로
+// 嵌套路径
 app.Route("GET", "/users/:userId/posts/:postId", (*PostController).GetPost)
 ```
 
@@ -154,7 +162,7 @@ app.Route("GET", "/users/:userId/posts/:postId", (*PostController).GetPost)
 ```go
 import "github.com/NARUBROWN/spine/pkg/route"
 
-// 라우트별 인터셉터 적용
+// 应用路由级拦截器
 app.Route(
     "GET",
     "/users/:id",
@@ -162,7 +170,7 @@ app.Route(
     route.WithInterceptors(&LoggingInterceptor{}),
 )
 
-// 타입이 있는 nil 포인터는 컨테이너에서 조회
+// 通过带类型的 nil 指针从容器中查找实例
 app.Route(
     "POST",
     "/admin/users",
@@ -170,7 +178,7 @@ app.Route(
     route.WithInterceptors((*AuthInterceptor)(nil)),
 )
 
-// 여러 인터셉터 적용
+// 应用多个拦截器
 app.Route(
     "POST",
     "/admin/users",
@@ -280,11 +288,11 @@ RegisterTransport(t core.CustomTransport)
 ```go
 // core/transport.go
 type CustomTransport interface {
-    // Init은 DI 컨테이너 준비 이후 호출됩니다.
+    // Init 在 DI 容器准备完成后调用。
     Init(container Container) error
-    // Start는 Init 이후 별도 고루틴에서 호출됩니다.
+    // Start 在 Init 之后于独立的 goroutine 中调用。
     Start() error
-    // Stop은 정상 종료 시 호출됩니다.
+    // Stop 在正常关闭时调用。
     Stop(ctx context.Context) error
 }
 
@@ -301,7 +309,7 @@ type GRPCTransport struct {
 }
 
 func (t *GRPCTransport) Init(container core.Container) error {
-    // 컨테이너에서 서비스 조회
+    // 从容器中获取服务
     svc, err := container.Resolve(reflect.TypeOf((*MyService)(nil)))
     if err != nil {
         return err
@@ -356,10 +364,10 @@ Consumers() *consumer.Registry
 **示例**
 
 ```go
-// 이벤트 소비자 등록
+// 注册事件消费者
 app.Consumers().Register(
-    "order.created",            // 토픽/이벤트 이름
-    (*OrderConsumer).OnCreated, // 핸들러 메서드
+    "order.created",            // 主题/事件名称
+    (*OrderConsumer).OnCreated, // 处理器方法
 )
 
 app.Consumers().Register(
@@ -379,7 +387,7 @@ func NewOrderConsumer() *OrderConsumer {
     return &OrderConsumer{}
 }
 
-// 이벤트 핸들러
+// 事件处理器
 func (c *OrderConsumer) OnCreated(
     ctx context.Context,
     eventName string,
@@ -390,7 +398,7 @@ func (c *OrderConsumer) OnCreated(
     return nil
 }
 
-// 이벤트 DTO
+// 事件 DTO
 type OrderCreated struct {
     OrderID int64     `json:"order_id"`
     At      time.Time `json:"at"`
@@ -594,14 +602,14 @@ type HTTPOptions struct {
 - 末尾的 `"/"` 会自动移除
 
 ```go
-// 유효한 접두사
+// 有效前缀
 HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/v1"}
 HTTP: &boot.HTTPOptions{GlobalPrefix: "/v2"}
 
-// Validate와 Run이 설정 오류 반환
-HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // '/'로 시작하지 않음
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // 경로 매개변수 포함
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // 와일드카드 포함
+// Validate 与 Run 返回配置错误
+HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // 未以 '/' 开头
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // 包含路径参数
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // 包含通配符
 ```
 
 ### 基本用法
@@ -635,7 +643,7 @@ app.Run(boot.Options{
 默认启用恢复中间件，将 panic 转换为 HTTP 500 响应。
 
 ```go
-// Recover 비활성화
+// 关闭 Recover
 HTTP: &boot.HTTPOptions{
     DisableRecover: true,
 }
@@ -744,7 +752,7 @@ import "github.com/NARUBROWN/spine/pkg/event/publish"
 func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) httpx.Response[Order] {
     order := c.repo.Save(req)
 
-    // 이벤트 발행
+    // 发布事件
     publish.Event(ctx, OrderCreated{
         OrderID: order.ID,
         At:      time.Now(),
@@ -788,7 +796,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
+// BuildApplication 是服务器运行、契约检查与离线验证共用的应用配置函数。
 func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
 	app.Constructor(NewHealthController)

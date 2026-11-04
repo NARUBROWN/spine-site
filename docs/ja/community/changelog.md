@@ -1,6 +1,22 @@
 # 現在のリリース
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 通常のインストールには `@latest` を使います。現在の文書はSpine v0.6.5とCLI v0.4.2を対象とします。CLIは `spine version`、実際の依存関係は生成した `go.mod` で確認します。
+
+## Spine v0.7.0-preview.1 {#spine-preview}
+
+公開済みの Preview タグはコアの `v0.7.0-preview.1` と、各独立プラットフォームおよび playground の `v0.2.0-preview.1` です。安定版ドキュメントの基準である `v0.6.5` と区別して選択してください。
+
+入力元別の Path、Query、Header DTO、従来入力 API の Deprecated、混在時の起動拒否とボディバインディングの変更を説明します。標準 OpenAPI は `Enabled: true` で明示的に有効にします。
+
+対象バージョン、互換性と使用方法は [ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)と [ランタイム OpenAPI リファレンス](/ja/reference/api/openapi)を参照してください。
 
 ## Spine v0.6.5 / CLI v0.4.2
 

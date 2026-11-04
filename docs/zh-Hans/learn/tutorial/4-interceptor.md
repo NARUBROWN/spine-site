@@ -444,7 +444,7 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 以下示例仅摘录了审计拦截器读取认证拦截器所保存的 `currentUser` 的部分。要添加审计拦截器，请实现 `AuditInterceptor` 类型及其四个生命周期方法，并在认证拦截器之后注册。请勿重复声明现有认证拦截器的 `PreHandle`。
 
 ```go
-// AuthInterceptor — 사용자 정보 저장
+// AuthInterceptor — 保存用户信息
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     user, err := validateToken(token)
@@ -455,8 +455,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     return nil
 }
 
-// 컨트롤러에서는 읽기 전용 spine.Ctx로 조회
-// 또는 다른 인터셉터에서 조회
+// 控制器通过只读的 spine.Ctx 读取
+// 或在其他拦截器中读取
 func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     user, ok := ctx.Get("currentUser")
     if ok {
@@ -562,7 +562,7 @@ app.Constructor(
 )
 
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),  // 타입으로 참조
+    (*interceptor.TxInterceptor)(nil),  // 通过类型引用
 )
 ```
 
@@ -580,7 +580,7 @@ app.Route(
     "POST",
     "/orders",
     (*OrderController).CreateOrder,
-    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 타입으로 참조
+    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 通过类型引用
 )
 ```
 

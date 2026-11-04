@@ -1,5 +1,13 @@
 # Swagger 与 OpenAPI 文档
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 使用 CLI 导出 OpenAPI 文件，按需添加 Swaggo 文档和 Swagger UI，并从浏览器发送请求。CLI 的静态 OpenAPI 导出与使用 Swaggo 的 UI 配置分别进行。
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
@@ -8,7 +16,7 @@
 
 ## 使用 CLI 导出 OpenAPI
 
-CLI 根据已注册的路由和处理器签名生成 OpenAPI 3.1 文档，无需 Swaggo 注释。
+CLI 根据已注册的路由和处理器签名生成 OpenAPI 3.1 文档。
 
 ```bash
 spine doctor
@@ -186,16 +194,16 @@ spine dev
 ### 示例
 
 ```go
-// 쿼리 파라미터
+// 查询参数
 // @Param id query int true "User ID"
 // @Param name query string false "User name"
 // @Param active query bool false "Active status"
 
-// 요청 본문
-// @Param body body CreateUserRequest true "유저 생성 요청"
+// 请求体
+// @Param body body CreateUserRequest true "创建用户请求"
 
-// 헤더
-// @Param Authorization header string true "Bearer 토큰"
+// 请求头
+// @Param Authorization header string true "Bearer 令牌"
 ```
 
 
@@ -207,13 +215,13 @@ spine dev
 // src/user/user_request.go
 package user
 
-// CreateUserRequest 유저 생성 요청
+// CreateUserRequest 创建用户请求
 type CreateUserRequest struct {
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// UpdateUserRequest 유저 수정 요청
+// UpdateUserRequest 更新用户请求
 type UpdateUserRequest struct {
     Name  string `json:"name" example:"Alice Updated"`
     Email string `json:"email" example:"alice.new@example.com"`
@@ -226,14 +234,14 @@ type UpdateUserRequest struct {
 // src/user/user_response.go
 package user
 
-// UserResponse 유저 응답
+// UserResponse 用户响应
 type UserResponse struct {
     ID    int    `json:"id" example:"1"`
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// ErrorResponse 에러 응답
+// ErrorResponse 错误响应
 type ErrorResponse struct {
     Message string `json:"message" example:"유저를 찾을 수 없습니다."`
 }

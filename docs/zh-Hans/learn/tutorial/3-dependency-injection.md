@@ -14,7 +14,7 @@ Spine 根据已注册构造函数的参数类型，先创建所需对象，再�
 在以下构造函数中，`*UserRepository` 是 `UserService` 所需的依赖。
 
 ```go
-// 파라미터 타입을 보고 자동으로 의존성 주입
+// 根据参数类型自动注入依赖
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
@@ -82,7 +82,7 @@ app.Route("GET", "/user/:id", (*UserController).Get)
 即使像下面这样更改注册顺序，依赖的解析顺序也相同。
 
 ```go
-// user_route.go의 기존 Constructor 호출을 대체하는 예시입니다.
+// 替换 user_route.go 中现有 Constructor 调用的示例。
 app.Constructor(NewUserController, NewUserService, NewUserRepository)
 ```
 
@@ -101,13 +101,13 @@ graph LR
 以下示例仅展示签名。实际代码需要实现各函数的函数体和返回类型。
 
 ```go
-// 저장소 의존성 선언
+// 声明 Repository 依赖
 func NewUserService(repo *UserRepository) *UserService
 
-// 여러 의존성 선언
+// 声明多个依赖
 func NewUserController(svc *UserService, logger *Logger) *UserController
 
-// 의존성 없는 생성자
+// 无依赖的构造函数
 func NewLogger() *Logger
 ```
 
@@ -143,16 +143,16 @@ app.Constructor(database.NewDB)
 如果将仓储字段固定为 `*bun.DB`，就无法向该字段传入 `bun.Tx`。
 
 ```go
-// 이 필드에는 *bun.DB만 저장할 수 있음
+// 此字段只能保存 *bun.DB
 type UserRepository struct {
-    db *bun.DB  // bun.Tx를 받을 수 없음
+    db *bun.DB  // 无法接收 bun.Tx
 }
 ```
 
 使用 `*bun.DB` 和 `bun.Tx` 均实现的 `bun.IDB`，就能通过同一个契约处理两种类型。以下代码展示了仓储构造函数接收 `bun.IDB` 依赖的方式。
 
 ```go
-// *bun.DB와 bun.Tx는 모두 bun.IDB를 구현
+// *bun.DB 与 bun.Tx 均实现 bun.IDB
 type UserRepository struct {
     db bun.IDB
 }
@@ -208,10 +208,10 @@ app.Constructor(NewUserController)
 以下是一个独立的仓储设计示例。`App`、`UserRepository` 的 `writer` 和 `reader` 字段，以及 `connectToPrimary`、`connectToReplica`，需要根据应用自行实现。
 
 ```go
-// 파라미터 이름만으로 인스턴스를 구분할 수 없음
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 어떤 게 어떤 건지?
+// 无法仅凭参数名称区分实例
+func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 如何区分这两个参数？
 
-// 서로 다른 래퍼 타입으로 구분
+// 通过不同的包装类型区分
 type PrimaryDB struct{ *bun.DB }
 type ReplicaDB struct{ *bun.DB }
 
@@ -238,11 +238,11 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
 如果 `A` 需要 `B`，而 `B` 又需要 `A`，就无法先创建其中任何一个对象。以下伪代码展示了这种关系。
 
 ```go
-// A → B → A 순환
+// A → B → A 循环依赖
 func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
-// 부팅 시 에러 발생
+// 启动时报错
 // circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
@@ -251,13 +251,13 @@ func NewB(a *A) *B { ... }
 所需类型没有对应的构造函数时，依赖解析会失败。以下示例省略了 `NewUserRepository` 的注册。
 
 ```go
-// UserRepository를 등록하지 않으면
+// 如果未注册 UserRepository
 app.Constructor(
-    NewUserService,     // *UserRepository 필요
+    NewUserService,     // 需要 *UserRepository
     NewUserController,
 )
 
-// 부팅 시 에러 발생
+// 启动时报错
 // no constructor registered for *user.UserRepository
 ```
 

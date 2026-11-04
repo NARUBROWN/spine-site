@@ -1,5 +1,13 @@
 # ユーザー CRUD API を作る
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 ユーザーの作成、一覧取得、個別取得、更新、削除を行う HTTP API を作ります。ORM を使わずメモリ上のストアを使用するため、データベースを用意せずに実行できます。
 
 ## 事前準備
@@ -195,7 +203,7 @@ import (
     "example.com/crud-example/src/model"
 )
 
-// 요청 DTO
+// リクエスト DTO
 
 type CreateUserRequest struct {
     Name  string `json:"name"`
@@ -207,7 +215,7 @@ type UpdateUserRequest struct {
     Email string `json:"email"`
 }
 
-// 응답 DTO
+// レスポンス DTO
 
 type UserResponse struct {
     ID        int64     `json:"id"`
@@ -222,7 +230,7 @@ type UserListResponse struct {
     Total int            `json:"total"`
 }
 
-// 변환 함수
+// 変換関数
 
 func ToUserResponse(user *model.User) UserResponse {
     return UserResponse{
@@ -284,7 +292,7 @@ func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
-    // 이메일 중복 체크
+    // メールアドレスの重複をチェック
     if s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -305,7 +313,7 @@ func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.Use
         return nil, err
     }
 
-    // 이메일 변경 시 중복 체크
+    // メールアドレス変更時の重複をチェック
     if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
         return nil, repository.ErrEmailAlreadyExists
     }
@@ -421,7 +429,7 @@ func (c *UserController) Delete(id path.Int) error {
     return nil
 }
 
-// Repository 에러를 HTTP 에러로 변환
+// Repository のエラーを HTTP エラーに変換
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
@@ -600,7 +608,7 @@ curl -X DELETE http://localhost:8080/users/1
 リポジトリに存在しない ID を取得すると、HTTP 404 と次のエラーメッセージが返されます。
 
 ```bash
-# 존재하지 않는 사용자
+# 存在しないユーザー
 curl http://localhost:8080/users/999
 ```
 
@@ -616,7 +624,7 @@ curl http://localhost:8080/users/999
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{"name": "홍길동", "email": "hong@example.com"}'
-# 중복 이메일
+# メールアドレスの重複
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{"name": "김철수", "email": "hong@example.com"}'
@@ -635,10 +643,10 @@ curl -X POST http://localhost:8080/users \
 コントローラーは HTTP リクエストオブジェクトの代わりに、`path.Int` などの意味型を引数として受け取ります。エラーは `httperr` で表現します。
 
 ```go
-// 의미 타입으로 입력 받음
+// 意味を持つ型で入力を受け取る
 func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
 
-// httperr로 의미만 표현
+// httperr でエラーの意味だけを表現
 return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
 ```
 
@@ -647,11 +655,11 @@ return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을
 登録したコンストラクタの引数の型をもとに、リポジトリ、サービス、コントローラーの依存関係を接続します。
 
 ```go
-// 생성자 등록만으로 의존성 자동 해결
+// コンストラクターを登録するだけで依存関係を自動解決
 app.Constructor(
-    repository.NewUserRepository,  // 의존성 없음
-    service.NewUserService,        // Repository 의존
-    controller.NewUserController,  // Service 의존
+    repository.NewUserRepository,  // 依存関係なし
+    service.NewUserService,        // Repository に依存
+    controller.NewUserController,  // Service に依存
 )
 ```
 

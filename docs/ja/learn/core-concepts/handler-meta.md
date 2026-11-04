@@ -1,5 +1,13 @@
 # ハンドラーメタデータ (HandlerMeta)
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 `core.HandlerMeta`は、リクエストに対応するコントローラーメソッドを実行するために必要な情報です。コントローラーの型、メソッド、パスパラメーターの順序、ルートインターセプターを保持します。アプリでは`app.Route`でハンドラーを登録し、インターセプターで`HandlerMeta`を読み取って実行対象を確認できます。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
@@ -11,11 +19,11 @@
 [CLIプロジェクト構造](/ja/learn/tutorial/1-project-structure)で作成した`example.com/my-app`を基準に、ユーザールートは`src/user/user_route.go`の`Register(app)`に宣言します。生成されるハンドラーは`(*UserController).Get`で、パスは`GET /user/:id`です。`internal/application/application.go`の`BuildApplication`は`user.Register(app)`のエラーを確認して返し、生成された`main.go`で検証と実行を進めます。
 
 ```go
-// src/user/user_route.go의 Register 내부 발췌
+// src/user/user_route.go の Register 内から抜粋
 app.Route(
     "GET",
     "/user/:id",
-    (*UserController).Get,  // 메서드 표현식
+    (*UserController).Get,  // メソッド式
 )
 ```
 
@@ -28,16 +36,16 @@ app.Route(
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    // 컨트롤러 타입 (Container Resolve 대상)
+    // コントローラーの型 (Container Resolve の対象)
     ControllerType reflect.Type
 
-    // 호출할 메서드
+    // 呼び出すメソッド
     Method reflect.Method
 
-    // 라우트에 선언된 경로 매개변수 키의 순서
+    // ルートで宣言されたパスパラメーターのキーの順序
     PathKeys []string
 
-    // 핸들러에 적용된 인터셉터
+    // ハンドラーに適用されたインターセプター
     Interceptors []Interceptor
 }
 ```
@@ -58,7 +66,7 @@ meta.ControllerType  // reflect.Type of *UserController
 ```go
 meta.Method.Name           // "GetUser"
 meta.Method.Type           // func(*UserController, path.Int) (httpx.Response[User], error)
-meta.Method.Func           // 호출 가능한 reflect.Value
+meta.Method.Func           // 呼び出し可能な reflect.Value
 ```
 
 `PathKeys`は実際のリクエスト値ではなく、パスパラメーターの名前です。たとえば`/users/:userId/orders/:orderId`では`userId`、`orderId`の順序を保持し、この順序に従ってハンドラーの`path`型引数を対応付けます。リクエストごとに変わるパスパラメーターの値は、リクエストコンテキストから読み取ります。
@@ -66,7 +74,7 @@ meta.Method.Func           // 호출 가능한 reflect.Value
 `Interceptors`にはルートインターセプターだけが入ります。`app.Interceptor`で登録したグローバルインターセプターは、パイプラインが別に管理します。
 
 ```go
-meta.Interceptors  // []core.Interceptor (라우트 레벨)
+meta.Interceptors  // []core.Interceptor (ルート単位)
 ```
 
 ## メソッド式でハンドラーを登録する
@@ -74,9 +82,9 @@ meta.Interceptors  // []core.Interceptor (라우트 레벨)
 ルートには、`(*UserController).GetUser`のような**メソッド式**を渡します。この式は特定のコントローラーインスタンスに結び付いていない関数で、最初の引数としてコントローラーのポインターを受け取ります。
 
 ```go
-// 메서드 표현식의 실제 타입
+// メソッド式の実際の型
 func(*UserController, path.Int) (httpx.Response[User], error)
-//   ↑ receiver가 첫 번째 인자로 변환됨
+//   ↑ receiver が最初の引数に変換される
 ```
 
 Spineはこの情報から、コントローラーの型と呼び出すメソッドを確認します。コントローラーのインスタンスは、アプリのコンストラクタ登録に従って依存性コンテナーから取得します。
@@ -115,22 +123,22 @@ app.Route(
 依存性の注入が必要なインターセプターには、型付きのnilポインターを使用できます。この場合、インターセプターのコンストラクタと必要な依存性を登録する必要があります。型情報のない`nil`を渡すと、ルートインターセプターの登録に失敗します。
 
 ```go
-// src/user/user_route.go의 Register 내부 발췌
+// src/user/user_route.go の Register 内から抜粋
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
-// 라우트 인터셉터와 함께
+// ルートインターセプターと併用
 app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil 포인터 → Container에서 Resolve
+    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil ポインター → Container から Resolve
 )
 ```
 
 グローバルインターセプターとルートインターセプターを併用することもできます。グローバルインターセプターはすべてのリクエストに適用され、ルートインターセプターはそのルートだけに適用されます。
 
 ```go
-// 글로벌: 모든 요청에 적용 (라우팅 전 실행)
+// グローバル: すべてのリクエストに適用 (ルーティング前に実行)
 app.Interceptor(&CORSInterceptor{})
 
-// 라우트: 특정 핸들러에만 적용 (라우팅 후, Controller 호출 전 실행)
+// ルート: 特定のハンドラーにのみ適用 (ルーティング後、Controller 呼び出し前に実行)
 app.Route("GET", "/admin/:id", (*AdminController).Get,
     route.WithInterceptors(&AuthInterceptor{}),
 )

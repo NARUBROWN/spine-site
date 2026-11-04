@@ -1,6 +1,22 @@
 # 현재 릴리스
 
+::: warning v0.7.0 미리보기 입력 API 전환
+이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+
+새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
+
+적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+:::
+
 일반 설치는 `@latest`를 사용합니다. 현재 문서 기준은 Spine v0.6.5와 CLI v0.4.2입니다. 설치된 CLI는 `spine version`, 실제 의존성은 생성된 `go.mod`에서 확인하세요.
+
+## Spine v0.7.0 미리보기 1 {#spine-preview}
+
+미리보기로 공개한 태그는 코어 `v0.7.0-preview.1`과 각 독립 플랫폼 및 playground `v0.2.0-preview.1`입니다. 안정 문서의 기준인 `v0.6.5`와 구분해서 선택하세요.
+
+출처별 Path, Query, Header DTO와 기존 입력 API의 Deprecated, 혼용 시 부팅 거부와 본문 바인딩 변경을 안내합니다. 표준 OpenAPI는 `Enabled: true`로 명시적으로 켭니다.
+
+[핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview)과 [런타임 OpenAPI 참조](/ko/reference/api/openapi)에서 적용 버전, 호환성 범위와 사용법을 확인하세요.
 
 ## Spine v0.6.5 / CLI v0.4.2
 

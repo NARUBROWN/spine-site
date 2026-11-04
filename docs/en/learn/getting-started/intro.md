@@ -1,5 +1,13 @@
 # Introduction
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Spine is a web framework that lets you register constructors, routes, and interceptors in Go code. The registration code shows which handler receives a request and which tasks run before and after it.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
@@ -16,13 +24,13 @@ The following example shows how to register a user feature you have implemented 
 func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New(echoplatform.Option())
 
-    // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
+    // Registered constructors resolve dependencies regardless of registration order.
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
 
-    // 인터셉터를 실행할 순서대로 등록합니다.
+    // Register interceptors in execution order.
     app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
 
-    // HTTP 메서드와 경로에 핸들러를 연결합니다.
+    // Bind a handler to an HTTP method and path.
     app.Route("GET", "/users", (*UserController).GetUser)
 
     return app, boot.Options{
@@ -44,12 +52,12 @@ The code created by `spine generate resource user` uses different names and path
 Declare the dependencies you need as constructor parameters, then register the constructors with `app.Constructor`. In the example below, `UserService` receives a `UserRepository`.
 
 ```go
-// 생성자 파라미터가 곧 의존성 선언
+// Constructor parameters declare dependencies
 func NewUserService(repo *UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 
-// 등록만 하면 자동으로 의존성 그래프 해결
+// Registration automatically resolves the dependency graph
 app.Constructor(NewUserRepository, NewUserService, NewUserController)
 ```
 
@@ -59,9 +67,9 @@ Interceptors run shared tasks such as authentication, transactions, and logging 
 
 ```go
 app.Interceptor(
-    &TxInterceptor{},      // 1. 트랜잭션 시작
-    &AuthInterceptor{},    // 2. 인증 확인
-    &LoggingInterceptor{}, // 3. 로깅
+    &TxInterceptor{},      // 1. Begin the transaction
+    &AuthInterceptor{},    // 2. Check authentication
+    &LoggingInterceptor{}, // 3. Log the request
 )
 
 ```
@@ -73,7 +81,7 @@ app.Interceptor(
 Use `app.Route` to connect an HTTP method and path to a handler. A registration function for each feature lets you manage related routes in one place.
 
 ```go
-// 한 곳에서 모든 라우트를 관리
+// Manage all routes in one place
 func RegisterUserRoutes(app spine.App) {
     app.Route("GET", "/users", (*UserController).GetUser)
     app.Route("POST", "/users", (*UserController).CreateUser)
@@ -87,11 +95,11 @@ func RegisterUserRoutes(app spine.App) {
 Handler parameters and return types express which values to read from a request and the shape of the response. In the following example, the lookup handler reads query parameters, and the creation handler receives the JSON request body as a struct pointer. You must implement the service and the request and response types yourself.
 
 ```go
-// 함수 시그니처가 곧 API 스펙
+// The function signature defines the API contract
 func (c *UserController) GetUser(
-    ctx context.Context,      // 컨텍스트
-    q query.Values,           // 쿼리 파라미터
-) (httpx.Response[UserResponse], error) {     // 응답 타입
+    ctx context.Context,      // Context
+    q query.Values,           // Query parameters
+) (httpx.Response[UserResponse], error) {     // Response type
     user, err := c.svc.Get(ctx, q.Int("id", 0))
     if err != nil {
         return httpx.Response[UserResponse]{}, err
@@ -99,10 +107,10 @@ func (c *UserController) GetUser(
     return httpx.Response[UserResponse]{Body: user}, nil
 }
 
-// DTO는 자동으로 바인딩
+// DTOs are bound automatically
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *CreateUserRequest,    // JSON body → 구조체 (포인터)
+    req *CreateUserRequest,    // JSON body → struct pointer
 ) (httpx.Response[UserResponse], error) {
     user, err := c.svc.Create(ctx, req)
     if err != nil {

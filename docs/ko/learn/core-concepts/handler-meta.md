@@ -1,5 +1,13 @@
 # 핸들러 메타데이터 (HandlerMeta)
 
+::: warning v0.7.0 미리보기 입력 API 전환
+이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+
+새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
+
+적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+:::
+
 `core.HandlerMeta`는 요청에 맞는 컨트롤러 메서드를 실행하는 데 필요한 정보입니다. 컨트롤러 타입, 메서드, 경로 매개변수의 순서, 라우트 인터셉터를 담습니다. 앱에서는 `app.Route`로 핸들러를 등록하고, 인터셉터에서 `HandlerMeta`를 읽어 실행 대상을 확인할 수 있습니다.
 
 이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.

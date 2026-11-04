@@ -1,5 +1,13 @@
 # SwaggerとOpenAPIドキュメント
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 CLIでOpenAPIファイルをエクスポートし、必要に応じてSwaggoのドキュメントとSwagger UIを追加して、ブラウザーからリクエストを送信します。CLIによる静的なOpenAPIのエクスポートと、Swaggoを使用するUIの構成は、それぞれ別に行います。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
@@ -8,7 +16,7 @@ CLIでOpenAPIファイルをエクスポートし、必要に応じてSwaggoの�
 
 ## CLIによるOpenAPIのエクスポート
 
-CLIは、登録されたルートとハンドラーのシグネチャからOpenAPI 3.1ドキュメントを生成します。Swaggoのコメントは必要ありません。
+CLIは、登録されたルートとハンドラーのシグネチャからOpenAPI 3.1ドキュメントを生成します。
 
 ```bash
 spine doctor
@@ -186,16 +194,16 @@ spine dev
 ### 例
 
 ```go
-// 쿼리 파라미터
+// クエリパラメーター
 // @Param id query int true "User ID"
 // @Param name query string false "User name"
 // @Param active query bool false "Active status"
 
-// 요청 본문
-// @Param body body CreateUserRequest true "유저 생성 요청"
+// リクエスト本文
+// @Param body body CreateUserRequest true "ユーザー作成リクエスト"
 
-// 헤더
-// @Param Authorization header string true "Bearer 토큰"
+// ヘッダー
+// @Param Authorization header string true "Bearer トークン"
 ```
 
 
@@ -207,13 +215,13 @@ spine dev
 // src/user/user_request.go
 package user
 
-// CreateUserRequest 유저 생성 요청
+// CreateUserRequest ユーザー作成リクエスト
 type CreateUserRequest struct {
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// UpdateUserRequest 유저 수정 요청
+// UpdateUserRequest ユーザー更新リクエスト
 type UpdateUserRequest struct {
     Name  string `json:"name" example:"Alice Updated"`
     Email string `json:"email" example:"alice.new@example.com"`
@@ -226,14 +234,14 @@ type UpdateUserRequest struct {
 // src/user/user_response.go
 package user
 
-// UserResponse 유저 응답
+// UserResponse ユーザーレスポンス
 type UserResponse struct {
     ID    int    `json:"id" example:"1"`
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// ErrorResponse 에러 응답
+// ErrorResponse エラーレスポンス
 type ErrorResponse struct {
     Message string `json:"message" example:"유저를 찾을 수 없습니다."`
 }

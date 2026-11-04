@@ -1,5 +1,13 @@
 # Swagger와 OpenAPI 문서
 
+::: warning v0.7.0 미리보기 입력 API 전환
+이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+
+새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
+
+적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+:::
+
 CLI로 OpenAPI 파일을 내보내고, 필요하면 Swaggo 문서와 Swagger UI를 추가해 브라우저에서 요청을 보냅니다. CLI의 정적 OpenAPI 내보내기와 Swaggo를 사용하는 UI 구성은 각각 진행합니다.
 
 이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
@@ -8,7 +16,7 @@ CLI로 OpenAPI 파일을 내보내고, 필요하면 Swaggo 문서와 Swagger UI�
 
 ## CLI로 OpenAPI 내보내기
 
-CLI는 등록된 경로와 핸들러 시그니처에서 OpenAPI 3.1 문서를 생성합니다. Swaggo 주석은 필요하지 않습니다.
+CLI는 등록된 경로와 핸들러 시그니처에서 OpenAPI 3.1 문서를 생성합니다.
 
 ```bash
 spine doctor

@@ -1,5 +1,13 @@
 # 選擇平台與 DTO 驗證
 
+::: warning v0.7.0 Preview 輸入 API 移轉
+本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
+
+新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
+
+適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+:::
+
 Spine 0.6.5 將 HTTP、WebSocket、事件與 DTO 驗證的公開契約保留在核心中，從獨立模組選擇具體實作。核心僅使用標準函式庫。CLI 0.4.2 的 `platform-contracts-v0.6.5` 配方選擇 Spine v0.6.5 與各實作的 v0.1.0 標籤。
 
 ## 安裝 CLI 並產生專案

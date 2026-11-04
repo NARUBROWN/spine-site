@@ -1,5 +1,13 @@
 # core.ExecutionContext
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 `ExecutionContext`は、インターセプターと実行パイプラインでリクエスト情報を読み取り、処理段階の間で値を共有するためのインターフェースです。HTTPリクエスト、イベント、WebSocketメッセージで共通に使用し、トランスポートごとの追加情報は個別のインターフェースで提供します。
 
 ```go
@@ -79,20 +87,20 @@ type HttpRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // 개별 접근
+    // 個別にアクセス
     Param(name string) string
     Query(name string) string
     Header(name string) string
 
-    // 전체 뷰 접근
+    // ビュー全体にアクセス
     Params() map[string]string
     Queries() map[string][]string
     Headers() map[string][]string
 
-    // 요청 본문
+    // リクエスト本文
     Bind(out any) error
 
-    // 멀티파트
+    // マルチパート
     MultipartForm() (*multipart.Form, error)
 }
 ```
@@ -225,7 +233,7 @@ Method() string
 ```go
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     if ctx.Method() == "OPTIONS" {
-        // CORS 사전 요청 처리
+        // CORS プリフライトリクエストを処理
     }
     return nil
 }
@@ -414,7 +422,7 @@ Get(key string) (any, bool)
 
 ```go
 func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
-    // 인터셉터가 Set("auth.user", ...)으로 저장한 값 조회
+    // インターセプターが Set("auth.user", ...) で保存した値を取得
     if authUser, ok := ctx.Get("auth.user"); ok {
         _ = authUser.(*AuthUser)
         // ...
@@ -507,7 +515,7 @@ if err != nil {
     return err
 }
 for _, file := range form.File["upload"] {
-    // 파일 처리
+    // ファイルを処理
 }
 ```
 
@@ -580,7 +588,7 @@ WebSocketメッセージの型を返します。
 
 ```go
 if ctx.MessageType() == ws.TextMessage {
-    // 텍스트 메시지 처리
+    // テキストメッセージを処理
 }
 ```
 

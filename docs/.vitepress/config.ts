@@ -77,6 +77,13 @@ export default withMermaid(defineConfig({
                                 { text: 'query.Values', link: '/en/learn/core-concepts/query-values' },
                                 { text: 'httperr', link: '/en/learn/core-concepts/httperr' }
                             ]
+                        },
+                        {
+                            text: 'Preview',
+                            items: [
+                                { text: 'Handler input migration', link: '/en/learn/migration/v0.7.0-preview' },
+                                { text: 'Runtime OpenAPI (Preview)', link: '/en/reference/api/openapi' }
+                            ]
                         }
                     ],
                     '/en/reference/': [
@@ -86,7 +93,8 @@ export default withMermaid(defineConfig({
                                 { text: 'spine.App', link: '/en/reference/api/spine-app' },
                                 { text: 'ExecutionContext', link: '/en/reference/api/execution-context' },
                                 { text: 'Interceptor', link: '/en/reference/api/interceptor' },
-                                { text: 'query.Values', link: '/en/reference/api/query-values' }
+                                { text: 'query.Values', link: '/en/reference/api/query-values' },
+                                { text: 'Runtime OpenAPI (Preview)', link: '/en/reference/api/openapi' }
                             ]
                         },
                         {
@@ -174,7 +182,13 @@ export default withMermaid(defineConfig({
                                 { text: 'httperr 패키지', link: '/ko/learn/core-concepts/httperr' }
                             ]
                         },
-
+                        {
+                            text: '미리보기',
+                            items: [
+                                { text: '핸들러 입력 전환', link: '/ko/learn/migration/v0.7.0-preview' },
+                                { text: '런타임 OpenAPI (미리보기)', link: '/ko/reference/api/openapi' }
+                            ]
+                        }
                     ],
                     '/ko/reference/': [
                         {
@@ -183,7 +197,8 @@ export default withMermaid(defineConfig({
                                 { text: 'spine.App', link: '/ko/reference/api/spine-app' },
                                 { text: 'core.ExecutionContext', link: '/ko/reference/api/execution-context' },
                                 { text: 'core.Interceptor', link: '/ko/reference/api/interceptor' },
-                                { text: 'query.Values', link: '/ko/reference/api/query-values' }
+                                { text: 'query.Values', link: '/ko/reference/api/query-values' },
+                                { text: '런타임 OpenAPI (미리보기)', link: '/ko/reference/api/openapi' }
                             ]
                         },
                         {
@@ -270,6 +285,13 @@ export default withMermaid(defineConfig({
                                 { text: 'query.Values', link: '/ja/learn/core-concepts/query-values' },
                                 { text: 'httperr パッケージ', link: '/ja/learn/core-concepts/httperr' }
                             ]
+                        },
+                        {
+                            text: 'Preview',
+                            items: [
+                                { text: 'ハンドラー入力の移行', link: '/ja/learn/migration/v0.7.0-preview' },
+                                { text: 'ランタイム OpenAPI (Preview)', link: '/ja/reference/api/openapi' }
+                            ]
                         }
                     ],
                     '/ja/reference/': [
@@ -279,7 +301,8 @@ export default withMermaid(defineConfig({
                                 { text: 'spine.App', link: '/ja/reference/api/spine-app' },
                                 { text: 'core.ExecutionContext', link: '/ja/reference/api/execution-context' },
                                 { text: 'core.Interceptor', link: '/ja/reference/api/interceptor' },
-                                { text: 'query.Values', link: '/ja/reference/api/query-values' }
+                                { text: 'query.Values', link: '/ja/reference/api/query-values' },
+                                { text: 'ランタイム OpenAPI (Preview)', link: '/ja/reference/api/openapi' }
                             ]
                         },
                         {
@@ -351,14 +374,22 @@ export default withMermaid(defineConfig({
                             { text: 'HandlerMeta', link: '/zh-Hans/learn/core-concepts/handler-meta' },
                             { text: 'query.Values', link: '/zh-Hans/learn/core-concepts/query-values' },
                             { text: 'httperr', link: '/zh-Hans/learn/core-concepts/httperr' }
-                        ] }
+                        ] },
+                        {
+                            text: 'Preview',
+                            items: [
+                                { text: '处理器输入迁移', link: '/zh-Hans/learn/migration/v0.7.0-preview' },
+                                { text: '运行时 OpenAPI (Preview)', link: '/zh-Hans/reference/api/openapi' }
+                            ]
+                        }
                     ],
                     '/zh-Hans/reference/': [
                         { text: 'API 参考', items: [
                             { text: 'spine.App', link: '/zh-Hans/reference/api/spine-app' },
                             { text: 'ExecutionContext', link: '/zh-Hans/reference/api/execution-context' },
                             { text: 'Interceptor', link: '/zh-Hans/reference/api/interceptor' },
-                            { text: 'query.Values', link: '/zh-Hans/reference/api/query-values' }
+                            { text: 'query.Values', link: '/zh-Hans/reference/api/query-values' },
+                                { text: '运行时 OpenAPI (Preview)', link: '/zh-Hans/reference/api/openapi' }
                         ] },
                         { text: '示例', items: [
                             { text: '创建用户 CRUD API', link: '/zh-Hans/reference/examples/crud' },
@@ -420,14 +451,22 @@ export default withMermaid(defineConfig({
                             { text: 'HandlerMeta', link: '/zh-Hant/learn/core-concepts/handler-meta' },
                             { text: 'query.Values', link: '/zh-Hant/learn/core-concepts/query-values' },
                             { text: 'httperr', link: '/zh-Hant/learn/core-concepts/httperr' }
-                        ] }
+                        ] },
+                        {
+                            text: 'Preview',
+                            items: [
+                                { text: '處理器輸入移轉', link: '/zh-Hant/learn/migration/v0.7.0-preview' },
+                                { text: '執行階段 OpenAPI (Preview)', link: '/zh-Hant/reference/api/openapi' }
+                            ]
+                        }
                     ],
                     '/zh-Hant/reference/': [
                         { text: 'API 參考', items: [
                             { text: 'spine.App', link: '/zh-Hant/reference/api/spine-app' },
                             { text: 'ExecutionContext', link: '/zh-Hant/reference/api/execution-context' },
                             { text: 'Interceptor', link: '/zh-Hant/reference/api/interceptor' },
-                            { text: 'query.Values', link: '/zh-Hant/reference/api/query-values' }
+                            { text: 'query.Values', link: '/zh-Hant/reference/api/query-values' },
+                                { text: '執行階段 OpenAPI (Preview)', link: '/zh-Hant/reference/api/openapi' }
                         ] },
                         { text: '範例', items: [
                             { text: '建立使用者 CRUD API', link: '/zh-Hant/reference/examples/crud' },

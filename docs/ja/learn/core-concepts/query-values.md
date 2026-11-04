@@ -1,5 +1,13 @@
 # query.Values
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 `query.Values`でHTTPクエリパラメーターを読み取り、デフォルト値を指定できます。コントローラーの引数に`q query.Values`を宣言し、必要なキーを文字列、整数、真偽値として取得して使用します。クエリパラメーターを任意のDTOに自動でマッピングする方法はサポートしていません。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
@@ -34,10 +42,10 @@ func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
 このメソッドを`GET /user`に登録した場合、リクエストとレスポンスは次のようになります。
 
 ```bash
-# 요청
+# リクエスト
 GET /user?id=123&name=john
 
-# 응답
+# レスポンス
 {
     "id": 123,
     "name": "john"
@@ -115,8 +123,8 @@ q.String("name")  // "john"
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (키 없음 → 기본값)
-q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
+q.Int("offset", 0)  // 0 (キーなし → デフォルト値)
+q.Int("page", 1)    // 1 (page=abc の場合 → デフォルト値)
 ```
 
 変換に成功した負数や0は、そのまま返します。ページ番号や価格範囲のように正の数だけを許可する値は、アプリで別に検査する必要があります。
@@ -139,8 +147,8 @@ q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (키 없음 → 기본값)
-q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
+q.GetBoolByKey("deleted", false)   // false (キーなし → デフォルト値)
+q.GetBoolByKey("active", false)    // false (active=maybe の場合 → デフォルト値)
 ```
 
 ### キーの存在を確認する
@@ -151,7 +159,7 @@ q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
 // GET /user?status=active&empty=
 
 q.Has("status")  // true
-q.Has("empty")   // true (값은 비었지만 키는 존재)
+q.Has("empty")   // true (値は空だがキーは存在)
 q.Has("missing") // false
 ```
 
@@ -226,11 +234,11 @@ func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
 次のように、アプリが受け付けるフィルター名だけを確認し、サービスに渡すこともできます。
 
 ```go
-// 동적 필터 처리
+// 動的フィルターを処理
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
 
-    // 어떤 필터가 올지 미리 알 수 없음
+    // どのフィルターが来るか事前には分からない
     if q.Has("min_price") {
         filters["min_price"] = q.String("min_price")
     }
@@ -279,13 +287,13 @@ GET /user?page=2&size=20&status=active&sort_by=created_at
 同じリクエストで両方の型を宣言してもかまいません。`query.Values`でも`page`、`size`を読み取れるため、サービスに渡すページ情報の基準をどちらかに統一し、処理の重複を避けてください。
 
 ```go
-// 고정된 페이지네이션만 필요 → query.Pagination
+// 固定のページネーションのみ必要 → query.Pagination
 func List(p query.Pagination) httpx.Response[[]User]
 
-// 동적 필터 + 페이지네이션 → 둘 다 사용
+// 動的フィルター + ページネーション → 両方を使用
 func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
 
-// 완전히 동적인 쿼리 → query.Values만
+// 完全に動的なクエリ → query.Values のみ
 func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
@@ -302,7 +310,7 @@ GET /product?tag=go&tag=web&tag=api
 複数の値を受け取る必要がある場合は、APIでカンマ区切りの文字列を1つ受け取り、アプリで分割する方法があります。次の例では、`strings`パッケージも必要です。
 
 ```go
-// 쉼표 구분 방식
+// カンマ区切り形式
 // GET /product?tags=go,web,api
 
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {

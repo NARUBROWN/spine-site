@@ -1,5 +1,13 @@
 # query.Values
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 `query.Values`はHTTPクエリパラメータを読み取るヘルパーです。コントローラーの引数に値型の`query.Values`を宣言すると、ランタイムがリクエストのクエリ値を注入します。
 
 ```go
@@ -111,10 +119,10 @@ func (q Values) Int(key string, def int64) int64
 // GET /user?page=3&size=20
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (키 없음)
+q.Int("offset", 0)  // 0 (キーなし)
 
 // GET /user?page=abc
-q.Int("page", 1)    // 1 (파싱 실패)
+q.Int("page", 1)    // 1 (解析失敗)
 ```
 
 ### GetBoolByKey
@@ -151,10 +159,10 @@ func (q Values) GetBoolByKey(key string, def bool) bool
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (키 없음)
+q.GetBoolByKey("deleted", false)   // false (キーなし)
 
 // GET /user?active=maybe
-q.GetBoolByKey("active", false)    // false (인식 불가)
+q.GetBoolByKey("active", false)    // false (認識不可)
 ```
 
 ### Has
@@ -178,7 +186,7 @@ func (q Values) Has(key string) bool
 ```go
 // GET /user?status=active&empty=
 q.Has("status")  // true
-q.Has("empty")   // true (값이 비어도 키는 존재)
+q.Has("empty")   // true (値が空でもキーは存在)
 q.Has("missing") // false
 ```
 

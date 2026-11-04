@@ -1,5 +1,13 @@
 # query.Values
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 `query.Values` 是用于读取 HTTP 查询参数的辅助类型。在控制器参数中声明值类型 `query.Values`，运行时便会注入请求的查询值。
 
 ```go
@@ -111,10 +119,10 @@ func (q Values) Int(key string, def int64) int64
 // GET /user?page=3&size=20
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (키 없음)
+q.Int("offset", 0)  // 0（键不存在）
 
 // GET /user?page=abc
-q.Int("page", 1)    // 1 (파싱 실패)
+q.Int("page", 1)    // 1（解析失败）
 ```
 
 ### GetBoolByKey
@@ -151,10 +159,10 @@ func (q Values) GetBoolByKey(key string, def bool) bool
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (키 없음)
+q.GetBoolByKey("deleted", false)   // false（键不存在）
 
 // GET /user?active=maybe
-q.GetBoolByKey("active", false)    // false (인식 불가)
+q.GetBoolByKey("active", false)    // false（无法识别）
 ```
 
 ### Has
@@ -178,7 +186,7 @@ func (q Values) Has(key string) bool
 ```go
 // GET /user?status=active&empty=
 q.Has("status")  // true
-q.Has("empty")   // true (값이 비어도 키는 존재)
+q.Has("empty")   // true（即使值为空，键仍存在）
 q.Has("missing") // false
 ```
 

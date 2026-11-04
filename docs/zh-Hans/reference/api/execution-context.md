@@ -1,5 +1,13 @@
 # core.ExecutionContext
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 `ExecutionContext` 是拦截器和执行流水线用于读取请求信息、在处理阶段之间共享值的接口。HTTP 请求、事件和 WebSocket 消息共用此接口，各传输方式还通过独立接口提供额外信息。
 
 ```go
@@ -79,20 +87,20 @@ type HttpRequestContext interface {
     ContextCarrier
     EventBusCarrier
 
-    // 개별 접근
+    // 逐项访问
     Param(name string) string
     Query(name string) string
     Header(name string) string
 
-    // 전체 뷰 접근
+    // 访问完整视图
     Params() map[string]string
     Queries() map[string][]string
     Headers() map[string][]string
 
-    // 요청 본문
+    // 请求体
     Bind(out any) error
 
-    // 멀티파트
+    // 多部分表单
     MultipartForm() (*multipart.Form, error)
 }
 ```
@@ -225,7 +233,7 @@ Method() string
 ```go
 func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     if ctx.Method() == "OPTIONS" {
-        // CORS 사전 요청 처리
+        // 处理 CORS 预检请求
     }
     return nil
 }
@@ -414,7 +422,7 @@ Get(key string) (any, bool)
 
 ```go
 func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
-    // 인터셉터가 Set("auth.user", ...)으로 저장한 값 조회
+    // 读取拦截器通过 Set("auth.user", ...) 保存的值
     if authUser, ok := ctx.Get("auth.user"); ok {
         _ = authUser.(*AuthUser)
         // ...
@@ -507,7 +515,7 @@ if err != nil {
     return err
 }
 for _, file := range form.File["upload"] {
-    // 파일 처리
+    // 处理文件
 }
 ```
 
@@ -580,7 +588,7 @@ MessageType() int
 
 ```go
 if ctx.MessageType() == ws.TextMessage {
-    // 텍스트 메시지 처리
+    // 处理文本消息
 }
 ```
 

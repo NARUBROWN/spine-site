@@ -1,5 +1,13 @@
 # Handler Metadata (HandlerMeta)
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 `core.HandlerMeta` contains the information needed to execute the controller method for a request: the controller type, method, order of path parameters, and route interceptors. Register handlers with `app.Route`, then read `HandlerMeta` in an interceptor to identify the handler being executed.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
@@ -11,11 +19,11 @@ This page describes the public types and HTTP execution flow in Spine v0.6.5. Yo
 In `example.com/my-app` from [CLI Project Structure](/en/learn/tutorial/1-project-structure), declare user routes in `Register(app)` in `src/user/user_route.go`. The generated handler is `(*UserController).Get`, and its route is `GET /user/:id`. `BuildApplication` in `internal/application/application.go` checks and returns errors from `user.Register(app)`, while the generated `main.go` handles validation and execution.
 
 ```go
-// src/user/user_route.go의 Register 내부 발췌
+// Excerpt from Register in src/user/user_route.go
 app.Route(
     "GET",
     "/user/:id",
-    (*UserController).Get,  // 메서드 표현식
+    (*UserController).Get,  // Method expression
 )
 ```
 
@@ -28,16 +36,16 @@ The `GetUser` method, admin handler, and authentication interceptor below are ex
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    // 컨트롤러 타입 (Container Resolve 대상)
+    // Controller type to resolve from Container
     ControllerType reflect.Type
 
-    // 호출할 메서드
+    // Method to invoke
     Method reflect.Method
 
-    // 라우트에 선언된 경로 매개변수 키의 순서
+    // Order of path parameter keys declared in the route
     PathKeys []string
 
-    // 핸들러에 적용된 인터셉터
+    // Interceptors applied to the handler
     Interceptors []Interceptor
 }
 ```
@@ -58,7 +66,7 @@ meta.ControllerType  // reflect.Type of *UserController
 ```go
 meta.Method.Name           // "GetUser"
 meta.Method.Type           // func(*UserController, path.Int) (httpx.Response[User], error)
-meta.Method.Func           // 호출 가능한 reflect.Value
+meta.Method.Func           // Callable reflect.Value
 ```
 
 `PathKeys` contains path parameter names rather than actual request values. For example, `/users/:userId/orders/:orderId` stores `userId` followed by `orderId`, and the handler's `path` arguments are bound in that order. Path parameter values, which vary for each request, are read from the request context.
@@ -66,7 +74,7 @@ meta.Method.Func           // 호출 가능한 reflect.Value
 `Interceptors` contains only route interceptors. The pipeline manages global interceptors registered with `app.Interceptor` separately.
 
 ```go
-meta.Interceptors  // []core.Interceptor (라우트 레벨)
+meta.Interceptors  // []core.Interceptor (route level)
 ```
 
 ## Registering a Handler with a Method Expression
@@ -74,9 +82,9 @@ meta.Interceptors  // []core.Interceptor (라우트 레벨)
 Pass a **method expression** such as `(*UserController).GetUser` to the route. This expression is a function that is not bound to a particular controller instance and takes a controller pointer as its first argument.
 
 ```go
-// 메서드 표현식의 실제 타입
+// Actual type of the method expression
 func(*UserController, path.Int) (httpx.Response[User], error)
-//   ↑ receiver가 첫 번째 인자로 변환됨
+//   ↑ The receiver becomes the first argument
 ```
 
 Spine uses this information to identify the controller type and method to call. It obtains the controller instance from the dependency container according to the app's constructor registrations.
@@ -115,22 +123,22 @@ There are two ways to pass an interceptor.
 You can use a typed nil pointer for an interceptor that needs dependency injection. In this case, register the interceptor constructor and its required dependencies. Passing `nil` without type information causes route interceptor registration to fail.
 
 ```go
-// src/user/user_route.go의 Register 내부 발췌
+// Excerpt from Register in src/user/user_route.go
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 
-// 라우트 인터셉터와 함께
+// With route interceptors
 app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil 포인터 → Container에서 Resolve
+    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil pointer → resolve from Container
 )
 ```
 
 You can also use global and route interceptors together. Global interceptors apply to every request, while route interceptors apply only to their route.
 
 ```go
-// 글로벌: 모든 요청에 적용 (라우팅 전 실행)
+// Global: applies to all requests before routing
 app.Interceptor(&CORSInterceptor{})
 
-// 라우트: 특정 핸들러에만 적용 (라우팅 후, Controller 호출 전 실행)
+// Route: applies to a specific handler after routing and before the controller call
 app.Route("GET", "/admin/:id", (*AdminController).Get,
     route.WithInterceptors(&AuthInterceptor{}),
 )

@@ -1,5 +1,13 @@
 # Execution Pipeline
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Spine's execution pipeline receives a request, selects a handler, binds its arguments, and turns its return value into a response. Use this flow to understand when interceptors run and how far execution proceeds when an error occurs.
 
 This document describes the HTTP execution order in Spine v0.6.5. HTTP, event consumers, and WebSocket use the same pipeline implementation, but their input resolvers and response handling configurations differ.
@@ -83,10 +91,10 @@ The router uses `ctx.Method()` and `ctx.Path()` to find a registered handler. If
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    ControllerType reflect.Type   // 의존성 컨테이너에서 찾을 컨트롤러 타입
-    Method         reflect.Method // 호출할 메서드
-    PathKeys       []string       // 라우트에 선언한 경로 매개변수의 순서
-    Interceptors   []Interceptor  // 해당 핸들러에 적용할 인터셉터
+    ControllerType reflect.Type   // Controller type to resolve from the dependency container
+    Method         reflect.Method // Method to invoke
+    PathKeys       []string       // Order of path parameters declared in the route
+    Interceptors   []Interceptor  // Interceptors to apply to this handler
 }
 ```
 
@@ -103,8 +111,8 @@ If a resolver cannot create a value, or no resolver supports the type, the pipel
 `path.Int`, `path.String`, and `path.Boolean` bind in the order of the parameters declared in the route. They do not match by Go argument name.
 
 ```go
-// 라우트: /users/:userId/posts/:postId
-// userId에는 첫 번째 경로 값, postId에는 두 번째 경로 값이 들어갑니다.
+// Route: /users/:userId/posts/:postId
+// userId receives the first path value, and postId receives the second.
 func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
 ```
 

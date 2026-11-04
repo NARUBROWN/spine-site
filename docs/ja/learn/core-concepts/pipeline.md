@@ -1,5 +1,13 @@
 # 実行パイプライン
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 Spine の実行パイプラインは、リクエストを受け取ってハンドラーを選び、引数をバインドし、戻り値からレスポンスを作る流れです。インターセプターを実行するタイミングや、エラーが発生したときにどの段階まで処理が進むかを理解するための基準になります。
 
 このドキュメントでは、Spine v0.6.5 の HTTP の実行順序を説明します。HTTP、イベントコンシューマー、WebSocket は同じパイプライン実装を使いますが、入力を解釈するリゾルバーとレスポンス処理の構成は異なります。
@@ -83,10 +91,10 @@ HTTP アダプターはリクエストごとに `core.ExecutionContext` を作�
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    ControllerType reflect.Type   // 의존성 컨테이너에서 찾을 컨트롤러 타입
-    Method         reflect.Method // 호출할 메서드
-    PathKeys       []string       // 라우트에 선언한 경로 매개변수의 순서
-    Interceptors   []Interceptor  // 해당 핸들러에 적용할 인터셉터
+    ControllerType reflect.Type   // 依存関係コンテナーから取得するコントローラーの型
+    Method         reflect.Method // 呼び出すメソッド
+    PathKeys       []string       // ルートで宣言したパスパラメーターの順序
+    Interceptors   []Interceptor  // そのハンドラーに適用するインターセプター
 }
 ```
 
@@ -103,8 +111,8 @@ type HandlerMeta struct {
 `path.Int`、`path.String`、`path.Boolean` は、ルートで宣言したパラメーターの順序でバインドします。Go の引数名で対応付けるわけではありません。
 
 ```go
-// 라우트: /users/:userId/posts/:postId
-// userId에는 첫 번째 경로 값, postId에는 두 번째 경로 값이 들어갑니다.
+// ルート: /users/:userId/posts/:postId
+// userId には最初のパスの値、postId には 2 番目のパスの値が入ります。
 func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
 ```
 

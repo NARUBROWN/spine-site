@@ -1,5 +1,13 @@
 # spine.App
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 `App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.6.5.
 
 ```go
@@ -91,17 +99,17 @@ Registers constructor functions with the dependency injection container. The con
 **Example**
 
 ```go
-// 의존성 없는 생성자
+// Constructor without dependencies
 func NewUserRepository() *UserRepository {
     return &UserRepository{}
 }
 
-// 의존성 있는 생성자
+// Constructor with dependencies
 func NewUserController(repo *UserRepository) *UserController {
     return &UserController{repo: repo}
 }
 
-// 이벤트 소비자 생성자
+// Event consumer constructor
 func NewOrderConsumer() *OrderConsumer {
     return &OrderConsumer{}
 }
@@ -136,14 +144,14 @@ Registers an HTTP route. Leading and trailing whitespace in `method` is removed,
 **Example**
 
 ```go
-// 기본 라우트
+// Basic route
 app.Route("GET", "/users", (*UserController).List)
 app.Route("GET", "/users/:id", (*UserController).GetUser)
 app.Route("POST", "/users", (*UserController).CreateUser)
 app.Route("PUT", "/users/:id", (*UserController).UpdateUser)
 app.Route("DELETE", "/users/:id", (*UserController).DeleteUser)
 
-// 중첩 경로
+// Nested path
 app.Route("GET", "/users/:userId/posts/:postId", (*PostController).GetPost)
 ```
 
@@ -154,7 +162,7 @@ Use `route.WithInterceptors` to apply interceptors to a specific route.
 ```go
 import "github.com/NARUBROWN/spine/pkg/route"
 
-// 라우트별 인터셉터 적용
+// Apply interceptors to a route
 app.Route(
     "GET",
     "/users/:id",
@@ -162,7 +170,7 @@ app.Route(
     route.WithInterceptors(&LoggingInterceptor{}),
 )
 
-// 타입이 있는 nil 포인터는 컨테이너에서 조회
+// Resolve typed nil pointers from the container
 app.Route(
     "POST",
     "/admin/users",
@@ -170,7 +178,7 @@ app.Route(
     route.WithInterceptors((*AuthInterceptor)(nil)),
 )
 
-// 여러 인터셉터 적용
+// Apply multiple interceptors
 app.Route(
     "POST",
     "/admin/users",
@@ -280,11 +288,11 @@ Registers a transport that runs independently of the HTTP pipeline. For example,
 ```go
 // core/transport.go
 type CustomTransport interface {
-    // Init은 DI 컨테이너 준비 이후 호출됩니다.
+    // Init is called after the DI container is ready.
     Init(container Container) error
-    // Start는 Init 이후 별도 고루틴에서 호출됩니다.
+    // Start is called in a separate goroutine after Init.
     Start() error
-    // Stop은 정상 종료 시 호출됩니다.
+    // Stop is called during graceful shutdown.
     Stop(ctx context.Context) error
 }
 
@@ -301,7 +309,7 @@ type GRPCTransport struct {
 }
 
 func (t *GRPCTransport) Init(container core.Container) error {
-    // 컨테이너에서 서비스 조회
+    // Resolve a service from the container
     svc, err := container.Resolve(reflect.TypeOf((*MyService)(nil)))
     if err != nil {
         return err
@@ -356,10 +364,10 @@ Returns the registry for registering event consumers. Register event names and h
 **Example**
 
 ```go
-// 이벤트 소비자 등록
+// Register an event consumer
 app.Consumers().Register(
-    "order.created",            // 토픽/이벤트 이름
-    (*OrderConsumer).OnCreated, // 핸들러 메서드
+    "order.created",            // Topic or event name
+    (*OrderConsumer).OnCreated, // Handler method
 )
 
 app.Consumers().Register(
@@ -379,7 +387,7 @@ func NewOrderConsumer() *OrderConsumer {
     return &OrderConsumer{}
 }
 
-// 이벤트 핸들러
+// Event handler
 func (c *OrderConsumer) OnCreated(
     ctx context.Context,
     eventName string,
@@ -390,7 +398,7 @@ func (c *OrderConsumer) OnCreated(
     return nil
 }
 
-// 이벤트 DTO
+// Event DTO
 type OrderCreated struct {
     OrderID int64     `json:"order_id"`
     At      time.Time `json:"at"`
@@ -594,14 +602,14 @@ type HTTPOptions struct {
 - A trailing `"/"` is removed automatically
 
 ```go
-// 유효한 접두사
+// Valid prefixes
 HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/v1"}
 HTTP: &boot.HTTPOptions{GlobalPrefix: "/v2"}
 
-// Validate와 Run이 설정 오류 반환
-HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // '/'로 시작하지 않음
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // 경로 매개변수 포함
-HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // 와일드카드 포함
+// Validate and Run return configuration errors
+HTTP: &boot.HTTPOptions{GlobalPrefix: "api"}       // Does not start with '/'
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/:ver"}  // Contains a path parameter
+HTTP: &boot.HTTPOptions{GlobalPrefix: "/api/*"}     // Contains a wildcard
 ```
 
 ### Basic usage
@@ -635,7 +643,7 @@ When HTTP graceful shutdown is enabled, the server handles `SIGINT` and `SIGTERM
 Recovery middleware that converts panics to HTTP 500 responses is enabled by default.
 
 ```go
-// Recover 비활성화
+// Disable Recover
 HTTP: &boot.HTTPOptions{
     DisableRecover: true,
 }
@@ -744,7 +752,7 @@ import "github.com/NARUBROWN/spine/pkg/event/publish"
 func (c *OrderController) Create(ctx context.Context, req *CreateOrderRequest) httpx.Response[Order] {
     order := c.repo.Save(req)
 
-    // 이벤트 발행
+    // Publish an event
     publish.Event(ctx, OrderCreated{
         OrderID: order.ID,
         At:      time.Now(),
@@ -788,7 +796,7 @@ func (c *HealthController) Get() httpx.Response[map[string]string] {
 	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 
-// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
+// BuildApplication configures the app for server startup, contract checks, and offline verification.
 func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
 	app.Constructor(NewHealthController)

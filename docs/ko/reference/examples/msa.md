@@ -1,5 +1,13 @@
 # Kafka로 주문 서비스와 재고 서비스 연결하기
 
+::: warning v0.7.0 미리보기 입력 API 전환
+이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+
+새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
+
+적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+:::
+
 주문 HTTP 서비스와 재고 소비 서비스를 각각 만들고 Kafka로 `order.created` 이벤트를 전달합니다. 주문 요청을 보낸 뒤 재고 서비스의 처리 로그까지 확인합니다. 재고 서비스는 HTTP 리스너 없이 실행합니다.
 
 ## 시작 전 준비

@@ -444,7 +444,7 @@ Interceptors read request information from `core.ExecutionContext` and pass valu
 The following excerpt shows only how an audit interceptor reads `currentUser` stored by an authentication interceptor. To add an audit interceptor, implement the `AuditInterceptor` type and all four lifecycle methods, then register it after the authentication interceptor. Do not declare a second `PreHandle` for the existing authentication interceptor.
 
 ```go
-// AuthInterceptor — 사용자 정보 저장
+// AuthInterceptor stores user information
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     user, err := validateToken(token)
@@ -455,8 +455,8 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     return nil
 }
 
-// 컨트롤러에서는 읽기 전용 spine.Ctx로 조회
-// 또는 다른 인터셉터에서 조회
+// Read through the read-only spine.Ctx in the controller
+// Or read from another interceptor
 func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     user, ok := ctx.Get("currentUser")
     if ok {
@@ -562,7 +562,7 @@ app.Constructor(
 )
 
 app.Interceptor(
-    (*interceptor.TxInterceptor)(nil),  // 타입으로 참조
+    (*interceptor.TxInterceptor)(nil),  // Reference by type
 )
 ```
 
@@ -580,7 +580,7 @@ app.Route(
     "POST",
     "/orders",
     (*OrderController).CreateOrder,
-    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // 타입으로 참조
+    route.WithInterceptors((*interceptor.TxInterceptor)(nil)),  // Reference by type
 )
 ```
 

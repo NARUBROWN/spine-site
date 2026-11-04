@@ -1,5 +1,13 @@
 # Connect to a database
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Connect to MySQL with Bun and extend the generated `GET /user/:id` handler to look up users in the database. You will also write a migration to create the table and basic repository queries.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
@@ -29,14 +37,14 @@ This example uses [Bun](https://bun.uptrace.dev/) to write SQL queries and map t
 ## Install dependencies
 
 ```bash
-# Bun 코어
+# Bun core
 go get github.com/uptrace/bun@v1.2.16
 
-# MySQL 드라이버 + 방언
+# MySQL driver and dialect
 go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
-# PostgreSQL을 사용한다면
+# If using PostgreSQL
 # go get github.com/uptrace/bun/dialect/pgdialect
 # go get github.com/jackc/pgx/v5/stdlib
 ```
@@ -161,7 +169,7 @@ func NewDB() *bun.DB {
 The `NewDB` function above reads the connection string from the `DATABASE_URL` environment variable.
 
 ```go
-// src/database/db.go의 NewDB 내부 발췌
+// Excerpt from NewDB in src/database/db.go
 dsn := os.Getenv("DATABASE_URL")
 if dsn == "" {
     panic("DATABASE_URL is required")
@@ -222,7 +230,7 @@ import (
 )
 
 type UserRepository struct {
-    db bun.IDB  // *bun.DB 또는 bun.Tx 모두 가능
+    db bun.IDB  // Accepts either *bun.DB or bun.Tx
 }
 
 func NewUserRepository(db *bun.DB) *UserRepository {
@@ -432,10 +440,10 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 Run this in the terminal where you set `DATABASE_URL`. If the migrations succeed, the program prints `Migrations applied successfully.` You can then start the server.
 
 ```bash
-# 마이그레이션 실행
+# Run migrations
 go run ./cmd/migrate
 
-# 서버 실행
+# Start the server
 spine dev
 ```
 
@@ -512,7 +520,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 ```go
 // src/user/user_repository.go
-// DI는 구체 타입 *bun.DB를 받고 내부 쿼리 필드는 bun.IDB로 유지합니다.
+// DI receives the concrete *bun.DB type; the internal query field remains bun.IDB.
 func NewUserRepository(db *bun.DB) *UserRepository {
     return &UserRepository{db: db}
 }

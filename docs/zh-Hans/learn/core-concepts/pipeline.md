@@ -1,5 +1,13 @@
 # 执行流水线
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 Spine 的执行流水线接收请求、选择处理器、绑定参数，再将返回值转换为响应。要理解拦截器应在哪个时点执行，以及发生错误后流程会进行到哪一步，可以以这条流程为依据。
 
 本文说明 Spine v0.6.5 的 HTTP 执行顺序。HTTP、事件消费者和 WebSocket 使用相同的流水线实现，但解析输入的解析器和响应处理配置各不相同。
@@ -83,10 +91,10 @@ HTTP 适配器为每个请求创建一个 `core.ExecutionContext`。流水线通
 ```go
 // core/handler_meta.go
 type HandlerMeta struct {
-    ControllerType reflect.Type   // 의존성 컨테이너에서 찾을 컨트롤러 타입
-    Method         reflect.Method // 호출할 메서드
-    PathKeys       []string       // 라우트에 선언한 경로 매개변수의 순서
-    Interceptors   []Interceptor  // 해당 핸들러에 적용할 인터셉터
+    ControllerType reflect.Type   // 从依赖容器中查找的控制器类型
+    Method         reflect.Method // 要调用的方法
+    PathKeys       []string       // 路由中声明的路径参数顺序
+    Interceptors   []Interceptor  // 要应用于此处理器的拦截器
 }
 ```
 
@@ -103,8 +111,8 @@ type HandlerMeta struct {
 `path.Int`、`path.String`、`path.Boolean` 按路由中参数的声明顺序绑定，而不是根据 Go 参数名匹配。
 
 ```go
-// 라우트: /users/:userId/posts/:postId
-// userId에는 첫 번째 경로 값, postId에는 두 번째 경로 값이 들어갑니다.
+// 路由：/users/:userId/posts/:postId
+// userId 接收第一个路径值，postId 接收第二个路径值。
 func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
 ```
 

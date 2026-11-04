@@ -14,7 +14,7 @@ Spine は、登録されたコンストラクタのパラメーターの型を�
 次のコンストラクタでは、`*UserRepository` が `UserService` に必要な依存性です。
 
 ```go
-// 파라미터 타입을 보고 자동으로 의존성 주입
+// 引数の型に基づいて依存関係を自動注入
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
@@ -82,7 +82,7 @@ app.Route("GET", "/user/:id", (*UserController).Get)
 次のように登録順序を変えても、依存性を解決する順序は同じです。
 
 ```go
-// user_route.go의 기존 Constructor 호출을 대체하는 예시입니다.
+// user_route.go の既存の Constructor 呼び出しを置き換える例です。
 app.Constructor(NewUserController, NewUserService, NewUserRepository)
 ```
 
@@ -101,13 +101,13 @@ graph LR
 以下はシグネチャだけを示した例です。実際のコードでは、各関数の本体と戻り値の型を実装する必要があります。
 
 ```go
-// 저장소 의존성 선언
+// リポジトリーへの依存関係を宣言
 func NewUserService(repo *UserRepository) *UserService
 
-// 여러 의존성 선언
+// 複数の依存関係を宣言
 func NewUserController(svc *UserService, logger *Logger) *UserController
 
-// 의존성 없는 생성자
+// 依存関係のないコンストラクター
 func NewLogger() *Logger
 ```
 
@@ -143,16 +143,16 @@ app.Constructor(database.NewDB)
 リポジトリのフィールドを `*bun.DB` に固定すると、そのフィールドに `bun.Tx` を入れることはできません。
 
 ```go
-// 이 필드에는 *bun.DB만 저장할 수 있음
+// このフィールドには *bun.DB のみ格納可能
 type UserRepository struct {
-    db *bun.DB  // bun.Tx를 받을 수 없음
+    db *bun.DB  // bun.Tx は受け取れない
 }
 ```
 
 `*bun.DB` と `bun.Tx` の両方が実装する `bun.IDB` を使うと、この二つの型を同じ契約で扱えます。次のコードは、リポジトリのコンストラクタが依存性として `bun.IDB` を受け取る例です。
 
 ```go
-// *bun.DB와 bun.Tx는 모두 bun.IDB를 구현
+// *bun.DB と bun.Tx はどちらも bun.IDB を実装
 type UserRepository struct {
     db bun.IDB
 }
@@ -208,10 +208,10 @@ app.Constructor(NewUserController)
 以下は、独立したリポジトリ設計の例です。`App`、`UserRepository` の `writer` と `reader` フィールド、`connectToPrimary`、`connectToReplica` は、アプリに合わせて実装する必要があります。
 
 ```go
-// 파라미터 이름만으로 인스턴스를 구분할 수 없음
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // 어떤 게 어떤 건지?
+// 引数名だけではインスタンスを区別できない
+func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // どちらがどのインスタンスか判別できない
 
-// 서로 다른 래퍼 타입으로 구분
+// 異なるラッパー型で区別
 type PrimaryDB struct{ *bun.DB }
 type ReplicaDB struct{ *bun.DB }
 
@@ -238,11 +238,11 @@ func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
 `A` が `B` を必要とし、`B` も `A` を必要とする場合、どちらのオブジェクトも先に作ることができません。次のコードは、この関係を示す疑似コードです。
 
 ```go
-// A → B → A 순환
+// A → B → A の循環
 func NewA(b *B) *A { ... }
 func NewB(a *A) *B { ... }
 
-// 부팅 시 에러 발생
+// 起動時にエラーが発生
 // circular dependency detected: *user.A -> *user.B -> *user.A
 ```
 
@@ -251,13 +251,13 @@ func NewB(a *A) *B { ... }
 必要な型のコンストラクタがなければ、依存性の解決に失敗します。以下は、`NewUserRepository` の登録を省略した場合です。
 
 ```go
-// UserRepository를 등록하지 않으면
+// UserRepository を登録しない場合
 app.Constructor(
-    NewUserService,     // *UserRepository 필요
+    NewUserService,     // *UserRepository が必要
     NewUserController,
 )
 
-// 부팅 시 에러 발생
+// 起動時にエラーが発生
 // no constructor registered for *user.UserRepository
 ```
 

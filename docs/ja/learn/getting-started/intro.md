@@ -1,5 +1,13 @@
 # はじめに
 
+::: warning v0.7.0 Preview 入力 API の移行
+このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+
+新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+
+対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+:::
+
 Spineは、コンストラクタ、ルート、インターセプターをGoコードで登録するWebフレームワークです。リクエストを受け取るハンドラーと、その前後に実行する処理を登録コードで確認できます。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
@@ -16,13 +24,13 @@ CLIで生成したプロジェクトでは、アプリの構成コードを`inte
 func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New(echoplatform.Option())
 
-    // 생성자를 등록하면 등록 순서와 관계없이 의존성을 해결합니다.
+    // コンストラクターを登録すると、登録順序に関係なく依存関係を解決します。
     app.Constructor(NewUserRepository, NewUserService, NewUserController)
 
-    // 인터셉터를 실행할 순서대로 등록합니다.
+    // インターセプターを実行順に登録します。
     app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
 
-    // HTTP 메서드와 경로에 핸들러를 연결합니다.
+    // HTTP メソッドとパスにハンドラーを紐付けます。
     app.Route("GET", "/users", (*UserController).GetUser)
 
     return app, boot.Options{
@@ -44,12 +52,12 @@ CLIの`spine generate resource user`が生成するコードは、上の例と�
 コンストラクタのパラメーターで必要な依存関係を宣言し、`app.Constructor`にコンストラクタを登録します。次の例では、`UserService`が`UserRepository`を受け取ります。
 
 ```go
-// 생성자 파라미터가 곧 의존성 선언
+// コンストラクターの引数が依存関係の宣言になる
 func NewUserService(repo *UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 
-// 등록만 하면 자동으로 의존성 그래프 해결
+// 登録するだけで依存関係グラフを自動解決
 app.Constructor(NewUserRepository, NewUserService, NewUserController)
 ```
 
@@ -59,9 +67,9 @@ app.Constructor(NewUserRepository, NewUserService, NewUserController)
 
 ```go
 app.Interceptor(
-    &TxInterceptor{},      // 1. 트랜잭션 시작
-    &AuthInterceptor{},    // 2. 인증 확인
-    &LoggingInterceptor{}, // 3. 로깅
+    &TxInterceptor{},      // 1. トランザクション開始
+    &AuthInterceptor{},    // 2. 認証確認
+    &LoggingInterceptor{}, // 3. ログ記録
 )
 
 ```
@@ -73,7 +81,7 @@ app.Interceptor(
 `app.Route`でHTTPメソッド、パス、ハンドラーを関連付けます。機能ごとに登録関数を用意すると、関連するルートを1か所で管理できます。
 
 ```go
-// 한 곳에서 모든 라우트를 관리
+// すべてのルートを 1 か所で管理
 func RegisterUserRoutes(app spine.App) {
     app.Route("GET", "/users", (*UserController).GetUser)
     app.Route("POST", "/users", (*UserController).CreateUser)
@@ -87,11 +95,11 @@ func RegisterUserRoutes(app spine.App) {
 ハンドラーのパラメーターと戻り値の型で、リクエストから読み取る値とレスポンスの形式を表します。次の例では、取得ハンドラーがクエリパラメーターを読み取り、作成ハンドラーがJSONリクエストボディを構造体へのポインターとして受け取ります。サービスとリクエスト、レスポンスの型は自分で実装する必要があります。
 
 ```go
-// 함수 시그니처가 곧 API 스펙
+// 関数シグネチャーが API 仕様になる
 func (c *UserController) GetUser(
-    ctx context.Context,      // 컨텍스트
-    q query.Values,           // 쿼리 파라미터
-) (httpx.Response[UserResponse], error) {     // 응답 타입
+    ctx context.Context,      // コンテキスト
+    q query.Values,           // クエリパラメーター
+) (httpx.Response[UserResponse], error) {     // レスポンスの型
     user, err := c.svc.Get(ctx, q.Int("id", 0))
     if err != nil {
         return httpx.Response[UserResponse]{}, err
@@ -99,10 +107,10 @@ func (c *UserController) GetUser(
     return httpx.Response[UserResponse]{Body: user}, nil
 }
 
-// DTO는 자동으로 바인딩
+// DTO は自動的にバインド
 func (c *UserController) CreateUser(
     ctx context.Context,
-    req *CreateUserRequest,    // JSON body → 구조체 (포인터)
+    req *CreateUserRequest,    // JSON body → 構造体 (ポインター)
 ) (httpx.Response[UserResponse], error) {
     user, err := c.svc.Create(ctx, req)
     if err != nil {

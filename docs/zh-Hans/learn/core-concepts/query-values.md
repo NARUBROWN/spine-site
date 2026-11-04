@@ -1,5 +1,13 @@
 # query.Values
 
+::: warning v0.7.0 Preview 输入 API 迁移
+本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+
+新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+
+适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+:::
+
 使用 `query.Values` 可以读取 HTTP 查询参数并指定默认值。在控制器参数中声明 `q query.Values` 后，即可按需将键对应的值读取为字符串、整数或布尔值。不支持将查询参数自动映射到任意 DTO。
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
@@ -34,10 +42,10 @@ func (c *UserController) GetUserQuery(q query.Values) httpx.Response[User] {
 将此方法注册到 `GET /user` 后，请求和响应如下。
 
 ```bash
-# 요청
+# 请求
 GET /user?id=123&name=john
 
-# 응답
+# 响应
 {
     "id": 123,
     "name": "john"
@@ -115,8 +123,8 @@ q.String("name")  // "john"
 
 q.Int("page", 1)    // 3
 q.Int("size", 10)   // 20
-q.Int("offset", 0)  // 0 (키 없음 → 기본값)
-q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
+q.Int("offset", 0)  // 0（键不存在 → 默认值）
+q.Int("page", 1)    // 1（若 page=abc → 默认值）
 ```
 
 转换成功的负数或 0 会原样返回。对于页码、价格范围等只允许正数的值，应用必须另行检查。
@@ -139,8 +147,8 @@ q.Int("page", 1)    // 1 (만약 page=abc라면 → 기본값)
 q.GetBoolByKey("active", false)    // true
 q.GetBoolByKey("verified", false)  // true
 q.GetBoolByKey("premium", false)   // true
-q.GetBoolByKey("deleted", false)   // false (키 없음 → 기본값)
-q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
+q.GetBoolByKey("deleted", false)   // false（键不存在 → 默认值）
+q.GetBoolByKey("active", false)    // false（若 active=maybe → 默认值）
 ```
 
 ### 检查键是否存在
@@ -151,7 +159,7 @@ q.GetBoolByKey("active", false)    // false (만약 active=maybe → 기본값)
 // GET /user?status=active&empty=
 
 q.Has("status")  // true
-q.Has("empty")   // true (값은 비었지만 키는 존재)
+q.Has("empty")   // true（值为空，但键存在）
 q.Has("missing") // false
 ```
 
@@ -226,11 +234,11 @@ func (c *OrderController) List(q query.Values) httpx.Response[[]Order] {
 也可以像下面这样，只检查应用接受的筛选条件名称，并将其传给服务。
 
 ```go
-// 동적 필터 처리
+// 处理动态筛选条件
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {
     filters := make(map[string]string)
 
-    // 어떤 필터가 올지 미리 알 수 없음
+    // 无法预先确定会传入哪些筛选条件
     if q.Has("min_price") {
         filters["min_price"] = q.String("min_price")
     }
@@ -279,13 +287,13 @@ GET /user?page=2&size=20&status=active&sort_by=created_at
 可以在同一个请求中同时声明这两种类型。`query.Values` 也能读取 `page`、`size`，因此请确定以哪一方提供的分页信息为准并传给服务，避免重复处理。
 
 ```go
-// 고정된 페이지네이션만 필요 → query.Pagination
+// 只需要固定分页 → query.Pagination
 func List(p query.Pagination) httpx.Response[[]User]
 
-// 동적 필터 + 페이지네이션 → 둘 다 사용
+// 动态筛选条件 + 分页 → 两者并用
 func Search(p query.Pagination, q query.Values) httpx.Response[[]User]
 
-// 완전히 동적인 쿼리 → query.Values만
+// 完全动态的查询 → 仅使用 query.Values
 func CustomSearch(q query.Values) httpx.Response[[]User]
 ```
 
@@ -302,7 +310,7 @@ GET /product?tag=go&tag=web&tag=api
 如果需要接收多个值，一种方法是将 API 定义为接收一个用逗号分隔的字符串，再由应用拆分。下面的示例还需要 `strings` 包。
 
 ```go
-// 쉼표 구분 방식
+// 逗号分隔方式
 // GET /product?tags=go,web,api
 
 func (c *ProductController) Search(q query.Values) httpx.Response[[]Product] {

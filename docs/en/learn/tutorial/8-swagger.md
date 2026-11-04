@@ -1,5 +1,13 @@
 # Swagger and OpenAPI documentation
 
+::: warning v0.7.0 Preview input API migration
+The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+
+The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+
+See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+:::
+
 Export an OpenAPI file with the CLI, then add Swaggo documentation and Swagger UI if you want to send requests from a browser. The CLI's static OpenAPI export and the Swaggo UI setup are separate workflows.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
@@ -8,7 +16,7 @@ Use the `example.com/my-app` project from [Your first app](/en/learn/tutorial/1-
 
 ## Export OpenAPI with the CLI
 
-The CLI generates an OpenAPI 3.1 document from registered routes and handler signatures. Swaggo annotations are not required.
+The CLI generates an OpenAPI 3.1 document from registered routes and handler signatures.
 
 ```bash
 spine doctor
@@ -186,16 +194,16 @@ Receive request DTOs as pointers in handlers. Tags such as `example`, `enums`, a
 ### Example
 
 ```go
-// 쿼리 파라미터
+// Query parameters
 // @Param id query int true "User ID"
 // @Param name query string false "User name"
 // @Param active query bool false "Active status"
 
-// 요청 본문
-// @Param body body CreateUserRequest true "유저 생성 요청"
+// Request body
+// @Param body body CreateUserRequest true "User creation request"
 
-// 헤더
-// @Param Authorization header string true "Bearer 토큰"
+// Headers
+// @Param Authorization header string true "Bearer token"
 ```
 
 
@@ -207,13 +215,13 @@ Receive request DTOs as pointers in handlers. Tags such as `example`, `enums`, a
 // src/user/user_request.go
 package user
 
-// CreateUserRequest 유저 생성 요청
+// CreateUserRequest is a user creation request
 type CreateUserRequest struct {
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// UpdateUserRequest 유저 수정 요청
+// UpdateUserRequest is a user update request
 type UpdateUserRequest struct {
     Name  string `json:"name" example:"Alice Updated"`
     Email string `json:"email" example:"alice.new@example.com"`
@@ -226,14 +234,14 @@ type UpdateUserRequest struct {
 // src/user/user_response.go
 package user
 
-// UserResponse 유저 응답
+// UserResponse is a user response
 type UserResponse struct {
     ID    int    `json:"id" example:"1"`
     Name  string `json:"name" example:"Alice"`
     Email string `json:"email" example:"alice@example.com"`
 }
 
-// ErrorResponse 에러 응답
+// ErrorResponse is an error response
 type ErrorResponse struct {
     Message string `json:"message" example:"유저를 찾을 수 없습니다."`
 }
