@@ -1,5 +1,7 @@
 # Current releases
 
+See the [version catalog](/en/community/versions) for the latest tags and next target versions.
+
 See [Release channels and installation](/en/community/release-channels) to choose Preview, RC, or stable and understand the publication process.
 
 ::: warning v0.7.0 Preview input API migration

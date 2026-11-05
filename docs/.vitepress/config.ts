@@ -120,6 +120,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: 'Overview', link: '/en/community/' },
                                 { text: 'Contributing', link: '/en/community/contributing' },
+                                { text: 'Version catalog', link: '/en/community/versions' },
                                 { text: 'Current Release', link: '/en/community/changelog' },
                                 { text: 'Release channels and installation', link: '/en/community/release-channels' }
                             ]
@@ -226,6 +227,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '개요', link: '/ko/community/' },
                                 { text: '기여하기', link: '/ko/community/contributing' },
+                                { text: '버전 현황', link: '/ko/community/versions' },
                                 { text: '현재 릴리스', link: '/ko/community/changelog' },
                                 { text: '릴리스 채널과 설치', link: '/ko/community/release-channels' }
                             ]
@@ -332,6 +334,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '概要', link: '/ja/community/' },
                                 { text: '貢献する', link: '/ja/community/contributing' },
+                                { text: 'バージョン一覧', link: '/ja/community/versions' },
                                 { text: '現在のリリース', link: '/ja/community/changelog' },
                                 { text: 'リリースチャンネルとインストール', link: '/ja/community/release-channels' }
                             ]
@@ -412,6 +415,7 @@ export default withMermaid(defineConfig({
                         { text: '社区', items: [
                             { text: '概览', link: '/zh-Hans/community/' },
                             { text: '贡献指南', link: '/zh-Hans/community/contributing' },
+                            { text: '版本概览', link: '/zh-Hans/community/versions' },
                             { text: '当前版本', link: '/zh-Hans/community/changelog' },
                             { text: '发布渠道与安装', link: '/zh-Hans/community/release-channels' }
                         ] }
@@ -491,6 +495,7 @@ export default withMermaid(defineConfig({
                         { text: '社群', items: [
                             { text: '概覽', link: '/zh-Hant/community/' },
                             { text: '貢獻指南', link: '/zh-Hant/community/contributing' },
+                            { text: '版本概覽', link: '/zh-Hant/community/versions' },
                             { text: '目前版本', link: '/zh-Hant/community/changelog' },
                             { text: '發佈通道與安裝', link: '/zh-Hant/community/release-channels' }
                         ] }

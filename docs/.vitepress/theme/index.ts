@@ -9,6 +9,7 @@ import BenchmarkReport from './components/BenchmarkReport.vue'
 import SpineWorkbench from './components/SpineWorkbench.vue'
 import EnterpriseSupport from './components/EnterpriseSupport.vue'
 import EnterpriseSupportBanner from './components/EnterpriseSupportBanner.vue'
+import ReleaseCatalog from './components/ReleaseCatalog.vue'
 import './custom.css'
 
 export default {
@@ -26,5 +27,6 @@ export default {
         app.component('BenchmarkSection', BenchmarkSection)
         app.component('BenchmarkReport', BenchmarkReport)
         app.component('EnterpriseSupport', EnterpriseSupport)
+        app.component('ReleaseCatalog', ReleaseCatalog)
     }
 } satisfies Theme
