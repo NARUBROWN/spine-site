@@ -20,3 +20,7 @@ You can contribute features, bug fixes, and documentation improvements. See the 
 
 - [Contribution guide](/en/community/contributing)
 - [Spine GitHub repository](https://github.com/NARUBROWN/spine)
+
+## Release channels and installation
+
+See [Release channels and installation](/en/community/release-channels) to choose Preview, RC, or stable and understand the publication process.

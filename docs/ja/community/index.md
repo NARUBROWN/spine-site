@@ -20,3 +20,7 @@ Discord で Spine の使い方を質問し、他の開発者と使用経験を�
 
 - [貢献ガイド](/ja/community/contributing)
 - [Spine GitHub リポジトリ](https://github.com/NARUBROWN/spine)
+
+## リリースチャンネルとインストール
+
+Preview、RC、安定版の選択と公開手順は[リリースチャンネルとインストール](/ja/community/release-channels)を参照してください。

@@ -2,6 +2,8 @@
 
 From Spine `v0.6.0`, the official starting point is CLI `new`. Install the latest released CLI, create a project, and check the development server response.
 
+See [Release channels and installation](/en/community/release-channels) to choose Preview, RC, or stable and understand the publication process.
+
 ## Requirements
 
 - Go 1.25.5 or later is required. The CLI recommends Go 1.27.3.

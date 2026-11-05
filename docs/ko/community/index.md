@@ -20,3 +20,7 @@ Discord에서 Spine 사용 방법을 질문하고 다른 개발자와 사용 경
 
 - [기여 안내](/ko/community/contributing)
 - [Spine GitHub 저장소](https://github.com/NARUBROWN/spine)
+
+## 릴리스 채널과 설치
+
+Preview, RC, 정식 채널의 선택과 발행 절차는 [릴리스 채널과 설치](/ko/community/release-channels)에서 확인하세요.

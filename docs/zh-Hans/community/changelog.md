@@ -1,5 +1,7 @@
 # 当前版本
 
+Preview、RC、稳定版的选择与发布流程，请参阅[发布渠道与安装](/zh-Hans/community/release-channels)。
+
 ::: warning v0.7.0 Preview 输入 API 迁移
 本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
 

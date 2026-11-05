@@ -2,6 +2,8 @@
 
 从 Spine `v0.6.0` 开始，官方入口是 CLI 的 `new`。安装最新发布的 CLI，创建项目并检查开发服务器的响应。
 
+Preview、RC、稳定版的选择与发布流程，请参阅[发布渠道与安装](/zh-Hans/community/release-channels)。
+
 ## 环境要求
 
 - 需要 Go 1.25.5 或更高版本。CLI 推荐使用 Go 1.27.3。

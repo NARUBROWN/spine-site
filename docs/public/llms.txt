@@ -15,6 +15,14 @@ Use `go install github.com/NARUBROWN/spine-cli/cmd/spine@latest` for general ins
 
 Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from an application. HTTP apps use `spine.New(echoplatform.Option())` from `github.com/NARUBROWN/spine-echo-platform`; HTTP-less workers omit HTTP options and register event factories with `spine.WithEventAdapter`. HTTP alone does not add a WebSocket implementation.
 
+## Release channels and publication
+
+Channel selection and release process: /en/community/release-channels. Install stable CLI with `go install github.com/NARUBROWN/spine-cli/cmd/spine@latest`, Preview with `@preview`, or the current RC branch with `@rc`. These replace the same executable unless separate GOBIN directories are used. Branch names select branch commits, which may resolve to tags or pseudo-versions; branch existence does not prove a verified RC tag has been published.
+
+Preview CLI uses `platform-contracts-preview` to resolve selected Spine modules at `@preview`. RC and stable use their own source recipes; installing CLI `@rc` does not automatically switch all app dependencies to `@rc`. Existing apps keep their recipe until explicitly changed. Check spine version, spine.toml, and go.mod.
+
+Releases progress Preview → RC → Production through source CI, public consumer checks, maintainer approval, immutable tags, tag installation checks, and release manifests. Preview/RC use Actions artifacts; stable creates a GitHub Release. Core candidates are followed by five platform publications and completion of the full combination. CLI versions and schedules are independent. Current observation policy is 72h after verified Preview and 24h after verified RC; core stable releases also have a 168h interval, while CLI has no additional stable interval. These are minimum gates, not an automatic publication schedule. Pin published tags for reproducibility.
+
 ## v0.7.0 Preview APIs
 
 The stable instructions below target Spine v0.6.5. Install the latest Preview CLI branch with `@preview`:

@@ -1,5 +1,7 @@
 # 目前版本
 
+Preview、RC、穩定版的選擇與發佈流程，請參閱[發佈通道與安裝](/zh-Hant/community/release-channels)。
+
 ::: warning v0.7.0 Preview 輸入 API 移轉
 本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
 

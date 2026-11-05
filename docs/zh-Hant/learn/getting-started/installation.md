@@ -2,6 +2,8 @@
 
 從 Spine `v0.6.0` 開始，官方進入點是 CLI 的 `new`。安裝最新發布的 CLI，建立專案並檢查開發伺服器的回應。
 
+Preview、RC、穩定版的選擇與發佈流程，請參閱[發佈通道與安裝](/zh-Hant/community/release-channels)。
+
 ## 需求
 
 - 需要 Go 1.25.5 以上版本。CLI 建議使用 Go 1.27.3。

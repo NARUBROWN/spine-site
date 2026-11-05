@@ -1,5 +1,7 @@
 # 현재 릴리스
 
+Preview, RC, 정식 채널의 선택과 발행 절차는 [릴리스 채널과 설치](/ko/community/release-channels)에서 확인하세요.
+
 ::: warning v0.7.0 미리보기 입력 API 전환
 이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
 

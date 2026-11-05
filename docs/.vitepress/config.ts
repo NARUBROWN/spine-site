@@ -51,6 +51,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: 'Introduction', link: '/en/learn/getting-started/intro' },
                                 { text: 'Installation', link: '/en/learn/getting-started/installation' },
+                                { text: 'Release channels and installation', link: '/en/community/release-channels' },
                                 { text: 'First App', link: '/en/learn/getting-started/first-app' },
                                 { text: 'Select platforms and DTO validation', link: '/en/learn/getting-started/platforms' }
                             ]
@@ -119,7 +120,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: 'Overview', link: '/en/community/' },
                                 { text: 'Contributing', link: '/en/community/contributing' },
-                                { text: 'Current Release', link: '/en/community/changelog' }
+                                { text: 'Current Release', link: '/en/community/changelog' },
+                                { text: 'Release channels and installation', link: '/en/community/release-channels' }
                             ]
                         }
                     ]
@@ -155,6 +157,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '소개', link: '/ko/learn/getting-started/intro' },
                                 { text: '설치', link: '/ko/learn/getting-started/installation' },
+                                { text: '릴리스 채널과 설치', link: '/ko/community/release-channels' },
                                 { text: '첫 번째 앱', link: '/ko/learn/getting-started/first-app' },
                                 { text: '플랫폼과 DTO 검증 선택', link: '/ko/learn/getting-started/platforms' }
                             ]
@@ -223,7 +226,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '개요', link: '/ko/community/' },
                                 { text: '기여하기', link: '/ko/community/contributing' },
-                                { text: '현재 릴리스', link: '/ko/community/changelog' }
+                                { text: '현재 릴리스', link: '/ko/community/changelog' },
+                                { text: '릴리스 채널과 설치', link: '/ko/community/release-channels' }
                             ]
                         }
                     ]
@@ -259,6 +263,7 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '紹介', link: '/ja/learn/getting-started/intro' },
                                 { text: 'インストール', link: '/ja/learn/getting-started/installation' },
+                                { text: 'リリースチャンネルとインストール', link: '/ja/community/release-channels' },
                                 { text: '最初のアプリ', link: '/ja/learn/getting-started/first-app' },
                                 { text: 'プラットフォームとDTO検証の選択', link: '/ja/learn/getting-started/platforms' }
                             ]
@@ -327,7 +332,8 @@ export default withMermaid(defineConfig({
                             items: [
                                 { text: '概要', link: '/ja/community/' },
                                 { text: '貢献する', link: '/ja/community/contributing' },
-                                { text: '現在のリリース', link: '/ja/community/changelog' }
+                                { text: '現在のリリース', link: '/ja/community/changelog' },
+                                { text: 'リリースチャンネルとインストール', link: '/ja/community/release-channels' }
                             ]
                         }
                     ]
@@ -355,6 +361,7 @@ export default withMermaid(defineConfig({
                         { text: '快速开始', items: [
                             { text: '简介', link: '/zh-Hans/learn/getting-started/intro' },
                             { text: '安装', link: '/zh-Hans/learn/getting-started/installation' },
+                            { text: '发布渠道与安装', link: '/zh-Hans/community/release-channels' },
                             { text: '第一个应用', link: '/zh-Hans/learn/getting-started/first-app' },
                             { text: '选择平台与 DTO 验证', link: '/zh-Hans/learn/getting-started/platforms' }
                         ] },
@@ -405,7 +412,8 @@ export default withMermaid(defineConfig({
                         { text: '社区', items: [
                             { text: '概览', link: '/zh-Hans/community/' },
                             { text: '贡献指南', link: '/zh-Hans/community/contributing' },
-                            { text: '当前版本', link: '/zh-Hans/community/changelog' }
+                            { text: '当前版本', link: '/zh-Hans/community/changelog' },
+                            { text: '发布渠道与安装', link: '/zh-Hans/community/release-channels' }
                         ] }
                     ]
                 }
@@ -432,6 +440,7 @@ export default withMermaid(defineConfig({
                         { text: '快速開始', items: [
                             { text: '簡介', link: '/zh-Hant/learn/getting-started/intro' },
                             { text: '安裝', link: '/zh-Hant/learn/getting-started/installation' },
+                            { text: '發佈通道與安裝', link: '/zh-Hant/community/release-channels' },
                             { text: '第一個應用程式', link: '/zh-Hant/learn/getting-started/first-app' },
                             { text: '選擇平台與 DTO 驗證', link: '/zh-Hant/learn/getting-started/platforms' }
                         ] },
@@ -482,7 +491,8 @@ export default withMermaid(defineConfig({
                         { text: '社群', items: [
                             { text: '概覽', link: '/zh-Hant/community/' },
                             { text: '貢獻指南', link: '/zh-Hant/community/contributing' },
-                            { text: '目前版本', link: '/zh-Hant/community/changelog' }
+                            { text: '目前版本', link: '/zh-Hant/community/changelog' },
+                            { text: '發佈通道與安裝', link: '/zh-Hant/community/release-channels' }
                         ] }
                     ]
                 }

@@ -1,5 +1,7 @@
 # Current releases
 
+See [Release channels and installation](/en/community/release-channels) to choose Preview, RC, or stable and understand the publication process.
+
 ::: warning v0.7.0 Preview input API migration
 The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
 

@@ -20,3 +20,7 @@
 
 - [貢獻指南](/zh-Hant/community/contributing)
 - [Spine GitHub 儲存庫](https://github.com/NARUBROWN/spine)
+
+## 發佈通道與安裝
+
+Preview、RC、穩定版的選擇與發佈流程，請參閱[發佈通道與安裝](/zh-Hant/community/release-channels)。

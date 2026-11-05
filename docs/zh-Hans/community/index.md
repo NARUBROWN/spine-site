@@ -20,3 +20,7 @@
 
 - [贡献指南](/zh-Hans/community/contributing)
 - [Spine GitHub 仓库](https://github.com/NARUBROWN/spine)
+
+## 发布渠道与安装
+
+Preview、RC、稳定版的选择与发布流程，请参阅[发布渠道与安装](/zh-Hans/community/release-channels)。
