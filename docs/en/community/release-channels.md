@@ -74,7 +74,7 @@ Verified candidates progress through **Preview → RC → Production**. Merging 
 3. A maintainer reviews the plan and results and approves publication of a new tag.
 4. Install and test the published tag again, then record successful results in a release manifest.
 5. Promote the candidate to RC and then main after observation and promotion checks. Required channel version pin changes are checked by policy; other code or dependency changes require validation from a new Preview.
-6. Publish the GitHub Release after public validation of the stable tag succeeds.
+6. Publish the GitHub Release after public validation of the stable tag succeeds. Core must also complete validation of the full combination with all five platforms.
 
 Spine core and platforms follow **core candidate publication → publication of five platforms → completion of validation for the full combination**. A published core tag alone is distinct from a complete platform combination ready for promotion.
 
@@ -101,7 +101,7 @@ See [Current Release](/en/community/changelog) for tags and published versions. 
 
 ## Pin or restore a version {#pin}
 
-Pin an actually published tag for reproducible CI and production use. This example pins the published CLI `v0.4.2`; it does not select the latest version.
+For CI and production, pin an actually published CLI tag and version application source, `go.mod`, and `go.sum` together. A CLI tag pins the tool’s code only. The dynamic Preview recipe still resolves `@preview` when the same CLI runs `new` or `update`, so reproduce an app from its saved source and dependencies. This example pins the published CLI `v0.4.2`; it does not select the latest version.
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.2
