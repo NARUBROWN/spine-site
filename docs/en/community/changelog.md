@@ -10,6 +10,18 @@ See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for ve
 
 Use `@latest` for general installation. The current documentation targets Spine v0.6.5 and CLI v0.4.2. Check the installed CLI with `spine version` and the actual dependencies in the generated `go.mod`.
 
+## Spine v0.7.0-preview.2 {#spine-preview-ui}
+
+Core `v0.7.0-preview.2` adds optional Swagger UI and ReDoc through `boot.OpenAPIOptions.UI`. UI assets and license notices are embedded in the binary. The default paths are `/docs` and `/redoc`, and each UI exposes `Path` and `Title` options.
+
+Runtime OpenAPI JSON is available from `v0.7.0-preview.1`; the `UI` registration option and both embedded UI packages are available from `v0.7.0-preview.2`. Use Echo `v0.2.0-preview.1` for HTTP. Select these versions separately from stable `v0.6.5`.
+
+```bash
+go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+```
+
+See [boot options](/en/reference/api/openapi#options), [UI registration and a runnable example](/en/reference/api/openapi#tools), and the [core tag](https://github.com/NARUBROWN/spine/tree/v0.7.0-preview.2).
+
 ## Spine v0.7.0-preview.1 {#spine-preview}
 
 The published Preview tags are core `v0.7.0-preview.1` and `v0.2.0-preview.1` for each independent platform and playground. Select them explicitly, separately from the stable `v0.6.5` documentation baseline.

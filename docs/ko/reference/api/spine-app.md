@@ -544,6 +544,8 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
+미리보기의 추가 부팅 옵션은 [런타임 OpenAPI 설정](/ko/reference/api/openapi#options)을 참고하세요. JSON 명세는 `v0.7.0-preview.1`부터, `HTTP.OpenAPI.UI`를 통한 Swagger UI와 ReDoc 등록은 `v0.7.0-preview.2`부터 사용할 수 있습니다. [UI 등록 예제](/ko/reference/api/openapi#tools)에서 import와 설정을 확인하세요.
+
 `boot.Options`는 HTTP 실행과 종료 정책을 지정합니다. HTTP를 실행할 때 `HTTP`를 지정합니다. 이벤트 연결과 역할은 외부 플랫폼 `Config`와 `spine.WithEventAdapter`에서 선택합니다.
 
 ```go

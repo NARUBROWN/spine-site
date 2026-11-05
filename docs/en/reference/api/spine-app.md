@@ -544,6 +544,8 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
+See [runtime OpenAPI settings](/en/reference/api/openapi#options) for additional Preview boot options. JSON documents are available from `v0.7.0-preview.1`; Swagger UI and ReDoc registration through `HTTP.OpenAPI.UI` is available from `v0.7.0-preview.2`. The [UI registration example](/en/reference/api/openapi#tools) shows the imports and configuration.
+
 `boot.Options` configures HTTP execution and shutdown policy. Set `HTTP` when running HTTP. Select event connections and roles through external platform `Config` values and `spine.WithEventAdapter`.
 
 ```go

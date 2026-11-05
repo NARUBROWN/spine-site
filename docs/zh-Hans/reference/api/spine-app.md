@@ -544,6 +544,8 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
+Preview 中新增的启动选项请参阅[运行时 OpenAPI 配置](/zh-Hans/reference/api/openapi#options)。JSON 规范从 `v0.7.0-preview.1` 起可用，通过 `HTTP.OpenAPI.UI` 注册 Swagger UI 与 ReDoc 则从 `v0.7.0-preview.2` 起可用。[UI 注册示例](/zh-Hans/reference/api/openapi#tools)包含 import 与配置。
+
 `boot.Options` 配置 HTTP 执行和关闭策略。运行 HTTP 时设置 `HTTP`。事件连接和角色通过外部平台 `Config` 与 `spine.WithEventAdapter` 选择。
 
 ```go

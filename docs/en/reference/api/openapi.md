@@ -2,7 +2,9 @@
 
 Starting with Spine `v0.7.0-preview.1`, you can generate OpenAPI 3.1.2 JSON from registered HTTP routes, handler types, and the validator's description contract.
 
-::: warning Preview API available from v0.7.0-preview.1
+`boot.OpenAPIOptions.UI` and embedded Swagger UI and ReDoc are available from `v0.7.0-preview.2`. This is later than `v0.7.0-preview.1`, which introduced JSON document generation.
+
+::: warning v0.7.0 Preview APIs
 This API is not included in stable `v0.6.5`. Use Echo `v0.2.0-preview.1` for HTTP, and select playground `v0.2.0-preview.1` if you use it for validation and detailed input schema descriptions. For input parameters, first read [Migrate handler inputs to Preview](/en/learn/migration/v0.7.0-preview).
 :::
 
@@ -31,6 +33,7 @@ options := boot.Options{
 | `Path` | `/openapi.json` | Static absolute path served with GET and HEAD |
 | `Title` | `Spine API` | OpenAPI `info.title` |
 | `Version` | `unversioned` | The app's `info.version`, independent of the framework version |
+| `UI` | `nil` | `[]boot.OpenAPIUI`, available from `v0.7.0-preview.2`. Omit it to serve only the JSON document |
 
 `HTTP: nil` disables both HTTP and the document resource. Setting only `Path`, `Title`, or `Version` does not enable it. To disable it, set `Enabled: false` or omit the OpenAPI options. Use the public Preview's `Enabled` option instead of the `Disabled` option used in unpublished development sources.
 
@@ -91,8 +94,90 @@ Unsupported custom rules and dynamic values are recorded as limitations in `x-sp
 
 The T in `httpx.Response[T]` describes the response body type. Status codes and error branches selected by the handler cannot be determined without executing it, so they remain under `default`. When a validator is registered and the document includes a request body or input parameters, it also adds a `400` response for framework binding and DTO validation failures. Defaults applied inside the handler are not added to the generated document either.
 
-## Integrating Swagger UI and ReDoc {#tools}
+## Serve Swagger UI and ReDoc {#tools}
 
-You can connect the generated JSON to Swagger UI or ReDoc. Configure the UI separately in your app. See the [Swagger and OpenAPI tutorial](/en/learn/tutorial/8-swagger) for a stable-version UI setup example.
+From `v0.7.0-preview.2`, add `UI` to your existing `boot.Options.HTTP.OpenAPI` settings to select documentation screens. Set `Enabled: true` and register the UIs. Omit `UI` to serve only JSON. Pin the core version explicitly and use the existing Preview tag for the HTTP platform.
 
-To migrate input models, follow [Migrate handler inputs to Preview](/en/learn/migration/v0.7.0-preview). For the stable API, see [spine.App](/en/reference/api/spine-app).
+```bash
+go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+```
+
+The following `main.go` is a standalone app that registers the selected UIs. In an existing app, add the imports and `OpenAPI.UI` settings to your current composition.
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/NARUBROWN/spine"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+)
+
+type Controller struct{}
+
+func (*Controller) Hello() httpx.Response[string] {
+    return httpx.Response[string]{Body: "hello"}
+}
+
+func main() {
+    app := spine.New(echoplatform.Option())
+    app.Constructor(func() *Controller { return &Controller{} })
+    app.Route("GET", "/hello", (*Controller).Hello)
+
+    options := boot.Options{
+        Address: ":8080",
+        HTTP: &boot.HTTPOptions{
+            OpenAPI: boot.OpenAPIOptions{
+                Enabled: true,
+                Title:   "Example API",
+                Version: "1.0.0",
+                UI: []boot.OpenAPIUI{
+                    swaggerui.New(swaggerui.Options{}),
+                    redoc.New(redoc.Options{}),
+                },
+            },
+        },
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+Running the app serves `/openapi.json`, `/docs`, and `/redoc`. To use only Swagger UI, omit the ReDoc import and registration. `go:embed` includes the selected UIs' JS, CSS, and license notices in the binary, so serving the default UI assets requires no CDN, npm, or separate static-file directory.
+
+### Options for each UI {#ui-options}
+
+| Option | Swagger UI default | ReDoc default | Meaning |
+| --- | --- | --- | --- |
+| `Path` | `/docs` | `/redoc` | Static absolute path for the documentation screen |
+| `Title` | `API documentation` | `API reference` | Browser tab title. Set the document's `info.title` through `OpenAPIOptions.Title` |
+
+Set the document URL through the shared `OpenAPIOptions.Path` option. Document and asset paths are independent of `HTTP.GlobalPrefix`. Assets and redistribution notices are served under `/_assets/` beneath each UI path. Relative URLs also support proxies that strip an external prefix before forwarding requests.
+
+Documents and assets support GET and HEAD and do not execute Spine business interceptors. HTTP server middleware still applies. To restrict access, protect the JSON document, UI, and asset paths with the same proxy access policy. API requests executed through Swagger use the original API's interceptors.
+
+### UI provider contract and preparation {#ui-provider}
+
+Both packages' `New` functions return the following `boot.OpenAPIUI` type. Resource bodies are strings.
+
+```go
+type OpenAPIResource struct {
+    Path        string
+    ContentType string
+    Body        string
+}
+
+type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
+```
+
+`Prepare` and `Run` call each UI provider once during preflight and connect the validated resources to the HTTP adapter. A separate `Validate` call also invokes the providers, and later preparation validates them again. Custom providers must return static resources without opening external connections or executing user handlers.
+
+Preparation rejects document or asset paths that overlap existing GET, HEAD, or WebSocket routes with `OPENAPI_PATH_CONFLICT`. A nil provider or invalid UI options produce `OPENAPI_UI_INVALID`; an invalid resource path or Content-Type produces `OPENAPI_UI_RESOURCE_INVALID`.
+
+For separate UI setup on stable `v0.6.5`, see the [Swagger and OpenAPI tutorial](/en/learn/tutorial/8-swagger). See [Migrate handler inputs to Preview](/en/learn/migration/v0.7.0-preview) for input models and [spine.App](/en/reference/api/spine-app) for the stable API.

@@ -10,6 +10,18 @@
 
 常规安装使用 `@latest`。当前文档以 Spine v0.6.5 和 CLI v0.4.2 为基准。使用 `spine version` 检查 CLI，在生成的 `go.mod` 中确认实际依赖。
 
+## Spine v0.7.0-preview.2 {#spine-preview-ui}
+
+核心 `v0.7.0-preview.2` 通过 `boot.OpenAPIOptions.UI` 提供可选的 Swagger UI 与 ReDoc。UI 资源和许可证声明内嵌于二进制中。默认路径为 `/docs` 与 `/redoc`，各 UI 均可设置 `Path` 和 `Title`。
+
+运行时 OpenAPI JSON 从 `v0.7.0-preview.1` 起可用，`UI` 注册选项与两个内嵌 UI 包从 `v0.7.0-preview.2` 起可用。HTTP 请使用 Echo `v0.2.0-preview.1`，并与稳定版 `v0.6.5` 区分选择。
+
+```bash
+go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+```
+
+请参阅 [启动选项](/zh-Hans/reference/api/openapi#options)、[UI 注册与运行示例](/zh-Hans/reference/api/openapi#tools)和[核心标签](https://github.com/NARUBROWN/spine/tree/v0.7.0-preview.2)。
+
 ## Spine v0.7.0-preview.1 {#spine-preview}
 
 已发布的 Preview 标签为核心 `v0.7.0-preview.1`，以及各独立平台和 playground 的 `v0.2.0-preview.1`。请与稳定文档基准 `v0.6.5` 区分并明确选择。

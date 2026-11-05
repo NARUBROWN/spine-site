@@ -544,6 +544,8 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
+Preview で追加された起動オプションは、[ランタイム OpenAPI 設定](/ja/reference/api/openapi#options)を参照してください。JSON ドキュメントは `v0.7.0-preview.1` 以降、`HTTP.OpenAPI.UI` による Swagger UI と ReDoc の登録は `v0.7.0-preview.2` 以降で利用できます。[UI 登録例](/ja/reference/api/openapi#tools)に import と設定を示しています。
+
 `boot.Options` はHTTP実行と終了方針を設定します。HTTP実行時に `HTTP` を指定します。イベント接続と役割は外部プラットフォームの `Config` と `spine.WithEventAdapter` で選択します。
 
 ```go

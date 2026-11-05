@@ -2,7 +2,9 @@
 
 从 Spine `v0.7.0-preview.1` 起，可以根据实际注册的 HTTP 路由、处理器类型与 validator 描述契约生成 OpenAPI 3.1.2 JSON。
 
-::: warning 从 v0.7.0-preview.1 起提供的 Preview API
+`boot.OpenAPIOptions.UI` 与内嵌 Swagger UI、ReDoc 从 `v0.7.0-preview.2` 起可用。JSON 规范生成则从 `v0.7.0-preview.1` 起提供，请区分两者的首次可用版本。
+
+::: warning v0.7.0 Preview API
 此 API 不包含在稳定版 `v0.6.5` 中。HTTP 请使用 Echo `v0.2.0-preview.1`；如果使用 playground 进行验证与详细输入规范描述，也请选择 `v0.2.0-preview.1`。输入参数请先参阅 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)。
 :::
 
@@ -31,6 +33,7 @@ options := boot.Options{
 | `Path` | `/openapi.json` | 通过 GET 与 HEAD 提供的静态绝对路径 |
 | `Title` | `Spine API` | OpenAPI `info.title` |
 | `Version` | `unversioned` | 应用的 `info.version`，与框架版本无关 |
+| `UI` | `nil` | 从 `v0.7.0-preview.2` 起提供的 `[]boot.OpenAPIUI`。省略时仅提供 JSON 规范 |
 
 `HTTP: nil` 会同时关闭 HTTP 与规范资源。仅设置 `Path`、`Title` 或 `Version` 不会启用该功能。要关闭它，请设置 `Enabled: false` 或省略 OpenAPI 选项。请使用已公开 Preview 中的 `Enabled`，而非未发布开发源码中使用的 `Disabled`。
 
@@ -91,8 +94,90 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 `httpx.Response[T]` 中的 T 描述响应正文类型。无法在不运行处理器的情况下确定其选择的状态码与错误分支，因此将其记录在 `default` 下。如果已注册 validator，且规范包含请求正文或输入参数，还会添加表示框架绑定与 DTO 验证失败的 `400` 响应。处理器内部设置的默认值也不会补入自动生成的规范。
 
-## 集成 Swagger UI 与 ReDoc {#tools}
+## 提供 Swagger UI 与 ReDoc {#tools}
 
-可以将生成的 JSON 连接到 Swagger UI 或 ReDoc。UI 需要在应用中单独配置。稳定版的 UI 配置示例请参阅 [Swagger 与 OpenAPI 教程](/zh-Hans/learn/tutorial/8-swagger)。
+从 `v0.7.0-preview.2` 起，在现有 `boot.Options.HTTP.OpenAPI` 中添加 `UI` 即可选择文档界面。请同时设置 `Enabled: true` 并注册 UI。只需 JSON 时省略 `UI`。显式固定核心版本，HTTP 平台继续使用现有 Preview 标签。
 
-迁移输入模型时，请遵循 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)。稳定版 API 请参阅 [spine.App](/zh-Hans/reference/api/spine-app)。
+```bash
+go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+```
+
+以下是注册所选 UI 的独立应用 `main.go`。在现有应用中，将 import 和 `OpenAPI.UI` 配置添加到当前 composition。
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/NARUBROWN/spine"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+)
+
+type Controller struct{}
+
+func (*Controller) Hello() httpx.Response[string] {
+    return httpx.Response[string]{Body: "hello"}
+}
+
+func main() {
+    app := spine.New(echoplatform.Option())
+    app.Constructor(func() *Controller { return &Controller{} })
+    app.Route("GET", "/hello", (*Controller).Hello)
+
+    options := boot.Options{
+        Address: ":8080",
+        HTTP: &boot.HTTPOptions{
+            OpenAPI: boot.OpenAPIOptions{
+                Enabled: true,
+                Title:   "Example API",
+                Version: "1.0.0",
+                UI: []boot.OpenAPIUI{
+                    swaggerui.New(swaggerui.Options{}),
+                    redoc.New(redoc.Options{}),
+                },
+            },
+        },
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+运行应用后会提供 `/openapi.json`、`/docs` 和 `/redoc`。只使用 Swagger UI 时，省略 ReDoc 的 import 与注册。`go:embed` 将所选 UI 的 JS、CSS 和许可证声明包含在二进制中，因此提供默认 UI 资源不需要 CDN、npm 或单独的静态文件目录。
+
+### 各 UI 的选项 {#ui-options}
+
+| 选项 | Swagger UI 默认值 | ReDoc 默认值 | 含义 |
+| --- | --- | --- | --- |
+| `Path` | `/docs` | `/redoc` | 文档界面的静态绝对路径 |
+| `Title` | `API documentation` | `API reference` | 浏览器标签页标题。规范的 `info.title` 通过 `OpenAPIOptions.Title` 设置 |
+
+规范地址通过共享的 `OpenAPIOptions.Path` 设置。文档与资源路径独立于 `HTTP.GlobalPrefix`。资源和再分发声明在各 UI 路径下的 `/_assets/` 中提供。相对 URL 也支持先移除外部前缀再转发请求的代理。
+
+文档与资源支持 GET 和 HEAD，不执行 Spine 业务拦截器。HTTP 服务器中间件仍然生效。需要限制访问时，请使用相同的代理访问策略保护 JSON 规范、UI 和资源路径。通过 Swagger 执行的 API 请求仍使用原 API 的拦截器。
+
+### UI 提供者契约与准备 {#ui-provider}
+
+两个包的 `New` 都返回以下 `boot.OpenAPIUI` 类型。资源正文为字符串。
+
+```go
+type OpenAPIResource struct {
+    Path        string
+    ContentType string
+    Body        string
+}
+
+type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
+```
+
+`Prepare` 和 `Run` 在预检中各调用一次 UI 提供者，并将验证过的资源直接连接到 HTTP 适配器。单独调用 `Validate` 也会执行提供者，后续准备时会重新检查。自定义提供者必须返回静态资源，不得建立外部连接或执行用户处理器。
+
+文档或资源路径与现有 GET、HEAD、WebSocket 路由重叠时，准备过程以 `OPENAPI_PATH_CONFLICT` 失败。nil 提供者或无效 UI 选项产生 `OPENAPI_UI_INVALID`；无效资源路径或 Content-Type 产生 `OPENAPI_UI_RESOURCE_INVALID`。
+
+稳定版 `v0.6.5` 的独立 UI 配置请参阅 [Swagger 与 OpenAPI 教程](/zh-Hans/learn/tutorial/8-swagger)。输入模型请参阅 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，稳定版 API 请参阅 [spine.App](/zh-Hans/reference/api/spine-app)。

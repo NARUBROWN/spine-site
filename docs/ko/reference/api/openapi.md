@@ -2,7 +2,9 @@
 
 Spine `v0.7.0-preview.1`부터 실제 등록한 HTTP 라우트, 핸들러 타입과 validator 설명 계약으로 OpenAPI 3.1.2 JSON을 생성할 수 있습니다.
 
-::: warning v0.7.0 미리보기 1부터 제공하는 API
+`boot.OpenAPIOptions.UI`와 임베드 Swagger UI, ReDoc은 `v0.7.0-preview.2`부터 사용할 수 있습니다. JSON 명세 생성의 최초 버전인 `v0.7.0-preview.1`과 구분하세요.
+
+::: warning v0.7.0 미리보기 API
 이 API는 안정 버전 `v0.6.5`에 포함되지 않습니다. HTTP에는 Echo `v0.2.0-preview.1`을 사용하고, playground로 검증과 상세 입력 명세를 설명한다면 `v0.2.0-preview.1`을 선택하세요. 입력 인자는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview)을 먼저 확인하세요.
 :::
 
@@ -31,6 +33,7 @@ options := boot.Options{
 | `Path` | `/openapi.json` | GET과 HEAD로 제공할 정적 절대 경로 |
 | `Title` | `Spine API` | OpenAPI `info.title` |
 | `Version` | `unversioned` | 앱의 `info.version`, 프레임워크 버전과 별개 |
+| `UI` | `nil` | `v0.7.0-preview.2`부터 제공하는 `[]boot.OpenAPIUI`. 생략하면 JSON 명세만 제공 |
 
 `HTTP: nil`이면 HTTP와 명세 리소스가 모두 꺼집니다. `Path`, `Title`이나 `Version`만 지정해도 활성화되지 않습니다. 끄려면 `Enabled: false`로 설정하거나 OpenAPI 옵션을 생략하세요. 미발행 작업 소스에서 사용했던 `Disabled` 대신 공개 미리보기의 `Enabled`를 사용합니다.
 
@@ -91,8 +94,90 @@ validator가 없으면 입력 파라미터, 요청과 응답 모델, 오류 상�
 
 `httpx.Response[T]`의 T는 응답 본문 타입을 설명합니다. 핸들러가 선택하는 상태 코드와 오류 분기는 실행 없이 확정할 수 없으므로 `default`로 남깁니다. validator가 등록된 명세에서 요청 본문이나 입력 파라미터가 있으면 프레임워크 바인딩과 DTO 검증 실패를 나타내는 `400` 응답도 추가합니다. 핸들러 안에서 적용한 기본값도 자동 명세에 보충하지 않습니다.
 
-## Swagger UI와 ReDoc 연동 {#tools}
+## Swagger UI와 ReDoc 제공 {#tools}
 
-생성한 JSON을 Swagger UI나 ReDoc에 연결할 수 있습니다. UI는 앱에서 별도로 구성합니다. 안정 버전의 UI 구성 예제는 [Swagger와 OpenAPI 튜토리얼](/ko/learn/tutorial/8-swagger)을 참고하세요.
+`v0.7.0-preview.2`부터 기존 `boot.Options.HTTP.OpenAPI`에 `UI`를 추가해 문서 화면을 선택합니다. `Enabled: true`와 UI 등록을 함께 지정하세요. JSON만 제공하려면 `UI`를 생략합니다. 코어 버전을 명시적으로 고정하고 HTTP 플랫폼은 기존 미리보기 태그를 사용합니다.
 
-입력 모델을 전환할 때는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview)을 따르세요. 안정 버전 API는 [spine.App](/ko/reference/api/spine-app)을 참고하세요.
+```bash
+go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+```
+
+다음은 사용할 UI를 등록하는 독립 앱의 `main.go` 예제입니다. 기존 앱에는 import와 `OpenAPI.UI` 설정을 현재 composition에 반영하세요.
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/NARUBROWN/spine"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+)
+
+type Controller struct{}
+
+func (*Controller) Hello() httpx.Response[string] {
+    return httpx.Response[string]{Body: "hello"}
+}
+
+func main() {
+    app := spine.New(echoplatform.Option())
+    app.Constructor(func() *Controller { return &Controller{} })
+    app.Route("GET", "/hello", (*Controller).Hello)
+
+    options := boot.Options{
+        Address: ":8080",
+        HTTP: &boot.HTTPOptions{
+            OpenAPI: boot.OpenAPIOptions{
+                Enabled: true,
+                Title:   "Example API",
+                Version: "1.0.0",
+                UI: []boot.OpenAPIUI{
+                    swaggerui.New(swaggerui.Options{}),
+                    redoc.New(redoc.Options{}),
+                },
+            },
+        },
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+앱을 실행하면 `/openapi.json`, `/docs`, `/redoc`을 제공합니다. Swagger UI만 사용하려면 ReDoc의 import와 등록을 생략하세요. `go:embed`로 선택한 UI의 JS, CSS와 라이선스 고지를 바이너리에 포함하므로 기본 UI 자산을 제공할 때 CDN, npm이나 별도 정적 파일 디렉터리가 필요하지 않습니다.
+
+### UI별 옵션 {#ui-options}
+
+| 옵션 | Swagger UI 기본값 | ReDoc 기본값 | 의미 |
+| --- | --- | --- | --- |
+| `Path` | `/docs` | `/redoc` | 문서 화면의 정적 절대 경로 |
+| `Title` | `API documentation` | `API reference` | 브라우저 탭 제목. 명세의 `info.title`은 `OpenAPIOptions.Title`로 지정 |
+
+명세 주소는 공통 `OpenAPIOptions.Path`로 지정합니다. 문서와 자산 경로는 `HTTP.GlobalPrefix`와 독립적이며 자산과 재배포 고지는 각 UI 경로 아래의 `/_assets/`에서 제공합니다. 상대 URL을 사용하므로 프록시가 외부 접두사를 제거해 전달하는 배치도 지원합니다.
+
+문서와 자산은 GET과 HEAD로 제공하며 Spine 업무 인터셉터를 실행하지 않습니다. HTTP 서버 미들웨어는 적용됩니다. 접근을 제한하려면 JSON 명세, UI와 자산 경로를 같은 프록시 접근 정책으로 보호하세요. Swagger에서 실행한 API 요청에는 원래 API의 인터셉터가 적용됩니다.
+
+### UI 제공자 계약과 준비 {#ui-provider}
+
+두 패키지의 `New`는 다음 `boot.OpenAPIUI` 타입을 반환합니다. 리소스 본문은 문자열입니다.
+
+```go
+type OpenAPIResource struct {
+    Path        string
+    ContentType string
+    Body        string
+}
+
+type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
+```
+
+`Prepare`와 `Run`은 사전 검사에서 각 UI 제공자를 한 번 호출하고, 검증한 리소스를 그대로 HTTP 어댑터에 연결합니다. 별도로 `Validate`를 호출하면 그 호출에서도 제공자를 실행하며 이후 준비에서 다시 검사합니다. 사용자 정의 제공자는 외부 연결이나 사용자 핸들러 실행 없이 정적 리소스를 반환해야 합니다.
+
+기존 GET, HEAD 또는 WebSocket 라우트와 문서 및 자산 경로가 겹치면 `OPENAPI_PATH_CONFLICT`로 준비를 거부합니다. nil 제공자나 잘못된 UI 옵션은 `OPENAPI_UI_INVALID`, 잘못된 리소스 경로나 Content-Type은 `OPENAPI_UI_RESOURCE_INVALID`입니다.
+
+안정 버전 `v0.6.5`의 별도 UI 구성은 [Swagger와 OpenAPI 튜토리얼](/ko/learn/tutorial/8-swagger)을 참고하세요. 입력 모델은 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 안정 버전 API는 [spine.App](/ko/reference/api/spine-app)에서 확인하세요.

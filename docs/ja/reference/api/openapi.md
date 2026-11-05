@@ -2,7 +2,9 @@
 
 Spine `v0.7.0-preview.1` 以降では、実際に登録した HTTP ルート、ハンドラーの型、validator の記述契約から OpenAPI 3.1.2 JSON を生成できます。
 
-::: warning v0.7.0-preview.1 以降で提供する Preview API
+`boot.OpenAPIOptions.UI` と埋め込み Swagger UI、ReDoc は `v0.7.0-preview.2` 以降で利用できます。JSON ドキュメント生成を導入した `v0.7.0-preview.1` とは提供開始バージョンが異なります。
+
+::: warning v0.7.0 の Preview API
 この API は安定版 `v0.6.5` に含まれません。HTTP には Echo `v0.2.0-preview.1` を使用し、playground で検証と詳細な入力スキーマを記述する場合は `v0.2.0-preview.1` を選んでください。入力引数については、先に [Preview へのハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)を確認してください。
 :::
 
@@ -31,6 +33,7 @@ options := boot.Options{
 | `Path` | `/openapi.json` | GET と HEAD で提供する静的な絶対パス |
 | `Title` | `Spine API` | OpenAPI の `info.title` |
 | `Version` | `unversioned` | アプリの `info.version`。フレームワークのバージョンとは独立 |
+| `UI` | `nil` | `v0.7.0-preview.2` 以降の `[]boot.OpenAPIUI`。省略すると JSON ドキュメントのみを提供 |
 
 `HTTP: nil` の場合、HTTP とドキュメントのリソースはどちらも無効です。`Path`、`Title`、`Version` だけを指定しても有効にはなりません。無効にするには `Enabled: false` を設定するか、OpenAPI オプションを省略してください。未公開の開発ソースで使用していた `Disabled` ではなく、公開 Preview の `Enabled` を使用します。
 
@@ -91,8 +94,90 @@ validator がない場合、入力パラメーター、リクエストモデル�
 
 `httpx.Response[T]` の T は、レスポンス本文の型を記述します。ハンドラーが選ぶステータスコードやエラー分岐は実行せずに確定できないため、`default` に記述します。validator が登録され、ドキュメントにリクエスト本文または入力パラメーターがある場合は、フレームワークのバインディングと DTO 検証の失敗を示す `400` レスポンスも追加します。ハンドラー内で適用した既定値も、自動生成するドキュメントに補完しません。
 
-## Swagger UI と ReDoc の連携 {#tools}
+## Swagger UI と ReDoc の提供 {#tools}
 
-生成した JSON を Swagger UI や ReDoc に接続できます。UI はアプリ側で別途構成します。安定版の UI 構成例は、[Swagger と OpenAPI チュートリアル](/ja/learn/tutorial/8-swagger)を参照してください。
+`v0.7.0-preview.2` 以降では、既存の `boot.Options.HTTP.OpenAPI` に `UI` を追加してドキュメント画面を選択できます。`Enabled: true` と UI 登録を指定してください。JSON のみを提供する場合は `UI` を省略します。コアのバージョンを明示的に固定し、HTTP プラットフォームには既存の Preview タグを使用します。
 
-入力モデルを移行するときは、[Preview へのハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)に従ってください。安定版 API は [spine.App](/ja/reference/api/spine-app)を参照してください。
+```bash
+go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+```
+
+以下は、使用する UI を登録する独立したアプリの `main.go` です。既存アプリでは、現在の composition に import と `OpenAPI.UI` の設定を追加してください。
+
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/NARUBROWN/spine"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+)
+
+type Controller struct{}
+
+func (*Controller) Hello() httpx.Response[string] {
+    return httpx.Response[string]{Body: "hello"}
+}
+
+func main() {
+    app := spine.New(echoplatform.Option())
+    app.Constructor(func() *Controller { return &Controller{} })
+    app.Route("GET", "/hello", (*Controller).Hello)
+
+    options := boot.Options{
+        Address: ":8080",
+        HTTP: &boot.HTTPOptions{
+            OpenAPI: boot.OpenAPIOptions{
+                Enabled: true,
+                Title:   "Example API",
+                Version: "1.0.0",
+                UI: []boot.OpenAPIUI{
+                    swaggerui.New(swaggerui.Options{}),
+                    redoc.New(redoc.Options{}),
+                },
+            },
+        },
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+アプリを実行すると `/openapi.json`、`/docs`、`/redoc` を提供します。Swagger UI のみを使用する場合は ReDoc の import と登録を省略してください。`go:embed` により、選択した UI の JS、CSS、ライセンス通知をバイナリに含めます。既定の UI アセットを提供するために CDN、npm、別の静的ファイルディレクトリは必要ありません。
+
+### 各 UI のオプション {#ui-options}
+
+| オプション | Swagger UI の既定値 | ReDoc の既定値 | 意味 |
+| --- | --- | --- | --- |
+| `Path` | `/docs` | `/redoc` | ドキュメント画面の静的な絶対パス |
+| `Title` | `API documentation` | `API reference` | ブラウザーのタブタイトル。ドキュメントの `info.title` は `OpenAPIOptions.Title` で指定 |
+
+ドキュメント URL は共通の `OpenAPIOptions.Path` で指定します。ドキュメントとアセットのパスは `HTTP.GlobalPrefix` とは独立しています。アセットと再配布通知は各 UI パス配下の `/_assets/` で提供します。相対 URL を使うため、外部の接頭辞を除去してから転送するプロキシにも対応します。
+
+ドキュメントとアセットは GET と HEAD で提供し、Spine の業務インターセプターを実行しません。HTTP サーバーのミドルウェアは適用されます。アクセスを制限する場合は、JSON ドキュメント、UI、アセットのパスを同じプロキシのアクセス方針で保護してください。Swagger から実行する API リクエストには、元の API のインターセプターが適用されます。
+
+### UI 提供者の契約と準備 {#ui-provider}
+
+両パッケージの `New` は、以下の `boot.OpenAPIUI` 型を返します。リソースの本文は文字列です。
+
+```go
+type OpenAPIResource struct {
+    Path        string
+    ContentType string
+    Body        string
+}
+
+type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
+```
+
+`Prepare` と `Run` は事前検査で各 UI 提供者を一度呼び出し、検証したリソースをそのまま HTTP アダプターに接続します。別途 `Validate` を呼び出した場合も提供者を実行し、その後の準備では再検査します。独自の提供者は、外部への接続やユーザーハンドラーの実行を行わずに静的リソースを返す必要があります。
+
+ドキュメントやアセットのパスが既存の GET、HEAD、WebSocket ルートと重なる場合、準備は `OPENAPI_PATH_CONFLICT` で失敗します。nil の提供者や不正な UI オプションは `OPENAPI_UI_INVALID`、不正なリソースパスや Content-Type は `OPENAPI_UI_RESOURCE_INVALID` になります。
+
+安定版 `v0.6.5` で UI を別途構成する場合は、[Swagger と OpenAPI チュートリアル](/ja/learn/tutorial/8-swagger)を参照してください。入力モデルは [Preview へのハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、安定版 API は [spine.App](/ja/reference/api/spine-app)を参照してください。
