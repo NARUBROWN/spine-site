@@ -1,5 +1,7 @@
 # 現在のリリース
 
+最新タグと次の目標バージョンは[バージョン一覧](/ja/community/versions)で確認してください。
+
 Preview、RC、安定版の選択と公開手順は[リリースチャンネルとインストール](/ja/community/release-channels)を参照してください。
 
 ::: warning v0.7.0 Preview 入力 API の移行

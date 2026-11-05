@@ -1,5 +1,7 @@
 # 현재 릴리스
 
+[저장소별 버전 현황](/ko/community/versions)에서 최신 태그와 다음 목표 버전을 확인하세요.
+
 Preview, RC, 정식 채널의 선택과 발행 절차는 [릴리스 채널과 설치](/ko/community/release-channels)에서 확인하세요.
 
 ::: warning v0.7.0 미리보기 입력 API 전환
