@@ -35,14 +35,14 @@ spine version
 
 ## Preview CLI 설치 {#preview-cli}
 
-v0.7.0 미리보기를 사용하려면 CLI 태그를 명시적으로 지정합니다. 일반 설치의 `@latest`는 정식 버전 안내에 사용합니다.
+v0.7.0 미리보기는 `@preview`로 CLI의 Preview 브랜치 최신 커밋을 설치합니다. 발행된 태그 사이의 변경도 포함할 수 있으며, 일반 정식 설치는 `@latest`를 사용합니다.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-`spine version`은 `spine-cli 0.4.3-preview.3`을 출력해야 합니다. 이 CLI의 새 프로젝트는 `platform-contracts-v0.7.0-preview.2` 레시피로 코어 `v0.7.0-preview.2`와 Echo `v0.2.0-preview.1`을 선택합니다. 다른 플랫폼과 playground도 선택하면 `v0.2.0-preview.1`을 사용합니다. 아래 `spine.toml` 예시는 정식 레시피 기준이며, Preview로 생성하면 `recipe` 값이 달라집니다.
+`spine version`으로 실제 설치된 태그 또는 pseudo-version을 확인하세요. 새 프로젝트의 `platform-contracts-preview` 레시피는 코어와 선택한 플랫폼, playground를 각각 `@preview`로 조회하고 해석한 버전을 `go.mod`에 기록합니다. 아래 `spine.toml` 예시는 정식 레시피 기준입니다. Preview의 `--skip-install`도 버전 조회에는 Go와 네트워크 또는 모듈 프록시 캐시가 필요하며 설치와 빌드만 생략합니다.
 
 CLI 설치만으로 기존 앱의 레시피는 바뀌지 않습니다. 기존 앱 전환과 Swagger UI, ReDoc 활성화는 [Preview 전환 안내](/ko/learn/migration/v0.7.0-preview)를 따르세요.
 

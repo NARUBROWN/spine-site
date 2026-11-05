@@ -17,14 +17,14 @@ Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from
 
 ## v0.7.0 Preview APIs
 
-The stable instructions below target Spine v0.6.5. Install Preview CLI v0.4.3-preview.3 with an explicit tag:
+The stable instructions below target Spine v0.6.5. Install the latest Preview CLI branch with `@preview`:
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-The expected output is `spine-cli 0.4.3-preview.3`. New projects use recipe `platform-contracts-v0.7.0-preview.2`, selecting core v0.7.0-preview.2 and v0.2.0-preview.1 for each selected independent platform or playground. Installing the CLI does not change existing recipes. To migrate an existing app, preserve module, entrypoint, composition, port, layout, and implementation selections in spine.toml, explicitly change recipe, review `spine update --dry-run --json`, then apply with the matching `--if-match` hash. Apply source and boot option changes separately. Go 1.25.5+ is required by core/Echo; playground requires Go 1.26+. General `@latest` installation remains the stable path.
+Check the actual tag or pseudo-version with `spine version`. `@preview` selects the branch HEAD and may include changes between published tags. New projects use recipe `platform-contracts-preview`, resolving `@preview` for core and each selected platform or playground and recording canonical versions in go.mod. `--skip-install` still resolves these branches using Go and network access or module proxy cache; it skips installation and build checks. Existing versioned recipes stay pinned until explicitly changed. Preserve module, entrypoint, composition, port, layout, and implementation selections in spine.toml when changing recipe. Review `spine update --dry-run --json`, then apply with the matching `--if-match` hash. A changed resolution invalidates a reviewed plan. Go 1.25.5+ is required by core/Echo; playground requires Go 1.26+. General `@latest` installation remains the stable path.
 
 Input DTOs and runtime OpenAPI JSON are available from core v0.7.0-preview.1. Embedded Swagger UI and ReDoc registration through `boot.OpenAPIOptions.UI` requires v0.7.0-preview.2. Echo and optional playground remain at v0.2.0-preview.1.
 

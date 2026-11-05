@@ -10,14 +10,18 @@
 
 一般安裝使用 `@latest`。目前文件以 Spine v0.6.5 與 CLI v0.4.2 為基準。使用 `spine version` 檢查 CLI，在產生的 `go.mod` 中確認實際相依套件。
 
+## Preview CLI @preview {#cli-preview-branch}
+
+CLI 與新應用程式的相依套件可以跟隨 Preview 分支。CLI 使用 `@preview` 安裝，新應用程式使用 `platform-contracts-preview` 配方。產生和 `spine update` 解析核心及所選平台的 `@preview`，並將實際版本記錄在 `go.mod` 中。既有依版本命名的配方在明確修改前維持固定版本。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
+spine version
+```
+
 ## Spine CLI v0.4.3-preview.3 {#cli-preview}
 
 Preview CLI `v0.4.3-preview.3` 產生的新專案使用 `platform-contracts-v0.7.0-preview.2` 配方。核心使用 `v0.7.0-preview.2`，Echo、Gorilla、Kafka、RabbitMQ 和 playground 僅在選取時使用 `v0.2.0-preview.1`。
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
-spine version
-```
 
 僅安裝 CLI 不會更改既有應用程式的配方，也不會啟用 Swagger UI 或 ReDoc。既有 Preview 1 和穩定版配方在明確修改前維持原本的版本固定。
 

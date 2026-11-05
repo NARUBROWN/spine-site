@@ -35,14 +35,14 @@ spine version
 
 ## 安装 Preview CLI {#preview-cli}
 
-使用 v0.7.0 Preview 时，请明确指定 CLI 标签。常规安装步骤使用稳定版的 `@latest`。
+使用 v0.7.0 Preview 时，通过 `@preview` 安装 CLI 的 Preview 分支最新提交，其中可能包含已发布标签之间的变更。常规稳定版安装使用 `@latest`。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-`spine version` 应输出 `spine-cli 0.4.3-preview.3`。新项目使用 `platform-contracts-v0.7.0-preview.2` 配方，选择核心 `v0.7.0-preview.2` 与 Echo `v0.2.0-preview.1`。其他平台与 playground 在选中时也使用 `v0.2.0-preview.1`。下方的 `spine.toml` 示例使用稳定版配方，Preview 生成的项目具有不同的 `recipe` 值。
+使用 `spine version` 查看实际安装的标签或伪版本。新项目的 `platform-contracts-preview` 配方分别解析核心及所选平台、playground 的 `@preview`，并将解析后的版本记录在 `go.mod` 中。下方的 `spine.toml` 示例使用稳定版配方。Preview 的 `--skip-install` 仍需 Go 和网络访问或模块代理缓存来解析版本，仅跳过安装与构建验证。
 
 仅安装 CLI 不会更改现有应用的配方。迁移现有应用和启用 Swagger UI、ReDoc，请参阅 [Preview 迁移指南](/zh-Hans/learn/migration/v0.7.0-preview)。
 

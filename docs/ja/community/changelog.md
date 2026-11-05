@@ -10,14 +10,18 @@
 
 通常のインストールには `@latest` を使います。現在の文書はSpine v0.6.5とCLI v0.4.2を対象とします。CLIは `spine version`、実際の依存関係は生成した `go.mod` で確認します。
 
+## Preview CLI @preview {#cli-preview-branch}
+
+CLI と新しいアプリの依存関係は Preview ブランチに追従できます。CLI は `@preview` でインストールし、新しいアプリは `platform-contracts-preview` レシピを使用します。生成と `spine update` はコアと選択したプラットフォームの `@preview` を解決し、実際のバージョンを `go.mod` に記録します。既存のバージョン付きレシピは明示的に変更するまで固定バージョンを維持します。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
+spine version
+```
+
 ## Spine CLI v0.4.3-preview.3 {#cli-preview}
 
 Preview CLI `v0.4.3-preview.3` の新しいプロジェクトは `platform-contracts-v0.7.0-preview.2` レシピを使用します。コアは `v0.7.0-preview.2`、Echo、Gorilla、Kafka、RabbitMQ と playground は選択したものに限り `v0.2.0-preview.1` を使用します。
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
-spine version
-```
 
 CLI のインストールだけでは既存アプリのレシピ変更や Swagger UI、ReDoc の有効化は行いません。既存の Preview 1 と安定版レシピは明示的に変更するまで維持します。
 

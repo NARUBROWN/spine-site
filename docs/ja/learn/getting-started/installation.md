@@ -35,14 +35,14 @@ spine version
 
 ## Preview CLI のインストール {#preview-cli}
 
-v0.7.0 Preview を使う場合は、CLI のタグを明示してインストールします。通常のインストール手順では安定版の `@latest` を使用します。
+v0.7.0 Preview を使う場合は、`@preview` で CLI の Preview ブランチの最新コミットをインストールします。公開タグ間の変更も含まれる場合があります。通常の安定版インストールには `@latest` を使用します。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-`spine version` が `spine-cli 0.4.3-preview.3` を出力することを確認してください。新しいプロジェクトは `platform-contracts-v0.7.0-preview.2` レシピを使い、コア `v0.7.0-preview.2` と Echo `v0.2.0-preview.1` を選択します。ほかのプラットフォームと playground も、選択した場合は `v0.2.0-preview.1` を使用します。下の `spine.toml` は安定版レシピの例であり、Preview で生成すると `recipe` の値が変わります。
+`spine version` で実際にインストールされたタグまたは pseudo-version を確認してください。新しいプロジェクトの `platform-contracts-preview` レシピは、コアと選択したプラットフォーム、playground をそれぞれ `@preview` で解決し、そのバージョンを `go.mod` に記録します。下の `spine.toml` は安定版レシピの例です。Preview の `--skip-install` もバージョン解決には Go とネットワークまたはモジュールプロキシのキャッシュが必要で、インストールとビルドの検証のみ省略します。
 
 CLI のインストールだけでは既存アプリのレシピは変わりません。既存アプリの移行と Swagger UI、ReDoc の有効化は [Preview 移行ガイド](/ja/learn/migration/v0.7.0-preview)を参照してください。
 

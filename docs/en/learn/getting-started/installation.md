@@ -35,14 +35,14 @@ spine version
 
 ## Install the Preview CLI {#preview-cli}
 
-To use the v0.7.0 Preview, install an explicit CLI tag. General installation instructions use `@latest` for the stable version.
+For the v0.7.0 Preview, use `@preview` to install the latest commit on the CLI’s Preview branch. This can include changes between published tags. General stable installation uses `@latest`.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-`spine version` must print `spine-cli 0.4.3-preview.3`. New projects use the `platform-contracts-v0.7.0-preview.2` recipe, selecting core `v0.7.0-preview.2` and Echo `v0.2.0-preview.1`. Other platforms and playground also use `v0.2.0-preview.1` when selected. The `spine.toml` example below shows the stable recipe; a Preview-generated project has a different `recipe` value.
+Run `spine version` to check the installed tag or pseudo-version. The `platform-contracts-preview` recipe resolves `@preview` for core and each selected platform or playground, then records the resolved versions in `go.mod`. The `spine.toml` example below shows the stable recipe. Preview’s `--skip-install` still requires Go and network access or module proxy cache for version resolution; it skips installation and build verification.
 
 Installing the CLI does not change an existing app’s recipe. Follow the [Preview migration guide](/en/learn/migration/v0.7.0-preview) to migrate an existing app and enable Swagger UI or ReDoc.
 
