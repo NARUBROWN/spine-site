@@ -17,7 +17,16 @@ Use public packages; never import `github.com/NARUBROWN/spine/internal/...` from
 
 ## v0.7.0 Preview APIs
 
-The stable instructions below target Spine v0.6.5. The new handler input contract is available from core v0.7.0-preview.1 with Echo v0.2.0-preview.1. Select playground v0.2.0-preview.1 when using validation and detailed schema descriptions. Go 1.25.5+ is required by core/Echo; playground requires Go 1.26+. Pin Preview tags explicitly. The documented CLI v0.4.2 recipe still selects stable versions.
+The stable instructions below target Spine v0.6.5. Install Preview CLI v0.4.3-preview.3 with an explicit tag:
+
+```sh
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+spine version
+```
+
+The expected output is `spine-cli 0.4.3-preview.3`. New projects use recipe `platform-contracts-v0.7.0-preview.2`, selecting core v0.7.0-preview.2 and v0.2.0-preview.1 for each selected independent platform or playground. Installing the CLI does not change existing recipes. To migrate an existing app, preserve module, entrypoint, composition, port, layout, and implementation selections in spine.toml, explicitly change recipe, review `spine update --dry-run --json`, then apply with the matching `--if-match` hash. Apply source and boot option changes separately. Go 1.25.5+ is required by core/Echo; playground requires Go 1.26+. General `@latest` installation remains the stable path.
+
+Input DTOs and runtime OpenAPI JSON are available from core v0.7.0-preview.1. Embedded Swagger UI and ReDoc registration through `boot.OpenAPIOptions.UI` requires v0.7.0-preview.2. Echo and optional playground remain at v0.2.0-preview.1.
 
 - Migration, exact version pins, and a complete application: /en/learn/migration/v0.7.0-preview
 - Runtime OpenAPI API: /en/reference/api/openapi
@@ -28,7 +37,7 @@ From v0.7.0-preview.1, query.Values/header.Values and their constructors and loo
 
 New typed inputs reject invalid numbers with HTTP 400. Use pointer fields and apply defaults only when nil to distinguish missing values from zero. Query slices combine repeated keys and comma-separated values without trimming spaces or removing empty/duplicate elements. A missing path segment is not an optional DTO field. Ordinary non-pointer JSON values reject explicit null instead of becoming zero; missing fields, pointers, maps, slices, and custom JSON decoders have separate rules. Echo Preview binds bodies without merging URL query or route parameters. Host fields read Request.Host.
 
-Runtime OpenAPI 3.1.2 is opt-in through `boot.OpenAPIOptions{Enabled: true}` under HTTP options. The default path is /openapi.json, independent of GlobalPrefix. Path/Title/Version alone do not enable it. Without a validator, only route/method information and minimum OpenAPI placeholders are described. Detailed DTO inputs require a validator implementing SchemaDescriber. A validator without that interface can still describe legacy path wrapper types and Pagination page/size/defaults. Handler-selected response statuses remain under default; outside paths-only mode, described request bodies or parameters also add the framework 400 response for binding and validation errors. Legacy dynamic lookup keys, handler-local defaults, and runtime response status branches are not inferred. Swagger UI and ReDoc are separate integrations.
+Runtime OpenAPI 3.1.2 is opt-in through `boot.OpenAPIOptions{Enabled: true}` under HTTP options. The default path is /openapi.json, independent of GlobalPrefix. Path/Title/Version alone do not enable it. Without a validator, only route/method information and minimum OpenAPI placeholders are described. Detailed DTO inputs require a validator implementing SchemaDescriber. A validator without that interface can still describe legacy path wrapper types and Pagination page/size/defaults. Handler-selected response statuses remain under default; outside paths-only mode, described request bodies or parameters also add the framework 400 response for binding and validation errors. Legacy dynamic lookup keys, handler-local defaults, and runtime response status branches are not inferred. From v0.7.0-preview.2, import `github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui` and/or `github.com/NARUBROWN/spine/pkg/openapi/ui/redoc`, then add their `New(Options{})` results to `UI: []boot.OpenAPIUI{...}` with `Enabled: true`. The default UI paths are /docs and /redoc. Each UI accepts Path and Title; the schema URL follows OpenAPIOptions.Path. Selected UI assets and license notices are embedded with go:embed and served without a CDN. UIs remain opt-in, and their paths are independent of GlobalPrefix.
 
 ## Install, plan, and generate
 

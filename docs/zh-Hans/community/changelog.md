@@ -10,6 +10,19 @@
 
 常规安装使用 `@latest`。当前文档以 Spine v0.6.5 和 CLI v0.4.2 为基准。使用 `spine version` 检查 CLI，在生成的 `go.mod` 中确认实际依赖。
 
+## Spine CLI v0.4.3-preview.3 {#cli-preview}
+
+Preview CLI `v0.4.3-preview.3` 生成的新项目使用 `platform-contracts-v0.7.0-preview.2` 配方。核心使用 `v0.7.0-preview.2`，Echo、Gorilla、Kafka、RabbitMQ 和 playground 仅在选中时使用 `v0.2.0-preview.1`。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+spine version
+```
+
+仅安装 CLI 不会更改现有应用的配方，也不会启用 Swagger UI 或 ReDoc。现有 Preview 1 和稳定版配方在明确修改前保持原有版本固定。
+
+请参阅 [Preview 安装](/zh-Hans/learn/getting-started/installation#preview-cli)、[现有应用迁移](/zh-Hans/learn/migration/v0.7.0-preview)、[CLI 标签](https://github.com/NARUBROWN/spine-cli/tree/v0.4.3-preview.3)和[三个操作系统的发布验证](https://github.com/NARUBROWN/spine-cli/actions/runs/41971655264)。
+
 ## Spine v0.7.0-preview.2 {#spine-preview-ui}
 
 核心 `v0.7.0-preview.2` 通过 `boot.OpenAPIOptions.UI` 提供可选的 Swagger UI 与 ReDoc。UI 资源和许可证声明内嵌于二进制中。默认路径为 `/docs` 与 `/redoc`，各 UI 均可设置 `Path` 和 `Title`。

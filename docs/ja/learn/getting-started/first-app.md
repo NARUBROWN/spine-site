@@ -11,6 +11,8 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+v0.7.0 Preview を使う場合は、先に [Preview CLI のインストール](/ja/learn/getting-started/installation#preview-cli)で `v0.4.3-preview.3` をインストールしてください。このページの `spine.toml` は安定版レシピの例であり、Preview CLI の新しいプロジェクトは `platform-contracts-v0.7.0-preview.2` を使用します。
+
 `spine version` でインストール済み CLI のバージョンを確認してください。 コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)で PATH 設定を確認してください。
 
 ## 2. プロジェクトの生成

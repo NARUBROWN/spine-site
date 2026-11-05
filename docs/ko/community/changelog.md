@@ -10,6 +10,19 @@
 
 일반 설치는 `@latest`를 사용합니다. 현재 문서 기준은 Spine v0.6.5와 CLI v0.4.2입니다. 설치된 CLI는 `spine version`, 실제 의존성은 생성된 `go.mod`에서 확인하세요.
 
+## Spine CLI v0.4.3-preview.3 {#cli-preview}
+
+Preview CLI `v0.4.3-preview.3`의 새 프로젝트는 `platform-contracts-v0.7.0-preview.2` 레시피를 사용합니다. 코어는 `v0.7.0-preview.2`, Echo, Gorilla, Kafka, RabbitMQ와 playground는 선택한 항목에 한해 `v0.2.0-preview.1`을 사용합니다.
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+spine version
+```
+
+CLI 설치만으로 기존 앱의 레시피를 바꾸거나 Swagger UI, ReDoc을 활성화하지 않습니다. 기존 Preview 1 및 정식 레시피는 명시적으로 변경하기 전까지 유지합니다.
+
+[Preview 설치](/ko/learn/getting-started/installation#preview-cli), [기존 앱 전환](/ko/learn/migration/v0.7.0-preview), [CLI 태그](https://github.com/NARUBROWN/spine-cli/tree/v0.4.3-preview.3), [세 운영체제의 발행 검증](https://github.com/NARUBROWN/spine-cli/actions/runs/41971655264)을 확인하세요.
+
 ## Spine v0.7.0 미리보기 2 {#spine-preview-ui}
 
 코어 `v0.7.0-preview.2`부터 `boot.OpenAPIOptions.UI`로 Swagger UI와 ReDoc을 선택적으로 제공합니다. UI 자산과 라이선스 고지를 바이너리에 포함하며 기본 경로는 `/docs`와 `/redoc`입니다. 각 UI는 `Path`와 `Title`을 설정할 수 있습니다.

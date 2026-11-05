@@ -33,6 +33,19 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 spine version
 ```
 
+## Install the Preview CLI {#preview-cli}
+
+To use the v0.7.0 Preview, install an explicit CLI tag. General installation instructions use `@latest` for the stable version.
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+spine version
+```
+
+`spine version` must print `spine-cli 0.4.3-preview.3`. New projects use the `platform-contracts-v0.7.0-preview.2` recipe, selecting core `v0.7.0-preview.2` and Echo `v0.2.0-preview.1`. Other platforms and playground also use `v0.2.0-preview.1` when selected. The `spine.toml` example below shows the stable recipe; a Preview-generated project has a different `recipe` value.
+
+Installing the CLI does not change an existing app’s recipe. Follow the [Preview migration guide](/en/learn/migration/v0.7.0-preview) to migrate an existing app and enable Swagger UI or ReDoc.
+
 ## Create a New Project
 
 Run these commands in the parent directory where you want to place the project. If a `my-app` directory already exists, use a different name.

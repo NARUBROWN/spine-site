@@ -33,6 +33,19 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 spine version
 ```
 
+## Preview CLI のインストール {#preview-cli}
+
+v0.7.0 Preview を使う場合は、CLI のタグを明示してインストールします。通常のインストール手順では安定版の `@latest` を使用します。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-preview.3
+spine version
+```
+
+`spine version` が `spine-cli 0.4.3-preview.3` を出力することを確認してください。新しいプロジェクトは `platform-contracts-v0.7.0-preview.2` レシピを使い、コア `v0.7.0-preview.2` と Echo `v0.2.0-preview.1` を選択します。ほかのプラットフォームと playground も、選択した場合は `v0.2.0-preview.1` を使用します。下の `spine.toml` は安定版レシピの例であり、Preview で生成すると `recipe` の値が変わります。
+
+CLI のインストールだけでは既存アプリのレシピは変わりません。既存アプリの移行と Swagger UI、ReDoc の有効化は [Preview 移行ガイド](/ja/learn/migration/v0.7.0-preview)を参照してください。
+
 ## 新しいプロジェクトの生成
 
 プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。

@@ -11,6 +11,8 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+使用 v0.7.0 Preview 時，請先依 [Preview CLI 安裝說明](/zh-Hant/learn/getting-started/installation#preview-cli)安裝 `v0.4.3-preview.3`。本頁的 `spine.toml` 範例使用穩定版配方，Preview CLI 的新專案使用 `platform-contracts-v0.7.0-preview.2`。
+
 使用 `spine version` 確認已安裝的 CLI 版本。 若找不到指令，請在[安裝說明](/zh-Hant/learn/getting-started/installation)中檢查 PATH 設定。
 
 ## 2. 建立專案
