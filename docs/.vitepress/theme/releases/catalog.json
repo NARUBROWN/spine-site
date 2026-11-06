@@ -1,6 +1,6 @@
 {
   "schema_version": "spine.site-releases/v1",
-  "checked_at": "2026-11-05T14:46:46Z",
+  "checked_at": "2026-11-06T10:56:59Z",
   "repositories": [
     {
       "name": "spine",
@@ -10,6 +10,22 @@
       "milestones_url": "https://github.com/NARUBROWN/spine/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine/actions",
       "tags": [
+        {
+          "version": "v0.7.0-preview.4",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.0-preview.4",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
+        {
+          "version": "v0.7.0-preview.3",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.0-preview.3",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.7.0-preview.2",
           "channel": "preview",
@@ -309,6 +325,14 @@
       "actions_url": "https://github.com/NARUBROWN/spine-cli/actions",
       "tags": [
         {
+          "version": "v0.4.3-preview.4",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.3-preview.4",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
+        {
           "version": "v0.4.3-preview.3",
           "channel": "preview",
           "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.3-preview.3",
@@ -407,6 +431,22 @@
       "actions_url": "https://github.com/NARUBROWN/spine-echo-platform/actions",
       "tags": [
         {
+          "version": "v0.2.0-preview.3",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-echo-platform/tree/v0.2.0-preview.3",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
+        {
+          "version": "v0.2.0-preview.2",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-echo-platform/tree/v0.2.0-preview.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
+        {
           "version": "v0.2.0-preview.1",
           "channel": "preview",
           "tag_url": "https://github.com/NARUBROWN/spine-echo-platform/tree/v0.2.0-preview.1",
@@ -432,6 +472,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine-gorilla-platform/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-gorilla-platform/actions",
       "tags": [
+        {
+          "version": "v0.2.0-preview.2",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-gorilla-platform/tree/v0.2.0-preview.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.2.0-preview.1",
           "channel": "preview",
@@ -459,6 +507,14 @@
       "actions_url": "https://github.com/NARUBROWN/spine-kafka-platform/actions",
       "tags": [
         {
+          "version": "v0.2.0-preview.2",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-kafka-platform/tree/v0.2.0-preview.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
+        {
           "version": "v0.2.0-preview.1",
           "channel": "preview",
           "tag_url": "https://github.com/NARUBROWN/spine-kafka-platform/tree/v0.2.0-preview.1",
@@ -484,6 +540,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/actions",
       "tags": [
+        {
+          "version": "v0.2.0-preview.2",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/v0.2.0-preview.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.2.0-preview.1",
           "channel": "preview",
@@ -528,6 +592,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine-validator-playground/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-validator-playground/actions",
       "tags": [
+        {
+          "version": "v0.2.0-preview.2",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-validator-playground/tree/v0.2.0-preview.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.2.0-preview.1",
           "channel": "preview",
