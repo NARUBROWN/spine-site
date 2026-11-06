@@ -8,6 +8,8 @@
 適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
 :::
 
+可透過 `boot.HTTPOptions.OpenAPI.UI` 選擇 Swagger UI 與 ReDoc。請參閱 [Preview 功能與啟動選項](/zh-Hant/learn/migration/preview-features#boot)，了解執行範例、TLS 與 HTTP v3 變更。
+
 使用 CLI 匯出 OpenAPI 檔案，並視需要新增 Swaggo 文件與 Swagger UI，以便從瀏覽器傳送請求。CLI 的靜態 OpenAPI 匯出，以及使用 Swaggo 的 UI 設定，分別進行。
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。

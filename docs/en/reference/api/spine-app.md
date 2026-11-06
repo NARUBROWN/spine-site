@@ -8,6 +8,8 @@ The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing
 See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
 :::
 
+Select Swagger UI and ReDoc through `boot.HTTPOptions.OpenAPI.UI`. See [Preview features and boot options](/en/learn/migration/preview-features#boot) for a runnable example, TLS, and HTTP v3 changes.
+
 `App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.6.5.
 
 ```go

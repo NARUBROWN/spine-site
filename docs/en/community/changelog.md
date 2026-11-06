@@ -1,4 +1,4 @@
-# Current releases
+# Release notes
 
 See the [version catalog](/en/community/versions) for the latest tags and next target versions.
 

@@ -5,7 +5,11 @@
 `boot.OpenAPIOptions.UI` 与内嵌 Swagger UI、ReDoc 从 `v0.7.0-preview.2` 起可用。JSON 规范生成则从 `v0.7.0-preview.1` 起提供，请区分两者的首次可用版本。
 
 ::: warning v0.7.0 Preview API
-此 API 不包含在稳定版 `v0.6.5` 中。HTTP 请使用 Echo `v0.2.0-preview.1`；如果使用 playground 进行验证与详细输入规范描述，也请选择 `v0.2.0-preview.1`。输入参数请先参阅 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)。
+此 API 不包含在稳定版 `v0.6.5` 中。当前 Preview 请同时通过 `@preview` 解析核心与所选 HTTP 平台。HTTP v3 从核心 `v0.7.0-preview.3`、Echo `v0.2.0-preview.2` 与 net/http `v0.1.0-preview.1` 起公开。最新启动选项与合并变更请参阅 [Preview 功能指南](/zh-Hans/learn/migration/preview-features)。
+:::
+
+::: warning 当前 net/http 文档 UI 限制
+2026-11-06 验证：核心 `83b1e03` 与 net/http `v0.1.0-preview.2` 组合将文档与资源的 Content-Type 覆盖为 `text/plain`，导致 Swagger UI 与 ReDoc 无法正常渲染。下面的 UI 运行示例使用 Echo `v0.2.0-preview.3`。
 :::
 
 ## 启用与启动选项 {#options}
@@ -96,10 +100,10 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 ## 提供 Swagger UI 与 ReDoc {#tools}
 
-从 `v0.7.0-preview.2` 起，在现有 `boot.Options.HTTP.OpenAPI` 中添加 `UI` 即可选择文档界面。请同时设置 `Enabled: true` 并注册 UI。只需 JSON 时省略 `UI`。显式固定核心版本，HTTP 平台继续使用现有 Preview 标签。
+从 `v0.7.0-preview.2` 起，通过 `boot.Options.HTTP.OpenAPI.UI` 选择界面。同时设置 `Enabled: true` 并注册 UI，仅提供 JSON 时省略 `UI`。以下命令解析当前 Preview 分支。请保存解析后的 `go.mod` 与 `go.sum` 以便复现。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
 ```
 
 以下是注册所选 UI 的独立应用 `main.go`。在现有应用中，将 import 和 `OpenAPI.UI` 配置添加到当前 composition。

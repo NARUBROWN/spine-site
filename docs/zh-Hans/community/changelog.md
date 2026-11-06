@@ -1,4 +1,4 @@
-# 当前版本
+# 发布说明
 
 最新标签和下一目标版本请查看[版本概览](/zh-Hans/community/versions)。
 

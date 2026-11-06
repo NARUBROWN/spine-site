@@ -5,7 +5,11 @@ Spine `v0.7.0-preview.1`부터 실제 등록한 HTTP 라우트, 핸들러 타입
 `boot.OpenAPIOptions.UI`와 임베드 Swagger UI, ReDoc은 `v0.7.0-preview.2`부터 사용할 수 있습니다. JSON 명세 생성의 최초 버전인 `v0.7.0-preview.1`과 구분하세요.
 
 ::: warning v0.7.0 미리보기 API
-이 API는 안정 버전 `v0.6.5`에 포함되지 않습니다. HTTP에는 Echo `v0.2.0-preview.1`을 사용하고, playground로 검증과 상세 입력 명세를 설명한다면 `v0.2.0-preview.1`을 선택하세요. 입력 인자는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview)을 먼저 확인하세요.
+이 API는 안정 버전 `v0.6.5`에 포함되지 않습니다. 현재 미리보기는 코어와 선택한 HTTP 플랫폼을 `@preview`로 함께 조회하세요. HTTP v3는 코어 `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1`부터 공개됐습니다. 최신 부팅 옵션과 병합 변경은 [미리보기 기능 안내](/ko/learn/migration/preview-features)를 확인하세요.
+:::
+
+::: warning net/http 문서 UI의 현재 제한
+2026-11-06 확인: 코어 `83b1e03`과 net/http `v0.1.0-preview.2` 조합은 문서와 자산의 Content-Type을 `text/plain`으로 덮어써 Swagger UI와 ReDoc이 정상 렌더링되지 않습니다. 아래 UI 실행 예제는 Echo `v0.2.0-preview.3` 조합을 기준으로 합니다.
 :::
 
 ## 활성화와 부팅 옵션 {#options}
@@ -96,10 +100,10 @@ validator가 없으면 입력 파라미터, 요청과 응답 모델, 오류 상�
 
 ## Swagger UI와 ReDoc 제공 {#tools}
 
-`v0.7.0-preview.2`부터 기존 `boot.Options.HTTP.OpenAPI`에 `UI`를 추가해 문서 화면을 선택합니다. `Enabled: true`와 UI 등록을 함께 지정하세요. JSON만 제공하려면 `UI`를 생략합니다. 코어 버전을 명시적으로 고정하고 HTTP 플랫폼은 기존 미리보기 태그를 사용합니다.
+`v0.7.0-preview.2`부터 `boot.Options.HTTP.OpenAPI.UI`로 화면을 선택합니다. `Enabled: true`와 UI 등록을 함께 지정하고 JSON만 제공하려면 `UI`를 생략합니다. 다음 명령은 현재 미리보기 브랜치를 조회합니다. 재현할 버전은 해석된 `go.mod`와 `go.sum`으로 보관하세요.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
 ```
 
 다음은 사용할 UI를 등록하는 독립 앱의 `main.go` 예제입니다. 기존 앱에는 import와 `OpenAPI.UI` 설정을 현재 composition에 반영하세요.

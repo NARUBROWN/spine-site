@@ -8,6 +8,8 @@
 适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
+可通过 `boot.HTTPOptions.OpenAPI.UI` 选择 Swagger UI 与 ReDoc。请参阅 [Preview 功能与启动选项](/zh-Hans/learn/migration/preview-features#boot)，了解运行示例、TLS 与 HTTP v3 变更。
+
 `App` 是注册构造函数、HTTP 路由、拦截器、事件消费者、WebSocket 处理器和自定义传输方式，并运行应用程序的入口。本参考介绍 Spine v0.6.5 的公开 API 和启动选项。
 
 ```go

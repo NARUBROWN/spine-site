@@ -8,6 +8,8 @@
 适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
+可通过 `boot.HTTPOptions.OpenAPI.UI` 选择 Swagger UI 与 ReDoc。请参阅 [Preview 功能与启动选项](/zh-Hans/learn/migration/preview-features#boot)，了解运行示例、TLS 与 HTTP v3 变更。
+
 使用 CLI 导出 OpenAPI 文件，按需添加 Swaggo 文档和 Swagger UI，并从浏览器发送请求。CLI 的静态 OpenAPI 导出与使用 Swaggo 的 UI 配置分别进行。
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。

@@ -8,6 +8,8 @@
 적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
 :::
 
+Swagger UI와 ReDoc은 `boot.HTTPOptions.OpenAPI.UI`로 선택할 수 있습니다. [미리보기 기능과 부팅 옵션](/ko/learn/migration/preview-features#boot)에서 실행 예제와 TLS, HTTP v3 변경을 확인하세요.
+
 `App`은 생성자, HTTP 라우트, 인터셉터, 이벤트 소비자, WebSocket 핸들러와 사용자 정의 전송 방식을 등록하고 애플리케이션을 실행하는 진입점입니다. 이 참조는 Spine v0.6.5의 공개 API와 부트 옵션을 다룹니다.
 
 ```go

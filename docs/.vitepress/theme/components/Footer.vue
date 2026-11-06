@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useData } from 'vitepress'
+import { footerNavigation, siteLocale } from '../../navigation'
 
 const { lang, page } = useData()
 
@@ -24,123 +25,31 @@ const localePath = computed(() => {
   return currentLang.value
 })
 
+const columns = computed(() => footerNavigation(siteLocale(localePath.value)))
+
 const locales = {
   ko: {
     description: '익숙한 개발 방식으로, 더 빠른 서버를. 컨트롤러와 생성자 주입을 갖춘 Go 백엔드 프레임워크.',
-    columns: [
-      {
-        title: '제품',
-        items: [
-          { text: '소개', link: '/ko/learn/getting-started/intro' }
-        ]
-      },
-      {
-        title: '리소스',
-        items: [
-          { text: '문서', link: '/ko/learn/getting-started/intro' },
-          { text: '가이드', link: '/ko/learn/tutorial/1-project-structure' },
-          { text: '변경 이력', link: '/ko/community/changelog' }
-        ]
-      },
-      {
-        title: '약관',
-        items: [
-          { text: '개인정보 처리방침', link: '#' },
-          { text: '이용약관', link: '#' },
-          { text: '보안', link: '#' }
-        ]
-      }
-    ],
     copyright: '© 2026 김원정. All rights reserved.',
     tagline: '세상의 모든 개발자들을 위해 만들었습니다.'
   },
   en: {
     description: 'Familiar patterns. Faster backends. A Go backend framework with controllers and constructor injection.',
-    columns: [
-      {
-        title: 'Product',
-        items: [
-          { text: 'Intro', link: '/en/learn/getting-started/intro' }
-        ]
-      },
-      {
-        title: 'Resources',
-        items: [
-          { text: 'Docs', link: '/en/learn/getting-started/intro' },
-          { text: 'Guides', link: '/en/learn/tutorial/1-project-structure' },
-          { text: 'Changelog', link: '/en/community/changelog' }
-        ]
-      },
-      {
-        title: 'Legal',
-        items: [
-          { text: 'Privacy Policy', link: '#' },
-          { text: 'Terms of Service', link: '#' },
-          { text: 'Security', link: '#' }
-        ]
-      }
-    ],
     copyright: '© 2026 김원정. All rights reserved.',
     tagline: 'Made for all developers in the world.'
   },
   ja: {
     description: '使い慣れた設計で、高速なサーバーを。 コントローラーとコンストラクタ注入を備えたGoバックエンドフレームワーク。',
-    columns: [
-      {
-        title: '製品',
-        items: [
-          { text: '紹介', link: '/ja/learn/getting-started/intro' }
-        ]
-      },
-      {
-        title: 'リソース',
-        items: [
-          { text: 'ドキュメント', link: '/ja/learn/getting-started/intro' },
-          { text: 'ガイド', link: '/ja/learn/tutorial/1-project-structure' },
-          { text: '変更履歴', link: '/ja/community/changelog' }
-        ]
-      },
-      {
-        title: '規約',
-        items: [
-          { text: '個人情報保護方針', link: '#' },
-          { text: '利用規約', link: '#' },
-          { text: 'セキュリティ', link: '#' }
-        ]
-      }
-    ],
     copyright: '© 2026 Wonjeong Kim. All rights reserved.',
     tagline: '世界中のすべての開発者のために作りました。'
   },
   zhHans: {
     description: '用熟悉的方式，构建更快的后端。 提供控制器与构造函数注入的Go后端框架。',
-    columns: [
-      { title: '产品', items: [{ text: '简介', link: '/zh-Hans/learn/getting-started/intro' }] },
-      { title: '资源', items: [
-        { text: '文档', link: '/zh-Hans/learn/getting-started/intro' },
-        { text: '教程', link: '/zh-Hans/learn/tutorial/1-project-structure' },
-        { text: '更新日志', link: '/zh-Hans/community/changelog' }
-      ] },
-      { title: '法律信息', items: [
-        { text: '隐私政策', link: '#' }, { text: '服务条款', link: '#' }, { text: '安全', link: '#' }
-      ] }
-    ],
     copyright: '© 2026 Wonjeong Kim. 保留所有权利。',
     tagline: '为世界各地的开发者打造。'
   },
   zhHant: {
     description: '用熟悉的方式，打造更快的後端。 提供控制器與建構函式注入的Go後端框架。',
-    columns: [
-      { title: '產品', items: [{ text: '簡介', link: '/zh-Hant/learn/getting-started/intro' }] },
-      { title: '資源', items: [
-        { text: '文件', link: '/zh-Hant/learn/getting-started/intro' },
-        { text: '教學', link: '/zh-Hant/learn/tutorial/1-project-structure' },
-        { text: '更新日誌', link: '/zh-Hant/community/changelog' }
-      ] },
-      { title: '法律資訊', items: [
-        { text: '隱私權政策', link: '#' }, { text: '服務條款', link: '#' }, { text: '安全性', link: '#' }
-      ] }
-    ],
     copyright: '© 2026 Wonjeong Kim. 保留所有權利。',
     tagline: '為世界各地的開發者打造。'
   }
@@ -160,7 +69,7 @@ const locales = {
           <p class="description">{{ content.description }}</p>
         </div>
         
-        <div v-for="col in content.columns" :key="col.title" class="footer-column">
+        <div v-for="col in columns" :key="col.title" class="footer-column">
           <h3 class="column-title">{{ col.title }}</h3>
           <ul class="column-list">
             <li v-for="item in col.items" :key="item.text">

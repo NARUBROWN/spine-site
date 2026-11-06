@@ -8,6 +8,8 @@ The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing
 See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
 :::
 
+Select Swagger UI and ReDoc through `boot.HTTPOptions.OpenAPI.UI`. See [Preview features and boot options](/en/learn/migration/preview-features#boot) for a runnable example, TLS, and HTTP v3 changes.
+
 Export an OpenAPI file with the CLI, then add Swaggo documentation and Swagger UI if you want to send requests from a browser. The CLI's static OpenAPI export and the Swaggo UI setup are separate workflows.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.

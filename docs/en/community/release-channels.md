@@ -74,9 +74,9 @@ Verified candidates progress through **Preview → RC → Production**. Merging 
 3. A maintainer reviews the plan and results and approves publication of a new tag.
 4. Install and test the published tag again, then record successful results in a release manifest.
 5. Promote the candidate to RC and then main after observation and promotion checks. Required channel version pin changes are checked by policy; other code or dependency changes require validation from a new Preview.
-6. Publish the GitHub Release after public validation of the stable tag succeeds. Core must also complete validation of the full combination with all five platforms.
+6. Publish the GitHub Release after public validation of the stable tag succeeds. Core must also complete validation of the full combination with all six platforms.
 
-Spine core and platforms follow **core candidate publication → publication of five platforms → completion of validation for the full combination**. A published core tag alone is distinct from a complete platform combination ready for promotion.
+Spine core and platforms follow **core candidate publication → publication of six platforms → completion of validation for the full combination**. A published core tag alone is distinct from a complete platform combination ready for promotion.
 
 The CLI has its own version and release schedule. A core version change does not require matching CLI version numbers. Check the selected combination when generating or updating an app.
 

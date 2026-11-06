@@ -8,6 +8,8 @@
 対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
+`boot.HTTPOptions.OpenAPI.UI` で Swagger UI と ReDoc を選択できます。[Preview の機能と起動オプション](/ja/learn/migration/preview-features#boot)で実行例、TLS、HTTP v3 の変更を確認してください。
+
 `App`は、コンストラクタ、HTTPルート、インターセプター、イベントコンシューマー、WebSocketハンドラー、ユーザー定義のトランスポートを登録し、アプリケーションを実行するためのエントリーポイントです。このリファレンスでは、Spine v0.6.5の公開APIと起動オプションを扱います。
 
 ```go

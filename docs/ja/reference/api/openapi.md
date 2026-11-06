@@ -5,7 +5,11 @@ Spine `v0.7.0-preview.1` 以降では、実際に登録した HTTP ルート、�
 `boot.OpenAPIOptions.UI` と埋め込み Swagger UI、ReDoc は `v0.7.0-preview.2` 以降で利用できます。JSON ドキュメント生成を導入した `v0.7.0-preview.1` とは提供開始バージョンが異なります。
 
 ::: warning v0.7.0 の Preview API
-この API は安定版 `v0.6.5` に含まれません。HTTP には Echo `v0.2.0-preview.1` を使用し、playground で検証と詳細な入力スキーマを記述する場合は `v0.2.0-preview.1` を選んでください。入力引数については、先に [Preview へのハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)を確認してください。
+この API は安定版 `v0.6.5` に含まれません。現在の Preview ではコアと選択した HTTP プラットフォームを `@preview` で一緒に解決してください。HTTP v3 はコア `v0.7.0-preview.3`、Echo `v0.2.0-preview.2`、net/http `v0.1.0-preview.1` から公開されています。最新の起動オプションと変更は[Preview 機能ガイド](/ja/learn/migration/preview-features)を参照してください。
+:::
+
+::: warning 現在の net/http 文書 UI の制限
+2026-11-06 確認: コア `83b1e03` と net/http `v0.1.0-preview.2` の組み合わせは文書とアセットの Content-Type を `text/plain` に上書きし、Swagger UI と ReDoc が正常に表示されません。以下の UI 実行例は Echo `v0.2.0-preview.3` を使用します。
 :::
 
 ## 有効化と起動オプション {#options}
@@ -96,10 +100,10 @@ validator がない場合、入力パラメーター、リクエストモデル�
 
 ## Swagger UI と ReDoc の提供 {#tools}
 
-`v0.7.0-preview.2` 以降では、既存の `boot.Options.HTTP.OpenAPI` に `UI` を追加してドキュメント画面を選択できます。`Enabled: true` と UI 登録を指定してください。JSON のみを提供する場合は `UI` を省略します。コアのバージョンを明示的に固定し、HTTP プラットフォームには既存の Preview タグを使用します。
+`v0.7.0-preview.2` から `boot.Options.HTTP.OpenAPI.UI` で画面を選択します。`Enabled: true` と UI 登録を指定し、JSON のみなら `UI` を省略します。次のコマンドは現在の Preview ブランチを解決します。再現用に解決後の `go.mod` と `go.sum` を保存してください。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
 ```
 
 以下は、使用する UI を登録する独立したアプリの `main.go` です。既存アプリでは、現在の composition に import と `OpenAPI.UI` の設定を追加してください。

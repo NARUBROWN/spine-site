@@ -1,4 +1,4 @@
-# 目前版本
+# 版本說明
 
 最新標籤與下一目標版本請查看[版本概覽](/zh-Hant/community/versions)。
 

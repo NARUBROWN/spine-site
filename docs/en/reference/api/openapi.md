@@ -5,7 +5,11 @@ Starting with Spine `v0.7.0-preview.1`, you can generate OpenAPI 3.1.2 JSON from
 `boot.OpenAPIOptions.UI` and embedded Swagger UI and ReDoc are available from `v0.7.0-preview.2`. This is later than `v0.7.0-preview.1`, which introduced JSON document generation.
 
 ::: warning v0.7.0 Preview APIs
-This API is not included in stable `v0.6.5`. Use Echo `v0.2.0-preview.1` for HTTP, and select playground `v0.2.0-preview.1` if you use it for validation and detailed input schema descriptions. For input parameters, first read [Migrate handler inputs to Preview](/en/learn/migration/v0.7.0-preview).
+This API is not included in stable `v0.6.5`. For current Preview, resolve core and the selected HTTP platform together at `@preview`. HTTP v3 was first published in core `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, and net/http `v0.1.0-preview.1`. See [Preview features](/en/learn/migration/preview-features) for current boot options and merged changes.
+:::
+
+::: warning Current net/http documentation UI limitation
+Verified on 2026-11-06: core `83b1e03` with net/http `v0.1.0-preview.2` overwrites document and asset Content-Type with `text/plain`, preventing Swagger UI and ReDoc from rendering correctly. The UI example below uses Echo `v0.2.0-preview.3`.
 :::
 
 ## Enable generation and configure boot options {#options}
@@ -96,10 +100,10 @@ The T in `httpx.Response[T]` describes the response body type. Status codes and 
 
 ## Serve Swagger UI and ReDoc {#tools}
 
-From `v0.7.0-preview.2`, add `UI` to your existing `boot.Options.HTTP.OpenAPI` settings to select documentation screens. Set `Enabled: true` and register the UIs. Omit `UI` to serve only JSON. Pin the core version explicitly and use the existing Preview tag for the HTTP platform.
+From `v0.7.0-preview.2`, select UIs through `boot.Options.HTTP.OpenAPI.UI`. Set `Enabled: true` and register the UIs; omit `UI` for JSON only. This command resolves the current Preview branches. Retain the resolved `go.mod` and `go.sum` for reproducibility.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
+go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
 ```
 
 The following `main.go` is a standalone app that registers the selected UIs. In an existing app, add the imports and `OpenAPI.UI` settings to your current composition.
