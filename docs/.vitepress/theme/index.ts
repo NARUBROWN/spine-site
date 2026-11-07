@@ -3,6 +3,7 @@ import DefaultTheme from 'vitepress/theme'
 import { h } from 'vue'
 import FrameworkTabs from '../components/FrameworkTabs.vue'
 import TerminalBoot from './components/TerminalBoot.vue'
+import AgentStart from './components/AgentStart.vue'
 import Footer from './components/Footer.vue'
 import BenchmarkSection from './components/BenchmarkSection.vue'
 import BenchmarkReport from './components/BenchmarkReport.vue'
@@ -19,6 +20,7 @@ export default {
         return h(DefaultTheme.Layout, null, {
             'home-hero-image': () => h(SpineWorkbench),
             'home-hero-actions-after': () => h(EnterpriseSupportBanner),
+            'home-hero-after': () => h(AgentStart),
             'layout-bottom': () => h(Footer)
         })
     },
