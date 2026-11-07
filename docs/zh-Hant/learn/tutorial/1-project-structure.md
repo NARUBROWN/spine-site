@@ -1,5 +1,9 @@
 # 專案結構
 
+::: warning Preview
+本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+:::
+
 透過 Spine CLI 建立專案並新增使用者資源。閱讀產生的檔案，了解應用程式設定程式碼應放置的位置，以及控制器、服務與儲存庫各自的職責。
 
 請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。本教學使用依功能劃分的套件，因此請在新目錄中以 `--layout legacy` 建立 `my-app`。它與[第一個應用程式](/zh-Hant/learn/getting-started/first-app)的預設 `layered-v1` 結構不同，不會自動轉換既有應用程式。

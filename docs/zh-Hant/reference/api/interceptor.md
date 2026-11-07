@@ -1,5 +1,9 @@
 # core.Interceptor
 
+::: warning Preview
+本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+:::
+
 在控制器執行前後加入驗證、日誌記錄、CORS 與交易處理的介面。在 Spine v0.6.5 中，分別實作前置處理、成功後處理、回應前處理與最終清理。
 
 ## 介面

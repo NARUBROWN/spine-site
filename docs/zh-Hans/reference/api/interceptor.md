@@ -1,5 +1,9 @@
 # core.Interceptor
 
+::: warning Preview
+本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+:::
+
 用于在控制器执行前后添加认证、日志、CORS 和事务处理的接口。在 Spine v0.6.5 中，分别实现前置处理、成功后处理、响应前处理和最终清理。
 
 ## 接口

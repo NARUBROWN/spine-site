@@ -1,5 +1,9 @@
 # 執行階段 OpenAPI
 
+::: warning Preview
+本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+:::
+
 從 Spine `v0.7.0-preview.1` 起，可以根據實際註冊的 HTTP 路由、處理器型別與 validator 描述契約產生 OpenAPI 3.1.2 JSON。
 
 `boot.OpenAPIOptions.UI` 與內嵌 Swagger UI、ReDoc 從 `v0.7.0-preview.2` 起可用。JSON 規格產生則從 `v0.7.0-preview.1` 起提供，請區分兩者的首次可用版本。

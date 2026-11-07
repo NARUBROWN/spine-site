@@ -1,5 +1,9 @@
 # JWT 登入範例
 
+::: warning Preview
+本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+:::
+
 建立註冊和登入 API，並使用登入時核發的 JWT 查詢自己的資訊。驗證攔截器只套用於 `/me`，因此註冊和登入請求不需要權杖。
 
 ## 開始前的準備

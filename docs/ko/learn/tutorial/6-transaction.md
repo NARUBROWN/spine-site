@@ -1,5 +1,9 @@
 # 트랜잭션 관리
 
+::: warning Preview
+이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+:::
+
 한 HTTP 요청에서 실행한 여러 INSERT를 하나의 트랜잭션으로 묶습니다. 요청이 성공하면 커밋하고, 중간에 실패하면 앞선 INSERT까지 롤백하는 인터셉터를 작성합니다.
 
 이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.

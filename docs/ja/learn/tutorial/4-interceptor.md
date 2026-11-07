@@ -1,5 +1,9 @@
 # インターセプター
 
+::: warning Preview
+このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+:::
+
 ユーザー取得のリクエストにロギングとデモ用の認証を追加し、リクエストがインターセプターを通過する順序を確認します。インターセプターは、複数のハンドラーで共有する認証、権限チェック、ロギング、トランザクション処理を担当します。
 
 このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。

@@ -1,5 +1,9 @@
 # JWT ログインの例
 
+::: warning Preview
+このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+:::
+
 ユーザー登録とログインの API を作り、ログイン時に発行した JWT で自分の情報を取得します。認証インターセプターは `/me` にのみ適用するため、ユーザー登録とログインはトークンなしでリクエストできます。
 
 ## 事前準備

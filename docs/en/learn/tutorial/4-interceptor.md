@@ -1,5 +1,9 @@
 # Interceptors
 
+::: warning Preview
+This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+:::
+
 Add logging and demo authentication to user lookup requests, and check the order in which requests pass through interceptors. Interceptors handle authentication, authorization checks, logging, and transactions shared by multiple handlers.
 
 The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.

@@ -1,5 +1,9 @@
 # core.Interceptor
 
+::: warning Preview
+이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+:::
+
 컨트롤러 실행 전후에 인증, 로깅, CORS와 트랜잭션 처리를 추가하는 인터페이스입니다. Spine v0.6.5에서는 사전 처리, 성공 후 처리, 응답 전 처리와 최종 정리를 각각 구현합니다.
 
 ## 인터페이스

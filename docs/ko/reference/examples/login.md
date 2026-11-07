@@ -1,5 +1,9 @@
 # JWT 로그인 예제
 
+::: warning Preview
+이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+:::
+
 회원가입과 로그인 API를 만들고, 로그인할 때 발급한 JWT로 내 정보를 조회합니다. 인증 인터셉터는 `/me`에만 적용하므로 회원가입과 로그인은 토큰 없이 요청할 수 있습니다.
 
 ## 시작 전 준비

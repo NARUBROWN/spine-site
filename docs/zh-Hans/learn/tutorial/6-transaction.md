@@ -1,5 +1,9 @@
 # 事务管理
 
+::: warning Preview
+本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+:::
+
 将一次 HTTP 请求中执行的多个 INSERT 合并到同一个事务。编写拦截器，在请求成功时提交，中途失败时连同之前的 INSERT 一并回滚。
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。

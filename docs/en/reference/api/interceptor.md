@@ -1,5 +1,9 @@
 # core.Interceptor
 
+::: warning Preview
+This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+:::
+
 An interface for adding authentication, logging, CORS, and transaction handling before and after controller execution. In Spine v0.6.5, you implement separate methods for preprocessing, processing after success, processing before the response, and final cleanup.
 
 ## Interface

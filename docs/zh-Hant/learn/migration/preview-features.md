@@ -1,5 +1,9 @@
 # v0.7.0 Preview 功能與啟動選項
 
+::: warning Preview
+以下可執行範例需要 Spine `v0.7.0-preview.7` 或更新版本。 [Preview](/zh-Hant/learn/migration/preview-controller-routes)
+:::
+
 透過啟動選項啟用 Swagger UI 與 ReDoc，並了解移轉至 HTTP v3 與 net/http 平台所需的修改。本頁也整理已合併至 Preview 的路徑處理、關閉處理與事件清理歷程變更。
 
 ::: warning 僅適用於 Preview
@@ -14,6 +18,7 @@
 | 內嵌 Swagger UI 與 ReDoc | Spine `v0.7.0-preview.2` |
 | HTTP v3、TLS 與 net/http 平台 | Spine `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1` |
 | HTTP v3 分析及 net/http 應用程式產生與更新 | CLI `v0.4.3-preview.4` |
+| 控制器路由、角色建構函式與 API 群組 | Spine `v0.7.0-preview.7`, CLI `v0.4.3-preview.8` |
 
 需要 Go 1.25.5 或更新版本。選擇 playground 驗證器時需要 Go 1.26 或更新版本。也可透過 `--platform nethttp` 選擇 net/http。使用預設 Go 代理設定時，Preview 分支中繼資料從來源儲存庫查詢，因此需要 Git。安裝 CLI 與更新應用程式相依套件是兩個操作。
 
@@ -44,7 +49,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -52,14 +59,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
     options := boot.Options{
         Address: ":8080",
         EnableGracefulShutdown: true,

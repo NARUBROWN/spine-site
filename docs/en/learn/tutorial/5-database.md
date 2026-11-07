@@ -1,5 +1,9 @@
 # Connect to a database
 
+::: warning Preview
+This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+:::
+
 ::: warning v0.7.0 Preview input API migration
 The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
 

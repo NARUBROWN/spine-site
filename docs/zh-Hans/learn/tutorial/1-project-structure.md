@@ -1,5 +1,9 @@
 # 项目结构
 
+::: warning Preview
+本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+:::
+
 使用 Spine CLI 创建项目并添加用户资源。通过阅读生成的文件，了解应用配置代码应放在何处，以及控制器、服务和仓储的作用。
 
 请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。本教程使用按功能划分的包，因此请在新目录中通过 `--layout legacy` 创建 `my-app`。它与[第一个应用](/zh-Hans/learn/getting-started/first-app)的默认 `layered-v1` 结构不同，不会自动转换现有应用。

@@ -1,5 +1,9 @@
 # プロジェクト構造
 
+::: warning Preview
+このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+:::
+
 Spine CLIでプロジェクトを作成し、ユーザーリソースを追加します。生成されたファイルを確認しながら、アプリの構成コードを置く場所と、コントローラー、サービス、リポジトリの役割を学びます。
 
 先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。このチュートリアルでは機能別パッケージを使うため、新しいディレクトリで `--layout legacy` を指定して `my-app` を作成します。[最初のアプリ](/ja/learn/getting-started/first-app)の標準 `layered-v1` とは構造が異なり、既存アプリを自動変換することはありません。

@@ -1,5 +1,9 @@
 # 拦截器
 
+::: warning Preview
+本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+:::
+
 为用户查询请求添加日志记录和演示认证，并确认请求经过拦截器的顺序。拦截器负责多个处理器共用的认证、权限检查、日志记录和事务处理。
 
 本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。

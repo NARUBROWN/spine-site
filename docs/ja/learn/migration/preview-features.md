@@ -1,5 +1,9 @@
 # v0.7.0 Preview の機能と起動オプション
 
+::: warning Preview
+以下の実行例には Spine `v0.7.0-preview.7` 以降が必要です。 [Preview](/ja/learn/migration/preview-controller-routes)
+:::
+
 起動オプションで Swagger UI と ReDoc を有効にし、HTTP v3 と net/http プラットフォームへの移行点を確認します。Preview にマージされたパス処理、終了処理、イベントのクリーンアップ履歴の変更もまとめています。
 
 ::: warning Preview 専用
@@ -14,6 +18,7 @@
 | 埋め込み Swagger UI と ReDoc | Spine `v0.7.0-preview.2` |
 | HTTP v3、TLS、net/http プラットフォーム | Spine `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1` |
 | HTTP v3 解析と net/http アプリの生成および更新 | CLI `v0.4.3-preview.4` |
+| コントローラールート、役割別生成、API グループ | Spine `v0.7.0-preview.7`, CLI `v0.4.3-preview.8` |
 
 Go 1.25.5 以上が必要です。playground 検証器を選ぶ場合は Go 1.26 以上が必要です。net/http は `--platform nethttp` で選択できます。既定の Go プロキシ設定では Preview のブランチ情報を元のリポジトリから取得するため Git が必要です。CLI のインストールとアプリ依存関係の更新は別の操作です。
 
@@ -44,7 +49,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -52,14 +59,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
     options := boot.Options{
         Address: ":8080",
         EnableGracefulShutdown: true,

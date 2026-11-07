@@ -45,6 +45,9 @@ Input DTOs and runtime OpenAPI JSON are available from core v0.7.0-preview.1. Em
 As verified on 2026-11-06, core 83b1e03 with net/http v0.1.0-preview.2 overwrites OpenAPI UI document and asset Content-Type with text/plain, so the documented UI example uses Echo v0.2.0-preview.3. HTTP status 200 alone does not establish browser rendering.
 
 - Preview features, boot options, HTTP v3 migration, and merged fixes: /en/learn/migration/preview-features
+- Preview controller routes, role registrations, API groups, and deprecated APIs: /en/learn/migration/preview-controller-routes
+
+From core v0.7.0-preview.7, App.Route is Deprecated for HTTP controllers. Register routes in api.Controller.RegisterRoutes and register the controller with constructor.Controller through app.Constructor. Old and new route registrations coexist, but duplicate method and path pairs fail preparation. General DI constructor functions remain supported. The removal version is undecided. API groups use path, api.Options(...), then handler. Static analysis does not execute user code or infer every dynamic registration.
 - Runtime OpenAPI API: /en/reference/api/openapi
 
 Declare separate pointer-to-struct parameters for body, path, query, and header sources. Use field tags such as `path:"user_id"`, `query:"page"`, and `header:"X-Request-ID"`, then read ordinary fields. Path tags match route keys by name, including case. Required fields follow the configured validator, not pointer-ness alone.

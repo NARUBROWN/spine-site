@@ -1,5 +1,9 @@
 # v0.7.0 미리보기 기능과 부팅 옵션
 
+::: warning Preview
+아래 실행 예제는 Spine `v0.7.0-preview.7` 이상이 필요합니다. [Preview](/ko/learn/migration/preview-controller-routes)
+:::
+
 Swagger UI와 ReDoc을 부팅 옵션으로 켜고, HTTP v3와 net/http 플랫폼으로 전환할 때 필요한 변경을 확인합니다. 이번에 미리보기 브랜치에 병합된 경로 처리, 종료 처리와 이벤트 정리 이력 변경도 함께 정리합니다.
 
 ::: warning 미리보기 전용
@@ -14,6 +18,7 @@ Swagger UI와 ReDoc을 부팅 옵션으로 켜고, HTTP v3와 net/http 플랫폼
 | 임베드 Swagger UI와 ReDoc | Spine `v0.7.0-preview.2` |
 | HTTP v3, TLS와 net/http 플랫폼 | Spine `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1` |
 | HTTP v3 분석과 net/http 앱 생성 및 업데이트 | CLI `v0.4.3-preview.4` |
+| 컨트롤러 라우트, 역할별 생성자와 API 그룹 | Spine `v0.7.0-preview.7`, CLI `v0.4.3-preview.8` |
 
 Go 1.25.5 이상이 필요합니다. playground 검증기를 선택하면 Go 1.26 이상이 필요합니다. `--platform nethttp`로 net/http를 선택할 수도 있습니다. 기본 Go 프록시 설정에서는 미리보기 브랜치 메타데이터를 원본에서 조회하므로 Git이 필요합니다. CLI 설치와 앱 의존성 갱신은 별개입니다.
 
@@ -44,7 +49,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -52,14 +59,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
     options := boot.Options{
         Address: ":8080",
         EnableGracefulShutdown: true,

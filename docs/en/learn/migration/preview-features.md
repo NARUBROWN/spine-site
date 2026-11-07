@@ -1,5 +1,9 @@
 # v0.7.0 Preview features and boot options
 
+::: warning Preview
+The executable example below requires Spine `v0.7.0-preview.7` or later. [Preview](/en/learn/migration/preview-controller-routes)
+:::
+
 Enable Swagger UI and ReDoc with boot options, and review the changes needed for HTTP v3 and the net/http platform. This page also covers path handling, shutdown, and event cleanup history changes merged into Preview.
 
 ::: warning Preview only
@@ -14,6 +18,7 @@ This page follows the `preview` branch and does not apply directly to stable `v0
 | Embedded Swagger UI and ReDoc | Spine `v0.7.0-preview.2` |
 | HTTP v3, TLS, and the net/http platform | Spine `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1` |
 | HTTP v3 analysis and net/http generation and updates | CLI `v0.4.3-preview.4` |
+| Controller routes, role constructors, and API groups | Spine `v0.7.0-preview.7`, CLI `v0.4.3-preview.8` |
 
 Go 1.25.5 or later is required; selecting the playground validator requires Go 1.26 or later. Use `--platform nethttp` to select net/http. With the default Go proxy settings, Preview branch metadata is queried from the source repository, so Git is required. Installing the CLI and updating app dependencies are separate operations.
 
@@ -44,7 +49,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -52,14 +59,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
     options := boot.Options{
         Address: ":8080",
         EnableGracefulShutdown: true,

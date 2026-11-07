@@ -1,5 +1,9 @@
 # JWT Login Example
 
+::: warning Preview
+This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+:::
+
 Build signup and login APIs, then retrieve your profile using the JWT issued at login. The authentication interceptor applies only to `/me`, so signup and login requests do not require a token.
 
 ## Prerequisites

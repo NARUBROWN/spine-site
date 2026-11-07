@@ -1,5 +1,9 @@
 # 프로젝트 구조
 
+::: warning Preview
+이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+:::
+
 Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. 생성된 파일을 살펴보면서 앱 구성 코드를 둘 위치와 컨트롤러, 서비스, 리포지토리의 역할을 익힙니다.
 
 먼저 [CLI 설치](/ko/learn/getting-started/installation)를 완료하세요. 이 튜토리얼은 기능별 패키지를 사용하므로 새 디렉터리에서 `--layout legacy`로 `my-app`을 생성합니다. [첫 번째 앱](/ko/learn/getting-started/first-app)의 기본 `layered-v1` 앱과 구조가 다르며, 기존 앱을 자동 변환하지 않습니다.

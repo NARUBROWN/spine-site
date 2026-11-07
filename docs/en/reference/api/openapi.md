@@ -1,5 +1,9 @@
 # Runtime OpenAPI
 
+::: warning Preview
+This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+:::
+
 Starting with Spine `v0.7.0-preview.1`, you can generate OpenAPI 3.1.2 JSON from registered HTTP routes, handler types, and the validator's description contract.
 
 `boot.OpenAPIOptions.UI` and embedded Swagger UI and ReDoc are available from `v0.7.0-preview.2`. This is later than `v0.7.0-preview.1`, which introduced JSON document generation.

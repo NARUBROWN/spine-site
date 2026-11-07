@@ -1,5 +1,9 @@
 # core.Interceptor
 
+::: warning Preview
+このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+:::
+
 コントローラーの実行前後に、認証、ログ出力、CORS、トランザクション処理を追加するインターフェースです。Spine v0.6.5では、事前処理、成功後の処理、レスポンス前の処理、最終的なクリーンアップをそれぞれ実装します。
 
 ## インターフェース

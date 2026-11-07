@@ -1,5 +1,9 @@
 # 相依性注入
 
+::: warning Preview
+本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+:::
+
 以[控制器](/zh-Hant/learn/tutorial/2-controller)中建立的 `src/user` 資源為基礎，說明建構函式註冊與相依性注入（DI）。完成後，您可以串接控制器、服務與儲存庫，並確認是否存在循環相依性或缺少建構函式。
 
 本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。

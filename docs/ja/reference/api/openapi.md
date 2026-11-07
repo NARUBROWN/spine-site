@@ -1,5 +1,9 @@
 # ランタイム OpenAPI
 
+::: warning Preview
+このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+:::
+
 Spine `v0.7.0-preview.1` 以降では、実際に登録した HTTP ルート、ハンドラーの型、validator の記述契約から OpenAPI 3.1.2 JSON を生成できます。
 
 `boot.OpenAPIOptions.UI` と埋め込み Swagger UI、ReDoc は `v0.7.0-preview.2` 以降で利用できます。JSON ドキュメント生成を導入した `v0.7.0-preview.1` とは提供開始バージョンが異なります。

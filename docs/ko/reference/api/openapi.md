@@ -1,5 +1,9 @@
 # 런타임 OpenAPI
 
+::: warning Preview
+이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+:::
+
 Spine `v0.7.0-preview.1`부터 실제 등록한 HTTP 라우트, 핸들러 타입과 validator 설명 계약으로 OpenAPI 3.1.2 JSON을 생성할 수 있습니다.
 
 `boot.OpenAPIOptions.UI`와 임베드 Swagger UI, ReDoc은 `v0.7.0-preview.2`부터 사용할 수 있습니다. JSON 명세 생성의 최초 버전인 `v0.7.0-preview.1`과 구분하세요.

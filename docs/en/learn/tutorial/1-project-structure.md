@@ -1,5 +1,9 @@
 # Project Structure
 
+::: warning Preview
+This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+:::
+
 Create a project with the Spine CLI and add a user resource. Read the generated files to learn where to put app configuration code and what controllers, services, and repositories do.
 
 Complete [CLI installation](/en/learn/getting-started/installation) first. This tutorial uses feature packages, so create `my-app` with `--layout legacy` in a new directory. Its layout differs from the default `layered-v1` app in [Your First App](/en/learn/getting-started/first-app); existing apps are not converted automatically.
