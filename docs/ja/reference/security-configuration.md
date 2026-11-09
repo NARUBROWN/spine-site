@@ -1,6 +1,6 @@
 # セキュリティ設定
 
-Spine 0.6.5はHTTP、WebSocketのサイズ、時間、接続数に制限を設けます。ブローカーの転送方針は独立したKafka、RabbitMQプラットフォームが管理します。以下の標準値は各プラットフォームv0.1.0を基準とします。
+Spine `v0.7.1` は HTTP と WebSocket のサイズ、時間、接続数を制限します。ブローカーの転送方針は独立したプラットフォームが管理します。使用するバージョンと設定も確認してください。
 
 ## 設定の検証
 
@@ -99,7 +99,7 @@ app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory
 
 ## WebSocket
 
-HTTPにはEcho、WebSocketには独立したGorilla実装を選択します。WS登録にはHTTPのupgrade対応とWS factoryの両方が必要です。検証を有効にするには `playground.New()` の結果を `spine.WithValidator` に渡します。
+HTTP は Echo または net/http、WebSocket は独立した Gorilla 実装を選びます。WebSocket ルートには HTTP upgrade 対応と WS factory が必要です。検証には `playground.New()` を `spine.WithValidator` に渡します。
 
 `boot.HTTPOptions.WebSocket`でオリジン、接続数、メッセージの制限を設定します。アプリで使用する正確なオリジンと接続数の上限を指定してください。
 
@@ -151,6 +151,10 @@ func (i *AuthInterceptor) PreHandshake(
 
 `AllowOrigins: []string{"*"}`と`AllowCredentials: true`は併用できません。起動段階で検証するには、`cors.NewValidated`を使用してください。`cors.New`も、最初のリクエストでレスポンスヘッダーを書き込む前に、構造化されたエラーを返します。
 
+CORS プリフライトは `OPTIONS`、`Origin`、`Access-Control-Request-Method` がそろった場合に判定します。許可されたリクエストは 204、拒否された出所、メソッド、ヘッダーは 403 です。通常リクエストの許可されない出所には CORS 許可ヘッダーを返しませんが、CORS はサーバーの認証やアクセス制御の代わりにはなりません。
+
+`MaxAge` は秒数のポインターです。nil はヘッダーを省略し、0 は明示的な 0 を送ります。`ExposeHeaders` は通常レスポンスで公開するヘッダーを指定し、`AllowOrigin` は静的リストで許可されない出所を追加で判定できます。認証情報の許可とワイルドカード出所は併用できません。
+
 ```go
 corsInterceptor, err := cors.NewValidated(cors.Config{
     AllowOrigins:     []string{"https://app.example.com"},
@@ -163,6 +167,59 @@ app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
 
 Cookieの名前、値、パス、ドメイン、`SameSite`、`Priority`が無効な場合、JSON、文字列、バイナリ、リダイレクトの各レスポンスは、ヘッダーや本文を書き込む前に失敗します。Unicodeや区切り文字を元の値に復元する必要がある場合は、`httpx.EncodeCookieValue`と`httpx.DecodeCookieValue`を使用してください。
+
+
+### CORS プリフライトの確認
+
+次の独立アプリを Spine `v0.7.1` と互換 Echo プラットフォームがある別の Go モジュールの `main.go` に保存して実行します。`Authorization` は許可ヘッダーに明示します。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/interceptor/cors"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/resource", func() httpx.Response[string] { return httpx.Response[string]{Body: "ok"} })
+}
+func main() {
+	maxAge := 60
+	policy, err := cors.NewValidated(cors.Config{
+		AllowOrigins:     []string{"https://app.example.com"},
+		AllowMethods:     []string{"GET"},
+		AllowHeaders:     []string{"Authorization", "Content-Type"},
+		AllowCredentials: true,
+		MaxAge:           &maxAge,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	app.InterceptorFor(boot.InterceptorHTTP, policy)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+最初のリクエストは 204 と `Access-Control-Max-Age: 60`、二つ目は 403 を返します。
+
+```bash
+curl -i -X OPTIONS -H 'Origin: https://app.example.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization' http://localhost:8080/resource
+curl -i -X OPTIONS -H 'Origin: https://app.example.com' -H 'Access-Control-Request-Method: DELETE' http://localhost:8080/resource
+```
 
 ## 運用時の制約
 

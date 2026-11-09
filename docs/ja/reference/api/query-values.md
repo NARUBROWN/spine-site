@@ -1,11 +1,7 @@
 # query.Values
 
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: warning Deprecated
+`query.Values` とその取得メソッドは `v0.7.1` で非推奨となり、既存コードとの互換性のために維持されます。新しいコードには[クエリ DTO](/ja/learn/core-concepts/query-values)を使います。一つのハンドラーで従来の入力と新しい Path、Query、Header DTO を混在させると準備時に拒否されます。[入力の移行](/ja/learn/migration/v0.7.1-preview)と [OpenAPI](/ja/reference/api/openapi)も参照してください。
 :::
 
 `query.Values`はHTTPクエリパラメータを読み取るヘルパーです。コントローラーの引数に値型の`query.Values`を宣言すると、ランタイムがリクエストのクエリ値を注入します。
@@ -236,7 +232,7 @@ func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
 - 真偽値の前後の空白は取り除きません。たとえば、`" true "`は認識できないため`def`を返します。
 - `NewValues`は、受け取ったマップをコピーしません。生成後に元のマップを変更すると、取得結果も変わります。
 
-実装は、[クエリヘルパー](https://github.com/NARUBROWN/spine/blob/v0.6.5/pkg/query/types.go)と[自動注入のコード](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/query_values_resolver.go)で確認できます。
+実装は、[クエリヘルパー](https://github.com/NARUBROWN/spine/blob/v0.7.1/pkg/query/types.go)と[自動注入のコード](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/query_values_resolver.go)で確認できます。
 
 ## 関連情報
 

@@ -1,11 +1,7 @@
 # core.ExecutionContext
 
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: info
+See [input migration](/en/learn/migration/v0.7.1-preview) for compatibility with legacy input APIs and [OpenAPI](/en/reference/api/openapi) for document options.
 :::
 
 `ExecutionContext` is an interface for reading request information and sharing values between processing stages in interceptors and the execution pipeline. It is used for HTTP requests, events, and WebSocket messages, with separate interfaces providing additional information for each transport.
@@ -146,7 +142,7 @@ type WebSocketContext interface {
 
 ### WebSocket connection request information {#websocket-request-context}
 
-v0.6.5 copies and preserves HTTP upgrade request information. The following interfaces provide access to headers, queries, cookies, the remote address, the host, and the request URI.
+v0.7.1 copies and preserves HTTP upgrade request information. The following interfaces provide access to headers, queries, cookies, the remote address, the host, and the request URI.
 
 ```go
 type WebSocketRequestContext interface {
@@ -420,14 +416,20 @@ Delegates to `ExecutionContext.Get()`. It does not provide a `Set()` method.
 
 The following code extends `src/user/user_controller.go` in a [CLI project](/en/learn/tutorial/1-project-structure). Define `User`, `AuthUser`, and the repository field in your application. Keep the generated `user.Register(app)` and root `main.go`.
 
+This excerpt requires the `core`, `input`, `httpx`, and `httperr` packages. If authentication is mandatory, apply the application policy when the value is missing too.
+
 ```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
+func (c *UserController) GetUser(ctx core.ControllerContext, userId input.Path[int64]) (httpx.Response[User], error) {
     // Read the value stored by the interceptor with Set("auth.user", ...)
     if authUser, ok := ctx.Get("auth.user"); ok {
-        _ = authUser.(*AuthUser)
+        auth, valid := authUser.(*AuthUser)
+        if !valid || auth == nil {
+            return httpx.Response[User]{}, httperr.Unauthorized("invalid authentication context")
+        }
+        _ = auth
         // ...
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -491,6 +493,8 @@ Bind(out any) error
 Binds the HTTP request body to a struct.
 
 **Example**
+
+The HTTP v3 core request view parses the body. Path and query values are not merged into a body DTO, and Spine DTO input does not call Echo Binder or JSONSerializer extensions.
 
 ```go
 var req CreateUserRequest
@@ -695,11 +699,11 @@ Input resolution components receive `core.ExecutionContext` and assert it to the
 
 For an HTTP controller's `context.Context` parameter, the runtime passes the standard context with a request-scoped event bus. For its `core.ControllerContext` parameter, it passes a view that provides only `Get()`. The default consumer and WebSocket input resolvers do not inject `ControllerContext`. The runtime's input resolution code is available in the following sources.
 
-- [HTTP path parameter resolution](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
-- [Standard context injection](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
-- [Controller read context injection](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
-- [Event input resolution](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
-- [WebSocket input resolution](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
+- [HTTP path parameter resolution](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/scalar_path_resolver.go)
+- [Standard context injection](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/std_context_resolver.go)
+- [Controller read context injection](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/controller_context_resolver.go)
+- [Event input resolution](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/event/consumer/resolver)
+- [WebSocket input resolution](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/ws/resolver)
 
 ## Behavior by protocol
 

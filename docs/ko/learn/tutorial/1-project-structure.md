@@ -1,7 +1,7 @@
 # 프로젝트 구조
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+::: info
+이 예제는 `legacy` 레이아웃의 호환 등록 방식으로 작성되었습니다. `app.Route`는 Deprecated이며 새 컨트롤러는 [컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요.
 :::
 
 Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. 생성된 파일을 살펴보면서 앱 구성 코드를 둘 위치와 컨트롤러, 서비스, 리포지토리의 역할을 익힙니다.
@@ -14,7 +14,7 @@ Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. �
 
 ```sh
 spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -51,9 +51,11 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 | 키 | 역할 |
@@ -63,7 +65,7 @@ validator = "none"
 | `composition` | 앱 구성을 검사하고 생성한 코드를 자동으로 등록할 위치 |
 | `port` | 개발 서버에서 사용할 포트 |
 | `layout` | 생성기의 파일 배치 (`legacy` 또는 `layered-v1`) |
-| `platform` | HTTP 플랫폼 (`echo` 또는 `none`) |
+| `platform` | HTTP 플랫폼 (`echo`, `nethttp` 또는 `none`) |
 | `recipe` | 호환 의존성 조합을 선택하는 레시피 |
 | `websocket_platform` | WebSocket 구현 (`none` 또는 `gorilla`) |
 | `validator` | DTO 검증 구현 (`none` 또는 `playground`) |
@@ -127,7 +129,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
     if port := os.Getenv("SPINE_PORT"); port != "" {
         address = ":" + port
     }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 

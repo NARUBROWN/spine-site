@@ -1,20 +1,6 @@
 # Runtime OpenAPI
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
-:::
-
-Starting with Spine `v0.7.0-preview.1`, you can generate OpenAPI 3.1.2 JSON from registered HTTP routes, handler types, and the validator's description contract.
-
-`boot.OpenAPIOptions.UI` and embedded Swagger UI and ReDoc are available from `v0.7.0-preview.2`. This is later than `v0.7.0-preview.1`, which introduced JSON document generation.
-
-::: warning v0.7.0 Preview APIs
-This API is not included in stable `v0.6.5`. For current Preview, resolve core and the selected HTTP platform together at `@preview`. HTTP v3 was first published in core `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, and net/http `v0.1.0-preview.1`. See [Preview features](/en/learn/migration/preview-features) for current boot options and merged changes.
-:::
-
-::: warning Current net/http documentation UI limitation
-Verified on 2026-11-06: core `83b1e03` with net/http `v0.1.0-preview.2` overwrites document and asset Content-Type with `text/plain`, preventing Swagger UI and ReDoc from rendering correctly. The UI example below uses Echo `v0.2.0-preview.3`.
-:::
+Spine `v0.7.1` generates OpenAPI 3.1.2 JSON from registered HTTP routes, handler types, and the validator description contract. The embedded Swagger UI and ReDoc can be served optionally.
 
 ## Enable generation and configure boot options {#options}
 
@@ -41,9 +27,9 @@ options := boot.Options{
 | `Path` | `/openapi.json` | Static absolute path served with GET and HEAD |
 | `Title` | `Spine API` | OpenAPI `info.title` |
 | `Version` | `unversioned` | The app's `info.version`, independent of the framework version |
-| `UI` | `nil` | `[]boot.OpenAPIUI`, available from `v0.7.0-preview.2`. Omit it to serve only the JSON document |
+| `UI` | `nil` | `[]boot.OpenAPIUI`. Omit it to serve only the JSON document |
 
-`HTTP: nil` disables both HTTP and the document resource. Setting only `Path`, `Title`, or `Version` does not enable it. To disable it, set `Enabled: false` or omit the OpenAPI options. Use the public Preview's `Enabled` option instead of the `Disabled` option used in unpublished development sources.
+`HTTP: nil` disables both HTTP and the document resource. Setting only `Path`, `Title`, or `Version` does not enable it. To disable it, set `Enabled: false` or omit the OpenAPI options.
 
 The document path is independent of `GlobalPrefix`. The options above apply `/api` to business APIs while serving the document at `/openapi.json`. A prepared app reuses the document snapshot and does not save a file automatically.
 
@@ -84,6 +70,24 @@ This function requires imports for the standard `errors` and `io` packages, `git
 
 Explicit calls to `DescribeHTTP` and `openapi.Generate` also work when automatic HTTP serving is disabled. Custom App implementations without description support return `ErrHTTPDescriptionUnavailable`.
 
+Routes of a new `api.Controller` are collected during preparation, so `DescribeHTTP` above returns `spine.ErrRoutesNotCollected`. The following function accepts an app prepared by the caller, who must also close it. Preparation can execute constructors and initialization code.
+
+```go
+func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.OpenAPIOptions, output io.Writer) error {
+    description, err := spine.DescribePreparedHTTP(prepared)
+    if err != nil {
+        return err
+    }
+    document, err := openapi.Generate(description, options)
+    if err != nil {
+        return err
+    }
+    _, err = output.Write(document)
+    return err
+}
+```
+
+
 ## Validator support and description scope {#validation}
 
 | Registration state | Generated information |
@@ -104,10 +108,10 @@ The T in `httpx.Response[T]` describes the response body type. Status codes and 
 
 ## Serve Swagger UI and ReDoc {#tools}
 
-From `v0.7.0-preview.2`, select UIs through `boot.Options.HTTP.OpenAPI.UI`. Set `Enabled: true` and register the UIs; omit `UI` for JSON only. This command resolves the current Preview branches. Retain the resolved `go.mod` and `go.sum` for reproducibility.
+Select UIs with `boot.Options.HTTP.OpenAPI.UI`. Set `Enabled: true` and register the UIs; omit `UI` for JSON only. This example pins a compatible Echo RC. Retain `go.mod` and `go.sum` for reproducibility.
 
 ```bash
-go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
 ```
 
 The following `main.go` is a standalone app that registers the selected UIs. In an existing app, add the imports and `OpenAPI.UI` settings to your current composition.
@@ -120,7 +124,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -128,14 +134,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
 
     options := boot.Options{
         Address: ":8080",
@@ -188,4 +197,4 @@ type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
 
 Preparation rejects document or asset paths that overlap existing GET, HEAD, or WebSocket routes with `OPENAPI_PATH_CONFLICT`. A nil provider or invalid UI options produce `OPENAPI_UI_INVALID`; an invalid resource path or Content-Type produces `OPENAPI_UI_RESOURCE_INVALID`.
 
-For separate UI setup on stable `v0.6.5`, see the [Swagger and OpenAPI tutorial](/en/learn/tutorial/8-swagger). See [Migrate handler inputs to Preview](/en/learn/migration/v0.7.0-preview) for input models and [spine.App](/en/reference/api/spine-app) for the stable API.
+See the [Swagger and OpenAPI tutorial](/en/learn/tutorial/8-swagger) for a complete runnable example, [input migration](/en/learn/migration/v0.7.1-preview) for input models, and [spine.App](/en/reference/api/spine-app) for the app API.

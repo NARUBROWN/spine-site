@@ -1,18 +1,14 @@
 # Execution Context (ExecutionContext)
 
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: info
+See [input migration](/en/learn/migration/v0.7.1-preview) for compatibility with legacy input APIs and [OpenAPI](/en/reference/api/openapi) for document options.
 :::
 
 Spine creates an execution context for each request or message to pass input information and execution state through the pipeline. Interceptors read and write execution state through `core.ExecutionContext`, while HTTP controllers receive only the values they need through semantic types and read-only `spine.Ctx`.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
+The `src/user` examples use the `legacy` layout from [Project Structure](/en/learn/tutorial/1-project-structure).
 
-Understanding this distinction helps you pass values stored by interceptors to controllers and determine which inputs are available in HTTP, event consumers, and WebSocket. The interfaces and behavior in this document are based on Spine v0.6.5.
+Understanding this distinction helps you pass values stored by interceptors to controllers and determine which inputs are available in HTTP, event consumers, and WebSocket. The interfaces and behavior in this document are based on Spine v0.7.1.
 
 The app handler examples are manual extensions to a [project created with the CLI](/en/learn/tutorial/1-project-structure). Keep the generated `BuildApplication` and the `user.Register(app)` call that checks for errors. The `core/` interfaces are public contracts; you do not need to copy `internal/` implementations into your app.
 
@@ -24,7 +20,7 @@ The context does not expose one large object to all code. It separates the acces
 | --- | --- | --- |
 | HTTP controller | `context.Context` | Propagate cancellation and timeouts, and publish domain events |
 | HTTP controller | `pkg/spine.Ctx` | Read values stored by interceptors |
-| HTTP controller | `path.Int`, `query.Values`, DTOs, and others | Bound request input |
+| HTTP controller | `input.Path[T]`, `input.Query[T]`, DTOs, and others | Bound request input |
 | Interceptor | `core.ExecutionContext` | Read request information, read and write the store, and run processing before and after execution |
 | HTTP argument resolver | `core.HttpRequestContext` | Interpret HTTP input such as bodies, headers, and forms |
 | Consumer argument resolver | `core.ConsumerRequestContext` | Interpret the event name and payload |
@@ -183,11 +179,11 @@ The default HTTP resolver wraps the execution context in this view before passin
 
 ### Reading Authentication Information Stored by an Interceptor
 
-The following method is an example to add to `UserController` in an app where an authentication interceptor stores `auth.user`. Import `context`, `github.com/NARUBROWN/spine/pkg/spine`, `pkg/path`, and `pkg/httpx`. In a real app, check whether `authInfo` exists and has the expected type according to your authentication policy.
+The following method is an example to add to `UserController` in an app where an authentication interceptor stores `auth.user`. Import `context`, `github.com/NARUBROWN/spine/pkg/spine`, `pkg/input`, and `pkg/httpx`. In a real app, check whether `authInfo` exists and has the expected type according to your authentication policy.
 
 ```go
 // src/user/user_controller.go
-func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId path.Int) httpx.Response[any] {
+func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId input.Path[int64]) httpx.Response[any] {
     authInfo, _ := cc.Get("auth.user")
     return httpx.Response[any]{Body: authInfo}
 }
@@ -235,11 +231,9 @@ Here, `multipart.Form` is a type from Go's standard `mime/multipart` package.
 
 ### HTTP Adapter Behavior
 
-Spine's HTTP adapter uses Echo. `Param()` first looks for values stored by the Spine router, then checks Echo's path values if none are found. `Params()` returns a copy to prevent changes to the original path map.
+In HTTP v3, Echo or net/http supplies the raw request and the core request view resolves path, query, headers, and body input. Ownership of complete header maps may vary by platform, so treat returned values as read-only.
 
-HTTP `Headers()`, however, returns the request's header map directly. Use it for reading, and do not assume that every accessor returns a copy.
-
-`Bind()` and `MultipartForm()` delegate to Echo's input handling. The default HTTP DTO resolver creates a struct pointer and passes it to `Bind()`. Declare pointers in app controllers as follows.
+`Bind()` and `MultipartForm()` are provided by the core request view. The ordinary body DTO resolver uses `Bind()`; path and query values are not merged into the body DTO. Spine DTO input does not call Echo Binder or JSONSerializer extensions.
 
 ```go
 func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User], error)
@@ -247,7 +241,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 This code is a method signature example; `CreateUserRequest` and `User` are types defined by the app. Form DTOs use `form` tags on their fields, and uploaded files can be received as `pkg/multipart.UploadedFiles`.
 
-Spine `v0.6.5` with Echo platform `v0.1.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests. [Execution Pipeline](/en/learn/core-concepts/pipeline#error-responses)
+Spine `v0.7.1` with Echo platform `v0.2.0-rc.1` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests. [Execution Pipeline](/en/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: Interpreting Event Input
 
@@ -405,10 +399,10 @@ In the following excerpt, `publish` is imported from `github.com/NARUBROWN/spine
 
 ```go
 // src/user/user_controller.go
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
+func (c *UserController) CreateOrder(ctx context.Context, orderId input.Path[int64]) httpx.Response[string] {
     // Collect events through the EventBus attached to context.Context.
     publish.Event(ctx, OrderCreated{
-        OrderID: orderId.Value,
+        OrderID: *orderId,
         At:      time.Now(),
     })
 

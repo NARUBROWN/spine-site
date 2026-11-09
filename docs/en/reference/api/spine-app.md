@@ -1,20 +1,12 @@
 # spine.App
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+::: info
+`app.Route` is retained for compatibility but deprecated. See [route migration](/en/learn/migration/preview-controller-routes), [input migration](/en/learn/migration/v0.7.1-preview), and [OpenAPI](/en/reference/api/openapi).
 :::
 
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+Select Swagger UI and ReDoc through `boot.HTTPOptions.OpenAPI.UI`. See [HTTP v3 and boot options](/en/learn/migration/preview-features#boot) for a runnable example, TLS, and HTTP v3 changes.
 
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
-:::
-
-Select Swagger UI and ReDoc through `boot.HTTPOptions.OpenAPI.UI`. See [Preview features and boot options](/en/learn/migration/preview-features#boot) for a runnable example, TLS, and HTTP v3 changes.
-
-`App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.6.5.
+`App` is the entry point for registering constructors, HTTP routes, interceptors, event consumers, WebSocket handlers, and custom transports, and for running the application. This reference covers the public API and boot options in Spine v0.7.1.
 
 ```go
 import (
@@ -71,13 +63,13 @@ app.Run(boot.Options{
 
 ## Implementation selection options {#platform-options}
 
-Select Echo for HTTP and the independent Gorilla implementation for WebSocket. Registered WS routes require both HTTP upgrade support and a WS factory. To enable validation, pass the result of `playground.New()` to `spine.WithValidator`.
+Select Echo or net/http for HTTP and the independent Gorilla implementation for WebSocket. WS routes require HTTP upgrade support and a WS factory. Pass the result of `playground.New()` to `spine.WithValidator` for validation.
 
 | Option | Implementation |
 | --- | --- |
-| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `contract/http` |
+| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `nethttpplatform.Option()` / `contract/http` |
 | `spine.WithWebSocketAdapter(factory)` | `gorillaplatform.Option()` / `contract/websocket` |
-| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / `contract/event` |
+| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / NATS / `contract/event` |
 | `spine.WithValidator(validator)` | playground / `contract/validator` |
 
 [Select platforms and DTO validation](/en/learn/getting-started/platforms)
@@ -90,19 +82,7 @@ Select Echo for HTTP and the independent Gorilla implementation for WebSocket. R
 Constructor(constructors ...any)
 ```
 
-Registers constructor functions with the dependency injection container. The container injects other registered objects according to the constructors' parameter types.
-
-**Parameters**
-
-- `constructors` - Constructor functions (variadic)
-
-**Constructor rules**
-
-- Must be a function
-- Must return exactly one value
-- Constructors that provide its parameter types must also be registered
-
-**Example**
+Accepts constructor functions and `constructor.Custom`, `Repository`, `Service`, `Controller`, or `Interceptor` role markers. Functions return exactly one value. Object role markers use a struct pointer with `Constructor(dependencies...) *Self`. Register all required dependencies; Controller and Interceptor have additional role contracts. The following is a legacy function example. See the [role registration example](/en/learn/tutorial/3-dependency-injection).
 
 ```go
 // Constructor without dependencies
@@ -148,6 +128,8 @@ Registers an HTTP route. Leading and trailing whitespace in `method` is removed,
 - `/users/:userId/posts/:postId` - Multiple parameters
 
 **Example**
+
+The `Route` examples below show alternatives. Do not register the same method and path more than once.
 
 ```go
 // Basic route
@@ -309,6 +291,8 @@ type Container interface {
 
 **Example**
 
+`Stop` waits for active RPCs and forces the server to stop when the shutdown context expires. The app supplies `MyService` and its service registration function.
+
 ```go
 type GRPCTransport struct {
     server *grpc.Server
@@ -334,8 +318,18 @@ func (t *GRPCTransport) Start() error {
 }
 
 func (t *GRPCTransport) Stop(ctx context.Context) error {
-    t.server.GracefulStop()
-    return nil
+    done := make(chan struct{})
+    go func() {
+        t.server.GracefulStop()
+        close(done)
+    }()
+    select {
+    case <-done:
+        return nil
+    case <-ctx.Done():
+        t.server.Stop()
+        return ctx.Err()
+    }
 }
 
 app.RegisterTransport(&GRPCTransport{})
@@ -348,12 +342,14 @@ RunContext(ctx context.Context, opts boot.Options) error
 Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
 
 type PreparedApplication interface {
-    Handler() http.Handler
+    HTTPAdapter() httpcontract.HTTPAdapter
     Close(ctx context.Context) error
 }
+
+func NetHTTPHandler(prepared PreparedApplication) (http.Handler, error)
 ```
 
-`RunContext` starts graceful shutdown when its context is canceled. `Prepare` prepares an app without a listener and returns `Handler()` and `Close(ctx)`. It does not start consumers or custom transports, but broker readiness and custom Init may open network connections depending on configuration. The caller owns closing the prepared result and shutting down the external HTTP server.
+`RunContext` starts graceful shutdown when its context is canceled. `Prepare` prepares the app without a listener. `HTTPAdapter()` returns the prepared adapter or nil when HTTP is disabled. `spine.NetHTTPHandler(prepared)` returns an `http.Handler` and an error for supported adapters. Do not start or stop the adapter twice; the caller shuts down the external server and closes the prepared result. Consumers and custom transports are not started, but broker readiness or custom Init can open network connections. `httpcontract` is `github.com/NARUBROWN/spine/contract/http`.
 
 ### Consumers
 
@@ -435,6 +431,8 @@ if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err
 
 WebSocket handlers accept connection IDs and message DTOs from the `ws` package as parameters. The following example stores an object for sending to each connection and broadcasts messages to all connections. Register the `ChatController` constructor with `Constructor`.
 
+The example also imports the standard `context`, `encoding/json`, `strings`, `sync`, and `time` packages. The connection list is in memory; disconnected clients are removed after a subsequent send fails.
+
 ```go
 import "github.com/NARUBROWN/spine/pkg/ws"
 
@@ -507,7 +505,7 @@ func (c *ChatController) OnMessage(
 }
 ```
 
-WebSocket registers paths on the same Echo instance as the HTTP server, so it requires `boot.Options.HTTP`. For origin, connection limit, and authentication settings, see [security configuration](/en/reference/security-configuration#websocket).
+WebSocket paths are registered on the HTTP platform, so `boot.Options.HTTP` and an HTTP platform that supports upgrades are required. See [security configuration](/en/reference/security-configuration#websocket) for origin, connection limit, and authentication settings.
 
 ### Validate
 
@@ -550,7 +548,7 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
-See [runtime OpenAPI settings](/en/reference/api/openapi#options) for additional Preview boot options. JSON documents are available from `v0.7.0-preview.1`; Swagger UI and ReDoc registration through `HTTP.OpenAPI.UI` is available from `v0.7.0-preview.2`. The [UI registration example](/en/reference/api/openapi#tools) shows the imports and configuration.
+See [runtime OpenAPI settings](/en/reference/api/openapi#options) for JSON and embedded UI options. The [UI registration example](/en/reference/api/openapi#tools) shows imports and configuration.
 
 `boot.Options` configures HTTP execution and shutdown policy. Set `HTTP` when running HTTP. Select event connections and roles through external platform `Config` values and `spine.WithEventAdapter`.
 
@@ -569,6 +567,8 @@ type Options struct {
 }
 
 type HTTPOptions struct {
+    TLS               *tls.Config
+    OpenAPI           OpenAPIOptions
     GlobalPrefix      string
     DisableRecover    bool
     ReadHeaderTimeout time.Duration
@@ -577,6 +577,7 @@ type HTTPOptions struct {
     IdleTimeout       time.Duration
     MaxHeaderBytes    int
     MaxBodyBytes      int64
+    MultipartMemoryBytes int64
     WebSocket         WebSocketOptions
 }
 ```
@@ -590,6 +591,9 @@ type HTTPOptions struct {
 
 | `HTTPOptions` field | When `0` or omitted | Constraint |
 | --- | --- | --- |
+| `TLS` | `nil`, plaintext HTTP | `*tls.Config` with certificates or certificate callback |
+| `OpenAPI` | Disabled | Document and optional UI configuration |
+| `MultipartMemoryBytes` | 32 MiB | Positive or 0, not a cap on total request memory |
 | `GlobalPrefix` | No prefix | The path rules below apply |
 | `DisableRecover` | `false`; use recovery middleware that converts panics to HTTP 500 responses | `true` disables the middleware |
 | `ReadHeaderTimeout` | 5 seconds | Must not be negative |
@@ -599,6 +603,9 @@ type HTTPOptions struct {
 | `MaxHeaderBytes` | 1 MiB | Must not be negative |
 | `MaxBodyBytes` | 32 MiB | A negative value disables the body size limit |
 | `WebSocket` | [WebSocket defaults](/en/reference/security-configuration#websocket) | `boot.WebSocketOptions` |
+
+
+The net/http platform does not support `DisableRecover: true`.
 
 ### GlobalPrefix validation rules
 
@@ -788,33 +795,24 @@ The following is the default structure of the generated `BuildApplication`.
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-	"os"
-
+	controller "example.com/my-app/src/controller"
 	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
 	"github.com/NARUBROWN/spine/pkg/boot"
-	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"os"
 )
 
-type HealthController struct{}
-
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-// BuildApplication configures the app for server startup, contract checks, and offline verification.
 func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
-	app.Constructor(NewHealthController)
-	app.Route("GET", "/health", (*HealthController).Get)
-
+	app.Constructor(
+		constructor.Controller(&controller.HealthController{}),
+	)
 	address := ":8080"
 	if port := os.Getenv("SPINE_PORT"); port != "" {
 		address = ":" + port
 	}
-	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 
@@ -824,7 +822,7 @@ After validating options, `Run` configures the dependency injection container an
 
 Once this preparation is complete, it runs consumers and custom transports' `Start` in separate goroutines, then starts the HTTP server last. Startup fails if HTTP route paths overlap ambiguously for the same method. For example, `/users/:id` and `/users/me` are treated as overlapping paths.
 
-During shutdown, it first stops incoming WebSocket and HTTP requests, waits for consumers to stop, and then calls custom transports' `Stop` in reverse initialization order. It then releases event publisher resources. For the implementation, see the [v0.6.5 startup and shutdown code](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/bootstrap/bootstrap.go).
+During shutdown, it first stops incoming WebSocket and HTTP requests, waits for consumers to stop, and then calls custom transports' `Stop` in reverse initialization order. It then releases event publisher resources. For the implementation, see the [v0.7.1 startup and shutdown code](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/bootstrap/bootstrap.go).
 
 ## Constraints and errors
 

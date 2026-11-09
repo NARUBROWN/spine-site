@@ -11,7 +11,14 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-使用 v0.7.0 Preview 时，请先按 [Preview CLI 安装说明](/zh-Hans/learn/getting-started/installation#preview-cli)通过 `@preview` 安装 CLI。本页的 `spine.toml` 示例使用稳定版配方，Preview CLI 的新项目使用 `platform-contracts-preview`。
+以下渠道选择命令与生成结果需要 CLI `v0.4.3-rc.1` 或更高版本。如果 `@latest` 安装了较旧版本，请使用以下兼容 RC。如果兼容的稳定版平台标签尚不可用，创建项目时请使用 `--channel rc` 并检查 `go.mod`。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
+`--channel main` 选择正式标签，也可以在交互式创建中选择 Main。
 
 使用 `spine version` 确认已安装的 CLI 版本。 如果找不到命令，请在[安装指南](/zh-Hans/learn/getting-started/installation)中检查 PATH 设置。
 
@@ -20,9 +27,17 @@ spine version
 在准备存放项目的父目录中运行。如果 `hello-spine` 目录已存在，请使用其他名称。
 
 ```bash
-spine new hello-spine --module example.com/hello-spine
+spine new hello-spine --module example.com/hello-spine --channel main --no-interactive
 cd hello-spine
 ```
+
+RC 渠道可能在运行时选择更新的核心 RC。要复现核心 `v0.7.1`，请在生成的项目中运行以下命令，并在 `go.mod` 中检查兼容平台版本。之后的 `spine update` 可能根据渠道再次更改版本。
+
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+
 
 `new` 根据已安装 CLI 的验证配方选择兼容的 Spine、Echo 平台和 Echo 版本，并完成依赖安装、静态契约检查和构建。请在生成的 `go.mod` 中查看所选版本。使用 `--skip-install` 时，请单独运行 `go mod tidy` 和 `go mod download all`。安装过程不会初始化应用、运行测试或启动监听器。
 
@@ -40,8 +55,7 @@ hello-spine/
 │   ├── application.go
 │   └── application_test.go
 └── src/
-    ├── controller/health_controller.go
-    └── route/route.go
+    └── controller/health_controller.go
 ```
 
 项目包含作为运行入口的 `main.go`，以及存放应用配置代码的 `internal/application` 目录。`spine.toml` 向 CLI 提供模块路径、运行入口、应用配置代码的位置和端口。
@@ -53,9 +67,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `internal/application/application.go` 中的 `BuildApplication()` 返回应用和运行选项。生成的代码注册 `HealthController` 构造函数和 `GET /health`，并显式指定 HTTP 运行选项 `boot.HTTPOptions`。

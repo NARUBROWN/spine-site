@@ -1,20 +1,6 @@
 # ランタイム OpenAPI
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
-:::
-
-Spine `v0.7.0-preview.1` 以降では、実際に登録した HTTP ルート、ハンドラーの型、validator の記述契約から OpenAPI 3.1.2 JSON を生成できます。
-
-`boot.OpenAPIOptions.UI` と埋め込み Swagger UI、ReDoc は `v0.7.0-preview.2` 以降で利用できます。JSON ドキュメント生成を導入した `v0.7.0-preview.1` とは提供開始バージョンが異なります。
-
-::: warning v0.7.0 の Preview API
-この API は安定版 `v0.6.5` に含まれません。現在の Preview ではコアと選択した HTTP プラットフォームを `@preview` で一緒に解決してください。HTTP v3 はコア `v0.7.0-preview.3`、Echo `v0.2.0-preview.2`、net/http `v0.1.0-preview.1` から公開されています。最新の起動オプションと変更は[Preview 機能ガイド](/ja/learn/migration/preview-features)を参照してください。
-:::
-
-::: warning 現在の net/http 文書 UI の制限
-2026-11-06 確認: コア `83b1e03` と net/http `v0.1.0-preview.2` の組み合わせは文書とアセットの Content-Type を `text/plain` に上書きし、Swagger UI と ReDoc が正常に表示されません。以下の UI 実行例は Echo `v0.2.0-preview.3` を使用します。
-:::
+Spine `v0.7.1` は登録された HTTP ルート、ハンドラーの型、validator の記述契約から OpenAPI 3.1.2 JSON を生成します。内蔵の Swagger UI と ReDoc も選択して提供できます。
 
 ## 有効化と起動オプション {#options}
 
@@ -41,9 +27,9 @@ options := boot.Options{
 | `Path` | `/openapi.json` | GET と HEAD で提供する静的な絶対パス |
 | `Title` | `Spine API` | OpenAPI の `info.title` |
 | `Version` | `unversioned` | アプリの `info.version`。フレームワークのバージョンとは独立 |
-| `UI` | `nil` | `v0.7.0-preview.2` 以降の `[]boot.OpenAPIUI`。省略すると JSON ドキュメントのみを提供 |
+| `UI` | `nil` | `[]boot.OpenAPIUI`。省略すると JSON ドキュメントのみを提供 |
 
-`HTTP: nil` の場合、HTTP とドキュメントのリソースはどちらも無効です。`Path`、`Title`、`Version` だけを指定しても有効にはなりません。無効にするには `Enabled: false` を設定するか、OpenAPI オプションを省略してください。未公開の開発ソースで使用していた `Disabled` ではなく、公開 Preview の `Enabled` を使用します。
+`HTTP: nil` の場合、HTTP とドキュメントのリソースはどちらも無効です。`Path`、`Title`、`Version` だけを指定しても有効にはなりません。無効にするには `Enabled: false` を設定するか、OpenAPI オプションを省略してください。
 
 ドキュメントのパスは `GlobalPrefix` から独立しています。上記のオプションは業務 API に `/api` を適用しますが、ドキュメントは `/openapi.json` で提供します。準備済みのアプリはドキュメントのスナップショットを再利用し、ファイルを自動保存しません。
 
@@ -84,6 +70,24 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 明示的に呼び出す `DescribeHTTP` と `openapi.Generate` は、HTTP での自動提供を無効にした状態でも使用できます。記述機能を持たないカスタム App は `ErrHTTPDescriptionUnavailable` を返します。
 
+新しい `api.Controller` のルートは準備中に収集されるため、上の `DescribeHTTP` は `spine.ErrRoutesNotCollected` を返します。次の関数は呼び出し側が `Prepare` したアプリを受け取ります。準備済みアプリの `Close` も呼び出し側が行います。準備中にコンストラクターや初期化コードが実行される場合があります。
+
+```go
+func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.OpenAPIOptions, output io.Writer) error {
+    description, err := spine.DescribePreparedHTTP(prepared)
+    if err != nil {
+        return err
+    }
+    document, err := openapi.Generate(description, options)
+    if err != nil {
+        return err
+    }
+    _, err = output.Write(document)
+    return err
+}
+```
+
+
 ## validator と記述の範囲 {#validation}
 
 | 登録状態 | 生成する情報 |
@@ -104,10 +108,10 @@ validator がない場合、入力パラメーター、リクエストモデル�
 
 ## Swagger UI と ReDoc の提供 {#tools}
 
-`v0.7.0-preview.2` から `boot.Options.HTTP.OpenAPI.UI` で画面を選択します。`Enabled: true` と UI 登録を指定し、JSON のみなら `UI` を省略します。次のコマンドは現在の Preview ブランチを解決します。再現用に解決後の `go.mod` と `go.sum` を保存してください。
+`boot.Options.HTTP.OpenAPI.UI` で画面を選択します。`Enabled: true` を設定して UI を登録し、JSON のみなら `UI` を省略します。以下は互換性のある Echo RC を固定する例です。再現のため `go.mod` と `go.sum` を保存してください。
 
 ```bash
-go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
 ```
 
 以下は、使用する UI を登録する独立したアプリの `main.go` です。既存アプリでは、現在の composition に import と `OpenAPI.UI` の設定を追加してください。
@@ -120,7 +124,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -128,14 +134,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
 
     options := boot.Options{
         Address: ":8080",
@@ -188,4 +197,4 @@ type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
 
 ドキュメントやアセットのパスが既存の GET、HEAD、WebSocket ルートと重なる場合、準備は `OPENAPI_PATH_CONFLICT` で失敗します。nil の提供者や不正な UI オプションは `OPENAPI_UI_INVALID`、不正なリソースパスや Content-Type は `OPENAPI_UI_RESOURCE_INVALID` になります。
 
-安定版 `v0.6.5` で UI を別途構成する場合は、[Swagger と OpenAPI チュートリアル](/ja/learn/tutorial/8-swagger)を参照してください。入力モデルは [Preview へのハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、安定版 API は [spine.App](/ja/reference/api/spine-app)を参照してください。
+実行例は [Swagger と OpenAPI チュートリアル](/ja/learn/tutorial/8-swagger)、入力モデルは[入力の移行](/ja/learn/migration/v0.7.1-preview)、アプリ API は [spine.App](/ja/reference/api/spine-app)を参照してください。

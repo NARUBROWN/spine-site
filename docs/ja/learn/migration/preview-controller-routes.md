@@ -1,10 +1,10 @@
-# Preview のコントローラーとルート移行
+# v0.7.1 のコントローラーとルート移行
 
-対象は Spine `v0.7.0-preview.7` と CLI `v0.4.3-preview.8` です。安定版 `v0.6.5` には適用できません。コアは Go 1.25.5 以上、playground バリデーターは Go 1.26 以上が必要です。全プラットフォームの組み合わせの昇格は別途確認してください。
+このガイドは Spine `v0.7.1` を対象とします。コアは Go 1.25.5 以上、playground バリデーターは Go 1.26 以上が必要です。
 
 ## コントローラーにルートを登録 {#routes}
 
-Preview では `app.Route` と、生成関数、別の route.go、メソッド式を使う HTTP コントローラー方式が Deprecated です。移行期間中は利用でき、削除バージョンは未定です。一般的な DI 生成関数は Deprecated ではありません。
+v0.7.1 では `app.Route` と、生成関数、別の route.go、メソッド式を使う HTTP コントローラー方式が Deprecated です。移行期間中は利用でき、削除バージョンは未定です。一般的な DI 生成関数は Deprecated ではありません。
 
 これは登録例であり単独で動作するアプリではありません。HTTP プラットフォームと実行設定を追加してください。
 
@@ -24,10 +24,10 @@ func (*UserController) Constructor() *UserController { return &UserController{} 
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
     users := r.Group("/users", api.Tags("Users"))
-    users.GET("/:id", api.Options(api.Summary("Get user")),
+    users.GET("/:id",
         func(p input.Path[UserPath]) httpx.Response[User] {
             return httpx.Response[User]{Body: User{ID: p.ID}}
-        })
+        }, api.Summary("Get user"))
 }
 
 func register(app interface{ Constructor(...any) }) {
@@ -45,9 +45,11 @@ Controller は `RegisterRoutes(*api.Registry)` を持つ `api.Controller`、Inte
 
 ## 入力とグループ {#groups}
 
-`input.Path[T]`, `input.Query[T]`, `input.Body[T]` の `T` は構造体です。パスとクエリはタグが優先され、タグがない場合は lowerCamel を使います。ヘッダーは `header` タグ付きの別の構造体ポインターで受け取ります。入力元ごとに分けてください。
+`input.Query[T]` と `input.Body[T]` の `T` は構造体です。パスとクエリはタグを優先し、タグがない場合は lowerCamel を使います。ヘッダーは `header` タグ付きの別の構造体ポインターで受け取ります。
 
-グループのメソッドはパス、`api.Options(...)`、ハンドラーの順です。空でも `api.Options()` を渡します。グループ外の `r.GET(path, handler, options...)` とは順序が異なります。グループは接頭辞とタグを継承し、`api.Interceptors(...)` を追加できます。`example` と `description` は文書用で、実行時のデフォルト値や検証規則ではありません。
+v0.7.1 ではパス変数ごとにスカラー `input.Path[T]` 引数をルートの順に宣言します。数を一致させ、同じハンドラーでパス DTO や従来のパスラッパーと混在させないでください。
+
+グループと Registry はどちらも `GET(path, handler, options...)` の順に指定します。グループは接頭辞とタグを継承し、`api.Interceptors(...)` を追加できます。`example` と `description` は文書用で、実行時のデフォルト値や検証規則ではありません。
 
 ## Deprecated 入力と互換性 {#deprecated}
 
@@ -61,5 +63,5 @@ Controller は `RegisterRoutes(*api.Registry)` を持つ `api.Controller`、Inte
 
 移行後に `spine contract check` と `spine verify` を実行し、実際の HTTP リクエストと仕様を確認してください。入力移行と HTTP v3 の制約は次の文書を参照してください。
 
-- [v0.7.0](/ja/learn/migration/v0.7.0-preview)
+- [v0.7.1](/ja/learn/migration/v0.7.1-preview)
 - [HTTP v3](/ja/learn/migration/preview-features#body)

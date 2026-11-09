@@ -1,45 +1,19 @@
-# v0.7.0 Preview features and boot options
+# v0.7.1 HTTP and boot options
 
-::: warning Preview
-The executable example below requires Spine `v0.7.0-preview.7` or later. [Preview](/en/learn/migration/preview-controller-routes)
-:::
+This guide covers OpenAPI UI, HTTP v3 input handling, TLS, and shutdown in Spine `v0.7.1`. When migrating an existing application, review the platform and application code together.
 
-Enable Swagger UI and ReDoc with boot options, and review the changes needed for HTTP v3 and the net/http platform. This page also covers path handling, shutdown, and event cleanup history changes merged into Preview.
+## Versions for the example {#versions}
 
-::: warning Preview only
-This page follows the `preview` branch and does not apply directly to stable `v0.6.5`. It distinguishes first published versions from current branch changes. Because `@preview` moves, retain the app source, `go.mod`, and `go.sum` together.
-:::
-
-## Versions and installation {#versions}
-
-| Feature | First published version |
-| --- | --- |
-| Source-specific input DTOs and OpenAPI JSON | Spine `v0.7.0-preview.1` |
-| Embedded Swagger UI and ReDoc | Spine `v0.7.0-preview.2` |
-| HTTP v3, TLS, and the net/http platform | Spine `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1` |
-| HTTP v3 analysis and net/http generation and updates | CLI `v0.4.3-preview.4` |
-| Controller routes, role constructors, and API groups | Spine `v0.7.0-preview.7`, CLI `v0.4.3-preview.8` |
-
-Go 1.25.5 or later is required; selecting the playground validator requires Go 1.26 or later. Use `--platform nethttp` to select net/http. With the default Go proxy settings, Preview branch metadata is queried from the source repository, so Git is required. Installing the CLI and updating app dependencies are separate operations.
+The standalone example uses core `v0.7.1` and Echo `v0.2.0-rc.1`. Go 1.25.5 or later is required. Create a module in a new directory, pin the dependencies, and save the code below as `main.go`. When stable platforms are published, select verified compatible tags and retain `go.mod` and `go.sum`.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
-spine version
-spine new preview-api --module example.com/preview-api --platform echo
-cd preview-api
-spine contract check
-spine verify
+go mod init example.com/boot-example
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
 ```
-
-For existing apps, select `recipe = "platform-contracts-preview"` as described in the [input migration guide](/en/learn/migration/v0.7.0-preview#versions). Review the changes from `spine update --dry-run`, then run the apply command shown in its output. `update` does not rewrite app source; apply the boot options and Prepared API changes yourself.
 
 ## Swagger UI and ReDoc boot options {#boot}
 
-::: warning Current net/http documentation UI limitation
-Verified on 2026-11-06: core `83b1e03` with net/http `v0.1.0-preview.2` overwrites document and asset Content-Type with `text/plain`, preventing Swagger UI and ReDoc from rendering correctly. The UI example below uses Echo `v0.2.0-preview.3`.
-:::
-
-The following `main.go` is a standalone reference app. Run it in a separate directory with dependencies prepared by the CLI above. For an existing app, add the imports and `HTTP.OpenAPI` configuration to its current composition and `BuildApplication`.
+The following is a standalone `main.go`. In an existing application, add the imports and `HTTP.OpenAPI` settings to your current composition.
 
 ```go
 package main
@@ -79,7 +53,7 @@ func main() {
             OpenAPI: boot.OpenAPIOptions{
                 Enabled: true,
                 Path:    "/openapi.json",
-                Title:   "Preview API",
+                Title:   "Example API",
                 Version: "1.0.0",
                 UI: []boot.OpenAPIUI{
                     swaggerui.New(swaggerui.Options{Path: "/docs"}),
@@ -121,7 +95,7 @@ func runTLS(app spine.App) error {
 
 ## HTTP v3 inputs and file lifetime {#body}
 
-In HTTP v3, core parses JSON, XML, urlencoded forms, and multipart through a shared implementation. Path and query values are not merged into body DTOs. Parsing happens after authentication interceptors, and each bound DTO is validated separately.
+In HTTP v3, core parses JSON, XML, urlencoded forms, and multipart through a shared implementation. Path and query values are not merged into body DTOs. Parsing and per-DTO validation occur after global interceptor `PreHandle` methods and before route interceptor `PreHandle` methods.
 
 `MaxBodyBytes: 0` means a 32 MiB total body limit; positive values set the byte limit and negative values disable it. `MultipartMemoryBytes: 0` means a 32 MiB file memory budget; positive values set that budget and negative values fail preparation. The multipart budget is not a total request memory limit; excess files spill to disk.
 
@@ -131,15 +105,15 @@ Form DTOs and uploaded files share one multipart result. Files remain valid thro
 
 Replace `PreparedApplication.Handler()` with `spine.NetHTTPHandler(prepared)`, which returns `(http.Handler, error)`. `prepared.HTTPAdapter()` returns the same prepared adapter, or nil when HTTP is disabled. Do not duplicate adapter serve or shutdown calls. The caller owns external server shutdown and `prepared.Close(ctx)`. Close blocks new entry and cleans up WebSocket connections and requests, including native middleware post-processing. Cleanup continues after the waiting context expires.
 
-Custom HTTP platforms must migrate to `spine.http-adapter/v3`, including `Serve(net.Listener, ...httpcontract.ServeOption) error` and TLS capabilities. The `adapter` and `adapter/http` aliases do not convert v2 implementations automatically. The net/http platform is an independent module and does not support `DisableRecover: true`. See the [complete HTTP v3 migration guide](https://github.com/NARUBROWN/spine/blob/preview/docs/migration/http-v3.md).
+Custom HTTP platforms must migrate to `spine.http-adapter/v3`, including `Serve(net.Listener, ...httpcontract.ServeOption) error` and TLS capabilities. The `adapter` and `adapter/http` aliases do not convert v2 implementations automatically. The net/http platform is an independent module and does not support `DisableRecover: true`. See the [complete HTTP v3 migration guide](https://github.com/NARUBROWN/spine/blob/v0.7.1/docs/migration/http-v3.md).
 
-## Additional changes in the merged PRs {#merged}
+## Additional runtime behavior {#merged}
 
-These additional changes describe the merged source in [core PR #34](https://github.com/NARUBROWN/spine/pull/34). Its next candidate is `v0.7.0-preview.5`; a candidate number does not establish tag publication or completion of the full release.
+The following path, shutdown, and event behavior is present in `v0.7.1`.
 
 - Path values: `/users/:id` and `/users/:userID/posts` bind using each route’s keys. For `/files/:name`, `a%2Fb` decodes once to `a/b`, and `a%252Fb` to `a%2Fb`. The actual path `/files/a/b` does not match that route.
 - Shutdown: later app resources are cleaned up after a WebSocket cleanup panic, and actual HTTP Serve errors are not hidden as normal shutdown.
-- Events: pass `boot.CleanupErrorHistoryOptions{MaxEntries, MaxAge}` to `spine.WithEventPublisherErrorHistory` and `spine.WithEventConsumerErrorHistory` to configure cleanup failure history per role. Defaults are the latest 32 entries and a maximum age of one hour, whichever limit is reached first. Zero uses defaults; negative values fail preflight. Log retention and already returned shutdown results do not change. CLI static analysis support for the new helpers is follow-up work.
+- Events: pass `boot.CleanupErrorHistoryOptions{MaxEntries, MaxAge}` to `spine.WithEventPublisherErrorHistory` and `spine.WithEventConsumerErrorHistory` to configure cleanup failure history per role. Defaults are the latest 32 entries and a maximum age of one hour, whichever limit is reached first. Zero uses defaults; negative values fail preflight. Log retention and already returned shutdown results do not change.
 - Nil event bodies: raw byte handlers distinguish nil tombstones from nonnil slices of length zero. DTO handlers that require a body retain their failure policy.
 - Swagger UI: fixes cover example generation for base64url, exponential multipleOf values, and contains without items.
 - Release combinations: validation includes six platforms, including net/http. A core tag or passing source CI alone does not establish completion of public combination validation.
@@ -158,7 +132,7 @@ curl -I http://localhost:8080/redoc
 ## Related documentation and merge sources {#sources}
 
 - [OpenAPI](/en/reference/api/openapi)
-- [v0.7.0](/en/learn/migration/v0.7.0-preview)
+- [v0.7.1](/en/learn/migration/v0.7.1-preview)
 - [Preview → RC → Production](/en/community/release-channels)
 - [Spine #26: OpenAPI UI](https://github.com/NARUBROWN/spine/pull/26)
 - [Spine #32: HTTP v3 / TLS](https://github.com/NARUBROWN/spine/pull/32)

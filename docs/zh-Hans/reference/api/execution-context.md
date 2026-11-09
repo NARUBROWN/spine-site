@@ -1,11 +1,7 @@
 # core.ExecutionContext
 
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
-
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info
+旧输入 API 的兼容规则请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，文档选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 `ExecutionContext` 是拦截器和执行流水线用于读取请求信息、在处理阶段之间共享值的接口。HTTP 请求、事件和 WebSocket 消息共用此接口，各传输方式还通过独立接口提供额外信息。
@@ -146,7 +142,7 @@ type WebSocketContext interface {
 
 ### WebSocket 连接请求信息 {#websocket-request-context}
 
-v0.6.5 会复制并保留 HTTP 升级请求的信息。通过以下接口，可以查询请求头、查询参数、Cookie、远程地址、主机和请求 URI。
+v0.7.1 会复制并保留 HTTP 升级请求的信息。通过以下接口，可以查询请求头、查询参数、Cookie、远程地址、主机和请求 URI。
 
 ```go
 type WebSocketRequestContext interface {
@@ -420,14 +416,20 @@ Get(key string) (any, bool)
 
 以下代码扩展了 [CLI 项目](/zh-Hans/learn/tutorial/1-project-structure)中的 `src/user/user_controller.go`。`User`、`AuthUser` 和存储库字段由应用定义。保留生成的 `user.Register(app)` 和根目录的 `main.go`。
 
+此片段需要 `core`、`input`、`httpx`、`httperr` 包。如果必须认证，也应按应用策略拒绝缺失值。
+
 ```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
+func (c *UserController) GetUser(ctx core.ControllerContext, userId input.Path[int64]) (httpx.Response[User], error) {
     // 读取拦截器通过 Set("auth.user", ...) 保存的值
     if authUser, ok := ctx.Get("auth.user"); ok {
-        _ = authUser.(*AuthUser)
+        auth, valid := authUser.(*AuthUser)
+        if !valid || auth == nil {
+            return httpx.Response[User]{}, httperr.Unauthorized("invalid authentication context")
+        }
+        _ = auth
         // ...
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -491,6 +493,8 @@ Bind(out any) error
 将 HTTP 请求体绑定到结构体。
 
 **示例**
+
+HTTP v3 核心请求视图解析请求体。路径和查询不会合并到请求体 DTO，Spine DTO 输入也不会调用 Echo Binder 或 JSONSerializer 扩展。
 
 ```go
 var req CreateUserRequest
@@ -695,11 +699,11 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 对于 HTTP 控制器的 `context.Context` 参数，运行时传递标准上下文和请求范围的事件总线；对于 `core.ControllerContext` 参数，传递仅提供 `Get()` 的视图。消费者和 WebSocket 的默认输入解析器不提供 `ControllerContext` 注入功能。运行时的输入解析代码可在以下源码中查看。
 
-- [HTTP 路径参数解析](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
-- [传递标准上下文](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
-- [传递控制器查询上下文](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
-- [事件输入解析](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
-- [WebSocket 输入解析](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
+- [HTTP 路径参数解析](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/scalar_path_resolver.go)
+- [传递标准上下文](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/std_context_resolver.go)
+- [传递控制器查询上下文](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/controller_context_resolver.go)
+- [事件输入解析](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/event/consumer/resolver)
+- [WebSocket 输入解析](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/ws/resolver)
 
 ## 不同协议的行为差异
 

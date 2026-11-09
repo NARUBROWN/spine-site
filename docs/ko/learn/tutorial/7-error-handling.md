@@ -1,20 +1,12 @@
 # 오류 처리
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
-:::
-
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
-
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+::: info
+이 튜토리얼의 `legacy` 레이아웃은 호환 `app.Route`를 사용합니다. 새 컨트롤러는 [라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요. 입력 호환 규칙은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 확인하세요.
 :::
 
 사용자 조회가 실패한 원인에 따라 HTTP 400이나 404를 반환하고, 예상하지 못한 오류의 내부 내용을 응답에서 숨깁니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 앱을 사용합니다. 기본 `layered-v1` 레이아웃은 역할별 디렉터리를 사용합니다.
 
 [첫 번째 앱](/ko/learn/tutorial/1-project-structure)과 [컨트롤러](/ko/learn/tutorial/2-controller)의 CLI 프로젝트를 사용합니다. `spine generate resource user`로 생성한 `src/user`가 필요합니다. 아래에서는 GET 핸들러를 읽기 전용 메모리 조회로 교체하므로, 데이터베이스 튜토리얼과 별도로 적용하세요. 도메인 오류와 HTTP 상태를 연결하는 코드는 직접 작성합니다.
 
@@ -83,7 +75,7 @@ import (
 
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type UserController struct{ service *UserService }
@@ -92,11 +84,11 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(id path.Int) (httpx.Response[User], error) {
-    if id.Value <= 0 {
+func (c *UserController) Get(id input.Path[int64]) (httpx.Response[User], error) {
+    if *id <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("invalid user ID")
     }
-    user, err := c.service.Find(id.Value)
+    user, err := c.service.Find(*id)
     if err != nil {
         return httpx.Response[User]{}, toHTTPError(err)
     }
@@ -264,7 +256,7 @@ curl -i http://localhost:8080/user/2
 | `/user/0` | 400 | `{"message":"invalid user ID"}` |
 | `/user/2` | 404 | `{"message":"user not found"}` |
 
-위 요청은 핸들러까지 전달된 정수 ID에 대한 처리를 확인합니다. 숫자로 해석할 수 없는 경로 값의 오류 처리는 이 예제의 `id.Value <= 0` 검증과 별개입니다.
+위 요청은 핸들러까지 전달된 정수 ID에 대한 처리를 확인합니다. 숫자로 해석할 수 없는 경로 값의 오류 처리는 이 예제의 `*id <= 0` 검증과 별개입니다.
 
 실제 DB나 인증 서비스를 연결하면 해당 서비스의 실패 경로도 직접 요청해 확인하세요. 정적 계약 검사만으로 외부 서비스의 오류 매핑을 검증할 수는 없습니다.
 

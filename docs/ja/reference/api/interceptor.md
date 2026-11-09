@@ -1,10 +1,6 @@
 # core.Interceptor
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
-:::
-
-コントローラーの実行前後に、認証、ログ出力、CORS、トランザクション処理を追加するインターフェースです。Spine v0.6.5では、事前処理、成功後の処理、レスポンス前の処理、最終的なクリーンアップをそれぞれ実装します。
+コントローラーの実行前後に、認証、ログ出力、CORS、トランザクション処理を追加するインターフェースです。Spine v0.7.1では、事前処理、成功後の処理、レスポンス前の処理、最終的なクリーンアップをそれぞれ実装します。
 
 ## インターフェース
 
@@ -65,7 +61,7 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
 
 レスポンスを実際のトランスポート層に書き込む前に、逆順で実行します。`executionErr`には、事前処理、ルーティング、入力値の解釈、コントローラー、レスポンスの準備、実行後フックで、この時点までに発生したエラーが渡されます。先に実行した`BeforeResponse`が返したエラーもまとめて、次のインターセプターに渡します。
 
-リクエストスコープのトランザクションは、この段階でコミットまたはロールバックしてください。v0.6.5はレスポンスのシリアライズと、Cookieおよびステータスコードの検証を先に行うため、レスポンスの準備に失敗した場合にロールバックできます。
+リクエストスコープのトランザクションは、この段階でコミットまたはロールバックしてください。v0.7.1はレスポンスのシリアライズと、Cookieおよびステータスコードの検証を先に行うため、レスポンスの準備に失敗した場合にロールバックできます。
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -110,19 +106,79 @@ func (i *LoggingInterceptor) AfterCompletion(
 | `boot.InterceptorWebSocket` | WebSocketメッセージとオプションの接続前処理 |
 | `boot.InterceptorAll` | 両方のスコープ |
 
+新しいコントローラーは `RegisterRoutes` で `api.Interceptors` を使い、ルートインターセプターを指定します。以下の `r` は `*api.Registry`、`handler` はアプリが定義したハンドラーです。DI を使う場合はインターセプターの生成子も登録します。[実行例](/ja/learn/tutorial/4-interceptor)を参照してください。
+
 ```go
 app.InterceptorFor(boot.InterceptorAll, auth)
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 app.InterceptorFor(boot.InterceptorWebSocket, wsRateLimiter)
 
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),
+r.GET("/admin/users/:id", handler,
+    api.Interceptors((*AuthInterceptor)(nil)),
 )
 ```
 
 `(*AuthInterceptor)(nil)`のような型付きnilポインターを登録すると、コンテナからその型のインスタンスを取得して使用します。同じ型のnilポインターは、コンテナの共有インスタンスを使用します。
 
 グローバルインターセプターに同じポインターを複数のスコープで登録すると、スコープをまとめて1回実行します。同じ型でも、異なるポインターはそれぞれ実行します。値型も、登録した項目ごとにそれぞれ実行します。
+
+### DI でルートインターセプターを登録する
+
+この独立アプリは `constructor.Interceptor` で生成契約を登録し、`api.Interceptors` に型付き nil ポインターを渡します。Spine `v0.7.1` と互換 Echo プラットフォームのある別の Go モジュールで実行してください。トークンはデモ専用です。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"log"
+)
+
+type Auth struct{}
+
+func (*Auth) Constructor() *Auth { return &Auth{} }
+
+func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	if ctx.Header("Authorization") != "Bearer demo-token" {
+		return httperr.Unauthorized("unauthorized")
+	}
+	return nil
+}
+func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	}, api.Interceptors((*Auth)(nil)))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Interceptor(&Auth{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+認証なしのリクエストは 401、デモトークンを送ると 200 とユーザー ID が返ります。
+
+```bash
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+```
 
 ## WebSocket接続前の処理
 
@@ -172,7 +228,7 @@ Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
 - `core.ErrAbortPipeline`で中断する場合は、インターセプターが必要なレスポンスを準備する必要があります。コントローラーと、それ以降の成功時の処理段階は実行しません。
 - DBコミット後に、実際のレスポンス送信が失敗する場合があります。`BeforeResponse`は、DBとネットワーク送信を原子的にまとめるものではありません。
 
-具体的な早期終了とエラーの伝播は[v0.6.5のパイプライン実装](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/pipeline/pipeline.go)、接続前処理の順序は[WebSocketランタイムの実装](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/ws/runtime.go)を参照してください。
+具体的な早期終了とエラーの伝播は[v0.7.1のパイプライン実装](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/pipeline/pipeline.go)、接続前処理の順序は[WebSocketランタイムの実装](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/ws/runtime.go)を参照してください。
 
 ## 関連情報
 

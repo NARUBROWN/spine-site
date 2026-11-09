@@ -1,14 +1,14 @@
 # JWT Login Example
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+::: info
+This example uses `v0.7.1` controllers and route interceptors. See [route migration](/en/learn/migration/preview-controller-routes) for older registration.
 :::
 
 Build signup and login APIs, then retrieve your profile using the JWT issued at login. The authentication interceptor applies only to `/me`, so signup and login requests do not require a token.
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. CLI 0.4.2 does not provide a JWT authentication generator. Create a basic project, add the authentication code below, and install `github.com/golang-jwt/jwt/v5`.
+After [installing the CLI](/en/learn/getting-started/installation), create the project with CLI `v0.4.3-rc.1` or later. Add the JWT code manually and install `github.com/golang-jwt/jwt/v5`.
 
 This example uses an in-memory store, plaintext password comparison, and a JWT secret hardcoded in the source to teach the authentication flow. Registered users disappear when the server stops. Before using this in a real service, use password hashing and a JWT secret managed through environment variables.
 
@@ -16,11 +16,13 @@ This example uses an in-memory store, plaintext password comparison, and a JWT s
 
 Prepare a basic app and the JWT dependency. Run subsequent commands from `login-example/`.
 
+The commands below select the stable dependency channel. If a compatible stable platform tag is not yet available, use `--channel rc` for validation and check the selected versions in `go.mod`.
+
 ```sh
-spine new login-example --layout legacy --module example.com/login-example
+spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive
 cd login-example
 spine doctor
-go get github.com/golang-jwt/jwt/v5
+go get github.com/golang-jwt/jwt/v5@v5.3.1
 ```
 
 ### File Layout
@@ -238,6 +240,7 @@ import (
     "example.com/login-example/src/model"
     "example.com/login-example/src/store"
 
+    "github.com/NARUBROWN/spine/pkg/api"
     spinectx "github.com/NARUBROWN/spine/pkg/spine"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
@@ -248,10 +251,14 @@ type AuthController struct {
     userStore *store.UserStore
 }
 
-func NewAuthController(userStore *store.UserStore) *AuthController {
-    return &AuthController{
-        userStore: userStore,
-    }
+func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
+    return &AuthController{userStore: userStore}
+}
+
+func (c *AuthController) RegisterRoutes(r *api.Registry) {
+    r.POST("/signup", c.Signup)
+    r.POST("/login", c.Login)
+    r.GET("/me", c.GetMe, api.Interceptors(&interceptor.AuthInterceptor{}))
 }
 
 // Registration, no authentication required
@@ -293,7 +300,7 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
 
     tokenString, err := token.SignedString(interceptor.JWTSecret)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("토큰 생성에 실패했습니다.")
+        return httpx.Response[model.LoginResponse]{}, err
     }
 
     return httpx.Response[model.LoginResponse]{
@@ -312,7 +319,10 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
         return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
     }
 
-    userID := userIDValue.(int64)
+    userID, valid := userIDValue.(int64)
+    if !valid {
+        return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+    }
     user, err := c.userStore.FindByID(userID)
     if err != nil {
         return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
@@ -335,18 +345,17 @@ import (
     "time"
 
     "example.com/login-example/src/controller"
-    "example.com/login-example/src/interceptor"
     "example.com/login-example/src/store"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/route"
+    "github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New(echoplatform.Option())
-    app.Constructor(store.NewUserStore, controller.NewAuthController)
+    app.Constructor(store.NewUserStore, constructor.Controller(&controller.AuthController{}))
 
     corsInterceptor, err := cors.NewValidated(cors.Config{
         AllowOrigins: []string{"*"},
@@ -357,11 +366,6 @@ func BuildApplication() (spine.App, boot.Options, error) {
         return nil, boot.Options{}, err
     }
     app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
-    app.Route("POST", "/signup", (*controller.AuthController).Signup)
-    app.Route("POST", "/login", (*controller.AuthController).Login)
-    app.Route("GET", "/me", (*controller.AuthController).GetMe,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
 
     return app, boot.Options{
         Address: ":8080",

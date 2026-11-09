@@ -24,9 +24,16 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+The channel selection commands and generated output below require CLI `v0.4.3-rc.1` or later. If `@latest` installs an older version, install the compatible RC below. If compatible stable platform tags are not yet available, use `--channel rc` when creating the project and check its `go.mod`.
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
 To update the CLI itself, rerun the `go install` command above. `spine update` updates project dependencies for the selected recipe; it does not update the CLI executable or rewrite application source.
 
-Use `spine version` to check the installed CLI version. Update to CLI 0.4.2 or later for the 0.6.5 recipe.
+Use `spine version` to check the installed CLI version.
 
 If the `spine` command cannot be found and you have not set `GOBIN` separately, run the following commands in Bash or Zsh to add the directory to the current session's path. To keep using it in future sessions, save the same setting in your shell startup file. If you have set `GOBIN`, add that directory instead.
 
@@ -37,23 +44,27 @@ spine version
 
 ## Install the Preview CLI {#preview-cli}
 
-For the v0.7.0 Preview, use `@preview` to install the latest commit on the CLI’s Preview branch. This can include changes between published tags. General stable installation uses `@latest`.
+Install the Preview CLI with `@preview`. This is a moving branch; choose the application dependency channel separately with `spine new --channel`. Use `main` for stable applications.
+
+```
+
+The RC channel may select a newer core RC when you run it. To reproduce core `v0.7.1`, run the following in the generated project and check the compatible platform version in `go.mod`. A later `spine update` can change the version according to the channel.
 
 ```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
-
-Run `spine version` to check the installed tag or pseudo-version. The `platform-contracts-preview` recipe resolves `@preview` for core and each selected platform or playground, then records the resolved versions in `go.mod`. The `spine.toml` example below shows the stable recipe. Preview’s `--skip-install` still requires Go and network access or module proxy cache for version resolution; it skips installation and build verification.
-
-Installing the CLI does not change an existing app’s recipe. Follow the [Preview migration guide](/en/learn/migration/v0.7.0-preview) to migrate an existing app and enable Swagger UI or ReDoc.
 
 ## Create a New Project
 
 Run these commands in the parent directory where you want to place the project. If a `my-app` directory already exists, use a different name.
 
 ```bash
-spine new my-app --module example.com/my-app
+spine new my-app --module example.com/my-app --channel main --no-interactive
 cd my-app
 ```
 
@@ -68,9 +79,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `BuildApplication()` in `internal/application/application.go` registers the components and `GET /health`. The generated `main.go` calls this function, validates the configuration with `app.Validate(options)`, and starts the server with `app.Run(options)`.

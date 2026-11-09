@@ -1,20 +1,12 @@
 # エラー処理
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
-:::
-
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: info
+このチュートリアルの `legacy` レイアウトは互換 `app.Route` を使います。新しいコントローラーは[ルートの移行](/ja/learn/migration/preview-controller-routes)、入力の互換性は[入力の移行](/ja/learn/migration/v0.7.1-preview)、仕様の設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 ユーザーの取得に失敗した原因に応じてHTTP 400または404を返し、予期しないエラーの内部情報をレスポンスに公開しないようにします。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの `src/user` の例は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成したアプリを使います。既定の `layered-v1` は役割別のディレクトリを使います。
 
 [最初のアプリ](/ja/learn/tutorial/1-project-structure)と[コントローラー](/ja/learn/tutorial/2-controller)のCLIプロジェクトを使用します。`spine generate resource user` で生成した `src/user` が必要です。以下では、GETハンドラーを読み取り専用のメモリ内検索に置き換えるため、データベースのチュートリアルとは別に適用してください。ドメインエラーとHTTPステータスを対応付けるコードは手動で作成します。
 
@@ -83,7 +75,7 @@ import (
 
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type UserController struct{ service *UserService }
@@ -92,11 +84,11 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(id path.Int) (httpx.Response[User], error) {
-    if id.Value <= 0 {
+func (c *UserController) Get(id input.Path[int64]) (httpx.Response[User], error) {
+    if *id <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("invalid user ID")
     }
-    user, err := c.service.Find(id.Value)
+    user, err := c.service.Find(*id)
     if err != nil {
         return httpx.Response[User]{}, toHTTPError(err)
     }
@@ -264,7 +256,7 @@ curl -i http://localhost:8080/user/2
 | `/user/0` | 400 | `{"message":"invalid user ID"}` |
 | `/user/2` | 404 | `{"message":"user not found"}` |
 
-上のリクエストでは、ハンドラーに渡された整数IDに対する処理を確認します。数値として解釈できないパスの値のエラー処理は、この例の `id.Value <= 0` による検証とは別です。
+上のリクエストでは、ハンドラーに渡された整数IDに対する処理を確認します。数値として解釈できないパスの値のエラー処理は、この例の `*id <= 0` による検証とは別です。
 
 実際のDBや認証サービスを接続した場合は、そのサービスが失敗する経路も実際にリクエストして確認してください。静的な契約検査だけでは、外部サービスのエラーマッピングは検証できません。
 

@@ -11,7 +11,14 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-v0.7.0 Preview を使う場合は、[Preview CLI のインストール](/ja/learn/getting-started/installation#preview-cli)で CLI を `@preview` からインストールしてください。このページの `spine.toml` は安定版レシピの例であり、Preview CLI の新しいプロジェクトは `platform-contracts-preview` を使用します。
+以下のチャンネル選択コマンドと生成結果には CLI `v0.4.3-rc.1` 以降が必要です。`@latest` が古いバージョンをインストールする場合は、以下の互換 RC を使ってください。互換性のある安定版プラットフォームタグが利用できない場合はプロジェクト作成時に `--channel rc` を使い、`go.mod` を確認してください。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
+`--channel main` は正式タグを選択します。対話形式でも Main を選択できます。
 
 `spine version` でインストール済み CLI のバージョンを確認してください。 コマンドが見つからない場合は、[インストール手順](/ja/learn/getting-started/installation)で PATH 設定を確認してください。
 
@@ -20,9 +27,17 @@ v0.7.0 Preview を使う場合は、[Preview CLI のインストール](/ja/lear
 プロジェクトを配置する親ディレクトリで実行します。`hello-spine`ディレクトリがすでにある場合は、別の名前を使ってください。
 
 ```bash
-spine new hello-spine --module example.com/hello-spine
+spine new hello-spine --module example.com/hello-spine --channel main --no-interactive
 cd hello-spine
 ```
+
+RC チャンネルは実行時により新しいコア RC を選択する場合があります。コア `v0.7.1` を再現するには生成したプロジェクトで以下を実行し、互換プラットフォームのバージョンも `go.mod` で確認してください。後の `spine update` はチャンネルに従ってバージョンを変更する場合があります。
+
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+
 
 `new` はインストール済み CLI の検証済みレシピで互換性のある Spine、Echo プラットフォーム、Echo のバージョンを選択し、依存関係のインストール、静的契約の検査、ビルドを完了します。選択されたバージョンは生成された `go.mod` で確認してください。`--skip-install` を使った場合は、別途 `go mod tidy` と `go mod download all` を実行します。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
 
@@ -40,8 +55,7 @@ hello-spine/
 │   ├── application.go
 │   └── application_test.go
 └── src/
-    ├── controller/health_controller.go
-    └── route/route.go
+    └── controller/health_controller.go
 ```
 
 プロジェクトには、実行の起点となる`main.go`と、アプリの構成コードを含む`internal/application`ディレクトリがあります。`spine.toml`は、モジュールパス、エントリーポイント、アプリの構成コードの場所とポートをCLIに伝えます。
@@ -53,9 +67,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `internal/application/application.go`の`BuildApplication()`は、アプリと実行オプションを返します。生成されたコードは`HealthController`のコンストラクタと`GET /health`を登録し、HTTPの実行オプションとして`boot.HTTPOptions`を明示します。

@@ -1,24 +1,82 @@
-# SwaggerとOpenAPIドキュメント
+# Swagger と OpenAPI
 
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
+Spine `v0.7.1` は登録された HTTP ルートから OpenAPI JSON を生成し、内蔵 Swagger UI と ReDoc を提供できます。このチュートリアルでは独立したアプリで文書と画面を実行し、CLI の静的エクスポートを確認します。
 
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
+## 1. アプリを準備する
 
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
-:::
+別の Go モジュールに次の依存関係をインストールします。Echo RC はこの例で検証した組み合わせです。デプロイ時は公開済みの互換プラットフォームタグと `go.mod`、`go.sum` を固定してください。
 
-`boot.HTTPOptions.OpenAPI.UI` で Swagger UI と ReDoc を選択できます。[Preview の機能と起動オプション](/ja/learn/migration/preview-features#boot)で実行例、TLS、HTTP v3 の変更を確認してください。
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+```
 
-CLIでOpenAPIファイルをエクスポートし、必要に応じてSwaggoのドキュメントとSwagger UIを追加して、ブラウザーからリクエストを送信します。CLIによる静的なOpenAPIのエクスポートと、Swaggoを使用するUIの構成は、それぞれ別に行います。
+次のコードを `main.go` に保存し、`go run .` で実行します。`Enabled` を省略すると自動提供は無効です。JSON のみを提供する場合は `UI` を省略します。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
+```go
+package main
 
-[最初のアプリ](/ja/learn/tutorial/1-project-structure)で作成した `example.com/my-app` プロジェクトを使用します。先に[コントローラー](/ja/learn/tutorial/2-controller)の `spine generate resource user` で `src/user` を生成してください。別のモジュールパスを使用した場合は、以下のimportパスの `example.com/my-app` の部分だけをそのモジュールパスに置き換え、末尾の `/docs` は残してください。コマンドはプロジェクトルートで実行します。
+import (
+    "log"
 
-## CLIによるOpenAPIのエクスポート
+    "github.com/NARUBROWN/spine"
+    echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
+    "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
+    "github.com/NARUBROWN/spine/pkg/httpx"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+)
 
-CLIは、登録されたルートとハンドラーのシグネチャからOpenAPI 3.1ドキュメントを生成します。
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
+}
+
+func main() {
+    app := spine.New(echoplatform.Option())
+    app.Constructor(constructor.Controller(&Controller{}))
+
+    options := boot.Options{
+        Address: ":8080",
+        HTTP: &boot.HTTPOptions{
+            OpenAPI: boot.OpenAPIOptions{
+                Enabled: true,
+                Title:   "Example API",
+                Version: "1.0.0",
+                UI: []boot.OpenAPIUI{
+                    swaggerui.New(swaggerui.Options{}),
+                    redoc.New(redoc.Options{}),
+                },
+            },
+        },
+    }
+    if err := app.Run(options); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+## 2. HTTP で確認する
+
+別のターミナルから文書と画面にリクエストします。三つのリソースは 200 を返します。ブラウザーで `/docs` または `/redoc` を開くこともできます。
+
+```bash
+curl -i http://localhost:8080/openapi.json
+curl -I http://localhost:8080/docs
+curl -I http://localhost:8080/redoc
+```
+
+文書と UI は業務インターセプターを実行しません。アクセスを制限する場合は HTTP ミドルウェアまたはプロキシにポリシーを設定してください。
+
+## 3. CLI で静的文書を出力する
+
+[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で作成したアプリのルートで実行します。このコマンドはアプリを実行せずにソースを解析します。既存ファイルを `--force` で置き換える前に内容を確認してください。
 
 ```bash
 spine doctor
@@ -26,257 +84,8 @@ spine contract check
 spine contract export --format openapi --output openapi.json
 ```
 
-生成された `openapi.json` で `/health` と `/user/{id}` を確認します。Spineの `/user/:id` はOpenAPIでは `/user/{id}` と表され、`x-spine-*` フィールドには分析の根拠と限界が記録されます。たとえば、実行時に選択されるレスポンスのステータスコードは、静的解析だけでは確定できません。
-
-このコマンドはドキュメントファイルだけを生成します。Swagger UIが必要な場合は、次の手順に進んでください。既存のファイルを置き換える場合は、内容を確認してから `--force` を使用します。
-
-## オプション: SwaggoとSwagger UI
-
-SwaggoでSwagger 2.0ドキュメントを作成し、Echoのトランスポート層にUIのルートを追加します。ファイルと登録コードは手動で作成します。CLIの `openapi.json` とSwaggoの `docs/swagger.json` は別のドキュメントであるため、それぞれ更新する必要があります。
-
-### 1. ツールのインストール
-
-```bash
-go install github.com/swaggo/swag/cmd/swag@v1.16.6
-go get github.com/swaggo/swag@v1.16.6 github.com/swaggo/http-swagger@v1.3.4
-```
-
-### 2. APIの基本情報を追加
-
-`internal/application/application.go` の `BuildApplication()` の直前に、次のコメントを追加します。生成された `main.go` と、`spine.toml` の `composition = "./internal/application"` 設定は維持します。
-
-```go
-// @title Hello Spine API
-// @version 1.0.0
-// @description Spine HTTP API
-// @host localhost:8080
-// @BasePath /
-func BuildApplication() (spine.App, boot.Options, error) {
-    // ...
-}
-```
-
-### 3. GETハンドラーのドキュメント化
-
-生成された `src/user/user_controller.go` を次のコードに置き換えます。`UserIDResponse` は、レスポンスのスキーマをドキュメント化するために追加した型です。このハンドラーはパスのIDを返し、`/user/1` のレスポンスJSONは従来と同じ `{"id":1}` です。DBからユーザーを取得する処理は行いません。
-
-```go
-package user
-
-import (
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-)
-
-type UserController struct{ service *UserService }
-
-func NewUserController(service *UserService) *UserController {
-    return &UserController{service: service}
-}
-
-type UserIDResponse struct {
-    ID int64 `json:"id" example:"1"`
-}
-
-// Get godoc
-// @Summary Get user ID
-// @Tags users
-// @Produce json
-// @Param id path int true "User ID"
-// @Success 200 {object} UserIDResponse
-// @Router /user/{id} [get]
-func (c *UserController) Get(id path.Int) httpx.Response[UserIDResponse] {
-    return httpx.Response[UserIDResponse]{Body: UserIDResponse{ID: id.Value}}
-}
-```
-
-### 4. 先にdocsパッケージを生成
-
-次のコマンドでドキュメントのパッケージを生成します。生成前は、まだ存在しない `example.com/my-app/docs` をインポートしないでください。`--parseInternal` は、APIの基本情報があるinternalパッケージも読み取るように指定します。
-
-```bash
-swag init -g internal/application/application.go --parseInternal
-```
-
-`docs/docs.go`、`docs/swagger.json`、`docs/swagger.yaml` が生成されます。`docs.go` の `init` 関数がドキュメントを登録するため、次の手順ではこのパッケージを副作用を目的とするimportとして追加します。生成されたファイルは直接編集しません。
-
-### 5. UIの接続
-
-`internal/application/application.go` のimportブロックに追加します。
-
-```go
-import (
-    _ "example.com/my-app/docs"
-    "github.com/labstack/echo/v5"
-    httpSwagger "github.com/swaggo/http-swagger"
-)
-```
-
-Echo の拡張はプラットフォーム作成時に型付きの `WithEcho` オプションで登録します。既存の `app := spine.New(echoplatform.Option())` を以下のコードに置き換え、その後のコンストラクターとルートの登録は維持してください。`App.Transport` は Spine v0.6.0 で削除されました。
-
-```go
-app := spine.New(echoplatform.Option(echoplatform.WithEcho(func(e *echo.Echo) {
-    e.GET("/swagger/*", echo.WrapHandler(httpSwagger.WrapHandler))
-})))
-```
-
-### 6. 検証と実行
-
-```bash
-gofmt -w internal/application/application.go src/user/user_controller.go
-go mod tidy
-go mod download all
-spine contract check
-spine verify
-spine dev
-```
-
-ブラウザーで `http://localhost:8080/swagger/index.html` を開き、GETルートが表示されることを確認します。`/swagger/doc.json` では、生成したSwagger 2.0ドキュメントが返されるはずです。UIのTry it outから `/user/1` にリクエストすると、HTTP 200と `{"id":1}` が返ります。
-
-プラットフォームオプションで追加した native Echo ルートは、Spine の HTTP インターセプターと応答 staging を経由せず、静的な Spine ルート契約にも含まれません。実際の動作を別途確認してください。
-
-## 機能拡張に使用するコメントとDTO
-
-以下のタグとDTOは、機能を追加する際の参考例です。`resource` ジェネレーターは、これらのリクエスト型とレスポンス型や、POST、PUT、DELETEハンドラーを生成しません。`src/user` の `package user` に必要な型を追加し、実際のルートとレスポンスのステータスコードに合わせてコメントを記述してください。
-
-リクエストDTOはハンドラーでポインタとして受け取ります。`example`、`enums`、`minimum` などのタグは、ドキュメントに使用する情報です。入力検証を自動で実行するものではありません。
-
-### 基本のコメントタグ
-
-| タグ | 説明 | 例 |
-|------|------|------|
-| `@Summary` | 1行の要約 | `ユーザーの取得` |
-| `@Description` | 詳細な説明 | `IDでユーザー情報を取得します` |
-| `@Tags` | グループのタグ | `users` |
-| `@Router` | パスとメソッド | `/user [get]` |
-
-### リクエストタグ
-
-| タグ | 説明 | 例 |
-|------|------|------|
-| `@Accept` | リクエストのContent-Type | `json` |
-| `@Produce` | レスポンスのContent-Type | `json` |
-| `@Param` | パラメーターの定義 | `id query int true "User ID"` |
-
-### レスポンスタグ
-
-| タグ | 説明 | 例 |
-|------|------|------|
-| `@Success` | 成功時のレスポンス | `200 {object} UserResponse` |
-| `@Failure` | 失敗時のレスポンス | `404 {object} ErrorResponse` |
-
-
-## リクエストパラメーターの指定
-
-```
-@Param [名前] [場所] [型] [必須かどうか] "[説明]"
-```
-
-### パラメーターの場所
-
-| 場所 | 説明 | 例 |
-|------|------|------|
-| `query` | クエリ文字列 | `/user?id=1` |
-| `path` | URLのパス | `/user/{id}` |
-| `body` | リクエストボディ | JSONオブジェクト |
-| `header` | ヘッダー | `Authorization` |
-| `formData` | フォームデータ | ファイルのアップロード |
-
-### 型
-
-| 型 | 説明 |
-|------|------|
-| `int`, `integer` | 整数 |
-| `string` | 文字列 |
-| `bool`, `boolean` | 真偽値 |
-| `number` | 実数 |
-| `object` | オブジェクト (DTO) |
-| `array` | 配列 |
-
-### 例
-
-```go
-// クエリパラメーター
-// @Param id query int true "User ID"
-// @Param name query string false "User name"
-// @Param active query bool false "Active status"
-
-// リクエスト本文
-// @Param body body CreateUserRequest true "ユーザー作成リクエスト"
-
-// ヘッダー
-// @Param Authorization header string true "Bearer トークン"
-```
-
-
-## DTOのドキュメント化
-
-### リクエストDTO
-
-```go
-// src/user/user_request.go
-package user
-
-// CreateUserRequest ユーザー作成リクエスト
-type CreateUserRequest struct {
-    Name  string `json:"name" example:"Alice"`
-    Email string `json:"email" example:"alice@example.com"`
-}
-
-// UpdateUserRequest ユーザー更新リクエスト
-type UpdateUserRequest struct {
-    Name  string `json:"name" example:"Alice Updated"`
-    Email string `json:"email" example:"alice.new@example.com"`
-}
-```
-
-### レスポンスDTO
-
-```go
-// src/user/user_response.go
-package user
-
-// UserResponse ユーザーレスポンス
-type UserResponse struct {
-    ID    int    `json:"id" example:"1"`
-    Name  string `json:"name" example:"Alice"`
-    Email string `json:"email" example:"alice@example.com"`
-}
-
-// ErrorResponse エラーレスポンス
-type ErrorResponse struct {
-    Message string `json:"message" example:"유저를 찾을 수 없습니다."`
-}
-```
-
-### DTOタグ
-
-| タグ | 説明 | 例 |
-|------|------|------|
-| `example` | 値の例 | `example:"Alice"` |
-| `enums` | 許可する値の一覧 | `enums:"active,inactive"` |
-| `minimum` | 最小値 | `minimum:"1"` |
-| `maximum` | 最大値 | `maximum:"100"` |
-| `default` | デフォルト値 | `default:"10"` |
-
-
-
-## ドキュメントの再生成
-
-コメントやDTOを変更した場合は、Swaggoのドキュメントを再生成する必要があります。`spine dev` はSwaggoを自動で実行しません。次のMakefileを追加すると、`make run` でドキュメントを更新してからアプリを実行できます。CLIのOpenAPIファイルは、`spine contract export` で別途更新します。
-
-```makefile
-.PHONY: swagger run
-
-swagger:
-	swag init -g internal/application/application.go --parseInternal
-
-run: swagger
-	spine dev
-```
+生成した文書で `/health` と `/user/{id}` を確認します。静的解析では動的ルート、実行時 validator のすべての制約、ハンドラーが選ぶ応答ステータスを確定できません。診断を確認し、実際のリクエストと実行時文書も検証してください。
 
 ## 次のステップ
 
-- [Spine API](/ja/reference/api/spine-app)
-- [Swaggo v1.16.6](https://github.com/swaggo/swag/tree/v1.16.6)
-- [http-swagger v1.3.4](https://pkg.go.dev/github.com/swaggo/http-swagger@v1.3.4)
+パスの衝突、validator、文書の取得と UI 設定は[ランタイム OpenAPI リファレンス](/ja/reference/api/openapi)を参照してください。[入力の移行](/ja/learn/migration/v0.7.1-preview)では以前の入力 API の互換性を説明します。

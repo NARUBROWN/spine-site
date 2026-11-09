@@ -4,7 +4,7 @@ pageClass: release-versions
 
 # 版本概览
 
-查看 Spine 生态中8个仓库的已发布标签、下一目标版本和变更。各仓库使用独立版本发布。
+查看 Spine 生态中各仓库的已发布标签、下一目标版本和变更。各仓库使用独立版本发布。
 
 <ReleaseCatalog />
 

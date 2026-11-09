@@ -1,12 +1,68 @@
 # Interceptors
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+::: info
+The existing project examples below use the `legacy` layout and compatibility `app.Route`. New controllers attach route policies with `api.Interceptors`. See [route migration](/en/learn/migration/preview-controller-routes).
 :::
 
 Add logging and demo authentication to user lookup requests, and check the order in which requests pass through interceptors. Interceptors handle authentication, authorization checks, logging, and transactions shared by multiple handlers.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
+The `src/user` examples use the app created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). The default `layered-v1` layout uses role-based directories.
+
+## Apply an interceptor to a new controller
+
+This standalone app attaches an authentication interceptor to one route with `api.Interceptors`. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save it as `main.go`, and run it. The token is only for demonstration.
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"log"
+)
+
+type Auth struct{}
+
+func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	if ctx.Header("Authorization") != "Bearer demo-token" {
+		return httperr.Unauthorized("unauthorized")
+	}
+	return nil
+}
+func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	}, api.Interceptors(&Auth{}))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+The first request returns 401; the second returns 200 and `{"id":1}`. Implement secure token validation for real authentication.
+
+```bash
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+```
 
 ## Start from a CLI project
 
@@ -31,7 +87,7 @@ Put app-wide registration in `internal/application/application.go` and the authe
 
 ## Interceptor lifecycle
 
-In Spine v0.6.5, HTTP requests run through global interceptors, routing and input binding, route interceptors, and the controller, in that order. Interceptors must implement all four lifecycle methods.
+In Spine v0.7.1, HTTP requests run through global interceptors, routing and input binding, route interceptors, and the controller, in that order. Interceptors must implement all four lifecycle methods.
 
 ```mermaid
 graph TD

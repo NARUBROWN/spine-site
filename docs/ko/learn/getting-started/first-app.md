@@ -11,7 +11,14 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-v0.7.0 미리보기는 [Preview CLI 설치](/ko/learn/getting-started/installation#preview-cli)에서 CLI를 `@preview`로 설치한 뒤 진행하세요. 이 페이지의 `spine.toml` 예시는 정식 레시피 기준이며, Preview CLI의 새 프로젝트는 `platform-contracts-preview`를 사용합니다.
+아래 채널 선택 명령과 생성 결과는 CLI `v0.4.3-rc.1` 이상을 기준으로 합니다. `@latest`가 더 낮은 버전을 설치한다면 다음 명령으로 호환 RC를 설치하세요. 호환되는 정식 플랫폼 태그가 아직 없다면 프로젝트 생성 시 `--channel rc`를 사용하고 생성된 `go.mod`를 확인하세요.
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
+`--channel main`은 정식 태그를 선택하며, 대화형 생성에서도 Main을 선택할 수 있습니다.
 
 `spine version`으로 설치된 CLI 버전을 확인합니다. 명령을 찾을 수 없다면 [설치 안내](/ko/learn/getting-started/installation)에서 PATH 설정을 확인하세요.
 
@@ -20,9 +27,17 @@ v0.7.0 미리보기는 [Preview CLI 설치](/ko/learn/getting-started/installati
 프로젝트를 둘 상위 디렉터리에서 실행합니다. `hello-spine` 디렉터리가 이미 있다면 다른 이름을 사용하세요.
 
 ```bash
-spine new hello-spine --module example.com/hello-spine
+spine new hello-spine --module example.com/hello-spine --channel main --no-interactive
 cd hello-spine
 ```
+
+RC 채널은 실행 시점에 더 최신 코어 RC를 선택할 수 있습니다. 코어 `v0.7.1`을 재현하려면 생성된 프로젝트에서 다음을 실행하고 호환 플랫폼 버전도 `go.mod`에서 확인하세요. `spine update`는 채널에 따라 이 버전을 다시 바꿀 수 있습니다.
+
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+
 
 `new`는 설치한 CLI의 검증 레시피에 따라 Spine, Echo 플랫폼과 Echo의 호환 버전을 선택하고 의존성 설치, 정적 계약 검사와 빌드를 완료합니다. 선택된 버전은 생성된 `go.mod`에서 확인합니다. `--skip-install`로 파일만 생성했다면 `go mod tidy`와 `go mod download all`을 별도로 실행하세요. 설치 과정에서는 앱 초기화, 테스트나 리스너를 실행하지 않습니다.
 
@@ -40,8 +55,7 @@ hello-spine/
 │   ├── application.go
 │   └── application_test.go
 └── src/
-    ├── controller/health_controller.go
-    └── route/route.go
+    └── controller/health_controller.go
 ```
 
 프로젝트에는 실행을 시작하는 `main.go`와 앱 구성 코드를 담은 `internal/application` 디렉터리가 있습니다. `spine.toml`은 모듈 경로, 실행 진입점, 앱 구성 코드의 위치와 포트를 CLI에 알려줍니다.
@@ -53,9 +67,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `internal/application/application.go`의 `BuildApplication()`은 앱과 실행 옵션을 반환합니다. 생성된 코드는 `HealthController` 생성자와 `GET /health`를 등록하고, HTTP 실행 옵션인 `boot.HTTPOptions`를 명시합니다.

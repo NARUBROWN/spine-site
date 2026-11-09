@@ -1,45 +1,19 @@
-# v0.7.0 Preview 功能与启动选项
+# v0.7.1 HTTP 与启动选项
 
-::: warning Preview
-以下可执行示例需要 Spine `v0.7.0-preview.7` 或更高版本。 [Preview](/zh-Hans/learn/migration/preview-controller-routes)
-:::
+本指南说明 Spine `v0.7.1` 的 OpenAPI UI、HTTP v3 输入处理、TLS 和关闭行为。迁移现有应用时，请同时检查平台和应用代码。
 
-通过启动选项启用 Swagger UI 和 ReDoc，并了解迁移到 HTTP v3 与 net/http 平台所需的修改。本页还整理了已合并到 Preview 的路径处理、关闭处理与事件清理历史变更。
+## 示例版本 {#versions}
 
-::: warning 仅适用于 Preview
-本页以 `preview` 分支为准，不能直接应用于稳定版 `v0.6.5`。请区分功能首次发布版本与当前分支变更。`@preview` 会移动，请一起保存应用源码、`go.mod` 与 `go.sum`。
-:::
-
-## 版本与安装 {#versions}
-
-| 功能 | 首次发布版本 |
-| --- | --- |
-| 按来源划分的输入 DTO 与 OpenAPI JSON | Spine `v0.7.0-preview.1` |
-| 内嵌 Swagger UI 与 ReDoc | Spine `v0.7.0-preview.2` |
-| HTTP v3、TLS 与 net/http 平台 | Spine `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1` |
-| HTTP v3 分析及 net/http 应用生成与更新 | CLI `v0.4.3-preview.4` |
-| 控制器路由、角色构造器与 API 分组 | Spine `v0.7.0-preview.7`, CLI `v0.4.3-preview.8` |
-
-需要 Go 1.25.5 或更高版本。选择 playground 验证器时需要 Go 1.26 或更高版本。也可通过 `--platform nethttp` 选择 net/http。使用默认 Go 代理设置时，Preview 分支元数据从源仓库查询，因此需要 Git。安装 CLI 与更新应用依赖是两个操作。
+独立示例使用核心 `v0.7.1` 和 Echo `v0.2.0-rc.1`，需要 Go 1.25.5 或更高版本。在新目录中创建模块、固定依赖，然后将以下代码保存为 `main.go`。正式平台公开后，请选择经过验证的兼容标签并保留 `go.mod` 和 `go.sum`。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
-spine version
-spine new preview-api --module example.com/preview-api --platform echo
-cd preview-api
-spine contract check
-spine verify
+go mod init example.com/boot-example
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
 ```
-
-现有应用按[输入迁移指南](/zh-Hans/learn/migration/v0.7.0-preview#versions)选择 `recipe = "platform-contracts-preview"`。检查 `spine update --dry-run` 的变更后，运行输出中提供的应用命令。`update` 不改写应用源码，下面的启动选项与 Prepared API 需要手动修改。
 
 ## Swagger UI 与 ReDoc 启动选项 {#boot}
 
-::: warning 当前 net/http 文档 UI 限制
-2026-11-06 验证：核心 `83b1e03` 与 net/http `v0.1.0-preview.2` 组合将文档与资源的 Content-Type 覆盖为 `text/plain`，导致 Swagger UI 与 ReDoc 无法正常渲染。下面的 UI 运行示例使用 Echo `v0.2.0-preview.3`。
-:::
-
-下面是独立参考应用的 `main.go`。请先用上述 CLI 准备依赖，再在单独目录中运行。现有应用应在当前 composition 与 `BuildApplication` 中加入 import 和 `HTTP.OpenAPI` 配置。
+以下是独立应用的 `main.go`。在现有应用中，请将 import 和 `HTTP.OpenAPI` 设置添加到当前组装代码。
 
 ```go
 package main
@@ -79,7 +53,7 @@ func main() {
             OpenAPI: boot.OpenAPIOptions{
                 Enabled: true,
                 Path:    "/openapi.json",
-                Title:   "Preview API",
+                Title:   "Example API",
                 Version: "1.0.0",
                 UI: []boot.OpenAPIUI{
                     swaggerui.New(swaggerui.Options{Path: "/docs"}),
@@ -121,7 +95,7 @@ func runTLS(app spine.App) error {
 
 ## HTTP v3 输入与文件生命周期 {#body}
 
-HTTP v3 由核心使用公共实现解析 JSON、XML、urlencoded form 与 multipart。路径与查询值不会合并到正文 DTO。需要的 DTO 在认证拦截器之后解析，每个绑定成功的 DTO 分别验证。
+HTTP v3 由核心使用公共实现解析 JSON、XML、urlencoded form 与 multipart。路径与查询值不会合并到正文 DTO。DTO 在全局拦截器的 `PreHandle` 之后解析并分别验证，路由拦截器的 `PreHandle` 则在绑定之后执行。
 
 `MaxBodyBytes: 0` 表示正文总上限 32 MiB，正值指定字节上限，负值取消限制。`MultipartMemoryBytes: 0` 表示文件内存预算 32 MiB，正值指定预算，负值导致准备失败。multipart 预算不是整个请求的内存上限，超出预算的文件写入磁盘。
 
@@ -131,15 +105,15 @@ HTTP v3 由核心使用公共实现解析 JSON、XML、urlencoded form 与 multi
 
 将 `PreparedApplication.Handler()` 改为返回 `(http.Handler, error)` 的 `spine.NetHTTPHandler(prepared)`。`prepared.HTTPAdapter()` 返回同一已准备适配器，HTTP 关闭时返回 nil。不要重复调用适配器的运行与关闭。调用方负责外部服务器关闭与 `prepared.Close(ctx)`。Close 阻止新请求进入，并清理 WebSocket 与包含 native 中间件后处理的请求。等待 context 超时后清理仍会继续。
 
-自定义 HTTP 平台必须迁移到 `spine.http-adapter/v3`，实现 `Serve(net.Listener, ...httpcontract.ServeOption) error` 并声明 TLS capability。`adapter` 与 `adapter/http` 别名不会自动转换 v2 实现。net/http 是独立模块，不支持 `DisableRecover: true`。请参阅[完整 HTTP v3 迁移指南](https://github.com/NARUBROWN/spine/blob/preview/docs/migration/http-v3.md)。
+自定义 HTTP 平台必须迁移到 `spine.http-adapter/v3`，实现 `Serve(net.Listener, ...httpcontract.ServeOption) error` 并声明 TLS capability。`adapter` 与 `adapter/http` 别名不会自动转换 v2 实现。net/http 是独立模块，不支持 `DisableRecover: true`。请参阅[完整 HTTP v3 迁移指南](https://github.com/NARUBROWN/spine/blob/v0.7.1/docs/migration/http-v3.md)。
 
-## 本次合并的其他变更 {#merged}
+## 其他运行行为 {#merged}
 
-上述其他变更以[核心 PR #34](https://github.com/NARUBROWN/spine/pull/34)合并源码为准。该源码的下一候选版本是 `v0.7.0-preview.5`，候选编号不代表标签已发布或完整发布流程已完成。
+以下是 `v0.7.1` 的路径、关闭和事件处理行为。
 
 - 路径值：`/users/:id` 与 `/users/:userID/posts` 使用各自路由的键绑定。`/files/:name` 中的 `a%2Fb` 只解码一次为 `a/b`，`a%252Fb` 为 `a%2Fb`。实际路径 `/files/a/b` 不匹配该路由。
 - 关闭：WebSocket 清理发生 panic 后仍继续清理后续应用资源，并且不会把实际 HTTP Serve 错误隐藏为正常关闭。
-- 事件：向 `spine.WithEventPublisherErrorHistory` 与 `spine.WithEventConsumerErrorHistory` 传入 `boot.CleanupErrorHistoryOptions{MaxEntries, MaxAge}`，分别设置各角色的清理失败历史。默认保留最近 32 条、最长 1 小时，先达到的限制生效。0 使用默认值，负值导致预检失败。不改变日志保留策略和已返回的关闭结果。CLI 对新 helper 的静态分析支持仍是后续工作。
+- 事件：向 `spine.WithEventPublisherErrorHistory` 与 `spine.WithEventConsumerErrorHistory` 传入 `boot.CleanupErrorHistoryOptions{MaxEntries, MaxAge}`，分别设置各角色的清理失败历史。默认保留最近 32 条、最长 1 小时，先达到的限制生效。0 使用默认值，负值导致预检失败。不改变日志保留策略和已返回的关闭结果。
 - nil 事件正文：raw byte handler 区分 nil tombstone 与长度为 0 的 nonnil slice。需要正文的 DTO handler 保持原有失败策略。
 - Swagger UI：修复 base64url、指数表示的 multipleOf 与没有 items 的 contains 示例生成问题。
 - 发布组合：验证包括 net/http 在内的六个平台。仅发布核心标签或通过源码 CI，不代表公开组合验证已完成。
@@ -158,7 +132,7 @@ curl -I http://localhost:8080/redoc
 ## 相关文档与合并依据 {#sources}
 
 - [OpenAPI](/zh-Hans/reference/api/openapi)
-- [v0.7.0](/zh-Hans/learn/migration/v0.7.0-preview)
+- [v0.7.1](/zh-Hans/learn/migration/v0.7.1-preview)
 - [Preview → RC → Production](/zh-Hans/community/release-channels)
 - [Spine #26: OpenAPI UI](https://github.com/NARUBROWN/spine/pull/26)
 - [Spine #32: HTTP v3 / TLS](https://github.com/NARUBROWN/spine/pull/32)

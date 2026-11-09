@@ -47,23 +47,15 @@ This installs the current RC branch. Preview changes appear after promotion; ear
 
 ## CLI channels and application dependencies {#dependencies}
 
-CLI versions are independent of Spine core and platform versions. Reinstalling the CLI does not automatically change an existing app’s source or dependencies. New apps use the generation recipe in the installed CLI source.
-
-| Installed CLI | New app dependency selection | Existing apps |
-| --- | --- | --- |
-| Preview | `platform-contracts-preview` resolves `@preview` for core and selected platforms and records actual versions in `go.mod` | `spine update` resolves again for the same recipe |
-| RC | Uses the recipe in that RC source; it does not automatically switch all dependencies to `@rc` | Keep their existing recipe |
-| Stable | Uses the version combination provided by that stable CLI | Keep their existing recipe |
-
-After creation, check `recipe` in `spine.toml` and inspect `go.mod`. To see the core version selected by the currently installed CLI’s `new` command:
+The installed CLI and application dependency channel are independent. Select `--channel main` with `spine new` for stable tags. `rc` selects RC or higher stable tags, and `preview` queries Preview branches. Interactive creation defaults to Preview, so select Main explicitly for a stable application.
 
 ```bash
-spine new channel-check --module example.com/channel-check
+spine new channel-check --module example.com/channel-check --channel main
 cd channel-check
 go list -m github.com/NARUBROWN/spine
 ```
 
-Preview’s `--skip-install` still requires Go and network access or module proxy cache to resolve branch versions. It skips dependency installation and build checks. Existing versioned Preview and stable recipes stay pinned until explicitly changed. See [Preview migration for existing apps](/en/learn/migration/v0.7.0-preview).
+The selected channel is recorded as `dependency_channel` in `spine.toml` and retained by `spine update`. Updating the CLI does not change existing projects. Check and version `go.mod` and `go.sum` after creation.
 
 ## How releases are published {#process}
 
@@ -101,10 +93,10 @@ See [Current Release](/en/community/changelog) for tags and published versions. 
 
 ## Pin or restore a version {#pin}
 
-For CI and production, pin an actually published CLI tag and version application source, `go.mod`, and `go.sum` together. A CLI tag pins the tool’s code only. The dynamic Preview recipe still resolves `@preview` when the same CLI runs `new` or `update`, so reproduce an app from its saved source and dependencies. This example pins the published CLI `v0.4.2`; it does not select the latest version.
+For CI and production, pin an actually published CLI tag and version application source, `go.mod`, and `go.sum` together. A CLI tag pins the tool’s code only. The dynamic Preview recipe still resolves `@preview` when the same CLI runs `new` or `update`, so reproduce an app from its saved source and dependencies. This example pins the published compatible CLI RC `v0.4.3-rc.1`; it does not select the latest version.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.2
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
 spine version
 ```
 

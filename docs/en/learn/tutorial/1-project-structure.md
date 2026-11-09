@@ -1,7 +1,7 @@
 # Project Structure
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+::: info
+This example uses the compatibility registration style of the `legacy` layout. `app.Route` is deprecated; see [controller and route migration](/en/learn/migration/preview-controller-routes) for new controllers.
 :::
 
 Create a project with the Spine CLI and add a user resource. Read the generated files to learn where to put app configuration code and what controllers, services, and repositories do.
@@ -14,7 +14,7 @@ Run these commands in the parent directory where you want to place the project. 
 
 ```sh
 spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -51,9 +51,11 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 | Key | Purpose |
@@ -63,7 +65,7 @@ validator = "none"
 | `composition` | The location where the CLI inspects app configuration and automatically registers generated code |
 | `port` | The port used by the development server |
 | `layout` | Generator file layout (`legacy` or `layered-v1`) |
-| `platform` | HTTP platform (`echo` or `none`) |
+| `platform` | HTTP platform (`echo`, `nethttp`, or `none`) |
 | `recipe` | Recipe selecting compatible dependencies |
 | `websocket_platform` | WebSocket implementation (`none` or `gorilla`) |
 | `validator` | DTO validator (`none` or `playground`) |
@@ -127,7 +129,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
     if port := os.Getenv("SPINE_PORT"); port != "" {
         address = ":" + port
     }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 

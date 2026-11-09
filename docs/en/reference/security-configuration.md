@@ -1,6 +1,6 @@
 # Security configuration
 
-Spine 0.6.5 uses HTTP/WebSocket size, time, and connection limits. Independent Kafka/RabbitMQ platforms own broker transport policies. The platform defaults below refer to v0.1.0.
+Spine `v0.7.1` applies HTTP and WebSocket size, time, and connection limits. Independent platforms manage broker transport policies. Check the selected platform version and configuration as well.
 
 ## Configuration validation
 
@@ -99,7 +99,7 @@ Publishers use persistent messages, mandatory routing, and publisher confirms. `
 
 ## WebSocket
 
-Select Echo for HTTP and the independent Gorilla implementation for WebSocket. Registered WS routes require both HTTP upgrade support and a WS factory. To enable validation, pass the result of `playground.New()` to `spine.WithValidator`.
+Select Echo or net/http for HTTP and the independent Gorilla implementation for WebSocket. WebSocket routes require HTTP upgrade support and a WS factory. Pass `playground.New()` to `spine.WithValidator` for validation.
 
 Configure origin, connection, and message limits in `boot.HTTPOptions.WebSocket`. Specify the exact origins and connection limit for your application.
 
@@ -151,6 +151,10 @@ Contexts used before connection establishment and message contexts preserve the 
 
 You cannot combine `AllowOrigins: []string{"*"}` with `AllowCredentials: true`. Use `cors.NewValidated` to validate this at startup. `cors.New` also returns a structured error on the first request before writing response headers.
 
+A CORS preflight has `OPTIONS`, `Origin`, and `Access-Control-Request-Method`. An allowed request returns 204; a denied origin, method, or header returns 403. A disallowed origin on an ordinary request receives no CORS allow header, but CORS does not replace server authentication or access control.
+
+`MaxAge` is a pointer to seconds: nil omits the header and 0 sends an explicit zero. `ExposeHeaders` selects exposed headers on ordinary responses, and `AllowOrigin` can make an additional decision for origins not allowed by the static list. A wildcard origin cannot be combined with credentials.
+
 ```go
 corsInterceptor, err := cors.NewValidated(cors.Config{
     AllowOrigins:     []string{"https://app.example.com"},
@@ -163,6 +167,59 @@ app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
 
 If a cookie's name, value, path, domain, `SameSite`, or `Priority` is invalid, JSON, string, binary, and redirect responses fail before writing headers or the body. Use `httpx.EncodeCookieValue` and `httpx.DecodeCookieValue` when Unicode or delimiters must be restored to their original values.
+
+
+### Verify CORS preflight
+
+Save this standalone app as `main.go` in a separate Go module with Spine `v0.7.1` and a compatible Echo platform, then run it. `Authorization` is explicitly listed as an allowed header.
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/interceptor/cors"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/resource", func() httpx.Response[string] { return httpx.Response[string]{Body: "ok"} })
+}
+func main() {
+	maxAge := 60
+	policy, err := cors.NewValidated(cors.Config{
+		AllowOrigins:     []string{"https://app.example.com"},
+		AllowMethods:     []string{"GET"},
+		AllowHeaders:     []string{"Authorization", "Content-Type"},
+		AllowCredentials: true,
+		MaxAge:           &maxAge,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	app.InterceptorFor(boot.InterceptorHTTP, policy)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+The first request returns 204 and `Access-Control-Max-Age: 60`; the second returns 403.
+
+```bash
+curl -i -X OPTIONS -H 'Origin: https://app.example.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization' http://localhost:8080/resource
+curl -i -X OPTIONS -H 'Origin: https://app.example.com' -H 'Access-Control-Request-Method: DELETE' http://localhost:8080/resource
+```
 
 ## Operational constraints
 

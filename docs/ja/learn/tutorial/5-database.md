@@ -1,20 +1,12 @@
 # データベース接続
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
-:::
-
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: info
+このチュートリアルの `legacy` レイアウトは互換 `app.Route` を使います。新しいコントローラーは[ルートの移行](/ja/learn/migration/preview-controller-routes)、入力の互換性は[入力の移行](/ja/learn/migration/v0.7.1-preview)、仕様の設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 BunでMySQLに接続し、生成された `GET /user/:id` を拡張してデータベースからユーザーを取得します。テーブルを作成するマイグレーションと、リポジトリの基本的なクエリも作成します。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの `src/user` の例は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成したアプリを使います。既定の `layered-v1` は役割別のディレクトリを使います。
 
 ## CLIプロジェクトの準備
 
@@ -49,9 +41,11 @@ go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
 # PostgreSQL を使用する場合
-# go get github.com/uptrace/bun/dialect/pgdialect
-# go get github.com/jackc/pgx/v5/stdlib
+# go get github.com/uptrace/bun/dialect/pgdialect@v1.2.16
+# go get github.com/jackc/pgx/v5/stdlib@v5.12.0
 ```
+
+Bun コアと使用する方言は同じバージョンに保ってください。バージョンが異なると初期化時にエラーになります。
 
 
 ## データベース接続
@@ -339,7 +333,7 @@ import (
     "example.com/my-app/src/entity"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type UserController struct{ service *UserService }
@@ -348,8 +342,8 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(ctx context.Context, id path.Int) (httpx.Response[*entity.User], error) {
-    user, err := c.service.FindByID(ctx, id.Value)
+func (c *UserController) Get(ctx context.Context, id input.Path[int64]) (httpx.Response[*entity.User], error) {
+    user, err := c.service.FindByID(ctx, *id)
     if errors.Is(err, sql.ErrNoRows) {
         return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
     }
@@ -581,14 +575,14 @@ count, err := r.db.NewSelect().
 ### 結合
 
 ```go
-// SELECT * FROM users JOIN orders ON users.id = orders.user_id
+// Load the Orders relation configured on User.
 err := r.db.NewSelect().
     Model(&users).
     Relation("Orders").
     Scan(ctx)
 ```
 
-結合の例にある `Orders` リレーションを動作させるには、別のエンティティとBunのリレーションタグを定義する必要があります。上の基本的な `User` モデルには含まれていません。
+結合の例にある `Orders` リレーションを動作させるには、別のエンティティとBunのリレーションタグを定義する必要があります。上の基本的な `User` モデルには含まれていません。 関連の種類によって Bun が別のクエリを実行する場合があるため、常に単一の SQL JOIN になるとは限りません。
 
 ## 検証
 

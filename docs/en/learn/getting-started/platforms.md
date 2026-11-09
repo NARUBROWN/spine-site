@@ -1,50 +1,31 @@
-# Select platforms and DTO validation
+# Choosing platforms and DTO validation
 
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+Spine `v0.7.1` keeps public HTTP, WebSocket, event, and DTO validation contracts in core and selects implementations as independent modules. Connect only the implementations your application needs.
 
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+## Choose with the CLI
 
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
-:::
-
-Spine 0.6.5 keeps the public HTTP, WebSocket, event, and DTO validation contracts in the core and selects concrete implementations from independent modules. The core uses only the standard library. CLI 0.4.2 uses the `platform-contracts-v0.6.5` recipe, selecting Spine v0.6.5 and v0.1.0 tags for the implementations.
-
-## Install the CLI and generate projects
-
-Use `@latest` for general installation and CLI upgrades. Each project command below creates a separate directory. Defaults are Echo HTTP with no WebSocket, event platform, or validator.
+Install CLI `v0.4.3-rc.1` or later, then run each command below in a separate directory. `--channel main` selects published stable tags. If a compatible stable platform tag is unavailable, use `--channel rc` for RC validation. The CLI installation channel and application dependency channel are independent.
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
-spine new http-app --module example.com/http-app
-spine new chat-app --module example.com/chat-app --websocket-platform gorilla
-spine new worker --module example.com/worker --platform none --event-platform events:kafka
-spine new validated-app --module example.com/validated-app --validator playground
+spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
 ```
 
-Supported options are `--platform echo|none`, `--websocket-platform none|gorilla`, repeatable `--event-platform [name:]kafka|rabbitmq`, and `--validator none|playground`. Gorilla requires Echo HTTP. An HTTP-less worker requires at least one event platform. Only selected implementations are installed; generation does not execute the app, factories, listeners, or brokers.
+Echo is the default HTTP platform; WebSocket, events, validator, and frontend are not selected by default. `--platform none` creates an event worker and requires an event platform. WebSocket requires an HTTP platform. `--event-platform` can be repeated.
 
-Configure broker addresses and credentials through the environment variables in the generated README. Select consumption and publication roles with `Config.Consume` and `Config.Publish` in application code. A platform named `events` uses the `SPINE_EVENTS_` prefix. `spine.toml` records implementation selections.
+The CLI and core require Go 1.25.5 or later. The playground validator and NATS platform require Go 1.26 or later. Check selected versions in `go.mod` and `spine.toml`. `--skip-install` still resolves versions, but skips installation and building.
 
-## Public contracts and application assembly
+## Public contracts and implementations
 
-| Contract | Implementation module |
-| --- | --- |
-| `contract/http` | `spine-echo-platform` |
-| `contract/websocket` | `spine-gorilla-platform` |
-| `contract/event` | `spine-kafka-platform`, `spine-rabbitmq-platform` |
-| `contract/validator` | `spine-validator-playground` |
+HTTP uses `contract/http` with Echo or net/http, and WebSocket uses `contract/websocket` with Gorilla. Events can use `contract/event` with Kafka, RabbitMQ, or NATS; validation can use `contract/validator` with playground. Selecting an HTTP platform does not add WebSocket automatically.
 
-The generated `BuildApplication` passes options directly to `spine.New(...)`: `echoplatform.Option()` for HTTP, `gorillaplatform.Option()` for WebSocket, `spine.WithEventAdapter(name, factory)` for events, and `spine.WithValidator(validator)` for validation. Check factory and validator creation errors before returning the app.
-
-The older `adapter`, `adapter/http`, `adapter/event`, and `wsadapter` paths remain compatibility aliases in 0.6.5. New implementations use `contract/` paths. Selecting HTTP alone does not add a WebSocket implementation.
+An application passes HTTP and WebSocket options, `spine.WithEventAdapter`, and `spine.WithValidator` to `spine.New(...)`. Check generated composition code and handle factory errors. Existing `adapter` compatibility paths are deprecated, and an HTTP v2 implementation is not automatically converted to v3.
 
 ## DTO validation
 
-`--validator playground` requires Go 1.26 or later. The CLI and applications without that validator require Go 1.25.5 or later. Register the result of `playground.New()` with `spine.WithValidator` to validate bound HTTP JSON/form DTOs and decoded WebSocket/consumer DTOs before handlers run. Without a validator, `validate` tags are not checked automatically.
-
-This request DTO can be used in an app generated with `--validator playground`.
+An app generated with `--validator playground` validates bound DTOs before the handler. Without a registered validator, `validate` tags are not executed. This is an example request DTO.
 
 ```go
 type CreateUserRequest struct {
@@ -53,30 +34,14 @@ type CreateUserRequest struct {
 }
 ```
 
-Rule violations produce HTTP 400 with `message` and `fields`, close WebSocket with 1008, or follow the consumer NACK policy. HTTP `fields[].field` uses JSON Pointer and rejected values are not exposed automatically. Validator execution errors produce HTTP 500 or WebSocket 1011.
+Rule violations result in HTTP 400, WebSocket close 1008, or the consumer failure policy. HTTP field paths and document coverage depend on the selected validator contract.
 
-## Migrate and verify existing apps
+## Update and verify
 
-`boot.Options.Kafka`, `boot.Options.RabbitMQ`, and broker-specific boot types were removed. Select `Consume`/`Publish` and connection settings in external Kafka/RabbitMQ `Config` values, then register them with `WithEventAdapter`. Use `WithEventConsumerRetry` and `WithEventSettlementTimeout` for reconnection and ACK/NACK time limits.
-
-Upgrade the CLI by rerunning `go install ...@latest` above. `spine update` updates project dependencies for the selected recipe; it does not rewrite source, implementation selections, or an existing recipe. Manually migrate assembly and settings before reviewing dependency changes.
-
-To migrate an existing app to 0.6.5, first update or add the recipe and implementation selection keys in `spine.toml`, preserving `module`, `entrypoint`, `composition`, `port`, and `layout`. The following configuration is for an HTTP-only app without a validator. Use `gorilla` for WebSocket, `playground` for validation, and an `event_platforms` list matching the actual event names and providers when needed. Align these selections with application assembly before updating dependencies below. An existing app without a recipe keeps the 0.6.0 dependency combination even after a CLI upgrade.
-
-```toml
-recipe = "platform-contracts-v0.6.5"
-websocket_platform = "none"
-validator = "none"
-event_platforms = []
-```
+`spine update` retains the dependency channel recorded by the project; it does not update the CLI executable or application source. Review the plan and base hash first and apply as directed by the output. Verify external databases, WebSocket behavior, and broker delivery separately in the target environment.
 
 ```sh
 spine update --dry-run
-spine update
-spine contract check
-spine verify
 ```
 
-Review the dry-run changes, then apply without `--dry-run`. After static and local checks pass, verify live HTTP/WebSocket behavior and broker delivery separately.
-
-[0.6.5 migration guide](https://github.com/NARUBROWN/spine/blob/v0.6.5/docs/migration/v0.6.5.md)
+See [release channels and installation](/en/community/release-channels), [input migration](/en/learn/migration/v0.7.1-preview), and [HTTP v3 and boot options](/en/learn/migration/preview-features).

@@ -4,52 +4,20 @@
 
 Preview、RC、稳定版的选择与发布流程，请参阅[发布渠道与安装](/zh-Hans/community/release-channels)。
 
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+## Spine v0.7.1
 
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
+Spine `v0.7.1` 提供控制器路由、按角色注册构造函数、按来源划分的 HTTP 输入、运行时 OpenAPI 和 HTTP v3。旧输入 API 保持兼容但已弃用，同一处理器不能混用新旧输入。
 
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
-:::
-
-常规安装使用 `@latest`。当前文档以 Spine v0.6.5 和 CLI v0.4.2 为基准。使用 `spine version` 检查 CLI，在生成的 `go.mod` 中确认实际依赖。
+请参阅 [v0.7.1 迁移指南](/zh-Hans/learn/migration/v0.7.1)和[运行时 OpenAPI](/zh-Hans/reference/api/openapi)。CLI 版本和应用依赖分别选择。通过 `spine version` 检查 CLI，在 `go.mod` 中确认依赖。以下条目记录各版本的历史情况。
 
 ## Preview CLI @preview {#cli-preview-branch}
 
-CLI 与新应用的依赖可以跟随 Preview 分支。CLI 使用 `@preview` 安装，新应用使用 `platform-contracts-preview` 配方。生成和 `spine update` 解析核心及所选平台的 `@preview`，并将实际版本记录在 `go.mod` 中。现有按版本命名的配方在明确修改前保持固定版本。
+CLI 可以使用 `@preview` 安装。应用依赖通过 `spine new --channel preview`、`rc` 或 `main` 单独选择。Preview 渠道从所选依赖的移动 `@preview` 分支解析版本。保留应用源码、`go.mod` 和 `go.sum` 以便重现。
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
-
-## Spine CLI v0.4.3-preview.3 {#cli-preview}
-
-Preview CLI `v0.4.3-preview.3` 生成的新项目使用 `platform-contracts-v0.7.0-preview.2` 配方。核心使用 `v0.7.0-preview.2`，Echo、Gorilla、Kafka、RabbitMQ 和 playground 仅在选中时使用 `v0.2.0-preview.1`。
-
-仅安装 CLI 不会更改现有应用的配方，也不会启用 Swagger UI 或 ReDoc。现有 Preview 1 和稳定版配方在明确修改前保持原有版本固定。
-
-请参阅 [Preview 安装](/zh-Hans/learn/getting-started/installation#preview-cli)、[现有应用迁移](/zh-Hans/learn/migration/v0.7.0-preview)、[CLI 标签](https://github.com/NARUBROWN/spine-cli/tree/v0.4.3-preview.3)和[三个操作系统的发布验证](https://github.com/NARUBROWN/spine-cli/actions/runs/41971655264)。
-
-## Spine v0.7.0-preview.2 {#spine-preview-ui}
-
-核心 `v0.7.0-preview.2` 通过 `boot.OpenAPIOptions.UI` 提供可选的 Swagger UI 与 ReDoc。UI 资源和许可证声明内嵌于二进制中。默认路径为 `/docs` 与 `/redoc`，各 UI 均可设置 `Path` 和 `Title`。
-
-运行时 OpenAPI JSON 从 `v0.7.0-preview.1` 起可用，`UI` 注册选项与两个内嵌 UI 包从 `v0.7.0-preview.2` 起可用。HTTP 请使用 Echo `v0.2.0-preview.1`，并与稳定版 `v0.6.5` 区分选择。
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
-```
-
-请参阅 [启动选项](/zh-Hans/reference/api/openapi#options)、[UI 注册与运行示例](/zh-Hans/reference/api/openapi#tools)和[核心标签](https://github.com/NARUBROWN/spine/tree/v0.7.0-preview.2)。
-
-## Spine v0.7.0-preview.1 {#spine-preview}
-
-已发布的 Preview 标签为核心 `v0.7.0-preview.1`，以及各独立平台和 playground 的 `v0.2.0-preview.1`。请与稳定文档基准 `v0.6.5` 区分并明确选择。
-
-此 Preview 提供按来源分离的 Path、Query 和 Header DTO，将旧输入 API 标记为 Deprecated，在启动时拒绝混用，并更改请求体绑定。标准 OpenAPI 需通过 `Enabled: true` 明确启用。
-
-适用版本、兼容范围和用法见 [处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)和 [运行时 OpenAPI 参考](/zh-Hans/reference/api/openapi)。
 
 ## Spine v0.6.5 / CLI v0.4.2
 

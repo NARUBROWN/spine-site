@@ -1,22 +1,14 @@
 # Connect Order and Stock Services with Kafka
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
-:::
-
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: info
+This example uses `v0.7.1` controllers and path inputs. See [route migration](/en/learn/migration/preview-controller-routes), [input migration](/en/learn/migration/v0.7.1-preview), and [OpenAPI](/en/reference/api/openapi) for compatibility and document options.
 :::
 
 Create an order HTTP service and a stock consumer service, and pass `order.created` events through Kafka. Send an order request, then check the processing log in the stock service. The stock service runs without an HTTP listener.
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. Use CLI 0.4.2 to generate the Kafka platform and consumer skeleton, then assemble the publisher service and HTTP-less worker with the code below.
+After [CLI installation](/en/learn/getting-started/installation), use CLI `v0.4.3-rc.1` or later to generate the Kafka platform and consumer skeleton.
 
 To test message delivery, you need a Kafka broker at `localhost:9092` and an `order.created` topic. This example uses a plaintext connection in an isolated local environment. The stock consumer logs events; it does not change actual stock quantities.
 
@@ -24,18 +16,20 @@ To test message delivery, you need a Kafka broker at `localhost:9092` and an `or
 
 Create a working directory and preview the files to be generated.
 
+The commands below select the stable dependency channel. If a compatible stable platform tag is not yet available, use `--channel rc` for validation and check the selected versions in `go.mod`.
+
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --dry-run
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive --dry-run
 ```
 
 Review the preview, then create both apps. Run subsequent commands from `spine-msa/` unless instructed otherwise.
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive
 ```
 
 ## 2. Generate the Stock Consumer Scaffold
@@ -128,20 +122,25 @@ import (
     "github.com/NARUBROWN/spine/pkg/event/publish"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/api"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type OrderController struct{}
 
-func NewOrderController() *OrderController { return &OrderController{} }
+func (*OrderController) Constructor() *OrderController { return &OrderController{} }
 
-func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Response[string], error) {
-    if id.Value <= 0 {
+func (c *OrderController) RegisterRoutes(r *api.Registry) {
+    r.POST("/orders/:order_id", c.Create)
+}
+
+func (c *OrderController) Create(ctx context.Context, id input.Path[int64]) (httpx.Response[string], error) {
+    if *id <= 0 {
         return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
     }
     publish.Event(ctx, events.OrderCreated{
-        EventID: fmt.Sprintf("order.created:%d", id.Value),
-        OrderID: id.Value,
+        EventID: fmt.Sprintf("order.created:%d", *id),
+        OrderID: *id,
         At: time.Now().UTC(),
     })
     return httpx.Response[string]{
@@ -163,6 +162,7 @@ import (
     "github.com/NARUBROWN/spine"
     kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
@@ -177,8 +177,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
         return nil, boot.Options{}, err
     }
     app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
-    app.Constructor(controller.NewOrderController)
-    app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
+    app.Constructor(constructor.Controller(&controller.OrderController{}))
 
     return app, boot.Options{
         Address: ":8080",

@@ -1,12 +1,12 @@
 # 依赖注入
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+::: info
+`legacy` 布局的 `app.Route` 为兼容性保留，但已弃用。新的注册方式请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
 :::
 
 以[控制器](/zh-Hans/learn/tutorial/2-controller)中创建的 `src/user` 资源为基础，了解构造函数注册和依赖注入（DI）。完成后，你将能够连接控制器、服务和仓储，并检查循环依赖或缺失的构造函数。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
+本页的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的应用。默认 `layered-v1` 布局按角色划分目录。
 
 请准备好[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)中的项目，并在 `my-app` 根目录继续操作。后面的数据库和包装类型示例是独立扩展，不会自动包含在基本资源中。
 
@@ -22,6 +22,59 @@ Spine 根据已注册构造函数的参数类型，先创建所需对象，再�
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
+```
+
+## 按角色注册构造函数
+
+以下独立应用使用 `Constructor` 方法和角色标记注册仓库、服务及控制器。即使逆序注册，依赖仍按类型解析。在独立 Go 模块中安装 Spine `v0.7.1` 与兼容 Echo 平台，保存为 `main.go` 后运行。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
+
+type Repository struct{}
+
+func (*Repository) Constructor() *Repository { return &Repository{} }
+func (*Repository) Greeting() string         { return "hello" }
+
+type Service struct{ repository *Repository }
+
+func (*Service) Constructor(repository *Repository) *Service { return &Service{repository: repository} }
+
+type Controller struct{ service *Service }
+
+func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/greeting", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: c.service.repository.Greeting()}
+	})
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(
+		constructor.Controller(&Controller{}),
+		constructor.Service(&Service{}),
+		constructor.Repository(&Repository{}),
+	)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+在另一个终端发送以下请求会返回 `hello`。角色标记用于注册类型，拦截器的全局或路由级应用需要单独配置。
+
+```bash
+curl http://localhost:8080/greeting
 ```
 
 ## CLI 生成的依赖

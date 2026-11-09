@@ -1,12 +1,68 @@
 # インターセプター
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+::: info
+以下の既存プロジェクト例は `legacy` レイアウトと互換 `app.Route` を使います。新しいコントローラーは `api.Interceptors` でルートのポリシーを指定します。[ルートの移行](/ja/learn/migration/preview-controller-routes)を参照してください。
 :::
 
 ユーザー取得のリクエストにロギングとデモ用の認証を追加し、リクエストがインターセプターを通過する順序を確認します。インターセプターは、複数のハンドラーで共有する認証、権限チェック、ロギング、トランザクション処理を担当します。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの `src/user` の例は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成したアプリを使います。既定の `layered-v1` は役割別のディレクトリを使います。
+
+## 新しいコントローラーにインターセプターを適用する
+
+次の独立アプリは `api.Interceptors` で認証インターセプターを一つのルートに接続します。別の Go モジュールに Spine `v0.7.1` と互換 Echo プラットフォームをインストールし、`main.go` に保存して実行してください。トークンは動作確認専用です。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"log"
+)
+
+type Auth struct{}
+
+func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	if ctx.Header("Authorization") != "Bearer demo-token" {
+		return httperr.Unauthorized("unauthorized")
+	}
+	return nil
+}
+func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	}, api.Interceptors(&Auth{}))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+最初のリクエストは 401、二つ目は 200 と `{"id":1}` を返します。実際の認証では安全なトークン検証を実装してください。
+
+```bash
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+```
 
 ## CLI プロジェクトから始める
 
@@ -31,7 +87,7 @@ CLI は `src/user` のファイルと、`BuildApplication` 内の `user.Register
 
 ## インターセプターのライフサイクル
 
-Spine v0.6.5 の HTTP リクエストは、グローバルインターセプター、ルーティングと入力バインディング、ルートインターセプター、コントローラーの順に実行されます。インターセプターは、四つのライフサイクルメソッドをすべて実装する必要があります。
+Spine v0.7.1 の HTTP リクエストは、グローバルインターセプター、ルーティングと入力バインディング、ルートインターセプター、コントローラーの順に実行されます。インターセプターは、四つのライフサイクルメソッドをすべて実装する必要があります。
 
 ```mermaid
 graph TD

@@ -1,11 +1,7 @@
 # core.ExecutionContext
 
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
-
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+::: info
+입력 DTO와 기존 입력 API의 호환 규칙은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 확인하세요.
 :::
 
 `ExecutionContext`는 인터셉터와 실행 파이프라인에서 요청 정보를 읽고 처리 단계 사이에 값을 공유하는 인터페이스입니다. HTTP 요청, 이벤트, WebSocket 메시지에 공통으로 사용하며, 전송 방식마다 별도 인터페이스로 추가 정보를 제공합니다.
@@ -146,7 +142,7 @@ type WebSocketContext interface {
 
 ### WebSocket 연결 요청 정보 {#websocket-request-context}
 
-v0.6.5는 HTTP 업그레이드 요청 정보를 복사해 보존합니다. 다음 인터페이스로 헤더, 쿼리, 쿠키, 원격 주소, 호스트와 요청 URI를 조회할 수 있습니다.
+v0.7.1는 HTTP 업그레이드 요청 정보를 복사해 보존합니다. 다음 인터페이스로 헤더, 쿼리, 쿠키, 원격 주소, 호스트와 요청 URI를 조회할 수 있습니다.
 
 ```go
 type WebSocketRequestContext interface {
@@ -420,14 +416,20 @@ Get(key string) (any, bool)
 
 아래 코드는 [CLI 프로젝트](/ko/learn/tutorial/1-project-structure)의 `src/user/user_controller.go`를 확장하는 예입니다. `User`, `AuthUser`와 저장소 필드는 앱에서 정의합니다. 생성된 `user.Register(app)`와 루트 `main.go`는 유지합니다.
 
+이 발췌에는 `core`, `input`, `httpx`, `httperr` 패키지가 필요합니다. 인증이 필수인 경우 값이 없는 경우도 거부하도록 앱의 정책을 적용하세요.
+
 ```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
+func (c *UserController) GetUser(ctx core.ControllerContext, userId input.Path[int64]) (httpx.Response[User], error) {
     // 인터셉터가 Set("auth.user", ...)으로 저장한 값 조회
     if authUser, ok := ctx.Get("auth.user"); ok {
-        _ = authUser.(*AuthUser)
+        auth, valid := authUser.(*AuthUser)
+        if !valid || auth == nil {
+            return httpx.Response[User]{}, httperr.Unauthorized("invalid authentication context")
+        }
+        _ = auth
         // ...
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -491,6 +493,8 @@ Bind(out any) error
 HTTP 요청 본문을 구조체에 바인딩합니다.
 
 **예시**
+
+HTTP v3의 코어 요청 뷰가 본문을 해석합니다. 경로와 쿼리는 본문 DTO에 합쳐지지 않으며 Echo Binder나 JSONSerializer 확장을 호출하지 않습니다.
 
 ```go
 var req CreateUserRequest
@@ -695,11 +699,11 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 HTTP 컨트롤러의 `context.Context` 매개변수에는 표준 컨텍스트와 요청 범위의 이벤트 버스를 전달하고, `core.ControllerContext` 매개변수에는 `Get()`만 제공하는 뷰를 전달합니다. 컨슈머와 WebSocket의 기본 입력 해석기에는 `ControllerContext` 주입 기능이 없습니다. 런타임의 입력 해석 코드는 다음 소스에서 확인할 수 있습니다.
 
-- [HTTP 경로 매개변수 해석](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
-- [표준 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
-- [컨트롤러 조회 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
-- [이벤트 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
-- [WebSocket 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
+- [HTTP 경로 매개변수 해석](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/scalar_path_resolver.go)
+- [표준 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/std_context_resolver.go)
+- [컨트롤러 조회 컨텍스트 전달](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/controller_context_resolver.go)
+- [이벤트 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/event/consumer/resolver)
+- [WebSocket 입력 해석](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/ws/resolver)
 
 ## 프로토콜별 동작 차이
 

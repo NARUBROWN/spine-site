@@ -1,20 +1,12 @@
 # Controllers
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
-:::
-
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: info
+`app.Route` remains available for compatibility but is deprecated. For new applications, see [controller and route migration](/en/learn/migration/preview-controller-routes). See [input migration](/en/learn/migration/v0.7.1-preview) for changes to older inputs and [OpenAPI](/en/reference/api/openapi) for specification options.
 :::
 
 Add a `GET /user/:id` controller to the CLI-generated `my-app` project and return the integer from the request path in a JSON response. Then explore how to accept queries, headers, and request bodies, and how to choose response types.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
+The `src/user` examples use `my-app` created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). The default `layered-v1` layout uses directories organized by role.
 
 Complete the installation and project creation steps in [Your first app](/en/learn/tutorial/1-project-structure), then work from the project root. If you have already run `spine generate resource user`, skip generation and check the files.
 
@@ -45,10 +37,9 @@ The generated `src/user/user_controller.go` accepts the `id` from the path and r
 ```go
 package user
 
-import (
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-)
+import "github.com/NARUBROWN/spine/pkg/httpx"
+
+type UserPath struct { ID int64 `path:"id"` }
 
 type UserController struct { service *UserService }
 
@@ -56,14 +47,82 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
-    return httpx.Response[map[string]any]{Body: map[string]any{"id": id.Value}}
+func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": params.ID}}
 }
 ```
 
 ::: info
 `resource` generates a basic structure with a read route and dependency registration. You must implement the database, domain models, data transfer objects (DTOs), and create or update operations yourself.
 :::
+
+
+## Run v0.7.1 inputs and routes
+
+This is a standalone application. Save it as `main.go` in a separate Go module with Spine `v0.7.1` and a compatible HTTP platform, then run `go run .`. Group routes take path, handler, then optional options. Body, path, query, and headers use separate inputs.
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+)
+
+type UserController struct{}
+type SearchQuery struct {
+	Name string `query:"name"`
+}
+type RequestHeaders struct {
+	RequestID string `header:"X-Request-ID"`
+}
+type CreateUser struct {
+	Name string `json:"name"`
+}
+type User struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func (*UserController) Constructor() *UserController { return &UserController{} }
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	users := r.Group("/users", api.Tags("Users"))
+	users.GET("/search", func(q input.Query[SearchQuery], h *RequestHeaders) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"name": q.Name, "request_id": h.RequestID}}
+	})
+	users.GET("/id/:id", func(id input.Path[int64]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{ID: *id}}
+	}, api.Summary("Get user"))
+	users.POST("/create", func(body input.Body[CreateUser]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{Name: body.Name}, Options: httpx.ResponseOptions{Status: 201}}
+	})
+}
+
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&UserController{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+Send requests from another terminal. The first returns the name and request ID, the second returns the ID, POST returns 201, and a nonnumeric path value returns 400.
+
+```bash
+curl -H 'X-Request-ID: r1' 'http://localhost:8080/users/search?name=alice'
+curl http://localhost:8080/users/id/12
+curl -i -H 'Content-Type: application/json' -d '{"name":"bob"}' http://localhost:8080/users/create
+curl -i http://localhost:8080/users/id/not-a-number
+```
+
 
 ## Check the generated route registration
 
@@ -125,13 +184,12 @@ Spine passes request values according to the handler's parameter types. This is 
 | Type | Description | Example |
 |------|------|------|
 | `context.Context` | Request context | `ctx context.Context` |
-| `query.Values` | Query parameters | `q query.Values` |
-| `query.Pagination` | Pagination | `page query.Pagination` |
-| `header.Values` | HTTP headers | `headers header.Values` |
+| `input.Query[T]` | Query parameters | `q input.Query[SearchQuery]` |
+| `*struct` (`header`) | HTTP headers | `headers *RequestHeaders` |
 | `*struct` (DTO) | JSON request body | `req *CreateUserRequest` |
 | `*struct` (form DTO) | Text fields in a form | `form *CreatePostForm` |
 | `multipart.UploadedFiles` | Multipart uploaded files | `files multipart.UploadedFiles` |
-| `path.*` | Path parameters | `userId path.Int` |
+| `input.Path[T]` | Path parameters | `userId input.Path[int64]` |
 | `spine.Ctx` | Controller context | `spineCtx spine.Ctx` |
 
 ### Supported return types
@@ -150,115 +208,24 @@ You can also use pointers to response types and `(supported response type, error
 
 ### Query parameters
 
-Read query strings with `query.Values`. In the request below, `id` is `1`, `name` is `alice`, and `active` is `true`.
-
-```go
-// GET /user?id=1&name=alice&active=true
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64, default 0
-    name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool, default false
-    _ = name
-    _ = active
-
-    user, _ := c.service.Get(ctx, int(id))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### query.Values methods
-
-| Method | Return type | Description |
-|--------|----------|------|
-| `Get(key)` | `string` | First value, or an empty string if absent |
-| `String(key)` | `string` | String value |
-| `Int(key, default)` | `int64` | Specified default if the value is absent or cannot be converted to an integer |
-| `GetBoolByKey(key, default)` | `bool` | Specified default if the value is absent or cannot be converted to a boolean |
-| `Has(key)` | `bool` | Whether the key exists |
-
+In the runnable example above, `input.Query[SearchQuery]` binds query values to struct fields using `query` tags. Fields without a tag use lowerCamel names.
 
 ### Pagination
 
-`query.Pagination` converts the `page` and `size` query parameters to integers. If a value is absent or cannot be converted to an integer, it uses `1` and `20`, respectively. Negative values and `0` are also treated as integers, so validate the allowed range in your app.
-
-```go
-// GET /user?page=2&size=10
-
-func (c *UserController) ListUsers(
-    ctx context.Context,
-    page query.Pagination,
-) httpx.Response[[]UserResponse] {
-    // page.Page = 2 (default: 1)
-    // page.Size = 10 (default: 20)
-    users, _ := c.service.List(ctx, page.Page, page.Size)
-    return httpx.Response[[]UserResponse]{Body: users}
-}
-```
-
+Declare `page` and `size` fields in a query DTO and apply defaults and bounds explicitly in the application.
 
 ### HTTP headers
 
-Use `header.Values` to access HTTP headers.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/header"
-
-func (c *CommonController) CheckHeader(
-    headers header.Values,
-) httpx.Response[HeaderInfo] {
-    return httpx.Response[HeaderInfo]{
-        Body: HeaderInfo{
-            UserAgent:   headers.Get("User-Agent"),
-            ContentType: headers.Get("Content-Type"),
-        },
-    }
-}
-```
-
-#### header.Values methods
-
-| Method | Return type | Description |
-|--------|----------|------|
-| `Get(key)` | `string` | Header value |
-| `Has(key)` | `bool` | Whether the header exists |
-
+Receive headers through a separate struct pointer with `header` tags. `RequestHeaders` above reads `X-Request-ID`.
 
 ### Path parameters
 
-Accept route path parameters with `path.Int`, `path.String`, and `path.Boolean`. The order of parameters declared in the path corresponds to the order of `path`-typed parameters in the handler. Go variable names can differ from the path parameter names.
+In v0.7.1, declare one scalar `input.Path[T]` argument per path variable in route order. The counts must match; do not mix scalar inputs with a path DTO or legacy path wrappers in one handler.
 
 ```go
-// GET /user/:id
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### path package structs
-
-```go
-package path
-
-type Int struct {
-    Value int64
-}
-
-type String struct {
-    Value string
-}
-
-type Boolean struct {
-    Value bool
-}
+r.GET("/:id/:name/:address", func(id input.Path[int64], name input.Path[string], address input.Path[string]) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": *id, "name": *name, "address": *address}}
+})
 ```
 
 
@@ -304,16 +271,17 @@ import "github.com/NARUBROWN/spine/pkg/spine"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
     // Read the value set by the interceptor
     if v, ok := spineCtx.Get("userRole"); ok {
-        role := v.(string)
-        // ...
+        if role, ok := v.(string); ok {
+            _ = role // Use the role in the application.
+        }
     }
 
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
     return httpx.Response[UserResponse]{Body: user}
 }
 ```
@@ -335,9 +303,9 @@ import "github.com/NARUBROWN/spine/pkg/httpx"
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,  // 200 OK (default)
@@ -378,9 +346,9 @@ func (c *UserController) CreateUser(
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,
@@ -450,11 +418,13 @@ Use `httpx.Redirect` to redirect the client to another URL.
 #### Basic redirect (302 Found)
 
 ```go
+type OAuthQuery struct { Code string `query:"code"` }
+
 func (c *AuthController) OAuthCallback(
     ctx context.Context,
-    q query.Values,
+    q input.Query[OAuthQuery],
 ) httpx.Redirect {
-    code := q.String("code")
+    code := q.Code
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
@@ -524,9 +494,9 @@ import "github.com/NARUBROWN/spine/pkg/httperr"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) error {
-    _, err := c.service.Get(ctx, int(userId.Value))
+    _, err := c.service.Get(ctx, int(*userId))
     if err != nil {
         return httperr.NotFound("유저를 찾을 수 없습니다.")
     }
@@ -557,9 +527,9 @@ Use `(httpx.Response[T], error)` to return both a success response and an error.
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userID path.Int,
+    userID input.Path[int64],
 ) (httpx.Response[UserResponse], error) {
-    user, err := c.service.Get(ctx, int(userID.Value))
+    user, err := c.service.Get(ctx, int(*userID))
     if err != nil {
         return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
     }
@@ -678,11 +648,16 @@ A single handler can accept a form DTO, uploaded files, and pagination together.
 #### Implement the handler
 
 ```go
+type PageQuery struct {
+    Page int `query:"page"`
+    Size int `query:"size"`
+}
+
 func (c *PostController) Upload(
     ctx context.Context,
     form  *CreatePostForm,           // form fields
     files multipart.UploadedFiles,   // multipart files
-    page  query.Pagination,          // query
+    page  input.Query[PageQuery],          // query
 ) httpx.Response[string] {
     fmt.Println("[FORM] Title  :", form.Title)
     fmt.Println("[FORM] Content:", form.Content)
@@ -698,12 +673,11 @@ func (c *PostController) Upload(
 
 ### How input types are distinguished
 
-Accept JSON and form DTOs as struct pointers. Accept queries, paths, and uploaded files as Spine-supported value types such as `query.Pagination`, `path.Int`, and `multipart.UploadedFiles`. Declaring an arbitrary struct value does not make it bind automatically.
-
+Receive JSON and form DTOs as struct pointers. Use `input.Query[T]` and `input.Path[T]` for query and path inputs, and `multipart.UploadedFiles` for files. Receive headers in a separate struct pointer with `header` tags.
 
 ## Input error handling considerations
 
-Spine `v0.6.5` with Echo platform `v0.1.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests.
+Malformed JSON and invalid path conversions return HTTP 400, unsupported body Content-Type returns 415, and a body over the configured limit returns 413. Binding fails before the controller runs. Verify actual requests and distinguish binding failures from business validation.
 
 ## Next steps
 

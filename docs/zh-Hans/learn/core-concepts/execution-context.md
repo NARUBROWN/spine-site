@@ -1,18 +1,14 @@
 # 执行上下文（ExecutionContext）
 
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
-
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info
+旧输入 API 的兼容规则请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，文档选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 Spine 为每个请求或消息创建执行上下文，将输入信息和执行状态传给流水线。拦截器通过 `core.ExecutionContext` 读写执行状态，HTTP 控制器则通过语义类型和只读的 `spine.Ctx` 仅接收所需的值。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
+本页的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中的 `legacy` 布局。
 
-理解这一区分后，就能将拦截器保存的值传给控制器，并判断 HTTP、事件消费者和 WebSocket 各自可使用哪些输入。本文的接口和行为以 Spine v0.6.5 为准。
+理解这一区分后，就能将拦截器保存的值传给控制器，并判断 HTTP、事件消费者和 WebSocket 各自可使用哪些输入。本文的接口和行为以 Spine v0.7.1 为准。
 
 应用处理器示例是对 [CLI 创建的项目](/zh-Hans/learn/tutorial/1-project-structure)的手动扩展。请保留生成的 `BuildApplication`，以及检查错误的 `user.Register(app)` 调用。`core/` 接口是公开契约，无需将 `internal/` 实现复制到应用中。
 
@@ -24,7 +20,7 @@ Spine 为每个请求或消息创建执行上下文，将输入信息和执行�
 | --- | --- | --- |
 | HTTP 控制器 | `context.Context` | 传递取消和超时信息、发布领域事件 |
 | HTTP 控制器 | `pkg/spine.Ctx` | 查询拦截器保存的值 |
-| HTTP 控制器 | `path.Int`、`query.Values`、DTO 等 | 已绑定的请求输入 |
+| HTTP 控制器 | `input.Path[T]`、`input.Query[T]`、DTO 等 | 已绑定的请求输入 |
 | 拦截器 | `core.ExecutionContext` | 查询请求信息、读写存储区，以及在执行前后处理 |
 | HTTP 参数解析器 | `core.HttpRequestContext` | 解析 HTTP 请求体、请求头和表单等输入 |
 | 消费者参数解析器 | `core.ConsumerRequestContext` | 解析事件名称和负载 |
@@ -183,11 +179,11 @@ type Ctx interface {
 
 ### 读取拦截器保存的认证信息
 
-以下方法是添加到认证拦截器已保存 `auth.user` 的应用中 `UserController` 的示例。需要导入 `context`、`github.com/NARUBROWN/spine/pkg/spine`、`pkg/path`、`pkg/httpx`。实际应用中，请根据认证策略检查 `authInfo` 是否存在及其类型。
+以下方法是添加到认证拦截器已保存 `auth.user` 的应用中 `UserController` 的示例。需要导入 `context`、`github.com/NARUBROWN/spine/pkg/spine`、`pkg/input`、`pkg/httpx`。实际应用中，请根据认证策略检查 `authInfo` 是否存在及其类型。
 
 ```go
 // src/user/user_controller.go
-func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId path.Int) httpx.Response[any] {
+func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId input.Path[int64]) httpx.Response[any] {
     authInfo, _ := cc.Get("auth.user")
     return httpx.Response[any]{Body: authInfo}
 }
@@ -235,11 +231,9 @@ type HttpRequestContext interface {
 
 ### HTTP 适配器的行为
 
-Spine 的 HTTP 适配器使用 Echo。`Param()` 首先查找 Spine 路由器保存的值，如果没有，则检查 Echo 的路径值。`Params()` 返回副本，以免修改原始路径映射。
+在 HTTP v3 中，Echo 或 net/http 提供原始请求，核心请求视图解析路径、查询、请求头和请求体。完整请求头映射的所有权可能因平台而异，因此请将返回值视为只读。
 
-HTTP `Headers()` 则直接返回请求的头部映射。不要假定所有查询结果都是副本，请仅将其用于读取。
-
-`Bind()` 和 `MultipartForm()` 将输入处理委托给 Echo。默认 HTTP DTO 解析器创建结构体指针，并传给 `Bind()`。应用中的控制器也应像下面这样声明指针。
+`Bind()` 和 `MultipartForm()` 由核心请求视图提供。普通请求体 DTO 解析器使用 `Bind()`，路径和查询不会合并到请求体 DTO。Spine DTO 输入不会调用 Echo Binder 或 JSONSerializer 扩展。
 
 ```go
 func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User], error)
@@ -247,7 +241,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 这段代码是方法签名示例，`CreateUserRequest` 和 `User` 是应用自行定义的类型。表单 DTO 在字段上使用 `form` 标签，上传文件可通过 `pkg/multipart.UploadedFiles` 接收。
 
-Spine `v0.6.5` 配合 Echo 平台 `v0.1.0`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。 [执行流水线](/zh-Hans/learn/core-concepts/pipeline#error-responses)
+Spine `v0.7.1` 配合 Echo 平台 `v0.2.0-rc.1`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。 [执行流水线](/zh-Hans/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext：解析事件输入
 
@@ -405,10 +399,10 @@ type WebSocketHandshakeInterceptor interface {
 
 ```go
 // src/user/user_controller.go
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
+func (c *UserController) CreateOrder(ctx context.Context, orderId input.Path[int64]) httpx.Response[string] {
     // 通过关联到 context.Context 的 EventBus 收集事件。
     publish.Event(ctx, OrderCreated{
-        OrderID: orderId.Value,
+        OrderID: *orderId,
         At:      time.Now(),
     })
 

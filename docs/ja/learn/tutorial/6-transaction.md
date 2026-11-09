@@ -1,18 +1,18 @@
 # トランザクション管理
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+::: info
+このチュートリアルの `legacy` レイアウトは互換 `app.Route` を使います。新しいコントローラーは[ルートの移行](/ja/learn/migration/preview-controller-routes)、入力の互換性は[入力の移行](/ja/learn/migration/v0.7.1-preview)、仕様の設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 1つのHTTPリクエストで実行する複数のINSERTを、1つのトランザクションにまとめます。リクエストが成功したらコミットし、途中で失敗したら先に実行したINSERTもロールバックするインターセプターを作成します。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの `src/user` の例は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成したアプリを使います。既定の `layered-v1` は役割別のディレクトリを使います。
 
 [データベース](/ja/learn/tutorial/5-database)の `example.com/my-app` の続きです。先に `src/database`、`src/entity`、`src/user` とマイグレーションを準備してください。以下のトランザクションのコードは手動で追加します。CLIにはBunのトランザクションやoutboxの生成機能はありません。
 
 ## 実行順序
 
-Spine v0.6.5では、`PreHandle` でトランザクションを開始し、`BeforeResponse` でコミットまたはロールバックします。レスポンスのシリアライズ、ステータスコードとCookieの検証、イベントの発行など、レスポンスの準備中に発生したエラーもロールバックの条件に含まれます。`AfterCompletion` は、完了後にログを記録したり、リソースを解放したりする際に使用します。
+Spine v0.7.1では、`PreHandle` でトランザクションを開始し、`BeforeResponse` でコミットまたはロールバックします。レスポンスのシリアライズ、ステータスコードとCookieの検証、イベントの発行など、レスポンスの準備中に発生したエラーもロールバックの条件に含まれます。`AfterCompletion` は、完了後にログを記録したり、リソースを解放したりする際に使用します。
 
 ```text
 PreHandle: トランザクション開始

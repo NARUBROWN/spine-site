@@ -1,12 +1,68 @@
 # 인터셉터
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+::: info
+아래 기존 프로젝트 예제는 `legacy` 레이아웃과 호환 `app.Route`를 사용합니다. 새 컨트롤러는 `api.Interceptors`로 라우트 정책을 지정합니다. [라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요.
 :::
 
 사용자 조회 요청에 로깅과 데모 인증을 추가하고, 요청이 인터셉터를 통과하는 순서를 확인합니다. 인터셉터는 여러 핸들러가 공유하는 인증, 권한 검사, 로깅, 트랜잭션 처리를 담당합니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 앱을 사용합니다. 기본 `layered-v1` 레이아웃은 역할별 디렉터리를 사용합니다.
+
+## 새 컨트롤러에 인터셉터 적용
+
+다음 독립 앱은 `api.Interceptors`로 인증 인터셉터를 한 라우트에 연결합니다. Spine `v0.7.1`과 호환 Echo 플랫폼을 설치한 별도 Go 모듈의 `main.go`에 저장해 실행하세요. 토큰은 동작 확인용으로만 사용합니다.
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"log"
+)
+
+type Auth struct{}
+
+func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	if ctx.Header("Authorization") != "Bearer demo-token" {
+		return httperr.Unauthorized("unauthorized")
+	}
+	return nil
+}
+func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	}, api.Interceptors(&Auth{}))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+첫 요청은 401, 두 번째는 200과 `{"id":1}`을 반환합니다. 실제 인증에는 안전한 토큰 검증을 구현하세요.
+
+```bash
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+```
 
 ## CLI 프로젝트에서 시작
 
@@ -31,7 +87,7 @@ CLI는 `src/user` 파일과 `BuildApplication`의 `user.Register(app)` 호출을
 
 ## 인터셉터 수명주기
 
-Spine v0.6.5의 HTTP 요청은 전역 인터셉터, 라우팅과 입력 바인딩, 라우트 인터셉터, 컨트롤러 순서로 실행됩니다. 인터셉터는 네 수명주기 메서드를 모두 구현해야 합니다.
+Spine v0.7.1의 HTTP 요청은 전역 인터셉터, 라우팅과 입력 바인딩, 라우트 인터셉터, 컨트롤러 순서로 실행됩니다. 인터셉터는 네 수명주기 메서드를 모두 구현해야 합니다.
 
 ```mermaid
 graph TD

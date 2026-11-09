@@ -1,30 +1,26 @@
 # httperr 패키지
 
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
-
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+::: info
+이 문서는 Spine `v0.7.1`의 오류 처리를 설명합니다. 기존 입력 API에서의 변경은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 참고하세요.
 :::
 
 `httperr`는 HTTP 상태 코드와 클라이언트에게 전달할 오류 메시지를 담는 패키지입니다. 컨트롤러에서 `httperr.NotFound("사용자를 찾을 수 없습니다")`처럼 오류를 반환하면 Spine이 상태 코드와 JSON 오류 응답으로 변환합니다. 컨트롤러가 Echo 등의 응답 객체를 직접 다룰 필요는 없습니다.
 
-이 페이지는 Spine v0.6.5의 `github.com/NARUBROWN/spine/pkg/httperr`를 기준으로 설명합니다.
+이 페이지는 Spine v0.7.1의 `github.com/NARUBROWN/spine/pkg/httperr`를 기준으로 설명합니다.
 
 ## CLI 프로젝트에서 사용하기
 
-아래 컨트롤러는 [CLI로 생성한 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 코드 조각입니다. `httpx`, `httperr`, `path`는 각각 `github.com/NARUBROWN/spine/pkg` 아래 패키지입니다. 컨트롤러 생성자와 라우트를 `BuildApplication`에서 사용하는 등록 경로에 연결하세요. `User`, 저장소, 서비스 등 업무 타입은 앱에서 정의합니다.
+아래 컨트롤러는 [CLI로 생성한 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 코드 조각입니다. `httpx`, `httperr`, `input`는 각각 `github.com/NARUBROWN/spine/pkg` 아래 패키지입니다. 컨트롤러 생성자와 라우트를 `BuildApplication`에서 사용하는 등록 경로에 연결하세요. `User`, 저장소, 서비스 등 업무 타입은 앱에서 정의합니다.
 
 성공 값은 `httpx.Response[T]`로 감싸고, 실패 시에는 빈 응답 값과 오류를 함께 반환합니다. 요청 본문을 받는 예제의 DTO는 `*PaymentRequest`처럼 포인터로 선언합니다.
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
+func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
+    if *userId <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
     }
@@ -35,7 +31,7 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 
 이 메서드를 `GET /users/:id`로 등록했다면 다음과 같이 응답합니다. 예제는 저장소의 조회 오류를 모두 404로 처리한다고 가정합니다. 실제 앱에서는 조회 결과가 없는 경우와 데이터베이스 장애를 구분해 상태 코드를 선택하세요.
 
-```bash
+```text
 # 잘못된 ID
 GET /users/-1
 → 400 {"message": "유효하지 않은 사용자 ID입니다"}
@@ -86,7 +82,7 @@ func (e *HTTPError) Error() string {
 
 ## 기본 헬퍼 함수
 
-Spine v0.6.5는 다음 네 가지 헬퍼를 제공합니다. 모두 `msg string`을 받아 `error`를 반환합니다.
+Spine v0.7.1는 다음 네 가지 헬퍼를 제공합니다. 모두 `msg string`을 받아 `error`를 반환합니다.
 
 | 함수 | 상태 코드 | 사용할 상황 |
 | --- | --- | --- |
@@ -106,7 +102,7 @@ func BadRequest(msg string) error {
 ```
 
 ```go
-if userId.Value <= 0 {
+if *userId <= 0 {
     return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
 }
 ```
@@ -222,14 +218,17 @@ func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt
 성공 응답 본문이 필요 없는 메서드는 `error`만 반환할 수 있습니다.
 
 ```go
-func (c *UserController) DeleteUser(userId path.Int) error {
-    exists, err := c.repo.Exists(userId.Value)
-    if err != nil || !exists {
+func (c *UserController) DeleteUser(userId input.Path[int64]) error {
+    exists, err := c.repo.Exists(*userId)
+    if err != nil {
+        return err
+    }
+    if !exists {
         return httperr.NotFound("사용자를 찾을 수 없습니다")
     }
 
-    if err := c.repo.Delete(userId.Value); err != nil {
-        return httperr.BadRequest("삭제할 수 없습니다")
+    if err := c.repo.Delete(*userId); err != nil {
+        return err
     }
 
     return nil  // 성공 시 nil 반환
@@ -238,7 +237,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
 
 nil을 반환하면 오류 응답은 작성하지 않습니다. 이 형식만으로 특정 성공 상태 코드를 지정하지는 않습니다. 삭제 성공에 204 등 명시적인 상태 코드가 필요하다면 `httpx` 응답 타입을 사용하세요.
 
-예제는 간결하게 보이도록 존재 확인 오류와 삭제 오류를 각각 404, 400으로 처리합니다. 실제 저장소 오류의 종류에 맞게 상태 코드와 재시도 정책을 구분해야 합니다.
+존재하지 않는 사용자는 404로 처리하고 저장소 장애는 그대로 반환합니다. 앱에서 오류 종류에 따라 상태 코드와 재시도 정책을 정하세요.
 
 ## 다른 오류 상태 코드 사용하기
 
@@ -314,6 +313,6 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 | 요청 본문 크기 제한 초과 | 413, `"Request entity too large"` 응답 |
 | 실제 응답이 이미 기록됨 | 추가 오류 응답을 쓰지 않아 이중 응답 방지 |
 
-Spine v0.6.5는 응답 전 처리까지 마친 뒤 준비한 응답을 실제 전송 계층에 반영합니다. `BeforeResponse`에서 오류가 발생하면 준비 중이던 성공 응답이 오류 응답으로 바뀔 수 있습니다. `AfterCompletion`은 응답 처리 뒤에 실행되므로, 이 단계에서는 새 오류 응답을 작성하려 하기보다 오류와 전송 결과를 기록하세요.
+Spine v0.7.1는 응답 전 처리까지 마친 뒤 준비한 응답을 실제 전송 계층에 반영합니다. `BeforeResponse`에서 오류가 발생하면 준비 중이던 성공 응답이 오류 응답으로 바뀔 수 있습니다. `AfterCompletion`은 응답 처리 뒤에 실행되므로, 이 단계에서는 새 오류 응답을 작성하려 하기보다 오류와 전송 결과를 기록하세요.
 
 오류는 Go의 반환값으로 전달하세요. `panic`은 정상적인 입력 검증이나 업무 실패를 표현하는 수단으로 사용하지 않습니다. 인터셉터의 중단과 마무리 처리는 [인터셉터 튜토리얼](/ko/learn/tutorial/4-interceptor)을 참고하세요.

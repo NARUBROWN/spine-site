@@ -24,9 +24,16 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+아래 채널 선택 명령과 생성 결과는 CLI `v0.4.3-rc.1` 이상을 기준으로 합니다. `@latest`가 더 낮은 버전을 설치한다면 다음 명령으로 호환 RC를 설치하세요. 호환되는 정식 플랫폼 태그가 아직 없다면 프로젝트 생성 시 `--channel rc`를 사용하고 생성된 `go.mod`를 확인하세요.
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
 CLI 자체를 갱신하려면 위 `go install` 명령을 다시 실행합니다. `spine update`는 선택된 레시피의 프로젝트 의존성을 갱신하며 CLI 실행 파일이나 앱 소스는 바꾸지 않습니다.
 
-`spine version`으로 설치된 CLI 버전을 확인합니다. 0.6.5 레시피를 사용하려면 CLI 0.4.2 이상으로 갱신하세요.
+`spine version`으로 설치된 CLI 버전을 확인합니다.
 
 `spine` 명령을 찾지 못하고 `GOBIN`을 따로 설정하지 않았다면, Bash나 Zsh에서 다음 명령으로 현재 세션의 경로를 추가하세요. 계속 사용하려면 같은 설정을 셸 시작 파일에 저장합니다. `GOBIN`을 설정했다면 그 디렉터리를 대신 추가하세요.
 
@@ -37,23 +44,27 @@ spine version
 
 ## Preview CLI 설치 {#preview-cli}
 
-v0.7.0 미리보기는 `@preview`로 CLI의 Preview 브랜치 최신 커밋을 설치합니다. 발행된 태그 사이의 변경도 포함할 수 있으며, 일반 정식 설치는 `@latest`를 사용합니다.
+Preview CLI는 `@preview`로 설치할 수 있습니다. 이는 이동하는 브랜치이며, 앱의 의존성 채널은 `spine new --channel`로 별도 선택합니다. 정식 앱에는 `main`을 사용하세요.
+
+```
+
+RC 채널은 실행 시점에 더 최신 코어 RC를 선택할 수 있습니다. 코어 `v0.7.1`을 재현하려면 생성된 프로젝트에서 다음을 실행하고 호환 플랫폼 버전도 `go.mod`에서 확인하세요. `spine update`는 채널에 따라 이 버전을 다시 바꿀 수 있습니다.
 
 ```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
-
-`spine version`으로 실제 설치된 태그 또는 pseudo-version을 확인하세요. 새 프로젝트의 `platform-contracts-preview` 레시피는 코어와 선택한 플랫폼, playground를 각각 `@preview`로 조회하고 해석한 버전을 `go.mod`에 기록합니다. 아래 `spine.toml` 예시는 정식 레시피 기준입니다. Preview의 `--skip-install`도 버전 조회에는 Go와 네트워크 또는 모듈 프록시 캐시가 필요하며 설치와 빌드만 생략합니다.
-
-CLI 설치만으로 기존 앱의 레시피는 바뀌지 않습니다. 기존 앱 전환과 Swagger UI, ReDoc 활성화는 [Preview 전환 안내](/ko/learn/migration/v0.7.0-preview)를 따르세요.
 
 ## 새 프로젝트 생성
 
 프로젝트를 둘 상위 디렉터리에서 실행합니다. 같은 이름의 `my-app` 디렉터리가 이미 있다면 다른 이름을 사용하세요.
 
 ```bash
-spine new my-app --module example.com/my-app
+spine new my-app --module example.com/my-app --channel main --no-interactive
 cd my-app
 ```
 
@@ -68,9 +79,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `internal/application/application.go`의 `BuildApplication()`이 구성 요소와 `GET /health`를 등록합니다. 생성된 `main.go`는 이 함수를 호출하고, `app.Validate(options)`로 구성을 검증한 뒤 `app.Run(options)`으로 서버를 실행합니다.

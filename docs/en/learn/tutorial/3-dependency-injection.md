@@ -1,12 +1,12 @@
 # Dependency injection
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+::: info
+The `legacy` layout uses `app.Route`, which remains available for compatibility but is deprecated. See [controller and route migration](/en/learn/migration/preview-controller-routes) for the new registration style.
 :::
 
 Explore constructor registration and dependency injection (DI) using the `src/user` resource created in [Controllers](/en/learn/tutorial/2-controller). By the end, you can connect controllers, services, and repositories, and identify circular dependencies or missing constructors.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
+The `src/user` examples use the app created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). The default `layered-v1` layout uses directories organized by role.
 
 Prepare the project from [Your first app](/en/learn/tutorial/1-project-structure) and work from the `my-app` root. The database and wrapper type examples later in this page are separate extensions that are not included automatically in the basic resource.
 
@@ -22,6 +22,59 @@ In the constructor below, `*UserRepository` is a dependency required by `UserSer
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
+```
+
+## Register constructors by role
+
+This standalone app registers a repository, service, and controller using `Constructor` methods and role markers. Dependencies resolve by type even though registration is in reverse order. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save this as `main.go`, and run it.
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
+
+type Repository struct{}
+
+func (*Repository) Constructor() *Repository { return &Repository{} }
+func (*Repository) Greeting() string         { return "hello" }
+
+type Service struct{ repository *Repository }
+
+func (*Service) Constructor(repository *Repository) *Service { return &Service{repository: repository} }
+
+type Controller struct{ service *Service }
+
+func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/greeting", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: c.service.repository.Greeting()}
+	})
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(
+		constructor.Controller(&Controller{}),
+		constructor.Service(&Service{}),
+		constructor.Repository(&Repository{}),
+	)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+The following request from another terminal returns `hello`. A role marker registers a type; global or per-route interceptor application must be configured separately.
+
+```bash
+curl http://localhost:8080/greeting
 ```
 
 ## CLI-generated dependencies

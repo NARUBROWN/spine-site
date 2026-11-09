@@ -10,8 +10,10 @@
 
 프로젝트와 WebSocket 핸들러를 생성합니다. 이후 명령은 `chat-app/`에서 실행합니다.
 
+CLI `v0.4.3-rc.1` 이상이 필요합니다. `--channel main`은 정식 의존성을 선택하며, 호환되는 플랫폼 정식 태그가 아직 없다면 검증할 때 `--channel rc`를 사용하세요.
+
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla
+spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla --channel main --no-interactive
 cd chat-app
 spine doctor
 spine generate websocket chat --path /ws/chat --field message:string

@@ -1,134 +1,78 @@
 # 简介
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
+Spine 是通过 Go 代码配置构造函数、路由和拦截器的后端框架。在 `v0.7.1` 中，控制器注册自己的 HTTP 路由，处理器签名描述输入来源和响应类型。
 
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
+## 配置并运行应用
 
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
-:::
-
-Spine 是一个通过 Go 代码注册构造函数、路由和拦截器的 Web 框架。通过注册代码，可以了解由哪个处理器接收请求，以及在处理器调用前后执行哪些操作。
-
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
-
-如果是第一次使用，请先按照[第一个应用](/zh-Hans/learn/getting-started/first-app)通过 CLI 创建项目，并确认 `GET /health` 的响应。本文介绍构建应用时使用的核心概念。
-
-## 应用配置与运行
-
-在 CLI 生成的项目中，应用配置代码集中在 `internal/application/application.go` 的 `BuildApplication()` 中。`main.go` 按照 `BuildApplication` → `Validate` → `Run` 的顺序构建、验证并运行应用。
-
-下面展示手动实现用户功能时的注册示例。代码省略了 `UserController` 和拦截器的实现，请勿用此示例覆盖生成的文件。
+以下独立应用配置了注入服务和仓库的控制器。在独立 Go 模块中安装 Spine `v0.7.1` 和兼容 Echo 平台，保存为 `main.go` 并运行 `go run .`。
 
 ```go
-func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
+package main
 
-    // 注册构造函数后，无论注册顺序如何，都会解析依赖。
-    app.Constructor(NewUserRepository, NewUserService, NewUserController)
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
 
-    // 按执行顺序注册拦截器。
-    app.InterceptorFor(boot.InterceptorHTTP, &TxInterceptor{}, &LoggingInterceptor{})
+type Repository struct{}
 
-    // 将处理器关联到 HTTP 方法与路径。
-    app.Route("GET", "/users", (*UserController).GetUser)
+func (*Repository) Constructor() *Repository { return &Repository{} }
+func (*Repository) Greeting() string         { return "hello" }
 
-    return app, boot.Options{
-        Address: ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout: 10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    }, nil
+type Service struct{ repository *Repository }
+
+func (*Service) Constructor(repository *Repository) *Service { return &Service{repository: repository} }
+
+type Controller struct{ service *Service }
+
+func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/greeting", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: c.service.repository.Greeting()}
+	})
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(
+		constructor.Controller(&Controller{}),
+		constructor.Service(&Service{}),
+		constructor.Repository(&Repository{}),
+	)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
+在另一个终端发送请求会返回 `hello`。CLI 生成的项目将应用配置集中在 `BuildApplication()`，并由 `main.go` 验证和运行。
 
-CLI 命令 `spine generate resource user` 生成的代码，其名称和路径与上例不同。生成的处理器是 `src/user` 中的 `UserController.Get`，路径为 `GET /user/:id`。如果构造函数已注册，请勿重复注册相同的构造函数或路由。还应保留添加到 `BuildApplication` 中的 `user.Register(app)` 调用及其错误处理。详细步骤请参阅[项目结构](/zh-Hans/learn/tutorial/1-project-structure)。
+```bash
+curl http://localhost:8080/greeting
+```
 
 ## 核心概念
 
-### 1. 基于构造函数的依赖注入
+### 构造函数和依赖
 
-通过构造函数参数声明所需的依赖，并将构造函数注册到 `app.Constructor`。在下面的示例中，`UserService` 接收 `UserRepository`。
+在 `Constructor` 方法中声明所需类型，并通过 `constructor.Repository`、`constructor.Service`、`constructor.Controller` 注册。容器按类型而非注册顺序解析依赖。现有构造函数也继续受支持。
 
-```go
-// 构造函数参数即依赖声明
-func NewUserService(repo *UserRepository) *UserService {
-    return &UserService{repo: repo}
-}
+### 路由与输入
 
-// 注册后自动解析依赖图
-app.Constructor(NewUserRepository, NewUserService, NewUserController)
-```
+在 `RegisterRoutes` 中通过 `api.Registry` 注册路径和回调。`input.Path[T]`、`input.Query[T]`、`input.Body[T]` 表示输入来源，请求头使用独立的带标签结构体。现有 `app.Route` 为兼容性保留，但已弃用。
 
-### 2. 拦截器流水线
+### 拦截器与响应
 
-拦截器在控制器调用前后执行认证、事务、日志记录等公共操作。下面的示例展示了三个自行实现的拦截器的注册顺序。
+拦截器在处理器前后执行认证、日志和事务等通用工作。成功响应可使用 `httpx.Response[T]`，失败可返回 `error`。如果认证必须在请求体绑定前执行，请确认全局拦截器的执行时机。
 
-```go
-app.Interceptor(
-    &TxInterceptor{},      // 1. 开始事务
-    &AuthInterceptor{},    // 2. 检查身份验证
-    &LoggingInterceptor{}, // 3. 记录日志
-)
+### 平台
 
-```
-
-`PreHandle` 按注册顺序执行。控制器返回后的 `PostHandle`、响应处理前的 `BeforeResponse` 和响应处理后的 `AfterCompletion` 按相反顺序执行。发生错误时的调用条件请参阅[拦截器](/zh-Hans/learn/tutorial/4-interceptor)。
-
-### 3. 显式路由
-
-使用 `app.Route` 将 HTTP 方法、路径和处理器关联起来。为每项功能设置注册函数，可以集中管理相关路由。
-
-```go
-// 在同一处管理所有路由
-func RegisterUserRoutes(app spine.App) {
-    app.Route("GET", "/users", (*UserController).GetUser)
-    app.Route("POST", "/users", (*UserController).CreateUser)
-    app.Route("PUT", "/users", (*UserController).UpdateUser)
-    app.Route("DELETE", "/users", (*UserController).DeleteUser)
-}
-```
-
-### 4. 类型安全的处理器
-
-通过处理器的参数和返回类型，表达要从请求中读取的值以及响应的结构。下面示例中的查询处理器读取查询参数，创建处理器则通过结构体指针接收 JSON 请求体。服务以及请求和响应类型需要自行实现。
-
-```go
-// 函数签名即 API 规范
-func (c *UserController) GetUser(
-    ctx context.Context,      // 上下文
-    q query.Values,           // 查询参数
-) (httpx.Response[UserResponse], error) {     // 响应类型
-    user, err := c.svc.Get(ctx, q.Int("id", 0))
-    if err != nil {
-        return httpx.Response[UserResponse]{}, err
-    }
-    return httpx.Response[UserResponse]{Body: user}, nil
-}
-
-// 自动绑定 DTO
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *CreateUserRequest,    // JSON body → 结构体（指针）
-) (httpx.Response[UserResponse], error) {
-    user, err := c.svc.Create(ctx, req)
-    if err != nil {
-        return httpx.Response[UserResponse]{}, err
-    }
-    return httpx.Response[UserResponse]{Body: user}, nil
-}
-```
+HTTP 可以选择 Echo 或 net/http 实现。WebSocket、事件代理和 validator 也通过独立平台连接。
 
 ## 开始使用
 
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
-```
-
-安装 CLI 后，请按照[第一个应用](/zh-Hans/learn/getting-started/first-app)创建项目并确认 HTTP 响应。如果找不到命令，请参阅[安装指南](/zh-Hans/learn/getting-started/installation)中的路径设置。
+完成[安装](/zh-Hans/learn/getting-started/installation)后，在[第一个应用](/zh-Hans/learn/getting-started/first-app)中创建 CLI 项目并确认响应。可继续阅读[控制器](/zh-Hans/learn/tutorial/2-controller)、[依赖注入](/zh-Hans/learn/tutorial/3-dependency-injection)和[拦截器](/zh-Hans/learn/tutorial/4-interceptor)。

@@ -1,18 +1,18 @@
 # 事务管理
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+::: info
+本教程的 `legacy` 布局使用兼容的 `app.Route`。新控制器请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)，输入兼容规则请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，规范选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 将一次 HTTP 请求中执行的多个 INSERT 合并到同一个事务。编写拦截器，在请求成功时提交，中途失败时连同之前的 INSERT 一并回滚。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
+本页的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的应用。默认 `layered-v1` 布局按角色划分目录。
 
 在[数据库](/zh-Hans/learn/tutorial/5-database)教程的 `example.com/my-app` 项目上继续操作。请先准备 `src/database`、`src/entity`、`src/user` 和迁移。以下事务代码需要手动添加，CLI 不提供 Bun 事务或 outbox 生成器。
 
 ## 执行顺序
 
-在 Spine v0.6.5 中，在 `PreHandle` 中启动事务，并在 `BeforeResponse` 中提交或回滚。响应序列化、状态码和 Cookie 验证、事件发布等响应准备过程中发生的错误，也会触发回滚。`AfterCompletion` 用于在完成后记录日志或清理资源。
+在 Spine v0.7.1 中，在 `PreHandle` 中启动事务，并在 `BeforeResponse` 中提交或回滚。响应序列化、状态码和 Cookie 验证、事件发布等响应准备过程中发生的错误，也会触发回滚。`AfterCompletion` 用于在完成后记录日志或清理资源。
 
 ```text
 PreHandle: 启动事务

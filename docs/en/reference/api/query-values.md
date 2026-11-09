@@ -1,11 +1,7 @@
 # query.Values
 
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: warning Deprecated
+`query.Values` and its lookup methods are deprecated in `v0.7.1` and retained for existing code. Use a [query DTO](/en/learn/core-concepts/query-values) for new code. Mixing legacy inputs with new Path, Query, or Header DTOs in one handler is rejected during preparation. See [input migration](/en/learn/migration/v0.7.1-preview) and [OpenAPI](/en/reference/api/openapi).
 :::
 
 `query.Values` is a helper for reading HTTP query parameters. When you declare the value type `query.Values` as a controller parameter, the runtime injects the request's query values.
@@ -236,7 +232,7 @@ func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
 - Leading and trailing whitespace is not removed from boolean values. For example, `" true "` is unrecognized and returns `def`.
 - `NewValues` does not copy the supplied map. Changing the original map after construction also changes lookup results.
 
-For the implementation, see the [query helper](https://github.com/NARUBROWN/spine/blob/v0.6.5/pkg/query/types.go) and [automatic injection code](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/query_values_resolver.go).
+For the implementation, see the [query helper](https://github.com/NARUBROWN/spine/blob/v0.7.1/pkg/query/types.go) and [automatic injection code](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/query_values_resolver.go).
 
 ## See also
 

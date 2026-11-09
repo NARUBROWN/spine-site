@@ -1,11 +1,7 @@
 # query.Values
 
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
-
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+::: warning Deprecated
+`query.Values` 及其读取方法在 `v0.7.1` 中已弃用，为兼容旧代码而保留。新代码请使用[查询 DTO](/zh-Hans/learn/core-concepts/query-values)。同一处理器中混用旧输入与新的 Path、Query、Header DTO 会在准备阶段被拒绝。请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)和 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 `query.Values` 是用于读取 HTTP 查询参数的辅助类型。在控制器参数中声明值类型 `query.Values`，运行时便会注入请求的查询值。
@@ -236,7 +232,7 @@ func (c *ProductController) Filter(q query.Values) httpx.Response[[]Product] {
 - 不会移除布尔值首尾的空格。例如，`" true "` 无法识别，会返回 `def`。
 - `NewValues` 不会复制传入的映射。创建后修改原始映射，查询结果也会改变。
 
-实现可在[查询辅助类型](https://github.com/NARUBROWN/spine/blob/v0.6.5/pkg/query/types.go)和[自动注入代码](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/query_values_resolver.go)中查看。
+实现可在[查询辅助类型](https://github.com/NARUBROWN/spine/blob/v0.7.1/pkg/query/types.go)和[自动注入代码](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/query_values_resolver.go)中查看。
 
 ## 参考
 

@@ -1,20 +1,12 @@
 # コントローラー
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
-:::
-
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: info
+`app.Route` は互換性のため維持されますが非推奨です。新しいアプリは[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を参照してください。以前の入力 API からの変更は[入力の移行](/ja/learn/migration/v0.7.1-preview)、仕様の設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 CLI で作成した `my-app` プロジェクトに `GET /user/:id` のコントローラーを追加し、リクエストパスの整数を JSON レスポンスとして返します。続いて、クエリ、ヘッダー、リクエストボディの受け取り方とレスポンスの型を確認します。
 
-このページの機能別 `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使用します。CLI `v0.4.2` の標準レイアウトは役割別の `layered-v1` です。どちらも Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` を使用します。
+このページの `src/user` の例は、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成した `my-app` を使います。既定の `layered-v1` は役割別のディレクトリを使います。
 
 [最初のアプリ](/ja/learn/tutorial/1-project-structure)のインストールとプロジェクト作成を済ませ、プロジェクトルートで進めてください。すでに `spine generate resource user` を実行した場合は、生成手順を省略してファイルを確認します。
 
@@ -45,10 +37,9 @@ src/user/
 ```go
 package user
 
-import (
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-)
+import "github.com/NARUBROWN/spine/pkg/httpx"
+
+type UserPath struct { ID int64 `path:"id"` }
 
 type UserController struct { service *UserService }
 
@@ -56,14 +47,82 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
-    return httpx.Response[map[string]any]{Body: map[string]any{"id": id.Value}}
+func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": params.ID}}
 }
 ```
 
 ::: info
 `resource` は、取得用のルートと依存性の登録を含む基本構成を生成します。データベース、ドメインモデル、データ転送オブジェクト（DTO）、作成や更新の機能は自分で実装する必要があります。
 :::
+
+
+## v0.7.1 の入力とルートを実行する
+
+以下は独立したアプリです。Spine `v0.7.1` と互換 HTTP プラットフォームを導入した別の Go モジュールの `main.go` に保存し、`go run .` で実行します。グループの登録順はパス、ハンドラー、選択オプションです。ボディ、パス、クエリ、ヘッダーは別の入力で受け取ります。
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+)
+
+type UserController struct{}
+type SearchQuery struct {
+	Name string `query:"name"`
+}
+type RequestHeaders struct {
+	RequestID string `header:"X-Request-ID"`
+}
+type CreateUser struct {
+	Name string `json:"name"`
+}
+type User struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func (*UserController) Constructor() *UserController { return &UserController{} }
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	users := r.Group("/users", api.Tags("Users"))
+	users.GET("/search", func(q input.Query[SearchQuery], h *RequestHeaders) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"name": q.Name, "request_id": h.RequestID}}
+	})
+	users.GET("/id/:id", func(id input.Path[int64]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{ID: *id}}
+	}, api.Summary("Get user"))
+	users.POST("/create", func(body input.Body[CreateUser]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{Name: body.Name}, Options: httpx.ResponseOptions{Status: 201}}
+	})
+}
+
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&UserController{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+別のターミナルからリクエストします。最初は名前とリクエスト ID、次は ID を返します。POST は 201、数値以外のパス値は 400 を返します。
+
+```bash
+curl -H 'X-Request-ID: r1' 'http://localhost:8080/users/search?name=alice'
+curl http://localhost:8080/users/id/12
+curl -i -H 'Content-Type: application/json' -d '{"name":"bob"}' http://localhost:8080/users/create
+curl -i http://localhost:8080/users/id/not-a-number
+```
+
 
 ## 生成されたルートの登録を確認する
 
@@ -125,13 +184,12 @@ Spine は、ハンドラーのパラメーターの型に応じてリクエス�
 | 型 | 説明 | 例 |
 |------|------|------|
 | `context.Context` | リクエストコンテキスト | `ctx context.Context` |
-| `query.Values` | クエリパラメーター | `q query.Values` |
-| `query.Pagination` | ページネーション | `page query.Pagination` |
-| `header.Values` | HTTP ヘッダー | `headers header.Values` |
+| `input.Query[T]` | クエリパラメーター | `q input.Query[SearchQuery]` |
+| `*struct` (`header`) | HTTP ヘッダー | `headers *RequestHeaders` |
 | `*struct`（DTO） | JSON リクエストボディ | `req *CreateUserRequest` |
 | `*struct`（フォーム DTO） | フォームのテキストフィールド | `form *CreatePostForm` |
 | `multipart.UploadedFiles` | マルチパートでアップロードされたファイル | `files multipart.UploadedFiles` |
-| `path.*` | パスパラメーター | `userId path.Int` |
+| `input.Path[T]` | パスパラメーター | `userId input.Path[int64]` |
 | `spine.Ctx` | コントローラーコンテキスト | `spineCtx spine.Ctx` |
 
 ### サポートする戻り値の型
@@ -150,115 +208,24 @@ Spine は、ハンドラーのパラメーターの型に応じてリクエス�
 
 ### クエリパラメーター
 
-`query.Values` でクエリ文字列を読み取ります。次のリクエストでは、`id` は `1`、`name` は `alice`、`active` は `true` です。
-
-```go
-// GET /user?id=1&name=alice&active=true
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64、デフォルト値 0
-    name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool、デフォルト値 false
-    _ = name
-    _ = active
-
-    user, _ := c.service.Get(ctx, int(id))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### query.Values のメソッド
-
-| メソッド | 戻り値の型 | 説明 |
-|--------|----------|------|
-| `Get(key)` | `string` | 最初の値（存在しない場合は空文字列） |
-| `String(key)` | `string` | 文字列の値 |
-| `Int(key, default)` | `int64` | 値が存在しない、または整数に変換できない場合は指定したデフォルト値 |
-| `GetBoolByKey(key, default)` | `bool` | 値が存在しない、または真偽値に変換できない場合は指定したデフォルト値 |
-| `Has(key)` | `bool` | キーが存在するかどうか |
-
+上の実行例では `input.Query[SearchQuery]` が `query` タグに従って構造体フィールドに値をバインドします。タグのないフィールドには lowerCamel 名を使います。
 
 ### ページネーション
 
-`query.Pagination` は、`page` と `size` のクエリパラメーターを整数に変換します。値が存在しない、または整数に変換できない場合は、それぞれ `1` と `20` を使います。負の数や `0` も整数として扱うため、許容範囲はアプリで検証してください。
-
-```go
-// GET /user?page=2&size=10
-
-func (c *UserController) ListUsers(
-    ctx context.Context,
-    page query.Pagination,
-) httpx.Response[[]UserResponse] {
-    // page.Page = 2 (デフォルト値: 1)
-    // page.Size = 10 (デフォルト値: 20)
-    users, _ := c.service.List(ctx, page.Page, page.Size)
-    return httpx.Response[[]UserResponse]{Body: users}
-}
-```
-
+クエリ DTO に `page` と `size` フィールドを宣言し、既定値と許容範囲はアプリで明示的に処理します。
 
 ### HTTP ヘッダー
 
-`header.Values` を使って HTTP ヘッダーにアクセスします。
-
-```go
-import "github.com/NARUBROWN/spine/pkg/header"
-
-func (c *CommonController) CheckHeader(
-    headers header.Values,
-) httpx.Response[HeaderInfo] {
-    return httpx.Response[HeaderInfo]{
-        Body: HeaderInfo{
-            UserAgent:   headers.Get("User-Agent"),
-            ContentType: headers.Get("Content-Type"),
-        },
-    }
-}
-```
-
-#### header.Values のメソッド
-
-| メソッド | 戻り値の型 | 説明 |
-|--------|----------|------|
-| `Get(key)` | `string` | ヘッダーの値 |
-| `Has(key)` | `bool` | ヘッダーが存在するかどうか |
-
+`header` タグ付きの別の構造体ポインターで受け取ります。上の `RequestHeaders` は `X-Request-ID` を読みます。
 
 ### パスパラメーター
 
-ルートパスのパラメーターを `path.Int`、`path.String`、`path.Boolean` で受け取ります。パスで宣言したパラメーターの順序と、ハンドラーの `path` 型パラメーターの順序が対応します。Go の変数名はパスパラメーター名と異なっていても構いません。
+v0.7.1 ではパス変数ごとにスカラー `input.Path[T]` 引数をルートの順に宣言します。数を一致させ、同じハンドラーでパス DTO や従来のパスラッパーと混在させないでください。
 
 ```go
-// GET /user/:id
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### path パッケージの構造体
-
-```go
-package path
-
-type Int struct {
-    Value int64
-}
-
-type String struct {
-    Value string
-}
-
-type Boolean struct {
-    Value bool
-}
+r.GET("/:id/:name/:address", func(id input.Path[int64], name input.Path[string], address input.Path[string]) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": *id, "name": *name, "address": *address}}
+})
 ```
 
 
@@ -304,16 +271,17 @@ import "github.com/NARUBROWN/spine/pkg/spine"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
     // インターセプターが Set で保存した値を取得
     if v, ok := spineCtx.Get("userRole"); ok {
-        role := v.(string)
-        // ...
+        if role, ok := v.(string); ok {
+            _ = role // Use the role in the application.
+        }
     }
 
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
     return httpx.Response[UserResponse]{Body: user}
 }
 ```
@@ -335,9 +303,9 @@ import "github.com/NARUBROWN/spine/pkg/httpx"
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,  // 200 OK (デフォルト)
@@ -378,9 +346,9 @@ func (c *UserController) CreateUser(
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,
@@ -450,11 +418,13 @@ type Cookie struct {
 #### 基本的なリダイレクト（302 Found）
 
 ```go
+type OAuthQuery struct { Code string `query:"code"` }
+
 func (c *AuthController) OAuthCallback(
     ctx context.Context,
-    q query.Values,
+    q input.Query[OAuthQuery],
 ) httpx.Redirect {
-    code := q.String("code")
+    code := q.Code
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
@@ -524,9 +494,9 @@ import "github.com/NARUBROWN/spine/pkg/httperr"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) error {
-    _, err := c.service.Get(ctx, int(userId.Value))
+    _, err := c.service.Get(ctx, int(*userId))
     if err != nil {
         return httperr.NotFound("유저를 찾을 수 없습니다.")
     }
@@ -557,9 +527,9 @@ func (c *UserController) GetUser(
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userID path.Int,
+    userID input.Path[int64],
 ) (httpx.Response[UserResponse], error) {
-    user, err := c.service.Get(ctx, int(userID.Value))
+    user, err := c.service.Get(ctx, int(*userID))
     if err != nil {
         return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
     }
@@ -678,11 +648,16 @@ curl -X POST http://localhost:8080/upload \
 #### ハンドラーを実装する
 
 ```go
+type PageQuery struct {
+    Page int `query:"page"`
+    Size int `query:"size"`
+}
+
 func (c *PostController) Upload(
     ctx context.Context,
     form  *CreatePostForm,           // form fields
     files multipart.UploadedFiles,   // multipart files
-    page  query.Pagination,          // query
+    page  input.Query[PageQuery],          // query
 ) httpx.Response[string] {
     fmt.Println("[FORM] Title  :", form.Title)
     fmt.Println("[FORM] Content:", form.Content)
@@ -698,12 +673,11 @@ func (c *PostController) Upload(
 
 ### 入力の型を区別する基準
 
-JSON とフォームの DTO は、構造体へのポインターで受け取ります。クエリ、パス、アップロードファイルは、`query.Pagination`、`path.Int`、`multipart.UploadedFiles` のように Spine がサポートする値型で受け取ります。任意の構造体を値として宣言しても、自動的にバインドされるわけではありません。
-
+JSON とフォームの DTO は構造体ポインターで受け取ります。クエリとパスには `input.Query[T]` と `input.Path[T]`、ファイルには `multipart.UploadedFiles` を使えます。ヘッダーは `header` タグ付きの別の構造体ポインターで受け取ります。
 
 ## 入力エラーを処理する際の注意点
 
-Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。
+不正な JSON やパス値の変換失敗は HTTP 400、未対応の本文 Content-Type は 415、本文サイズの上限超過は 413 になります。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証と区別し、実際のリクエストで確認してください。
 
 ## 次のステップ
 

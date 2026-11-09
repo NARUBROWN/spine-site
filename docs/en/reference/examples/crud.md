@@ -1,22 +1,14 @@
 # Build a User CRUD API
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
-:::
-
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: info
+This example uses `v0.7.1` controller callbacks and path inputs. See [route migration](/en/learn/migration/preview-controller-routes), [input migration](/en/learn/migration/v0.7.1-preview), and [OpenAPI](/en/reference/api/openapi) for compatibility and document options.
 :::
 
 Build an HTTP API to create, list, retrieve, update, and delete users. The example uses an in-memory repository without an ORM, so you can run it without setting up a database.
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. This example adds the full CRUD implementation to a basic app created with CLI 0.4.2. The CLI's `resource` command provides a GET scaffold, and `slice --storage memory` provides a scaffold for creating and retrieving records. The code below includes updates and deletions.
+Complete [CLI installation](/en/learn/getting-started/installation) first. Create the application with CLI `v0.4.3-rc.1` or later and add the CRUD code manually. The CLI `resource` generates a GET skeleton; `slice --storage memory` generates create and read skeletons.
 
 Stored users disappear when the server process stops.
 
@@ -38,8 +30,10 @@ graph TD
 
 Create a basic app and check its dependencies and project configuration. Run subsequent commands from `crud-example/`.
 
+The commands below select the stable dependency channel. If a compatible stable platform tag is not yet available, use `--channel rc` for validation and check the selected versions in `go.mod`.
+
 ```sh
-spine new crud-example --layout legacy --module example.com/crud-example
+spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -348,7 +342,8 @@ import (
 
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/api"
+    "github.com/NARUBROWN/spine/pkg/input"
 
     "example.com/crud-example/src/dto"
     "example.com/crud-example/src/repository"
@@ -359,8 +354,16 @@ type UserController struct {
     service *service.UserService
 }
 
-func NewUserController(service *service.UserService) *UserController {
+func (*UserController) Constructor(service *service.UserService) *UserController {
     return &UserController{service: service}
+}
+
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+    r.GET("/users", c.List)
+    r.GET("/users/:id", c.GetByID)
+    r.POST("/users", c.Create)
+    r.PUT("/users/:id", c.Update)
+    r.DELETE("/users/:id", c.Delete)
 }
 
 // GET /users
@@ -369,12 +372,12 @@ func (c *UserController) List() httpx.Response[dto.UserListResponse] {
 }
 
 // GET /users/:id
-func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error) {
-    if id.Value <= 0 {
+func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+    if *id <= 0 {
         return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    user, err := c.service.GetUserByID(id.Value)
+    user, err := c.service.GetUserByID(*id)
     if err != nil {
         return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
     }
@@ -400,8 +403,8 @@ func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.
 }
 
 // PUT /users/:id
-func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
-    if id.Value <= 0 {
+func (c *UserController) Update(id input.Path[int64], req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
+    if *id <= 0 {
         return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
     if req.Name == "" {
@@ -411,7 +414,7 @@ func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.
         return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
-    user, err := c.service.UpdateUser(id.Value, req)
+    user, err := c.service.UpdateUser(*id, req)
     if err != nil {
         return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
     }
@@ -420,12 +423,12 @@ func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.
 }
 
 // DELETE /users/:id
-func (c *UserController) Delete(id path.Int) error {
-    if id.Value <= 0 {
+func (c *UserController) Delete(id input.Path[int64]) error {
+    if *id <= 0 {
         return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    err := c.service.DeleteUser(id.Value)
+    err := c.service.DeleteUser(*id)
     if err != nil {
         return toHTTPError(err)
     }
@@ -441,7 +444,7 @@ func toHTTPError(err error) error {
     case errors.Is(err, repository.ErrEmailAlreadyExists):
         return httperr.BadRequest("이미 사용 중인 이메일입니다")
     default:
-        return httperr.BadRequest(err.Error())
+        return err
     }
 }
 ```
@@ -465,6 +468,7 @@ import (
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
@@ -472,13 +476,8 @@ func BuildApplication() (spine.App, boot.Options, error) {
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
-        controller.NewUserController,
+        constructor.Controller(&controller.UserController{}),
     )
-    app.Route("GET", "/users", (*controller.UserController).List)
-    app.Route("GET", "/users/:id", (*controller.UserController).GetByID)
-    app.Route("POST", "/users", (*controller.UserController).Create)
-    app.Route("PUT", "/users/:id", (*controller.UserController).Update)
-    app.Route("DELETE", "/users/:id", (*controller.UserController).Delete)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{
         AllowOrigins: []string{"*"},
@@ -644,11 +643,11 @@ curl -X POST http://localhost:8080/users \
 
 ### Receive Request Values Through Semantic Types
 
-The controller accepts semantic types such as `path.Int` as arguments instead of an HTTP request object. It represents errors with `httperr`.
+The controller accepts semantic types such as `input.Path[int64]` as arguments instead of an HTTP request object. It represents errors with `httperr`.
 
 ```go
 // Receive input through semantic types
-func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
+func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
 
 // Express the error through httperr
 return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
@@ -663,7 +662,7 @@ Spine connects the repository, service, and controller dependencies based on the
 app.Constructor(
     repository.NewUserRepository,  // No dependencies
     service.NewUserService,        // Depends on the repository
-    controller.NewUserController,  // Depends on the service
+    constructor.Controller(&controller.UserController{}),  // Depends on the service
 )
 ```
 

@@ -1,12 +1,12 @@
 # 相依性注入
 
-::: warning Preview
-本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+::: info
+`legacy` 版面的 `app.Route` 為相容性保留，但已棄用。新的註冊方式請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
 :::
 
 以[控制器](/zh-Hant/learn/tutorial/2-controller)中建立的 `src/user` 資源為基礎，說明建構函式註冊與相依性注入（DI）。完成後，您可以串接控制器、服務與儲存庫，並確認是否存在循環相依性或缺少建構函式。
 
-本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
+本頁的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的應用程式。預設 `layered-v1` 版面依角色劃分目錄。
 
 請準備好[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)的專案，並在 `my-app` 根目錄操作。後面的資料庫與包裝型別範例是獨立擴充，不會自動包含在基本資源中。
 
@@ -22,6 +22,59 @@ Spine 會根據已註冊建構函式的參數型別，先建立需要的物件�
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
+```
+
+## 依角色註冊建構函式
+
+以下獨立應用程式使用 `Constructor` 方法和角色標記註冊儲存庫、服務及控制器。即使反向註冊，相依性仍依型別解析。在獨立 Go 模組中安裝 Spine `v0.7.1` 與相容 Echo 平台，儲存為 `main.go` 後執行。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
+
+type Repository struct{}
+
+func (*Repository) Constructor() *Repository { return &Repository{} }
+func (*Repository) Greeting() string         { return "hello" }
+
+type Service struct{ repository *Repository }
+
+func (*Service) Constructor(repository *Repository) *Service { return &Service{repository: repository} }
+
+type Controller struct{ service *Service }
+
+func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/greeting", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: c.service.repository.Greeting()}
+	})
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(
+		constructor.Controller(&Controller{}),
+		constructor.Service(&Service{}),
+		constructor.Repository(&Repository{}),
+	)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+在另一個終端機傳送以下請求會回傳 `hello`。角色標記用來註冊型別，攔截器的全域或路由層級套用需要另行設定。
+
+```bash
+curl http://localhost:8080/greeting
 ```
 
 ## CLI 產生的相依性

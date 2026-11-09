@@ -1,6 +1,6 @@
 # 安全性設定
 
-Spine 0.6.5 為 HTTP/WebSocket 設定大小、時間與連線數限制。獨立的 Kafka/RabbitMQ 平台負責訊息代理傳輸政策。以下平台預設值以 v0.1.0 為基準。
+Spine `v0.7.1` 限制 HTTP 和 WebSocket 的大小、時間與連線數。獨立平台管理訊息代理傳輸政策，也請檢查所選平台版本和設定。
 
 ## 設定驗證
 
@@ -99,7 +99,7 @@ app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory
 
 ## WebSocket
 
-HTTP 選擇 Echo，WebSocket 選擇獨立的 Gorilla 實作。註冊 WS 路由需要 HTTP 升級支援與 WS factory。啟用驗證時將 `playground.New()` 的結果傳給 `spine.WithValidator`。
+HTTP 選擇 Echo 或 net/http，WebSocket 選擇獨立的 Gorilla 實作。WebSocket 路由需要 HTTP 升級支援和 WS factory。驗證時將 `playground.New()` 傳給 `spine.WithValidator`。
 
 在 `boot.HTTPOptions.WebSocket` 設定來源、連線數與訊息限制。請指定應用程式使用的確切來源與連線上限。
 
@@ -151,6 +151,10 @@ func (i *AuthInterceptor) PreHandshake(
 
 不可同時使用 `AllowOrigins: []string{"*"}` 與 `AllowCredentials: true`。若要在啟動階段檢查，請使用 `cors.NewValidated`。`cors.New` 也會在第一個請求中，於寫入回應標頭前回傳結構化錯誤。
 
+CORS 預檢由同時存在的 `OPTIONS`、`Origin` 和 `Access-Control-Request-Method` 判定。允許的請求回傳 204，遭拒的來源、方法或標頭回傳 403。一般請求中未獲准的來源不會收到 CORS 允許標頭，但 CORS 不能取代伺服器驗證或存取控制。
+
+`MaxAge` 是秒數指標：nil 省略標頭，0 明確傳送零。`ExposeHeaders` 指定一般回應中公開的標頭，`AllowOrigin` 可以對靜態清單未允許的來源進一步判斷。允許認證資訊時不能使用萬用字元來源。
+
 ```go
 corsInterceptor, err := cors.NewValidated(cors.Config{
     AllowOrigins:     []string{"https://app.example.com"},
@@ -163,6 +167,59 @@ app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
 
 若 Cookie 的名稱、值、路徑、網域、`SameSite` 或 `Priority` 無效，JSON、字串、二進位與重新導向回應會在寫入標頭或本文前失敗。若須將 Unicode 或分隔符號還原為原始值，請使用 `httpx.EncodeCookieValue` 與 `httpx.DecodeCookieValue`。
+
+
+### 驗證 CORS 預檢
+
+將以下獨立應用程式儲存為安裝 Spine `v0.7.1` 和相容 Echo 平台的獨立 Go 模組中的 `main.go`，然後執行。`Authorization` 已明確列入允許的標頭。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/interceptor/cors"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/resource", func() httpx.Response[string] { return httpx.Response[string]{Body: "ok"} })
+}
+func main() {
+	maxAge := 60
+	policy, err := cors.NewValidated(cors.Config{
+		AllowOrigins:     []string{"https://app.example.com"},
+		AllowMethods:     []string{"GET"},
+		AllowHeaders:     []string{"Authorization", "Content-Type"},
+		AllowCredentials: true,
+		MaxAge:           &maxAge,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	app.InterceptorFor(boot.InterceptorHTTP, policy)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+第一個請求回傳 204 和 `Access-Control-Max-Age: 60`，第二個回傳 403。
+
+```bash
+curl -i -X OPTIONS -H 'Origin: https://app.example.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization' http://localhost:8080/resource
+curl -i -X OPTIONS -H 'Origin: https://app.example.com' -H 'Access-Control-Request-Method: DELETE' http://localhost:8080/resource
+```
 
 ## 正式環境的限制
 

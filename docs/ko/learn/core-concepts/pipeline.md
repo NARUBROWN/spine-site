@@ -1,16 +1,12 @@
 # 실행 파이프라인
 
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
-
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+::: info
+이전 함수 생성자와 메서드 표현식은 호환을 위해 유지됩니다. 새 컨트롤러의 콜백은 [컨트롤러 전환](/ko/learn/migration/preview-controller-routes), 입력의 제약은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 설정은 [OpenAPI](/ko/reference/api/openapi)를 참고하세요.
 :::
 
 Spine의 실행 파이프라인은 요청을 받아 핸들러를 선택하고, 인자를 바인딩한 뒤, 반환값을 응답으로 만드는 흐름입니다. 인터셉터를 어느 시점에 실행해야 하는지, 오류가 발생하면 어떤 단계까지 진행하는지 이해할 때 이 흐름을 기준으로 삼습니다.
 
-이 문서는 Spine v0.6.5의 HTTP 실행 순서를 설명합니다. HTTP, 이벤트 컨슈머, WebSocket은 같은 파이프라인 구현을 사용하지만, 입력을 해석하는 리졸버와 응답 처리 구성은 다릅니다.
+이 문서는 Spine v0.7.1의 HTTP 실행 순서를 설명합니다. HTTP, 이벤트 컨슈머, WebSocket은 같은 파이프라인 구현을 사용하지만, 입력을 해석하는 리졸버와 응답 처리 구성은 다릅니다.
 
 컨트롤러 예제는 [CLI로 생성한 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 코드입니다. 요청 DTO는 포인터로 받고, 일반 성공 응답은 `github.com/NARUBROWN/spine/pkg/httpx`의 `httpx.Response[T]`로 반환합니다. 생성자와 라우트는 `BuildApplication`에서 등록합니다.
 
@@ -26,7 +22,7 @@ graph TD
     Router["Router<br>HandlerMeta 선택"]
     Binding["ParameterMeta 구성<br>ArgumentResolver로 인자 바인딩"]
     RoutePre["라우트 PreHandle<br>핸들러 호출 전 전처리"]
-    Handler["Invoker<br>컨트롤러 메서드 호출"]
+    Handler["Invoker<br>핸들러 호출"]
     Return["ReturnValueHandler<br>성공 응답 준비와 검증"]
     Hook["PostExecutionHook<br>도메인 이벤트 후처리"]
     Post["PostHandle<br>라우트, 전역 순서로 역순 실행"]
@@ -78,7 +74,7 @@ HTTP 어댑터는 요청마다 `core.ExecutionContext`를 만듭니다. 파이�
 
 - 실행할 컨트롤러와 메서드가 아직 정해지지 않았습니다.
 - Spine 라우터가 경로 매개변수를 아직 저장하지 않았습니다.
-- 요청 DTO와 `path.Int` 같은 컨트롤러 인자도 아직 생성하지 않았습니다.
+- 요청 DTO와 `input.Path[int64]` 같은 컨트롤러 인자도 아직 생성하지 않았습니다.
 
 라우팅에 성공한 뒤 실행하는 `PostHandle`, `BeforeResponse`, `AfterCompletion`에는 선택된 핸들러의 메타데이터가 전달됩니다. 라우팅 전에 중단하거나 실패했다면 빈 메타데이터로 마무리합니다.
 
@@ -93,50 +89,27 @@ HTTP 어댑터는 요청마다 `core.ExecutionContext`를 만듭니다. 파이�
 type HandlerMeta struct {
     ControllerType reflect.Type   // 의존성 컨테이너에서 찾을 컨트롤러 타입
     Method         reflect.Method // 호출할 메서드
+    Callback       reflect.Value
     PathKeys       []string       // 라우트에 선언한 경로 매개변수의 순서
     Interceptors   []Interceptor  // 해당 핸들러에 적용할 인터셉터
 }
 ```
 
-`HandlerMeta`는 요청마다 컨트롤러를 새로 만드는 지시가 아닙니다. Invoker가 의존성 컨테이너에서 호출 대상을 찾고, 인자를 메서드에 전달하는 데 사용하는 정보입니다. 자세한 필드는 [HandlerMeta](/ko/learn/core-concepts/handler-meta)를 참고하세요.
+`HandlerMeta`는 요청마다 컨트롤러를 새로 만드는 지시가 아닙니다. 기존 메서드 표현식은 컨테이너에서 컨트롤러를 찾고, 새 라우트 콜백은 준비 단계에서 연결된 함수를 호출합니다. 자세한 필드는 [HandlerMeta](/ko/learn/core-concepts/handler-meta)를 참고하세요.
 
 ## 인자 바인딩: ParameterMeta와 ArgumentResolver
 
-핸들러를 선택하면 파이프라인은 메서드 시그니처를 읽어 각 인자의 타입과 위치를 나타내는 `ParameterMeta`를 구성합니다. 이어서 등록된 리졸버 중 해당 타입을 지원하는 첫 번째 리졸버가 값을 만듭니다.
+핸들러를 선택하면 파이프라인은 함수 시그니처를 읽어 각 인자의 타입과 위치를 나타내는 `ParameterMeta`를 구성합니다. 이어서 등록된 리졸버 중 해당 타입을 지원하는 첫 번째 리졸버가 값을 만듭니다.
 
 리졸버가 값을 만들지 못하거나 지원하는 리졸버가 없으면 컨트롤러를 호출하지 않고 오류 처리로 넘어갑니다. **이 단계는 라우트 인터셉터의 `PreHandle`보다 먼저 실행됩니다.** 따라서 라우트 인터셉터에서 본문 바인딩 전 검사를 수행한다고 가정하면 안 됩니다.
 
-### 경로 매개변수는 선언 순서로 연결
+### 경로 입력 연결
 
-`path.Int`, `path.String`, `path.Boolean`은 라우트에 선언한 매개변수 순서대로 바인딩됩니다. Go 인자 이름으로 연결하지 않습니다.
+v0.7.1에서는 경로 변수가 여러 개일 때 스칼라 `input.Path[T]` 인자를 경로에 선언한 순서대로 하나씩 받습니다. 인자 수와 경로 변수 수는 같아야 하며, 스칼라와 경로 DTO 또는 기존 경로 래퍼는 같은 핸들러에서 혼용할 수 없습니다.
 
-```go
-// 라우트: /users/:userId/posts/:postId
-// userId에는 첫 번째 경로 값, postId에는 두 번째 경로 값이 들어갑니다.
-func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
-```
+### HTTP에서 지원하는 입력
 
-다른 종류의 인자를 사이에 넣어도 경로 타입끼리의 순서를 맞춰야 합니다. 경로 매개변수의 개수나 타입을 바꿀 때에는 라우트 선언과 메서드 시그니처를 함께 확인하세요.
-
-### HTTP에서 지원하는 인자
-
-| 리졸버 | 컨트롤러 인자 타입 | 전달하는 값 |
-| --- | --- | --- |
-| `StdContextResolver` | `context.Context` | 요청 취소와 타임아웃 정보, 이벤트 발행에 사용할 컨텍스트 |
-| `ControllerContextResolver` | `spine.Ctx`, `core.ControllerContext` | 인터셉터 저장소의 읽기 전용 뷰 |
-| `HeaderResolver` | `header.Values` | HTTP 헤더 뷰 |
-| `PathIntResolver` | `path.Int` | 경로 값을 파싱한 정수 |
-| `PathStringResolver` | `path.String` | 경로의 문자열 |
-| `PathBooleanResolver` | `path.Boolean` | 경로 값을 파싱한 불리언 |
-| `PaginationResolver` | `query.Pagination` | `page`, `size` 쿼리 값 |
-| `QueryValuesResolver` | `query.Values` | 전체 쿼리 값의 뷰 |
-| `DTOResolver` | `*struct` | HTTP 본문을 바인딩한 DTO |
-| `FormDTOResolver` | `form` 태그가 있는 `*struct` | 폼 또는 멀티파트 본문을 바인딩한 DTO |
-| `UploadedFilesResolver` | `multipart.UploadedFiles` | 업로드한 파일 |
-
-`header`, `path`, `query`, `multipart`는 각각 `github.com/NARUBROWN/spine/pkg/` 아래의 패키지입니다. 표의 `multipart.UploadedFiles`는 Go 표준 `mime/multipart` 타입과 구분해야 합니다.
-
-HTTP DTO는 구조체 포인터로 선언합니다. 필드에 `form` 태그가 하나라도 있으면 일반 DTO 리졸버가 건너뛰고 폼 DTO 리졸버가 처리합니다. `query.Pagination`의 `page`와 `size`는 생략하거나 정수로 파싱할 수 없을 때 각각 1과 20을 사용합니다.
+`context.Context`와 `spine.Ctx` 외에 `input.Path[T]`, `input.Query[T]`, `input.Body[T]`를 사용할 수 있습니다. 헤더는 `header` 태그가 있는 별도 구조체 포인터로 받고, 파일은 `multipart.UploadedFiles`로 받습니다. 기존 `path` 래퍼, `query.Values`, `header.Values`, `query.Pagination`은 Deprecated이며 새 Path, Query, Header 입력과 한 핸들러에서 혼용할 수 없습니다.
 
 ### 리졸버의 계약
 
@@ -153,12 +126,12 @@ type ArgumentResolver interface {
 
 ## 라우트 인터셉터: 핸들러 호출 전 처리
 
-`route.WithInterceptors()`로 등록한 인터셉터는 특정 핸들러에만 적용됩니다. 라우팅과 인자 바인딩이 끝난 뒤 `PreHandle`을 호출하므로, 선택된 `HandlerMeta`와 경로 매개변수를 사용할 수 있습니다.
+`api.Interceptors()` / `route.WithInterceptors()`로 등록한 인터셉터는 특정 핸들러에만 적용됩니다. 라우팅과 인자 바인딩이 끝난 뒤 `PreHandle`을 호출하므로, 선택된 `HandlerMeta`와 경로 매개변수를 사용할 수 있습니다.
 
 | 구분 | 등록 방법 | `PreHandle` 실행 시점 | 전달하는 메타데이터 |
 | --- | --- | --- | --- |
 | 전역 | `app.Interceptor()` | 라우팅 전 | 빈 `HandlerMeta{}` |
-| 라우트 | `route.WithInterceptors()` | 인자 바인딩 후, 핸들러 호출 전 | 선택된 `HandlerMeta` |
+| 라우트 | `api.Interceptors()` / `route.WithInterceptors()` | 인자 바인딩 후, 핸들러 호출 전 | 선택된 `HandlerMeta` |
 
 두 방식 모두 `core.Interceptor`의 네 메서드를 구현합니다.
 
@@ -178,16 +151,16 @@ type Interceptor interface {
 
 ## Invoker: 컨트롤러 호출
 
-Invoker는 의존성 컨테이너에서 컨트롤러 인스턴스를 구하고, 바인딩한 인자로 메서드를 호출합니다. 컨트롤러는 입력값을 검사하고 서비스를 호출한 뒤 결과나 오류를 반환합니다.
+Invoker는 새 컨트롤러 라우트의 콜백을 바인딩한 인자로 호출합니다. 기존 메서드 표현식은 의존성 컨테이너에서 컨트롤러 인스턴스를 찾은 뒤 호출합니다. 핸들러는 입력값을 검사하고 서비스를 호출한 뒤 결과나 오류를 반환합니다.
 
-다음 메서드는 `UserController`, `User`, `c.repo`가 있는 앱에 추가하는 예입니다. `path`, `httpx`, `httperr`는 각각 Spine의 `pkg/` 패키지에서 가져옵니다.
+다음 메서드는 `UserController`, `User`, `c.repo`가 있는 앱에 추가하는 예입니다. `input`, `httpx`, `httperr`는 각각 Spine의 `pkg/` 패키지에서 가져옵니다.
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
+func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
+    if *userId <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -267,7 +240,7 @@ type ReturnValueHandler interface {
 | 별도로 매핑하지 않은 실행 오류 | 500, `Internal server error` |
 | 이미 실제 응답이 커밋됨 | 이중 응답을 쓰지 않음 |
 
-Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요.
+Spine `v0.7.1`와 Echo 플랫폼 `v0.2.0-rc.1`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요.
 
 실제 응답 전송 중 오류가 발생하면 최종 실행 오류에 포함됩니다. 아직 응답을 커밋하지 않았다면 500 응답을 쓰는 처리를 시도합니다. 이미 전송한 응답은 되돌릴 수 없습니다.
 

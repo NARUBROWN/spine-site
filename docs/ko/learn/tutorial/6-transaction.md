@@ -1,18 +1,18 @@
 # 트랜잭션 관리
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+::: info
+이 튜토리얼의 `legacy` 레이아웃은 호환 `app.Route`를 사용합니다. 새 컨트롤러는 [라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요. 입력 호환 규칙은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 확인하세요.
 :::
 
 한 HTTP 요청에서 실행한 여러 INSERT를 하나의 트랜잭션으로 묶습니다. 요청이 성공하면 커밋하고, 중간에 실패하면 앞선 INSERT까지 롤백하는 인터셉터를 작성합니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 앱을 사용합니다. 기본 `layered-v1` 레이아웃은 역할별 디렉터리를 사용합니다.
 
 [데이터베이스](/ko/learn/tutorial/5-database)의 `example.com/my-app`에서 이어갑니다. `src/database`, `src/entity`, `src/user`와 마이그레이션을 먼저 준비하세요. 아래 트랜잭션 코드는 직접 추가하며, CLI는 Bun 트랜잭션이나 outbox 생성기를 제공하지 않습니다.
 
 ## 실행 순서
 
-Spine v0.6.5에서는 `PreHandle`에서 트랜잭션을 시작하고 `BeforeResponse`에서 커밋하거나 롤백합니다. 응답 직렬화, 상태 코드와 쿠키 검증, 이벤트 발행 등 응답 준비 과정에서 발생한 오류도 롤백 조건에 포함됩니다. `AfterCompletion`은 완료 후 로그를 남기거나 자원을 정리할 때 사용합니다.
+Spine v0.7.1에서는 `PreHandle`에서 트랜잭션을 시작하고 `BeforeResponse`에서 커밋하거나 롤백합니다. 응답 직렬화, 상태 코드와 쿠키 검증, 이벤트 발행 등 응답 준비 과정에서 발생한 오류도 롤백 조건에 포함됩니다. `AfterCompletion`은 완료 후 로그를 남기거나 자원을 정리할 때 사용합니다.
 
 ```text
 PreHandle: 트랜잭션 시작

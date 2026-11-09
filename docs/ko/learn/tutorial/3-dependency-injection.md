@@ -1,12 +1,12 @@
 # 의존성 주입
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+::: info
+`legacy` 레이아웃의 `app.Route`는 호환을 위해 유지되지만 Deprecated입니다. 새 등록 방법은 [컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요.
 :::
 
 [컨트롤러](/ko/learn/tutorial/2-controller)에서 만든 `src/user` 리소스를 기준으로 생성자 등록과 의존성 주입(DI)을 살펴봅니다. 이 과정을 마치면 컨트롤러, 서비스, 저장소를 연결하고 순환 의존성이나 누락된 생성자를 확인할 수 있습니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 앱을 사용합니다. 기본 `layered-v1` 레이아웃은 역할별 디렉터리를 사용합니다.
 
 [첫 번째 앱](/ko/learn/tutorial/1-project-structure)의 프로젝트를 준비하고 `my-app` 루트에서 진행하세요. 뒤의 데이터베이스와 래퍼 타입 예제는 기본 리소스에 자동으로 포함되지 않는 별도 확장입니다.
 
@@ -22,6 +22,59 @@ Spine은 등록된 생성자의 파라미터 타입을 보고 필요한 객체�
 func NewUserService(repository *UserRepository) *UserService {
     return &UserService{repository: repository}
 }
+```
+
+## 역할별 생성자 등록
+
+다음 독립 앱은 `Constructor` 메서드와 역할 표식으로 저장소, 서비스, 컨트롤러를 등록합니다. 등록 순서를 역순으로 작성해도 의존성 타입에 따라 해결합니다. 별도 Go 모듈에 Spine `v0.7.1`과 호환 Echo 플랫폼을 설치한 뒤 `main.go`로 저장하고 실행하세요.
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"log"
+)
+
+type Repository struct{}
+
+func (*Repository) Constructor() *Repository { return &Repository{} }
+func (*Repository) Greeting() string         { return "hello" }
+
+type Service struct{ repository *Repository }
+
+func (*Service) Constructor(repository *Repository) *Service { return &Service{repository: repository} }
+
+type Controller struct{ service *Service }
+
+func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/greeting", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: c.service.repository.Greeting()}
+	})
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(
+		constructor.Controller(&Controller{}),
+		constructor.Service(&Service{}),
+		constructor.Repository(&Repository{}),
+	)
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+다른 터미널에서 다음 요청을 보내면 `hello`가 반환됩니다. 역할 표식은 타입 등록이며, 인터셉터의 전역 또는 경로 적용은 별도로 지정해야 합니다.
+
+```bash
+curl http://localhost:8080/greeting
 ```
 
 ## CLI로 생성한 의존성

@@ -1,16 +1,12 @@
 # 実行パイプライン
 
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: info
+従来の生成関数とメソッド式は互換性のため維持されます。コールバックは[コントローラーの移行](/ja/learn/migration/preview-controller-routes)、入力制約は[入力の移行](/ja/learn/migration/v0.7.1-preview)、文書設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 Spine の実行パイプラインは、リクエストを受け取ってハンドラーを選び、引数をバインドし、戻り値からレスポンスを作る流れです。インターセプターを実行するタイミングや、エラーが発生したときにどの段階まで処理が進むかを理解するための基準になります。
 
-このドキュメントでは、Spine v0.6.5 の HTTP の実行順序を説明します。HTTP、イベントコンシューマー、WebSocket は同じパイプライン実装を使いますが、入力を解釈するリゾルバーとレスポンス処理の構成は異なります。
+このドキュメントでは、Spine v0.7.1 の HTTP の実行順序を説明します。HTTP、イベントコンシューマー、WebSocket は同じパイプライン実装を使いますが、入力を解釈するリゾルバーとレスポンス処理の構成は異なります。
 
 コントローラーの例は、[CLI で生成したプロジェクト](/ja/learn/tutorial/1-project-structure)に追加するコードです。リクエスト DTO はポインターで受け取り、通常の成功レスポンスは `github.com/NARUBROWN/spine/pkg/httpx` の `httpx.Response[T]` で返します。コンストラクタとルートは `BuildApplication` で登録します。
 
@@ -26,7 +22,7 @@ graph TD
     Router["Router<br>HandlerMeta を選択"]
     Binding["ParameterMeta を構成<br>ArgumentResolver で引数をバインド"]
     RoutePre["ルート PreHandle<br>ハンドラー呼び出し前の前処理"]
-    Handler["Invoker<br>コントローラーメソッドを呼び出す"]
+    Handler["Invoker<br>ハンドラーを呼び出す"]
     Return["ReturnValueHandler<br>成功レスポンスの準備と検証"]
     Hook["PostExecutionHook<br>ドメインイベントの後処理"]
     Post["PostHandle<br>ルート、グローバルの順でそれぞれ逆順に実行"]
@@ -78,7 +74,7 @@ HTTP アダプターはリクエストごとに `core.ExecutionContext` を作�
 
 - 実行するコントローラーとメソッドは、まだ決まっていません。
 - Spine ルーターは、まだパスパラメーターを保存していません。
-- リクエスト DTO や `path.Int` などのコントローラー引数も、まだ生成していません。
+- リクエスト DTO や `input.Path[int64]` などのコントローラー引数も、まだ生成していません。
 
 ルーティングの成功後に実行する `PostHandle`、`BeforeResponse`、`AfterCompletion` には、選択したハンドラーのメタデータを渡します。ルーティング前に中断または失敗した場合は、空のメタデータで処理を終えます。
 
@@ -93,50 +89,27 @@ HTTP アダプターはリクエストごとに `core.ExecutionContext` を作�
 type HandlerMeta struct {
     ControllerType reflect.Type   // 依存関係コンテナーから取得するコントローラーの型
     Method         reflect.Method // 呼び出すメソッド
+    Callback       reflect.Value
     PathKeys       []string       // ルートで宣言したパスパラメーターの順序
     Interceptors   []Interceptor  // そのハンドラーに適用するインターセプター
 }
 ```
 
-`HandlerMeta` は、リクエストごとにコントローラーを新しく作る指示ではありません。Invoker が依存性コンテナーから呼び出し対象を取得し、メソッドに引数を渡すために使う情報です。各フィールドの詳細は [HandlerMeta](/ja/learn/core-concepts/handler-meta) を参照してください。
+`HandlerMeta` はリクエストごとにコントローラーを作る指示ではありません。従来のメソッド式はコンテナーからコントローラーを取得し、新しいルートコールバックは準備時に結び付けた関数を呼び出します。詳細は [HandlerMeta](/ja/learn/core-concepts/handler-meta) を参照してください。
 
 ## 引数バインディング: ParameterMeta と ArgumentResolver
 
-ハンドラーを選ぶと、パイプラインはメソッドシグネチャを読み取り、各引数の型と位置を表す `ParameterMeta` を構成します。続いて、登録済みのリゾルバーのうち、その型をサポートする最初のリゾルバーが値を生成します。
+ハンドラーを選ぶと、パイプラインは関数シグネチャを読み取り、各引数の型と位置を表す `ParameterMeta` を構成します。続いて、登録済みのリゾルバーのうち、その型をサポートする最初のリゾルバーが値を生成します。
 
 リゾルバーが値を生成できない場合や、対応するリゾルバーがない場合は、コントローラーを呼び出さずにエラー処理へ進みます。**この段階は、ルートインターセプターの `PreHandle` より先に実行します。** そのため、ルートインターセプターで本文のバインディング前の検査を実行できると想定しないでください。
 
-### パスパラメーターは宣言順に対応付ける
+### パス入力の対応付け
 
-`path.Int`、`path.String`、`path.Boolean` は、ルートで宣言したパラメーターの順序でバインドします。Go の引数名で対応付けるわけではありません。
+v0.7.1 ではパス変数ごとにスカラー `input.Path[T]` 引数をルートの順に宣言します。数を一致させ、同じハンドラーでパス DTO や従来のパスラッパーと混在させないでください。
 
-```go
-// ルート: /users/:userId/posts/:postId
-// userId には最初のパスの値、postId には 2 番目のパスの値が入ります。
-func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
-```
+### HTTP でサポートする入力
 
-間に別の種類の引数を挟んでも、パス型同士の順序を合わせる必要があります。パスパラメーターの数や型を変更するときは、ルート宣言とメソッドシグネチャを併せて確認してください。
-
-### HTTP でサポートする引数
-
-| リゾルバー | コントローラーの引数型 | 渡す値 |
-| --- | --- | --- |
-| `StdContextResolver` | `context.Context` | リクエストのキャンセルとタイムアウトの情報、イベント発行に使うコンテキスト |
-| `ControllerContextResolver` | `spine.Ctx`, `core.ControllerContext` | インターセプターのストアの読み取り専用ビュー |
-| `HeaderResolver` | `header.Values` | HTTP ヘッダーのビュー |
-| `PathIntResolver` | `path.Int` | パスの値を解析した整数 |
-| `PathStringResolver` | `path.String` | パスの文字列 |
-| `PathBooleanResolver` | `path.Boolean` | パスの値を解析した真偽値 |
-| `PaginationResolver` | `query.Pagination` | `page`、`size` のクエリ値 |
-| `QueryValuesResolver` | `query.Values` | すべてのクエリ値のビュー |
-| `DTOResolver` | `*struct` | HTTP 本文をバインドした DTO |
-| `FormDTOResolver` | `form` タグがある `*struct` | フォームまたはマルチパート本文をバインドした DTO |
-| `UploadedFilesResolver` | `multipart.UploadedFiles` | アップロードしたファイル |
-
-`header`、`path`、`query`、`multipart` は、それぞれ `github.com/NARUBROWN/spine/pkg/` 配下のパッケージです。表の `multipart.UploadedFiles` は、Go 標準の `mime/multipart` の型と区別してください。
-
-HTTP DTO は構造体のポインターとして宣言します。フィールドに `form` タグが一つでもある場合、通常の DTO リゾルバーは処理せず、フォーム DTO リゾルバーが処理します。`query.Pagination` の `page` と `size` は、省略された場合や整数として解析できない場合、それぞれ 1 と 20 を使います。
+`context.Context` と `spine.Ctx` のほか、`input.Path[T]`、`input.Query[T]`、`input.Body[T]` を受け取れます。ヘッダーは `header` タグ付きの別の構造体ポインター、ファイルは `multipart.UploadedFiles` で受け取ります。従来の `path` ラッパー、`query.Values`、`header.Values`、`query.Pagination` は非推奨で、新しい Path、Query、Header 入力と同じハンドラーで混在できません。
 
 ### リゾルバーの契約
 
@@ -153,12 +126,12 @@ type ArgumentResolver interface {
 
 ## ルートインターセプター: ハンドラー呼び出し前の処理
 
-`route.WithInterceptors()` で登録したインターセプターは、特定のハンドラーにだけ適用します。ルーティングと引数バインディングが終わってから `PreHandle` を呼び出すため、選択済みの `HandlerMeta` とパスパラメーターを使えます。
+`api.Interceptors()` / `route.WithInterceptors()` で登録したインターセプターは、特定のハンドラーにだけ適用します。ルーティングと引数バインディングが終わってから `PreHandle` を呼び出すため、選択済みの `HandlerMeta` とパスパラメーターを使えます。
 
 | 区分 | 登録方法 | `PreHandle` の実行タイミング | 渡すメタデータ |
 | --- | --- | --- | --- |
 | グローバル | `app.Interceptor()` | ルーティング前 | 空の `HandlerMeta{}` |
-| ルート | `route.WithInterceptors()` | 引数バインディング後、ハンドラー呼び出し前 | 選択した `HandlerMeta` |
+| ルート | `api.Interceptors()` / `route.WithInterceptors()` | 引数バインディング後、ハンドラー呼び出し前 | 選択した `HandlerMeta` |
 
 どちらも `core.Interceptor` の四つのメソッドを実装します。
 
@@ -178,16 +151,16 @@ type Interceptor interface {
 
 ## Invoker: コントローラーの呼び出し
 
-Invoker は依存性コンテナーからコントローラーのインスタンスを取得し、バインドした引数でメソッドを呼び出します。コントローラーは入力値を検査してサービスを呼び出し、結果またはエラーを返します。
+Invoker は新しいルートコールバックをバインドした引数で呼び出します。従来のメソッド式では、まず依存性コンテナーからコントローラーを取得します。ハンドラーは入力を検査し、サービスを呼び出して結果またはエラーを返します。
 
-次のメソッドは、`UserController`、`User`、`c.repo` があるアプリに追加する例です。`path`、`httpx`、`httperr` は、それぞれ Spine の `pkg/` パッケージからインポートします。
+次のメソッドは、`UserController`、`User`、`c.repo` があるアプリに追加する例です。`input`、`httpx`、`httperr` は、それぞれ Spine の `pkg/` パッケージからインポートします。
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
+func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
+    if *userId <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -267,7 +240,7 @@ type ReturnValueHandler interface {
 | 個別にマッピングしていない実行エラー | 500、`Internal server error` |
 | 実際のレスポンスがすでにコミット済み | 二重にレスポンスを書き込まない |
 
-Spine `v0.6.5` と Echo プラットフォーム `v0.1.0` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。
+Spine `v0.7.1` と Echo プラットフォーム `v0.2.0-rc.1` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。
 
 実際のレスポンス送信中に発生したエラーは、最終的な実行エラーに含めます。まだレスポンスをコミットしていなければ、500 レスポンスの書き込みを試みます。送信済みのレスポンスを元に戻すことはできません。
 

@@ -1,7 +1,7 @@
 # 專案結構
 
-::: warning Preview
-本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+::: info
+此範例使用 `legacy` 版面的相容註冊方式。`app.Route` 已棄用，新控制器請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
 :::
 
 透過 Spine CLI 建立專案並新增使用者資源。閱讀產生的檔案，了解應用程式設定程式碼應放置的位置，以及控制器、服務與儲存庫各自的職責。
@@ -14,7 +14,7 @@
 
 ```sh
 spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -51,9 +51,11 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 | 鍵 | 用途 |
@@ -63,7 +65,7 @@ validator = "none"
 | `composition` | 檢查應用程式設定及自動註冊產生的程式碼的位置 |
 | `port` | 開發伺服器使用的連接埠 |
 | `layout` | 產生器檔案布局（`legacy` 或 `layered-v1`） |
-| `platform` | HTTP 平台（`echo` 或 `none`） |
+| `platform` | HTTP 平台（`echo`、`nethttp` 或 `none`） |
 | `recipe` | 選擇相容相依套件組合的配方 |
 | `websocket_platform` | WebSocket 實作（`none` 或 `gorilla`） |
 | `validator` | DTO 驗證器（`none` 或 `playground`） |
@@ -127,7 +129,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
     if port := os.Getenv("SPINE_PORT"); port != "" {
         address = ":" + port
     }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 

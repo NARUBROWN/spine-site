@@ -1,14 +1,14 @@
 # JWT 登录示例
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+::: info
+此示例使用 `v0.7.1` 控制器和路由拦截器。旧注册方式请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
 :::
 
 创建注册和登录 API，并使用登录时签发的 JWT 查询个人信息。认证拦截器仅应用于 `/me`，因此注册和登录请求无需携带令牌。
 
 ## 开始前的准备
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。CLI 0.4.2 不提供 JWT 认证生成器。创建基础项目后，手动添加下方认证代码，并安装 `github.com/golang-jwt/jwt/v5`。
+完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用 CLI `v0.4.3-rc.1` 或更高版本创建项目。手动添加 JWT 代码并安装 `github.com/golang-jwt/jwt/v5`。
 
 本示例使用内存存储库、明文密码比较和硬编码的 JWT 密钥，帮助你了解认证流程。服务器结束后，注册信息会消失。在实际服务中使用前，必须改用密码哈希，并通过环境变量管理 JWT 密钥。
 
@@ -16,11 +16,13 @@
 
 准备基础应用和 JWT 依赖。后续命令均在 `login-example/` 中运行。
 
+以下命令选择正式依赖渠道。兼容的正式平台标签尚不可用时，可使用 `--channel rc` 验证，并在 `go.mod` 中确认所选版本。
+
 ```sh
-spine new login-example --layout legacy --module example.com/login-example
+spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive
 cd login-example
 spine doctor
-go get github.com/golang-jwt/jwt/v5
+go get github.com/golang-jwt/jwt/v5@v5.3.1
 ```
 
 ### 文件布局
@@ -238,6 +240,7 @@ import (
     "example.com/login-example/src/model"
     "example.com/login-example/src/store"
 
+    "github.com/NARUBROWN/spine/pkg/api"
     spinectx "github.com/NARUBROWN/spine/pkg/spine"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
@@ -248,10 +251,14 @@ type AuthController struct {
     userStore *store.UserStore
 }
 
-func NewAuthController(userStore *store.UserStore) *AuthController {
-    return &AuthController{
-        userStore: userStore,
-    }
+func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
+    return &AuthController{userStore: userStore}
+}
+
+func (c *AuthController) RegisterRoutes(r *api.Registry) {
+    r.POST("/signup", c.Signup)
+    r.POST("/login", c.Login)
+    r.GET("/me", c.GetMe, api.Interceptors(&interceptor.AuthInterceptor{}))
 }
 
 // 注册账户 — 无需身份验证
@@ -293,7 +300,7 @@ func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.Lo
 
     tokenString, err := token.SignedString(interceptor.JWTSecret)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("토큰 생성에 실패했습니다.")
+        return httpx.Response[model.LoginResponse]{}, err
     }
 
     return httpx.Response[model.LoginResponse]{
@@ -312,7 +319,10 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
         return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
     }
 
-    userID := userIDValue.(int64)
+    userID, valid := userIDValue.(int64)
+    if !valid {
+        return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+    }
     user, err := c.userStore.FindByID(userID)
     if err != nil {
         return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
@@ -335,18 +345,17 @@ import (
     "time"
 
     "example.com/login-example/src/controller"
-    "example.com/login-example/src/interceptor"
     "example.com/login-example/src/store"
 
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/route"
+    "github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
     app := spine.New(echoplatform.Option())
-    app.Constructor(store.NewUserStore, controller.NewAuthController)
+    app.Constructor(store.NewUserStore, constructor.Controller(&controller.AuthController{}))
 
     corsInterceptor, err := cors.NewValidated(cors.Config{
         AllowOrigins: []string{"*"},
@@ -357,11 +366,6 @@ func BuildApplication() (spine.App, boot.Options, error) {
         return nil, boot.Options{}, err
     }
     app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
-    app.Route("POST", "/signup", (*controller.AuthController).Signup)
-    app.Route("POST", "/login", (*controller.AuthController).Login)
-    app.Route("GET", "/me", (*controller.AuthController).GetMe,
-        route.WithInterceptors(&interceptor.AuthInterceptor{}),
-    )
 
     return app, boot.Options{
         Address: ":8080",

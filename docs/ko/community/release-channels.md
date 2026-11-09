@@ -47,23 +47,15 @@ RC 브랜치의 현재 코드를 설치합니다. Preview 변경은 승격된 �
 
 ## CLI 채널과 앱 의존성 {#dependencies}
 
-CLI 버전과 Spine 코어 및 플랫폼 버전은 독립적입니다. CLI를 다시 설치해도 기존 앱의 소스나 의존성은 자동으로 바뀌지 않습니다. 새 앱은 설치한 CLI 소스의 생성 레시피를 사용합니다.
-
-| 설치한 CLI | 새 앱의 의존성 선택 | 기존 앱 |
-| --- | --- | --- |
-| Preview | `platform-contracts-preview`에서 코어와 선택한 플랫폼의 `@preview`를 조회하고 실제 버전을 `go.mod`에 기록 | 같은 레시피의 `spine update`에서 다시 조회 |
-| RC | 해당 RC 소스에 포함된 레시피 사용. 모든 의존성을 자동으로 `@rc`로 바꾸지 않음 | 기존 레시피 유지 |
-| 정식 | 해당 정식 CLI가 제공하는 버전 조합 사용 | 기존 레시피 유지 |
-
-프로젝트를 만든 뒤 `spine.toml`의 `recipe`와 `go.mod`를 확인하세요. 현재 CLI의 `new`가 선택하는 코어 버전은 다음처럼 확인할 수 있습니다.
+CLI 설치 버전과 앱 의존성 채널은 별도입니다. `spine new`에서 `--channel main`을 선택하면 정식 태그를 사용합니다. `rc`는 RC 또는 더 높은 정식 태그를 선택하고, `preview`는 Preview 브랜치를 조회합니다. 대화형 생성의 기본값은 Preview이므로 정식 앱은 명시적으로 Main을 선택하세요.
 
 ```bash
-spine new channel-check --module example.com/channel-check
+spine new channel-check --module example.com/channel-check --channel main
 cd channel-check
 go list -m github.com/NARUBROWN/spine
 ```
 
-Preview의 `--skip-install`도 브랜치 버전 조회에는 Go와 네트워크 또는 모듈 프록시 캐시가 필요합니다. 이 옵션은 의존성 설치와 빌드 검사를 생략합니다. 기존 버전별 Preview 레시피와 정식 레시피는 직접 바꾸기 전까지 고정 버전을 유지합니다. [기존 앱의 Preview 전환](/ko/learn/migration/v0.7.0-preview)을 참고하세요.
+선택한 채널은 `spine.toml`의 `dependency_channel`에 기록되며 `spine update`가 유지합니다. 설치된 CLI를 갱신해도 기존 프로젝트는 바뀌지 않습니다. 생성 후 `go.mod`와 `go.sum`을 확인하고 버전 관리하세요.
 
 ## 릴리스가 발행되는 순서 {#process}
 
@@ -101,10 +93,10 @@ CLI는 코어와 별도의 버전과 일정으로 릴리스합니다. 코어 버
 
 ## 버전 고정과 되돌리기 {#pin}
 
-CI와 운영 환경에서는 실제로 발행된 CLI 태그를 고정하고 앱 소스와 `go.mod`, `go.sum`도 함께 버전 관리합니다. CLI 태그는 도구의 코드만 고정합니다. Preview의 동적 레시피는 같은 CLI에서도 `new`나 `update`를 실행할 때 `@preview`를 다시 조회하므로, 앱을 재현할 때는 저장된 소스와 의존성을 사용하세요. 다음은 공개된 CLI `v0.4.2`에 고정하는 예시이며 최신 버전 지정이 아닙니다.
+CI와 운영 환경에서는 실제로 발행된 CLI 태그를 고정하고 앱 소스와 `go.mod`, `go.sum`도 함께 버전 관리합니다. CLI 태그는 도구의 코드만 고정합니다. Preview의 동적 레시피는 같은 CLI에서도 `new`나 `update`를 실행할 때 `@preview`를 다시 조회하므로, 앱을 재현할 때는 저장된 소스와 의존성을 사용하세요. 다음은 공개된 호환 CLI RC `v0.4.3-rc.1`에 고정하는 예시이며 최신 버전 지정이 아닙니다.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.2
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
 spine version
 ```
 

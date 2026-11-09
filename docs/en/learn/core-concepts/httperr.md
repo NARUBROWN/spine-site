@@ -1,30 +1,26 @@
 # httperr Package
 
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: info
+This page describes error handling in Spine `v0.7.1`. See [input migration](/en/learn/migration/v0.7.1-preview) for changes from legacy inputs and [OpenAPI](/en/reference/api/openapi) for document options.
 :::
 
 `httperr` contains HTTP status codes and error messages to send to clients. When a controller returns an error such as `httperr.NotFound("사용자를 찾을 수 없습니다")`, Spine converts it to a status code and a JSON error response. Controllers do not need to work directly with response objects from Echo or similar frameworks.
 
-This page describes `github.com/NARUBROWN/spine/pkg/httperr` in Spine v0.6.5.
+This page describes `github.com/NARUBROWN/spine/pkg/httperr` in Spine v0.7.1.
 
 ## Using It in a CLI Project
 
-The controller below is a code snippet to add to a [CLI-generated project](/en/learn/tutorial/1-project-structure). `httpx`, `httperr`, and `path` are packages under `github.com/NARUBROWN/spine/pkg`. Connect the controller constructor and route to the registration path used by `BuildApplication`. The app defines domain types such as `User`, repositories, and services.
+The controller below is a code snippet to add to a [CLI-generated project](/en/learn/tutorial/1-project-structure). `httpx`, `httperr`, and `input` are packages under `github.com/NARUBROWN/spine/pkg`. Connect the controller constructor and route to the registration path used by `BuildApplication`. The app defines domain types such as `User`, repositories, and services.
 
 Wrap successful values in `httpx.Response[T]`. On failure, return an empty response value together with the error. In examples that receive a request body, declare the DTO as a pointer, such as `*PaymentRequest`.
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
+func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
+    if *userId <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
     }
@@ -35,7 +31,7 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 
 If this method is registered for `GET /users/:id`, it responds as follows. The example assumes that every repository lookup error is treated as a 404. In a real app, distinguish a missing result from a database failure when choosing the status code.
 
-```bash
+```text
 # Invalid ID
 GET /users/-1
 → 400 {"message": "유효하지 않은 사용자 ID입니다"}
@@ -86,7 +82,7 @@ The helper functions return the `error` interface type, but the concrete value i
 
 ## Built-in Helper Functions
 
-Spine v0.6.5 provides the following four helpers. Each accepts `msg string` and returns `error`.
+Spine v0.7.1 provides the following four helpers. Each accepts `msg string` and returns `error`.
 
 | Function | Status Code | When to Use It |
 | --- | --- | --- |
@@ -106,7 +102,7 @@ func BadRequest(msg string) error {
 ```
 
 ```go
-if userId.Value <= 0 {
+if *userId <= 0 {
     return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
 }
 ```
@@ -222,14 +218,17 @@ The app implements `PaymentRequest`, `Receipt`, wallet lookup, and payment proce
 Methods that do not need a success response body can return only `error`.
 
 ```go
-func (c *UserController) DeleteUser(userId path.Int) error {
-    exists, err := c.repo.Exists(userId.Value)
-    if err != nil || !exists {
+func (c *UserController) DeleteUser(userId input.Path[int64]) error {
+    exists, err := c.repo.Exists(*userId)
+    if err != nil {
+        return err
+    }
+    if !exists {
         return httperr.NotFound("사용자를 찾을 수 없습니다")
     }
 
-    if err := c.repo.Delete(userId.Value); err != nil {
-        return httperr.BadRequest("삭제할 수 없습니다")
+    if err := c.repo.Delete(*userId); err != nil {
+        return err
     }
 
     return nil  // Return nil on success
@@ -238,7 +237,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
 
 Returning nil does not write an error response. This form alone does not specify a particular success status code. Use an `httpx` response type if you need an explicit status code, such as 204 after a successful deletion.
 
-For brevity, the example treats existence-check errors as 404 and deletion errors as 400. In a real app, choose status codes and retry policies according to the actual repository error type.
+A missing user returns 404; repository failures are returned unchanged. Choose status codes and retry policies according to the application error type.
 
 ## Using Other Error Status Codes
 
@@ -314,6 +313,6 @@ Errors can occur during routing, argument conversion, controller invocation, or 
 | Request body exceeds the size limit | Responds with 413 and `"Request entity too large"` |
 | An actual response has already been written | Does not write another error response, preventing a double response |
 
-Spine v0.6.5 applies the prepared response to the actual transport layer after pre-response processing is complete. An error in `BeforeResponse` can replace the pending success response with an error response. Since `AfterCompletion` runs after response processing, use this stage to log errors and transmission results rather than attempting to write a new error response.
+Spine v0.7.1 applies the prepared response to the actual transport layer after pre-response processing is complete. An error in `BeforeResponse` can replace the pending success response with an error response. Since `AfterCompletion` runs after response processing, use this stage to log errors and transmission results rather than attempting to write a new error response.
 
 Pass errors through Go return values. Do not use `panic` for normal input validation or business failures. See the [Interceptor Tutorial](/en/learn/tutorial/4-interceptor) for interceptor termination and cleanup behavior.

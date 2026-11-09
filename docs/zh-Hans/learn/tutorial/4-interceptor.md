@@ -1,12 +1,68 @@
 # 拦截器
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
+::: info
+以下现有项目示例使用 `legacy` 布局和兼容的 `app.Route`。新控制器使用 `api.Interceptors` 指定路由策略。请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
 :::
 
 为用户查询请求添加日志记录和演示认证，并确认请求经过拦截器的顺序。拦截器负责多个处理器共用的认证、权限检查、日志记录和事务处理。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
+本页的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的应用。默认 `layered-v1` 布局按角色划分目录。
+
+## 为新控制器应用拦截器
+
+以下独立应用通过 `api.Interceptors` 将认证拦截器连接到一个路由。在独立 Go 模块中安装 Spine `v0.7.1` 和兼容 Echo 平台，保存为 `main.go` 并运行。该令牌仅用于演示。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"log"
+)
+
+type Auth struct{}
+
+func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	if ctx.Header("Authorization") != "Bearer demo-token" {
+		return httperr.Unauthorized("unauthorized")
+	}
+	return nil
+}
+func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	}, api.Interceptors(&Auth{}))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+第一个请求返回 401，第二个返回 200 和 `{"id":1}`。实际认证需要实现安全的令牌验证。
+
+```bash
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+```
 
 ## 从 CLI 项目开始
 
@@ -31,7 +87,7 @@ CLI 会生成 `src/user` 下的文件，以及 `BuildApplication` 中的 `user.R
 
 ## 拦截器生命周期
 
-在 Spine v0.6.5 中，HTTP 请求依次经过全局拦截器、路由匹配与输入绑定、路由拦截器和控制器。拦截器必须实现全部四个生命周期方法。
+在 Spine v0.7.1 中，HTTP 请求依次经过全局拦截器、路由匹配与输入绑定、路由拦截器和控制器。拦截器必须实现全部四个生命周期方法。
 
 ```mermaid
 graph TD

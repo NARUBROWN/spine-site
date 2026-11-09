@@ -10,8 +10,10 @@
 
 创建项目和 WebSocket 处理器。后续命令均在 `chat-app/` 中运行。
 
+需要 CLI `v0.4.3-rc.1` 或更高版本。`--channel main` 选择正式依赖；兼容的平台正式标签尚不可用时，可使用 `--channel rc` 验证。
+
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla
+spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla --channel main --no-interactive
 cd chat-app
 spine doctor
 spine generate websocket chat --path /ws/chat --field message:string

@@ -1,22 +1,14 @@
 # Kafka で注文サービスと在庫サービスを接続する
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
-:::
-
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: info
+この例では `v0.7.1` のコントローラーとパス入力を使います。互換性は[ルートの移行](/ja/learn/migration/preview-controller-routes)、[入力の移行](/ja/learn/migration/v0.7.1-preview)、[OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 注文用の HTTP サービスと在庫のコンシューマーサービスをそれぞれ作成し、Kafka で `order.created` イベントを渡します。注文リクエストを送信した後、在庫サービスの処理ログまで確認します。在庫サービスは HTTP リスナーなしで実行します。
 
 ## 事前準備
 
-先に [CLIのインストール](/ja/learn/getting-started/installation) を完了します。CLI 0.4.2でKafkaプラットフォームとコンシューマーの雛形を生成し、以下のコードで発行サービスとHTTPを使わないワーカーを構成します。
+[CLI のインストール](/ja/learn/getting-started/installation)後、CLI `v0.4.3-rc.1` 以降で Kafka プラットフォームとコンシューマーのひな形を生成します。
 
 メッセージの配信を確認するには、`localhost:9092` の Kafka ブローカーと `order.created` トピックが必要です。この例では、隔離されたローカル環境の平文接続を使用します。在庫コンシューマーはイベントをログに記録し、実際の在庫数は変更しません。
 
@@ -24,18 +16,20 @@
 
 作業ディレクトリを作り、生成するファイルを先に確認します。
 
+以下のコマンドは正式依存関係チャンネルを選びます。互換性のある正式プラットフォームタグがない場合は検証に `--channel rc` を使い、選択されたバージョンを `go.mod` で確認してください。
+
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --dry-run
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive --dry-run
 ```
 
 プレビューを確認してから 2 つのアプリを作成します。以降のコマンドは、別途指定がなければ `spine-msa/` で実行します。
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive
 ```
 
 ## 2. 在庫コンシューマーのひな形を生成する
@@ -128,20 +122,25 @@ import (
     "github.com/NARUBROWN/spine/pkg/event/publish"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/api"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type OrderController struct{}
 
-func NewOrderController() *OrderController { return &OrderController{} }
+func (*OrderController) Constructor() *OrderController { return &OrderController{} }
 
-func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Response[string], error) {
-    if id.Value <= 0 {
+func (c *OrderController) RegisterRoutes(r *api.Registry) {
+    r.POST("/orders/:order_id", c.Create)
+}
+
+func (c *OrderController) Create(ctx context.Context, id input.Path[int64]) (httpx.Response[string], error) {
+    if *id <= 0 {
         return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
     }
     publish.Event(ctx, events.OrderCreated{
-        EventID: fmt.Sprintf("order.created:%d", id.Value),
-        OrderID: id.Value,
+        EventID: fmt.Sprintf("order.created:%d", *id),
+        OrderID: *id,
         At: time.Now().UTC(),
     })
     return httpx.Response[string]{
@@ -163,6 +162,7 @@ import (
     "github.com/NARUBROWN/spine"
     kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
@@ -177,8 +177,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
         return nil, boot.Options{}, err
     }
     app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
-    app.Constructor(controller.NewOrderController)
-    app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
+    app.Constructor(constructor.Controller(&controller.OrderController{}))
 
     return app, boot.Options{
         Address: ":8080",

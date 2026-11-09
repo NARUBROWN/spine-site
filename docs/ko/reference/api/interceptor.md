@@ -1,10 +1,6 @@
 # core.Interceptor
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
-:::
-
-컨트롤러 실행 전후에 인증, 로깅, CORS와 트랜잭션 처리를 추가하는 인터페이스입니다. Spine v0.6.5에서는 사전 처리, 성공 후 처리, 응답 전 처리와 최종 정리를 각각 구현합니다.
+컨트롤러 실행 전후에 인증, 로깅, CORS와 트랜잭션 처리를 추가하는 인터페이스입니다. Spine v0.7.1에서는 사전 처리, 성공 후 처리, 응답 전 처리와 최종 정리를 각각 구현합니다.
 
 ## 인터페이스
 
@@ -65,7 +61,7 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
 
 응답을 실제 전송 계층에 기록하기 전에 역순으로 실행합니다. `executionErr`에는 사전 처리, 라우팅, 입력값 해석, 컨트롤러, 응답 준비와 실행 후 훅에서 이 시점까지 발생한 오류가 전달됩니다. 앞서 실행한 `BeforeResponse`가 반환한 오류도 합쳐 다음 인터셉터에 전달합니다.
 
-요청 범위의 트랜잭션은 이 단계에서 커밋하거나 롤백하십시오. v0.6.5는 응답 직렬화, 쿠키와 상태 코드 검증을 먼저 수행하므로 응답 준비에 실패하면 롤백할 수 있습니다.
+요청 범위의 트랜잭션은 이 단계에서 커밋하거나 롤백하십시오. v0.7.1는 응답 직렬화, 쿠키와 상태 코드 검증을 먼저 수행하므로 응답 준비에 실패하면 롤백할 수 있습니다.
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -110,19 +106,79 @@ func (i *LoggingInterceptor) AfterCompletion(
 | `boot.InterceptorWebSocket` | WebSocket 메시지와 선택적 연결 전 처리 |
 | `boot.InterceptorAll` | 두 범위 모두 |
 
+새 컨트롤러의 라우트 인터셉터는 `RegisterRoutes`에서 `api.Interceptors`로 지정합니다. 예제의 `r`은 `*api.Registry`, `handler`는 앱이 정의한 핸들러입니다. DI를 사용할 때는 인터셉터 생성자도 등록해야 합니다. [전체 실행 예제](/ko/learn/tutorial/4-interceptor)를 참고하세요.
+
 ```go
 app.InterceptorFor(boot.InterceptorAll, auth)
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 app.InterceptorFor(boot.InterceptorWebSocket, wsRateLimiter)
 
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),
+r.GET("/admin/users/:id", handler,
+    api.Interceptors((*AuthInterceptor)(nil)),
 )
 ```
 
 `(*AuthInterceptor)(nil)`처럼 타입이 있는 nil 포인터를 등록하면 컨테이너에서 해당 타입의 인스턴스를 찾아 사용합니다. 같은 타입의 nil 포인터는 컨테이너의 공유 인스턴스를 사용합니다.
 
 전역 인터셉터에 같은 포인터를 여러 범위로 등록하면 범위를 합쳐 한 번 실행합니다. 같은 타입이어도 서로 다른 포인터는 각각 실행합니다. 값 타입도 등록한 항목마다 각각 실행합니다.
+
+### DI로 라우트 인터셉터 등록
+
+다음 독립 앱은 `constructor.Interceptor`로 생성 계약을 등록하고, `api.Interceptors`에 타입이 있는 nil 포인터를 전달합니다. Spine `v0.7.1`과 호환 Echo 플랫폼이 있는 별도 Go 모듈에서 실행하세요. 토큰은 데모 전용입니다.
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"log"
+)
+
+type Auth struct{}
+
+func (*Auth) Constructor() *Auth { return &Auth{} }
+
+func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	if ctx.Header("Authorization") != "Bearer demo-token" {
+		return httperr.Unauthorized("unauthorized")
+	}
+	return nil
+}
+func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	}, api.Interceptors((*Auth)(nil)))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Interceptor(&Auth{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+인증 없이 요청하면 401, 데모 토큰을 보내면 200과 사용자 ID를 반환합니다.
+
+```bash
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+```
 
 ## WebSocket 연결 전 처리
 
@@ -172,7 +228,7 @@ Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
 - `core.ErrAbortPipeline`으로 중단할 때는 인터셉터가 필요한 응답을 준비해야 합니다. 컨트롤러와 이후 성공 처리 단계는 실행하지 않습니다.
 - DB 커밋 뒤 실제 응답 전송이 실패할 수 있습니다. `BeforeResponse`는 DB와 네트워크 전송을 원자적으로 묶지 않습니다.
 
-구체적인 조기 종료와 오류 전파는 [v0.6.5 파이프라인 구현](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/pipeline/pipeline.go), 연결 전 처리 순서는 [WebSocket 런타임 구현](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/ws/runtime.go)을 참고하십시오.
+구체적인 조기 종료와 오류 전파는 [v0.7.1 파이프라인 구현](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/pipeline/pipeline.go), 연결 전 처리 순서는 [WebSocket 런타임 구현](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/ws/runtime.go)을 참고하십시오.
 
 ## 참고
 

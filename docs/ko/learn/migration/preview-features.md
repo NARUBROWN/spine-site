@@ -1,45 +1,19 @@
-# v0.7.0 미리보기 기능과 부팅 옵션
+# v0.7.1 HTTP와 부팅 옵션
 
-::: warning Preview
-아래 실행 예제는 Spine `v0.7.0-preview.7` 이상이 필요합니다. [Preview](/ko/learn/migration/preview-controller-routes)
-:::
+Spine `v0.7.1`의 OpenAPI UI, HTTP v3 입력 처리, TLS와 종료 동작을 설명합니다. 기존 앱은 플랫폼과 앱 코드를 함께 확인하며 전환하세요.
 
-Swagger UI와 ReDoc을 부팅 옵션으로 켜고, HTTP v3와 net/http 플랫폼으로 전환할 때 필요한 변경을 확인합니다. 이번에 미리보기 브랜치에 병합된 경로 처리, 종료 처리와 이벤트 정리 이력 변경도 함께 정리합니다.
+## 실행할 버전 {#versions}
 
-::: warning 미리보기 전용
-이 페이지는 `preview` 브랜치 기준이며 정식 `v0.6.5`에 그대로 적용할 수 없습니다. 기능이 처음 공개된 버전과 현재 브랜치 변경을 구분합니다. `@preview`는 이동하므로 실행한 앱의 `go.mod`, `go.sum`과 소스를 함께 보관하세요.
-:::
-
-## 적용 버전과 설치 {#versions}
-
-| 기능 | 최초 공개 버전 |
-| --- | --- |
-| 출처별 입력 DTO와 OpenAPI JSON | Spine `v0.7.0-preview.1` |
-| 임베드 Swagger UI와 ReDoc | Spine `v0.7.0-preview.2` |
-| HTTP v3, TLS와 net/http 플랫폼 | Spine `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1` |
-| HTTP v3 분석과 net/http 앱 생성 및 업데이트 | CLI `v0.4.3-preview.4` |
-| 컨트롤러 라우트, 역할별 생성자와 API 그룹 | Spine `v0.7.0-preview.7`, CLI `v0.4.3-preview.8` |
-
-Go 1.25.5 이상이 필요합니다. playground 검증기를 선택하면 Go 1.26 이상이 필요합니다. `--platform nethttp`로 net/http를 선택할 수도 있습니다. 기본 Go 프록시 설정에서는 미리보기 브랜치 메타데이터를 원본에서 조회하므로 Git이 필요합니다. CLI 설치와 앱 의존성 갱신은 별개입니다.
+독립 예제는 코어 `v0.7.1`과 Echo `v0.2.0-rc.1`을 사용합니다. Go 1.25.5 이상이 필요합니다. 새 디렉터리에서 모듈을 만들고 의존성을 고정한 뒤 아래 코드를 `main.go`에 저장하세요. 정식 플랫폼이 공개되면 검증된 호환 태그로 교체하고 `go.mod`와 `go.sum`을 보관하세요.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
-spine version
-spine new preview-api --module example.com/preview-api --platform echo
-cd preview-api
-spine contract check
-spine verify
+go mod init example.com/boot-example
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
 ```
-
-기존 앱은 [입력 전환 안내](/ko/learn/migration/v0.7.0-preview#versions)에 따라 `recipe = "platform-contracts-preview"`를 선택합니다. `spine update --dry-run`의 변경 내용을 검토한 뒤 출력에 안내된 적용 명령을 실행하세요. `update`는 앱 소스를 고치지 않으므로 아래 부팅 옵션과 Prepared API는 직접 반영합니다.
 
 ## Swagger UI와 ReDoc 부팅 옵션 {#boot}
 
-::: warning net/http 문서 UI의 현재 제한
-2026-11-06 확인: 코어 `83b1e03`과 net/http `v0.1.0-preview.2` 조합은 문서와 자산의 Content-Type을 `text/plain`으로 덮어써 Swagger UI와 ReDoc이 정상 렌더링되지 않습니다. 아래 UI 실행 예제는 Echo `v0.2.0-preview.3` 조합을 기준으로 합니다.
-:::
-
-다음은 독립 참고 앱의 `main.go`입니다. 먼저 위 CLI로 의존성을 준비한 별도 디렉터리에서 실행하세요. 기존 앱에서는 현재 composition과 `BuildApplication`에 import와 `HTTP.OpenAPI` 설정을 반영합니다.
+다음은 독립 앱의 `main.go`입니다. 기존 앱에서는 import와 `HTTP.OpenAPI` 설정을 현재 composition에 반영합니다.
 
 ```go
 package main
@@ -79,7 +53,7 @@ func main() {
             OpenAPI: boot.OpenAPIOptions{
                 Enabled: true,
                 Path:    "/openapi.json",
-                Title:   "Preview API",
+                Title:   "Example API",
                 Version: "1.0.0",
                 UI: []boot.OpenAPIUI{
                     swaggerui.New(swaggerui.Options{Path: "/docs"}),
@@ -121,7 +95,7 @@ func runTLS(app spine.App) error {
 
 ## HTTP v3 입력과 파일 수명 {#body}
 
-HTTP v3에서는 코어가 JSON, XML, urlencoded form과 multipart를 공통으로 해석합니다. 경로와 쿼리는 본문 DTO에 합치지 않습니다. 인증 인터셉터 뒤에 필요한 DTO를 파싱하고, 바인딩한 DTO별로 검증합니다.
+HTTP v3에서는 코어가 JSON, XML, urlencoded form과 multipart를 공통으로 해석합니다. 경로와 쿼리는 본문 DTO에 합치지 않습니다. 전역 인터셉터의 `PreHandle` 뒤에 DTO를 파싱하고 각 DTO를 검증합니다. 라우트 인터셉터의 `PreHandle`은 바인딩 뒤에 실행됩니다.
 
 `MaxBodyBytes: 0`은 전체 본문 한도 32 MiB, 양수는 지정한 바이트 한도, 음수는 제한 해제입니다. `MultipartMemoryBytes: 0`은 파일 메모리 예산 32 MiB, 양수는 지정한 예산, 음수는 준비 오류입니다. multipart 예산은 전체 요청 메모리의 상한이 아니며 초과 파일은 디스크로 넘깁니다.
 
@@ -131,15 +105,15 @@ HTTP v3에서는 코어가 JSON, XML, urlencoded form과 multipart를 공통으�
 
 `PreparedApplication.Handler()`는 `spine.NetHTTPHandler(prepared)`로 바꿉니다. 이 함수는 `(http.Handler, error)`를 반환합니다. `prepared.HTTPAdapter()`는 준비한 동일 어댑터를 반환하며 HTTP가 꺼져 있으면 nil입니다. 어댑터의 실행과 종료를 중복 호출하지 마세요. 외부 서버 종료와 `prepared.Close(ctx)`는 호출자가 관리합니다. Close는 새 진입을 차단하고 WebSocket과 native 미들웨어 후처리를 포함한 요청을 정리합니다. 대기 context가 만료돼도 정리는 계속됩니다.
 
-사용자 HTTP 플랫폼은 `spine.http-adapter/v3`로 이행해야 합니다. `Serve(net.Listener, ...httpcontract.ServeOption) error`와 TLS capability를 반영하세요. `adapter`, `adapter/http` 별칭은 v2 구현을 자동 변환하지 않습니다. net/http 플랫폼은 독립 모듈이며 `DisableRecover: true`를 지원하지 않습니다. [전체 HTTP v3 이행 안내](https://github.com/NARUBROWN/spine/blob/preview/docs/migration/http-v3.md)를 참고하세요.
+사용자 HTTP 플랫폼은 `spine.http-adapter/v3`로 이행해야 합니다. `Serve(net.Listener, ...httpcontract.ServeOption) error`와 TLS capability를 반영하세요. `adapter`, `adapter/http` 별칭은 v2 구현을 자동 변환하지 않습니다. net/http 플랫폼은 독립 모듈이며 `DisableRecover: true`를 지원하지 않습니다. [전체 HTTP v3 이행 안내](https://github.com/NARUBROWN/spine/blob/v0.7.1/docs/migration/http-v3.md)를 참고하세요.
 
-## 이번 병합의 추가 변경 {#merged}
+## 추가 실행 동작 {#merged}
 
-위 추가 변경은 [코어 PR #34](https://github.com/NARUBROWN/spine/pull/34)의 병합 소스 기준입니다. 그 소스의 다음 후보는 `v0.7.0-preview.5`이며, 후보 번호만으로 해당 태그의 발행이나 전체 릴리스 완료를 주장하지 않습니다.
+다음은 `v0.7.1`의 경로, 종료와 이벤트 처리 동작입니다.
 
 - 경로 값: `/users/:id`와 `/users/:userID/posts`가 각 라우트의 키로 바인딩됩니다. `/files/:name`에서 `a%2Fb`는 `a/b`, `a%252Fb`는 `a%2Fb`로 한 번만 디코딩합니다. 실제 `/files/a/b`는 같은 라우트에 매칭되지 않습니다.
 - 종료: WebSocket 정리 패닉 뒤에도 후속 앱 자원을 정리하며, HTTP의 실제 Serve 오류를 정상 종료로 숨기지 않습니다.
-- 이벤트: `spine.WithEventPublisherErrorHistory`와 `spine.WithEventConsumerErrorHistory`에 `boot.CleanupErrorHistoryOptions{MaxEntries, MaxAge}`를 전달해 역할별 정리 실패 이력을 설정합니다. 기본값은 최근 32건과 최대 1시간이며 먼저 도달한 한도를 적용합니다. 0은 기본값, 음수는 사전 검사 오류입니다. 로그 보관 정책과 이미 반환한 종료 결과는 바꾸지 않습니다. 새 helper를 인식하는 CLI 정적 분석 보완은 후속입니다.
+- 이벤트: `spine.WithEventPublisherErrorHistory`와 `spine.WithEventConsumerErrorHistory`에 `boot.CleanupErrorHistoryOptions{MaxEntries, MaxAge}`를 전달해 역할별 정리 실패 이력을 설정합니다. 기본값은 최근 32건과 최대 1시간이며 먼저 도달한 한도를 적용합니다. 0은 기본값, 음수는 사전 검사 오류입니다. 로그 보관 정책과 이미 반환한 종료 결과는 바꾸지 않습니다.
 - nil 이벤트 본문: raw byte 핸들러는 nil tombstone과 길이 0인 nonnil slice를 구분합니다. 본문이 필요한 DTO의 실패 정책은 유지합니다.
 - Swagger UI: base64url, 지수 표기의 multipleOf와 items 없는 contains 예제 생성 회귀를 수정했습니다.
 - 릴리스 조합: net/http를 포함한 여섯 플랫폼을 검증합니다. 코어 태그 하나나 소스 CI 통과만으로 전체 공개 조합의 검증 완료를 뜻하지 않습니다.
@@ -158,7 +132,7 @@ curl -I http://localhost:8080/redoc
 ## 관련 문서와 병합 근거 {#sources}
 
 - [OpenAPI](/ko/reference/api/openapi)
-- [v0.7.0](/ko/learn/migration/v0.7.0-preview)
+- [v0.7.1](/ko/learn/migration/v0.7.1-preview)
 - [Preview → RC → Production](/ko/community/release-channels)
 - [Spine #26: OpenAPI UI](https://github.com/NARUBROWN/spine/pull/26)
 - [Spine #32: HTTP v3 / TLS](https://github.com/NARUBROWN/spine/pull/32)

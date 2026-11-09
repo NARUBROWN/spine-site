@@ -1,20 +1,6 @@
 # 运行时 OpenAPI
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
-
-从 Spine `v0.7.0-preview.1` 起，可以根据实际注册的 HTTP 路由、处理器类型与 validator 描述契约生成 OpenAPI 3.1.2 JSON。
-
-`boot.OpenAPIOptions.UI` 与内嵌 Swagger UI、ReDoc 从 `v0.7.0-preview.2` 起可用。JSON 规范生成则从 `v0.7.0-preview.1` 起提供，请区分两者的首次可用版本。
-
-::: warning v0.7.0 Preview API
-此 API 不包含在稳定版 `v0.6.5` 中。当前 Preview 请同时通过 `@preview` 解析核心与所选 HTTP 平台。HTTP v3 从核心 `v0.7.0-preview.3`、Echo `v0.2.0-preview.2` 与 net/http `v0.1.0-preview.1` 起公开。最新启动选项与合并变更请参阅 [Preview 功能指南](/zh-Hans/learn/migration/preview-features)。
-:::
-
-::: warning 当前 net/http 文档 UI 限制
-2026-11-06 验证：核心 `83b1e03` 与 net/http `v0.1.0-preview.2` 组合将文档与资源的 Content-Type 覆盖为 `text/plain`，导致 Swagger UI 与 ReDoc 无法正常渲染。下面的 UI 运行示例使用 Echo `v0.2.0-preview.3`。
-:::
+Spine `v0.7.1` 根据已注册的 HTTP 路由、处理器类型与 validator 描述契约生成 OpenAPI 3.1.2 JSON，也可选择提供内置 Swagger UI 和 ReDoc。
 
 ## 启用与启动选项 {#options}
 
@@ -41,9 +27,9 @@ options := boot.Options{
 | `Path` | `/openapi.json` | 通过 GET 与 HEAD 提供的静态绝对路径 |
 | `Title` | `Spine API` | OpenAPI `info.title` |
 | `Version` | `unversioned` | 应用的 `info.version`，与框架版本无关 |
-| `UI` | `nil` | 从 `v0.7.0-preview.2` 起提供的 `[]boot.OpenAPIUI`。省略时仅提供 JSON 规范 |
+| `UI` | `nil` | `[]boot.OpenAPIUI`。省略时仅提供 JSON 规范 |
 
-`HTTP: nil` 会同时关闭 HTTP 与规范资源。仅设置 `Path`、`Title` 或 `Version` 不会启用该功能。要关闭它，请设置 `Enabled: false` 或省略 OpenAPI 选项。请使用已公开 Preview 中的 `Enabled`，而非未发布开发源码中使用的 `Disabled`。
+`HTTP: nil` 会同时关闭 HTTP 与规范资源。仅设置 `Path`、`Title` 或 `Version` 不会启用该功能。要关闭它，请设置 `Enabled: false` 或省略 OpenAPI 选项。
 
 规范路径独立于 `GlobalPrefix`。上述选项会为业务 API 应用 `/api`，但规范仍通过 `/openapi.json` 提供。完成准备的应用会复用规范快照，不会自动保存文件。
 
@@ -84,6 +70,24 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 即使关闭自动 HTTP 提供，也可以显式使用 `DescribeHTTP` 与 `openapi.Generate`。不支持描述功能的自定义 App 会返回 `ErrHTTPDescriptionUnavailable`。
 
+新 `api.Controller` 的路由在准备期间收集，因此上面的 `DescribeHTTP` 返回 `spine.ErrRoutesNotCollected`。以下函数接收调用方通过 `Prepare` 准备的应用，调用方也负责关闭它。准备期间可能执行构造函数和初始化代码。
+
+```go
+func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.OpenAPIOptions, output io.Writer) error {
+    description, err := spine.DescribePreparedHTTP(prepared)
+    if err != nil {
+        return err
+    }
+    document, err := openapi.Generate(description, options)
+    if err != nil {
+        return err
+    }
+    _, err = output.Write(document)
+    return err
+}
+```
+
+
 ## validator 与描述范围 {#validation}
 
 | 注册状态 | 生成的信息 |
@@ -104,10 +108,10 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 ## 提供 Swagger UI 与 ReDoc {#tools}
 
-从 `v0.7.0-preview.2` 起，通过 `boot.Options.HTTP.OpenAPI.UI` 选择界面。同时设置 `Enabled: true` 并注册 UI，仅提供 JSON 时省略 `UI`。以下命令解析当前 Preview 分支。请保存解析后的 `go.mod` 与 `go.sum` 以便复现。
+通过 `boot.Options.HTTP.OpenAPI.UI` 选择界面。设置 `Enabled: true` 并注册 UI，仅提供 JSON 时省略 `UI`。以下示例固定兼容的 Echo RC，请保存 `go.mod` 和 `go.sum` 以便复现。
 
 ```bash
-go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
 ```
 
 以下是注册所选 UI 的独立应用 `main.go`。在现有应用中，将 import 和 `OpenAPI.UI` 配置添加到当前 composition。
@@ -120,7 +124,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -128,14 +134,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
 
     options := boot.Options{
         Address: ":8080",
@@ -188,4 +197,4 @@ type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
 
 文档或资源路径与现有 GET、HEAD、WebSocket 路由重叠时，准备过程以 `OPENAPI_PATH_CONFLICT` 失败。nil 提供者或无效 UI 选项产生 `OPENAPI_UI_INVALID`；无效资源路径或 Content-Type 产生 `OPENAPI_UI_RESOURCE_INVALID`。
 
-稳定版 `v0.6.5` 的独立 UI 配置请参阅 [Swagger 与 OpenAPI 教程](/zh-Hans/learn/tutorial/8-swagger)。输入模型请参阅 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，稳定版 API 请参阅 [spine.App](/zh-Hans/reference/api/spine-app)。
+完整运行示例请参阅 [Swagger 与 OpenAPI 教程](/zh-Hans/learn/tutorial/8-swagger)，输入模型请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，应用 API 请参阅 [spine.App](/zh-Hans/reference/api/spine-app)。

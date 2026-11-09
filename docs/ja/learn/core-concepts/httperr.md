@@ -1,30 +1,26 @@
 # httperrパッケージ
 
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: info
+このページは Spine `v0.7.1` のエラー処理を説明します。従来の入力からの変更は[入力の移行](/ja/learn/migration/v0.7.1-preview)、文書設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 `httperr`は、HTTPステータスコードとクライアントに伝えるエラーメッセージを保持するパッケージです。コントローラーから`httperr.NotFound("사용자를 찾을 수 없습니다")`のようにエラーを返すと、SpineがステータスコードとJSONエラーレスポンスに変換します。コントローラーでEchoなどのレスポンスオブジェクトを直接扱う必要はありません。
 
-このページでは、Spine v0.6.5の`github.com/NARUBROWN/spine/pkg/httperr`を基準に説明します。
+このページでは、Spine v0.7.1の`github.com/NARUBROWN/spine/pkg/httperr`を基準に説明します。
 
 ## CLIプロジェクトで使用する
 
-以下のコントローラーは、[CLIで生成したプロジェクト](/ja/learn/tutorial/1-project-structure)に追加するコード断片です。`httpx`、`httperr`、`path`は、それぞれ`github.com/NARUBROWN/spine/pkg`配下のパッケージです。コントローラーのコンストラクタとルートを、`BuildApplication`で使用する登録経路に接続してください。`User`、リポジトリ、サービスなどの業務用の型は、アプリで定義します。
+以下のコントローラーは、[CLIで生成したプロジェクト](/ja/learn/tutorial/1-project-structure)に追加するコード断片です。`httpx`、`httperr`、`input`は、それぞれ`github.com/NARUBROWN/spine/pkg`配下のパッケージです。コントローラーのコンストラクタとルートを、`BuildApplication`で使用する登録経路に接続してください。`User`、リポジトリ、サービスなどの業務用の型は、アプリで定義します。
 
 成功値は`httpx.Response[T]`で包み、失敗時には空のレスポンス値とエラーを一緒に返します。リクエスト本文を受け取る例のDTOは、`*PaymentRequest`のようにポインターで宣言します。
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
+func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
+    if *userId <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
     }
@@ -35,7 +31,7 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 
 このメソッドを`GET /users/:id`に登録した場合、次のように応答します。この例では、リポジトリの検索エラーをすべて404として処理すると仮定しています。実際のアプリでは、検索結果がない場合とデータベース障害を区別してステータスコードを選んでください。
 
-```bash
+```text
 # 不正な ID
 GET /users/-1
 → 400 {"message": "유효하지 않은 사용자 ID입니다"}
@@ -86,7 +82,7 @@ func (e *HTTPError) Error() string {
 
 ## 標準のヘルパー関数
 
-Spine v0.6.5は、次の4つのヘルパーを提供します。すべて`msg string`を受け取り、`error`を返します。
+Spine v0.7.1は、次の4つのヘルパーを提供します。すべて`msg string`を受け取り、`error`を返します。
 
 | 関数 | ステータスコード | 使用する状況 |
 | --- | --- | --- |
@@ -106,7 +102,7 @@ func BadRequest(msg string) error {
 ```
 
 ```go
-if userId.Value <= 0 {
+if *userId <= 0 {
     return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
 }
 ```
@@ -222,14 +218,17 @@ func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt
 成功レスポンスの本文が不要なメソッドは、`error`だけを返すことができます。
 
 ```go
-func (c *UserController) DeleteUser(userId path.Int) error {
-    exists, err := c.repo.Exists(userId.Value)
-    if err != nil || !exists {
+func (c *UserController) DeleteUser(userId input.Path[int64]) error {
+    exists, err := c.repo.Exists(*userId)
+    if err != nil {
+        return err
+    }
+    if !exists {
         return httperr.NotFound("사용자를 찾을 수 없습니다")
     }
 
-    if err := c.repo.Delete(userId.Value); err != nil {
-        return httperr.BadRequest("삭제할 수 없습니다")
+    if err := c.repo.Delete(*userId); err != nil {
+        return err
     }
 
     return nil  // 成功時は nil を返す
@@ -238,7 +237,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
 
 nilを返すと、エラーレスポンスは作成しません。この形式だけでは、特定の成功ステータスコードを指定しません。削除の成功時に204などの明示的なステータスコードが必要な場合は、`httpx`のレスポンス型を使用してください。
 
-この例では簡潔に示すため、存在確認のエラーと削除のエラーをそれぞれ404、400として処理しています。実際のリポジトリエラーの種類に応じて、ステータスコードと再試行の方針を区別する必要があります。
+ユーザーが存在しない場合は 404 を返し、リポジトリの障害はそのまま返します。アプリのエラー種別に応じて状態コードと再試行ポリシーを決めてください。
 
 ## その他のエラーステータスコードを使用する
 
@@ -314,6 +313,6 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 | リクエスト本文のサイズ制限を超過 | 413、`"Request entity too large"`で応答 |
 | 実際のレスポンスがすでに書き込まれている | 追加のエラーレスポンスを書かず、二重応答を防ぐ |
 
-Spine v0.6.5は、レスポンス前の処理を終えてから、準備したレスポンスを実際の転送層に反映します。`BeforeResponse`でエラーが発生すると、準備中の成功レスポンスがエラーレスポンスに変わる場合があります。`AfterCompletion`はレスポンス処理の後に実行されるため、この段階では新たなエラーレスポンスを作成しようとせず、エラーと転送結果を記録してください。
+Spine v0.7.1は、レスポンス前の処理を終えてから、準備したレスポンスを実際の転送層に反映します。`BeforeResponse`でエラーが発生すると、準備中の成功レスポンスがエラーレスポンスに変わる場合があります。`AfterCompletion`はレスポンス処理の後に実行されるため、この段階では新たなエラーレスポンスを作成しようとせず、エラーと転送結果を記録してください。
 
 エラーはGoの戻り値で伝えてください。`panic`を、通常の入力検証や業務上の失敗を表す手段として使用しないでください。インターセプターによる中断と終了処理は、[インターセプターチュートリアル](/ja/learn/tutorial/4-interceptor)を参照してください。

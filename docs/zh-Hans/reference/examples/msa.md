@@ -1,22 +1,14 @@
 # 使用 Kafka 连接订单服务和库存服务
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
-
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
-
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info
+此示例使用 `v0.7.1` 控制器和路径输入。兼容规则请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)、[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)和 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 分别创建订单 HTTP 服务和库存消费服务，通过 Kafka 传递 `order.created` 事件。发送订单请求后，确认库存服务的处理日志。库存服务不启动 HTTP 监听器。
 
 ## 开始前的准备
 
-先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。使用 CLI 0.4.2 生成 Kafka 平台和消费者骨架，再用以下代码组装发布服务和无 HTTP 的 worker。
+完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用 CLI `v0.4.3-rc.1` 或更高版本生成 Kafka 平台和消费者框架。
 
 要确认消息传递，需要在 `localhost:9092` 运行 Kafka broker，并创建 `order.created` 主题。本示例使用隔离本地环境中的明文连接。库存消费者会记录事件日志，但不会修改实际库存数量。
 
@@ -24,18 +16,20 @@
 
 创建工作目录，先预览将要生成的文件。
 
+以下命令选择正式依赖渠道。兼容的正式平台标签尚不可用时，可使用 `--channel rc` 验证，并在 `go.mod` 中确认所选版本。
+
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --dry-run
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive --dry-run
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive --dry-run
 ```
 
 确认预览后，创建两个应用。除非另有说明，后续命令均在 `spine-msa/` 中运行。
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka
+spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive
+spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive
 ```
 
 ## 2. 生成库存消费者骨架
@@ -128,20 +122,25 @@ import (
     "github.com/NARUBROWN/spine/pkg/event/publish"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/api"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type OrderController struct{}
 
-func NewOrderController() *OrderController { return &OrderController{} }
+func (*OrderController) Constructor() *OrderController { return &OrderController{} }
 
-func (c *OrderController) Create(ctx context.Context, id path.Int) (httpx.Response[string], error) {
-    if id.Value <= 0 {
+func (c *OrderController) RegisterRoutes(r *api.Registry) {
+    r.POST("/orders/:order_id", c.Create)
+}
+
+func (c *OrderController) Create(ctx context.Context, id input.Path[int64]) (httpx.Response[string], error) {
+    if *id <= 0 {
         return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
     }
     publish.Event(ctx, events.OrderCreated{
-        EventID: fmt.Sprintf("order.created:%d", id.Value),
-        OrderID: id.Value,
+        EventID: fmt.Sprintf("order.created:%d", *id),
+        OrderID: *id,
         At: time.Now().UTC(),
     })
     return httpx.Response[string]{
@@ -163,6 +162,7 @@ import (
     "github.com/NARUBROWN/spine"
     kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
@@ -177,8 +177,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
         return nil, boot.Options{}, err
     }
     app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
-    app.Constructor(controller.NewOrderController)
-    app.Route("POST", "/orders/:order_id", (*controller.OrderController).Create)
+    app.Constructor(constructor.Controller(&controller.OrderController{}))
 
     return app, boot.Options{
         Address: ":8080",

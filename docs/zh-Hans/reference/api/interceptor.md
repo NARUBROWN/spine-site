@@ -1,10 +1,6 @@
 # core.Interceptor
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
-
-用于在控制器执行前后添加认证、日志、CORS 和事务处理的接口。在 Spine v0.6.5 中，分别实现前置处理、成功后处理、响应前处理和最终清理。
+用于在控制器执行前后添加认证、日志、CORS 和事务处理的接口。在 Spine v0.7.1 中，分别实现前置处理、成功后处理、响应前处理和最终清理。
 
 ## 接口
 
@@ -65,7 +61,7 @@ func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.Han
 
 在将响应写入实际传输层之前，按相反顺序执行。`executionErr` 包含前置处理、路由、输入值解析、控制器、响应准备和执行后钩子截至此时发生的错误。此前执行的 `BeforeResponse` 返回的错误也会合并并传递给下一个拦截器。
 
-请在此阶段提交或回滚请求范围的事务。v0.6.5 会先进行响应序列化、Cookie 和状态码验证，因此响应准备失败时可以回滚。
+请在此阶段提交或回滚请求范围的事务。v0.7.1 会先进行响应序列化、Cookie 和状态码验证，因此响应准备失败时可以回滚。
 
 ```go
 func (i *TxInterceptor) BeforeResponse(
@@ -110,19 +106,79 @@ func (i *LoggingInterceptor) AfterCompletion(
 | `boot.InterceptorWebSocket` | WebSocket 消息和可选的连接前处理 |
 | `boot.InterceptorAll` | 两种范围 |
 
+新控制器在 `RegisterRoutes` 中使用 `api.Interceptors` 指定路由拦截器。以下 `r` 是 `*api.Registry`，`handler` 由应用定义。使用 DI 时还必须注册拦截器构造函数。请参阅[完整运行示例](/zh-Hans/learn/tutorial/4-interceptor)。
+
 ```go
 app.InterceptorFor(boot.InterceptorAll, auth)
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 app.InterceptorFor(boot.InterceptorWebSocket, wsRateLimiter)
 
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),
+r.GET("/admin/users/:id", handler,
+    api.Interceptors((*AuthInterceptor)(nil)),
 )
 ```
 
 注册 `(*AuthInterceptor)(nil)` 这样的有类型 nil 指针时，会从容器中查找并使用该类型的实例。同一类型的 nil 指针使用容器中的共享实例。
 
 将同一个指针作为全局拦截器注册到多个范围时，会合并范围并仅执行一次。同一类型的不同指针会分别执行。值类型也会按各个注册项分别执行。
+
+### 使用 DI 注册路由拦截器
+
+此独立应用通过 `constructor.Interceptor` 注册构造契约，并向 `api.Interceptors` 传入带类型的 nil 指针。请在安装 Spine `v0.7.1` 和兼容 Echo 平台的独立 Go 模块中运行。令牌仅用于演示。
+
+```go
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"log"
+)
+
+type Auth struct{}
+
+func (*Auth) Constructor() *Auth { return &Auth{} }
+
+func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	if ctx.Header("Authorization") != "Bearer demo-token" {
+		return httperr.Unauthorized("unauthorized")
+	}
+	return nil
+}
+func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+
+type Controller struct{}
+
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	}, api.Interceptors((*Auth)(nil)))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Interceptor(&Auth{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+未认证请求返回 401，发送演示令牌返回 200 和用户 ID。
+
+```bash
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+```
 
 ## WebSocket 连接前处理
 
@@ -172,7 +228,7 @@ Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
 - 通过 `core.ErrAbortPipeline` 中止时，拦截器必须准备所需响应。控制器和后续成功处理阶段不会执行。
 - 数据库提交后，实际响应发送仍可能失败。`BeforeResponse` 无法将数据库与网络传输合并为原子操作。
 
-有关具体的提前终止和错误传播，请参阅 [v0.6.5 流水线实现](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/pipeline/pipeline.go)；有关连接前处理顺序，请参阅 [WebSocket 运行时实现](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/ws/runtime.go)。
+有关具体的提前终止和错误传播，请参阅 [v0.7.1 流水线实现](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/pipeline/pipeline.go)；有关连接前处理顺序，请参阅 [WebSocket 运行时实现](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/ws/runtime.go)。
 
 ## 参考
 

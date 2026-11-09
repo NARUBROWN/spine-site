@@ -11,7 +11,14 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-使用 v0.7.0 Preview 時，請先依 [Preview CLI 安裝說明](/zh-Hant/learn/getting-started/installation#preview-cli)透過 `@preview` 安裝 CLI。本頁的 `spine.toml` 範例使用穩定版配方，Preview CLI 的新專案使用 `platform-contracts-preview`。
+以下通道選擇命令與產生結果需要 CLI `v0.4.3-rc.1` 或更新版本。如果 `@latest` 安裝了較舊版本，請使用以下相容 RC。如果相容的穩定版平台標籤尚未提供，建立專案時請使用 `--channel rc` 並檢查 `go.mod`。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
+`--channel main` 選擇正式標籤，也可以在互動式建立時選擇 Main。
 
 使用 `spine version` 確認已安裝的 CLI 版本。 若找不到指令，請在[安裝說明](/zh-Hant/learn/getting-started/installation)中檢查 PATH 設定。
 
@@ -20,9 +27,17 @@ spine version
 在預計放置專案的上層目錄執行。若已有 `hello-spine` 目錄，請使用其他名稱。
 
 ```bash
-spine new hello-spine --module example.com/hello-spine
+spine new hello-spine --module example.com/hello-spine --channel main --no-interactive
 cd hello-spine
 ```
+
+RC 通道可能在執行時選擇更新的核心 RC。要重現核心 `v0.7.1`，請在產生的專案中執行以下命令，並在 `go.mod` 中檢查相容平台版本。之後的 `spine update` 可能依通道再次變更版本。
+
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+
 
 `new` 依照已安裝 CLI 的驗證配方選擇相容的 Spine、Echo 平台與 Echo 版本，並完成相依套件安裝、靜態契約檢查與建置。請在產生的 `go.mod` 中查看選取的版本。使用 `--skip-install` 時，請另外執行 `go mod tidy` 與 `go mod download all`。安裝過程不會初始化應用程式、執行測試或啟動監聽器。
 
@@ -40,8 +55,7 @@ hello-spine/
 │   ├── application.go
 │   └── application_test.go
 └── src/
-    ├── controller/health_controller.go
-    └── route/route.go
+    └── controller/health_controller.go
 ```
 
 專案包含作為執行起點的 `main.go`，以及存放應用程式設定程式碼的 `internal/application` 目錄。`spine.toml` 會告知 CLI 模組路徑、執行進入點、應用程式設定程式碼的位置與連接埠。
@@ -53,9 +67,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `internal/application/application.go` 中的 `BuildApplication()` 會回傳應用程式與執行選項。產生的程式碼會註冊 `HealthController` 建構函式與 `GET /health`，並明確指定 HTTP 執行選項 `boot.HTTPOptions`。

@@ -4,7 +4,7 @@ pageClass: release-versions
 
 # 版本概覽
 
-查看 Spine 生態中8個儲存庫的已發佈標籤、下一目標版本和變更。各儲存庫使用獨立版本發佈。
+查看 Spine 生態中各儲存庫的已發佈標籤、下一目標版本和變更。各儲存庫使用獨立版本發佈。
 
 <ReleaseCatalog />
 

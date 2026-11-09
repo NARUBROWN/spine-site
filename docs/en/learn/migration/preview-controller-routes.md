@@ -1,10 +1,10 @@
-# Preview controller and route migration
+# Controller and route migration for v0.7.1
 
-This guide targets Spine `v0.7.0-preview.7` and CLI `v0.4.3-preview.8`. It does not apply to stable `v0.6.5`. Core requires Go 1.25.5 or later; the playground validator requires Go 1.26 or later. Check full platform combination promotion separately.
+This guide targets Spine `v0.7.1`. Core requires Go 1.25.5 or later; the playground validator requires Go 1.26 or later.
 
 ## Register routes in a controller {#routes}
 
-In Preview, `app.Route` and the HTTP controller pattern using a constructor function, separate route.go, and method expressions are Deprecated. They remain available during migration; the removal version is undecided. General DI constructor functions are not deprecated.
+In v0.7.1, `app.Route` and the HTTP controller pattern using a constructor function, separate route.go, and method expressions are Deprecated. They remain available during migration; the removal version is undecided. General DI constructor functions are not deprecated.
 
 This is a registration example, not a standalone app. Add an HTTP platform and run configuration to your application.
 
@@ -24,10 +24,10 @@ func (*UserController) Constructor() *UserController { return &UserController{} 
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
     users := r.Group("/users", api.Tags("Users"))
-    users.GET("/:id", api.Options(api.Summary("Get user")),
+    users.GET("/:id",
         func(p input.Path[UserPath]) httpx.Response[User] {
             return httpx.Response[User]{Body: User{ID: p.ID}}
-        })
+        }, api.Summary("Get user"))
 }
 
 func register(app interface{ Constructor(...any) }) {
@@ -45,9 +45,11 @@ A Controller also implements `api.Controller` with `RegisterRoutes(*api.Registry
 
 ## Inputs and groups {#groups}
 
-The `T` in `input.Path[T]`, `input.Query[T]`, and `input.Body[T]` must be a struct. Path and query tags take precedence; without one, names default to lowerCamel. Receive headers through a separate struct pointer with `header` tags. Keep body, path, query, and headers in separate inputs.
+The `T` in `input.Query[T]` and `input.Body[T]` must be a struct. Path and query tags take precedence; otherwise names default to lowerCamel. Receive headers through a separate struct pointer with `header` tags.
 
-Group methods take path, `api.Options(...)`, then handler. Pass `api.Options()` even when empty. This differs from ungrouped `r.GET(path, handler, options...)`. Groups inherit prefixes and tags and can add interceptors with `api.Interceptors(...)`. The `example` and `description` tags describe documentation; they are not runtime defaults or validation rules.
+The `T` in `input.Query[T]` and `input.Body[T]` must be a struct. `input.Path[T]` also supports a basic scalar when the route has exactly one variable in v0.7.1. Use a path DTO for multiple variables. Path and query tags take precedence; without one, names default to lowerCamel. Receive headers through a separate struct pointer with `header` tags. Keep body, path, query, and headers in separate inputs.
+
+Both Group and Registry use `GET(path, handler, options...)`. Groups inherit prefixes and tags and can add interceptors with `api.Interceptors(...)`. The `example` and `description` tags describe documentation; they are not runtime defaults or validation rules.
 
 ## Deprecated inputs and compatibility {#deprecated}
 
@@ -61,5 +63,5 @@ Static OpenAPI does not run the validator and cannot establish its constraints. 
 
 After migration, run `spine contract check` and `spine verify`, then check actual HTTP requests and the description. See the following guides for input migration and additional HTTP v3 constraints.
 
-- [v0.7.0](/en/learn/migration/v0.7.0-preview)
+- [v0.7.1](/en/learn/migration/v0.7.1-preview)
 - [HTTP v3](/en/learn/migration/preview-features#body)

@@ -1,226 +1,74 @@
-# Handler Metadata (HandlerMeta)
+# Handler metadata (HandlerMeta)
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
-:::
+`core.HandlerMeta` passes metadata for the selected handler and route to interceptors. In `v0.7.1` it describes both legacy method expressions and callbacks registered in `RegisterRoutes`.
 
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
+## Fields and methods
 
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
+`ControllerType` identifies the controller type, `PathKeys` contains path parameter names in route order, and `Interceptors` contains route interceptors. `Method` describes a legacy method expression; `Callback` is the `reflect.Value` for a new callback. Do not assume either field is valid for every registration style.
 
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
-:::
+`FunctionType()` returns the callback or method function type. `ArgumentOffset()` returns 0 for a callback and 1 for a legacy method receiver. `HandlerName()` returns the controller type and `RegisterRoutes` for a callback, or the controller type and method name for a legacy method. A callback name does not uniquely identify each function.
 
-`core.HandlerMeta` contains the information needed to execute the controller method for a request: the controller type, method, order of path parameters, and route interceptors. Register handlers with `app.Route`, then read `HandlerMeta` in an interceptor to identify the handler being executed.
+A global `PreHandle` runs before routing and receives empty metadata. In that case `ControllerType` and `FunctionType()` are nil, and `HandlerName()` is empty. A route interceptor receives selected metadata after routing and input resolution.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
+## Runnable example
 
-This page describes the public types and HTTP execution flow in Spine v0.6.5. You do not need to implement metadata creation functions or router internals in your app.
-
-## Where It Fits in a CLI Project
-
-In `example.com/my-app` from [CLI Project Structure](/en/learn/tutorial/1-project-structure), declare user routes in `Register(app)` in `src/user/user_route.go`. The generated handler is `(*UserController).Get`, and its route is `GET /user/:id`. `BuildApplication` in `internal/application/application.go` checks and returns errors from `user.Register(app)`, while the generated `main.go` handles validation and execution.
+This standalone app reads `HandlerName()` and `ArgumentOffset()` in a route interceptor and stores them in the request context. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save this as `main.go`, and run `go run .`.
 
 ```go
-// Excerpt from Register in src/user/user_route.go
-app.Route(
-    "GET",
-    "/user/:id",
-    (*UserController).Get,  // Method expression
+package main
+
+import (
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
 )
-```
 
-The `GetUser` method, admin handler, and authentication interceptor below are examples of app extensions used to explain the concepts. They are separate from the CLI-generated `Get` method, so you must also implement their types and methods to add them as shown. See the [Interceptor Tutorial](/en/learn/tutorial/4-interceptor) for a complete interceptor implementation and registration instructions.
+type Inspector struct{}
 
-## HandlerMeta Fields
+func (*Inspector) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
+	ctx.Set("handler", meta.HandlerName())
+	ctx.Set("argument_offset", meta.ArgumentOffset())
+	return nil
+}
+func (*Inspector) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
+func (*Inspector) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
+func (*Inspector) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
 
-`core.HandlerMeta` has the following fields. It uses `reflect` types to represent controller and method information.
+type Controller struct{}
 
-```go
-// core/handler_meta.go
-type HandlerMeta struct {
-    // Controller type to resolve from Container
-    ControllerType reflect.Type
-
-    // Method to invoke
-    Method reflect.Method
-
-    // Order of path parameter keys declared in the route
-    PathKeys []string
-
-    // Interceptors applied to the handler
-    Interceptors []Interceptor
+func (*Controller) Constructor() *Controller { return &Controller{} }
+func (*Controller) RegisterRoutes(r *api.Registry) {
+	r.GET("/meta", func(ctx spinectx.Ctx) httpx.Response[map[string]any] {
+		handler, _ := ctx.Get("handler")
+		offset, _ := ctx.Get("argument_offset")
+		return httpx.Response[map[string]any]{Body: map[string]any{"handler": handler, "argument_offset": offset}}
+	}, api.Interceptors(&Inspector{}))
+}
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-| Field | Type | Role |
-| --- | --- | --- |
-| `ControllerType` | `reflect.Type` | Pointer type of the controller to resolve from the dependency container |
-| `Method` | `reflect.Method` | Name, signature, and function information for the method to call |
-| `PathKeys` | `[]string` | Ordered names of the path parameters declared in the route |
-| `Interceptors` | `[]core.Interceptor` | List of interceptors to apply to this route |
+A request from another terminal returns `argument_offset` 0 and handler name `*main.Controller.RegisterRoutes`. The name depends on the Go package and type.
 
-If `ControllerType` is `*UserController` and `Method.Name` is `GetUser`, the pipeline obtains a `*UserController` instance from the container and calls `GetUser`.
-
-```go
-meta.ControllerType  // reflect.Type of *UserController
+```bash
+curl http://localhost:8080/meta
 ```
 
-```go
-meta.Method.Name           // "GetUser"
-meta.Method.Type           // func(*UserController, path.Int) (httpx.Response[User], error)
-meta.Method.Func           // Callable reflect.Value
-```
+## Registration and execution
 
-`PathKeys` contains path parameter names rather than actual request values. For example, `/users/:userId/orders/:orderId` stores `userId` followed by `orderId`, and the handler's `path` arguments are bound in that order. Path parameter values, which vary for each request, are read from the request context.
+A new controller registers callbacks and `api.Interceptors(...)` options in `RegisterRoutes(*api.Registry)`. Existing `app.Route` and `route.WithInterceptors` remain available for compatibility, but `app.Route` is deprecated. Duplicate routes across the two styles are rejected during preparation.
 
-`Interceptors` contains only route interceptors. The pipeline manages global interceptors registered with `app.Interceptor` separately.
+Requests execute global interceptors, routing and input resolution, route interceptors, then the handler. `PathKeys` contains names, not request values. Named DTOs use `path` tags. In v0.7.1, declare one scalar `input.Path[T]` argument per path variable in route order. The counts must match; do not mix scalar inputs with a path DTO or legacy path wrappers in one handler.
 
-```go
-meta.Interceptors  // []core.Interceptor (route level)
-```
-
-## Registering a Handler with a Method Expression
-
-Pass a **method expression** such as `(*UserController).GetUser` to the route. This expression is a function that is not bound to a particular controller instance and takes a controller pointer as its first argument.
-
-```go
-// Actual type of the method expression
-func(*UserController, path.Int) (httpx.Response[User], error)
-//   ↑ The receiver becomes the first argument
-```
-
-Spine uses this information to identify the controller type and method to call. It obtains the controller instance from the dependency container according to the app's constructor registrations.
-
-Distinguish between the following registration forms.
-
-| Registration Form | Supported | Description |
-| --- | --- | --- |
-| `(*UserController).GetUser` | Yes | Method expression whose first argument is `*UserController` |
-| `UserController.GetUser` | No | Takes a value type as its first argument, so it does not meet the pointer type requirement |
-| `ctrl.GetUser` | No | Method value bound to a specific instance, so it does not take a separate controller argument |
-| Regular function or closure | No | Does not match the registration form used to identify the controller type and method |
-
-This requirement concerns the form of the expression passed to the route. Define app controllers with pointer receivers, as in the tutorial, and register them as `(*Controller).Method`.
-
-## Specifying Route Interceptors
-
-`route.WithInterceptors` accepts the interceptors to apply to that route. Import `github.com/NARUBROWN/spine/pkg/route` to use it.
-
-```go
-app.Route(
-    "GET",
-    "/users/:id",
-    (*UserController).GetUser,
-    route.WithInterceptors(&AuthInterceptor{}),
-)
-```
-
-There are two ways to pass an interceptor.
-
-| Value Passed | How the Instance Is Created |
-| --- | --- |
-| `&AuthInterceptor{}` | Uses the instance created by the app as is |
-| `(*AuthInterceptor)(nil)` | Creates an instance of that pointer type through the container during bootstrap |
-
-You can use a typed nil pointer for an interceptor that needs dependency injection. In this case, register the interceptor constructor and its required dependencies. Passing `nil` without type information causes route interceptor registration to fail.
-
-```go
-// Excerpt from Register in src/user/user_route.go
-app.Route("GET", "/users/:id", (*UserController).GetUser)
-
-// With route interceptors
-app.Route("GET", "/admin/users/:id", (*AdminController).GetUser,
-    route.WithInterceptors((*AuthInterceptor)(nil)),  // nil pointer → resolve from Container
-)
-```
-
-You can also use global and route interceptors together. Global interceptors apply to every request, while route interceptors apply only to their route.
-
-```go
-// Global: applies to all requests before routing
-app.Interceptor(&CORSInterceptor{})
-
-// Route: applies to a specific handler after routing and before the controller call
-app.Route("GET", "/admin/:id", (*AdminController).Get,
-    route.WithInterceptors(&AuthInterceptor{}),
-)
-```
-
-## Identifying the Handler in an Interceptor
-
-The interceptor methods `PreHandle`, `PostHandle`, `BeforeResponse`, and `AfterCompletion` receive `HandlerMeta`. Read this information when logging or applying policies for individual handlers.
-
-Global `PreHandle` runs before routing, so it receives an empty `HandlerMeta`. At this point, `ControllerType` is nil and `Method.Name` is empty. Once a route is selected, the actual handler metadata is passed, but a request whose routing fails may have no handler to execute. Check the fields before accessing them.
-
-The following example shows only `PreHandle`. It requires the `core` and `log` imports. An interceptor must also implement the other three methods before it can be registered.
-
-```go
-// src/interceptor/logging_interceptor.go
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    controllerName := "<unresolved>"
-    if meta.ControllerType != nil {
-        controllerName = meta.ControllerType.String()
-    }
-    log.Printf(
-        "[REQ] %s %s -> %s.%s",
-        ctx.Method(),
-        ctx.Path(),
-        controllerName,
-        meta.Method.Name,            // "GetUser"
-    )
-    return nil
-}
-```
-
-Interceptors use `core.ExecutionContext` to access request information in this way. HTTP controllers do not have to accept the same type as an argument. In a controller, declare request types supported by [Type-Based Argument Injection](/en/learn/tutorial/2-controller).
-
-## Registration and Request Execution
-
-During bootstrap, route declarations are prepared for execution.
-
-1. Identify the controller type and method from the handler declared in `app.Route`.
-2. Prepare the route interceptors and attach them to `HandlerMeta`.
-3. Register the full path and path parameter order with the router.
-4. Create the registered controllers and their dependencies in advance.
-
-Server startup fails if the handler form is invalid or if the controller or interceptor dependencies cannot be created. Preserve the generated project's error return path so the caller receives these failures.
-
-When a request arrives, the prepared metadata is used in the following order.
-
-1. Run `PreHandle` on global interceptors.
-2. Find the route that matches the request and obtain its `HandlerMeta`.
-3. Prepare arguments according to the method's parameter types and `PathKeys`.
-4. Run `PreHandle` on route interceptors.
-5. Obtain the controller instance and call the method.
-6. Process return values and complete pre-response processing, then send the response.
-
-The normal execution flow is shown below. An error or an interceptor's request to stop processing may cause later steps to be skipped.
-
-```mermaid
-graph TD
-    Register["Register route"] --> Meta["Prepare HandlerMeta"]
-    Meta --> Router["Store in router"]
-    Request["HTTP request"] --> GlobalPre["Global PreHandle"]
-    GlobalPre --> Match["Select route and HandlerMeta"]
-    Router -.-> Match
-    Match --> Args["Prepare arguments using types and PathKeys"]
-    Args --> RoutePre["Route PreHandle"]
-    RoutePre --> Invoke["Call controller method"]
-    Invoke --> Response["Process return values and response"]
-```
-
-For successful requests, `PostHandle` runs on route interceptors first, then global interceptors. Within each list, it runs in reverse registration order. See the [Interceptor Tutorial](/en/learn/tutorial/4-interceptor) for the execution conditions and error handling of `BeforeResponse` and `AfterCompletion`.
-
-## Where to Check Errors
-
-| Situation | What to Check |
-| --- | --- |
-| Handler registration fails | Check that the handler uses `(*Controller).Method` and that the method can be found |
-| Controller creation fails | Check that the controller constructor and the dependencies it accepts are registered |
-| Route interceptor creation fails | Check that a typed nil pointer is used and that the required constructors are registered |
-| Request argument preparation fails | Check that the handler argument types are supported and the path parameter declaration order is correct |
-| No matching route | Check the HTTP method, path, and global path prefix. Default HTTP handling returns a 404 error response |
-
-`HandlerMeta` describes the handler to execute. Argument resolvers convert request data, and return value handlers convert actual return values into HTTP responses. Check route declarations and controller signatures before attempting to replace these components yourself.
+See the [interceptor tutorial](/en/learn/tutorial/4-interceptor) for completion hooks and errors, and [controller and route migration](/en/learn/migration/preview-controller-routes) for registration.

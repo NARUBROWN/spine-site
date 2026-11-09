@@ -1,10 +1,10 @@
-# Preview 控制器與路由遷移
+# v0.7.1 控制器與路由遷移
 
-本文適用於 Spine `v0.7.0-preview.7` 和 CLI `v0.4.3-preview.8`，不適用於穩定版 `v0.6.5`。核心需要 Go 1.25.5 或更新版本，playground 驗證器需要 Go 1.26 或更新版本。完整平台組合的晉級狀態需要另行確認。
+本文適用於 Spine `v0.7.1`。核心需要 Go 1.25.5 或更新版本，playground 驗證器需要 Go 1.26 或更新版本。
 
 ## 在控制器中註冊路由 {#routes}
 
-Preview 中，`app.Route` 以及使用建構函式、獨立 route.go 和方法表達式的 HTTP 控制器方式已標記為 Deprecated。遷移期間仍可使用，移除版本尚未決定。一般 DI 建構函式並未棄用。
+v0.7.1 中，`app.Route` 以及使用建構函式、獨立 route.go 和方法表達式的 HTTP 控制器方式已標記為 Deprecated。遷移期間仍可使用，移除版本尚未決定。一般 DI 建構函式並未棄用。
 
 這是註冊範例，並非獨立應用程式。請在應用程式中加入 HTTP 平台和執行設定。
 
@@ -24,10 +24,10 @@ func (*UserController) Constructor() *UserController { return &UserController{} 
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
     users := r.Group("/users", api.Tags("Users"))
-    users.GET("/:id", api.Options(api.Summary("Get user")),
+    users.GET("/:id",
         func(p input.Path[UserPath]) httpx.Response[User] {
             return httpx.Response[User]{Body: User{ID: p.ID}}
-        })
+        }, api.Summary("Get user"))
 }
 
 func register(app interface{ Constructor(...any) }) {
@@ -45,9 +45,11 @@ Controller 還須實作包含 `RegisterRoutes(*api.Registry)` 的 `api.Controlle
 
 ## 輸入與群組 {#groups}
 
-`input.Path[T]`, `input.Query[T]`, `input.Body[T]` 的 `T` 必須是結構體。路徑和查詢優先使用對應標籤，沒有標籤時使用 lowerCamel。標頭使用帶 `header` 標籤的獨立結構體指標。請依來源分離輸入。
+`input.Query[T]` 和 `input.Body[T]` 的 `T` 必須是結構體。路徑和查詢優先使用標籤，否則使用 lowerCamel 名稱。標頭使用帶 `header` 標籤的獨立結構體指標。
 
-群組方法的參數依序為路徑、`api.Options(...)` 和處理器。沒有選項時也要傳入 `api.Options()`。這與群組外的 `r.GET(path, handler, options...)` 順序不同。群組繼承前綴和標籤，並可透過 `api.Interceptors(...)` 加入攔截器。`example` 和 `description` 標籤僅供文件使用，並非執行時預設值或驗證規則。
+在 v0.7.1 中，每個路徑變數對應一個純量 `input.Path[T]` 引數，順序與路由一致。數量必須相同，且不可在同一處理器中混用路徑 DTO 或舊路徑包裝型別。
+
+群組和 Registry 都使用 `GET(path, handler, options...)` 順序。群組繼承前綴和標籤，並可透過 `api.Interceptors(...)` 加入攔截器。`example` 和 `description` 標籤僅供文件使用，並非執行時預設值或驗證規則。
 
 ## 棄用輸入與相容性 {#deprecated}
 
@@ -61,5 +63,5 @@ Controller 還須實作包含 `RegisterRoutes(*api.Registry)` 的 `api.Controlle
 
 遷移後執行 `spine contract check` 和 `spine verify`，並檢查實際 HTTP 請求與描述。輸入遷移和 HTTP v3 的其他限制請參閱以下文件。
 
-- [v0.7.0](/zh-Hant/learn/migration/v0.7.0-preview)
+- [v0.7.1](/zh-Hant/learn/migration/v0.7.1-preview)
 - [HTTP v3](/zh-Hant/learn/migration/preview-features#body)

@@ -47,23 +47,15 @@ spine version
 
 ## CLI 渠道与应用依赖 {#dependencies}
 
-CLI 版本独立于 Spine 核心和平台版本。重新安装 CLI 不会自动更改现有应用源码或依赖。新应用使用已安装 CLI 源码中的生成配方。
-
-| 安装的 CLI | 新应用的依赖选择 | 现有应用 |
-| --- | --- | --- |
-| Preview | `platform-contracts-preview` 解析核心及所选平台的 `@preview`，将实际版本记录在 `go.mod` 中 | 同一配方的 `spine update` 会重新解析 |
-| RC | 使用该 RC 源码中的配方，不会自动将全部依赖切换为 `@rc` | 保留现有配方 |
-| 稳定版 | 使用该稳定版 CLI 提供的版本组合 | 保留现有配方 |
-
-生成后，请查看 `spine.toml` 中的 `recipe` 与 `go.mod`。下面可检查当前 CLI 的 `new` 所选核心版本。
+安装的 CLI 与应用依赖渠道相互独立。使用 `spine new --channel main` 选择正式标签。`rc` 选择 RC 或更高的正式标签，`preview` 查询 Preview 分支。交互式创建默认使用 Preview，正式应用请明确选择 Main。
 
 ```bash
-spine new channel-check --module example.com/channel-check
+spine new channel-check --module example.com/channel-check --channel main
 cd channel-check
 go list -m github.com/NARUBROWN/spine
 ```
 
-Preview 的 `--skip-install` 仍需 Go 和网络访问或模块代理缓存来解析分支版本，仅跳过依赖安装与构建检查。现有按版本命名的 Preview 配方与稳定版配方在明确修改前保持固定版本。请参阅[现有应用的 Preview 迁移](/zh-Hans/learn/migration/v0.7.0-preview)。
+所选渠道记录在 `spine.toml` 的 `dependency_channel` 中，`spine update` 会保留它。更新 CLI 不会更改现有项目。创建后请检查并版本管理 `go.mod` 和 `go.sum`。
 
 ## 发布流程 {#process}
 
@@ -101,10 +93,10 @@ CLI 使用独立的版本与发布时间表。核心版本变化时，不要求 
 
 ## 固定与恢复版本 {#pin}
 
-在 CI 和生产环境中，请固定实际已发布的 CLI 标签，并对应用源码、`go.mod` 和 `go.sum` 一同进行版本管理。CLI 标签仅固定工具代码。动态 Preview 配方即使由同一 CLI 执行 `new` 或 `update`，仍会重新解析 `@preview`；复现应用时请使用保存的源码和依赖。以下示例固定到已发布的 CLI `v0.4.2`，并不代表最新版本。
+在 CI 和生产环境中，请固定实际已发布的 CLI 标签，并对应用源码、`go.mod` 和 `go.sum` 一同进行版本管理。CLI 标签仅固定工具代码。动态 Preview 配方即使由同一 CLI 执行 `new` 或 `update`，仍会重新解析 `@preview`；复现应用时请使用保存的源码和依赖。以下示例固定到已发布的兼容 CLI RC `v0.4.3-rc.1`，并不代表最新版本。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.2
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
 spine version
 ```
 

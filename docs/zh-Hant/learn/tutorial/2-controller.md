@@ -1,20 +1,12 @@
 # 控制器
 
-::: warning Preview
-本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
-:::
-
-::: warning v0.7.0 Preview 輸入 API 移轉
-本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
-
-新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
-
-適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+::: info
+`app.Route` 為相容性保留，但已棄用。新應用程式請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。舊輸入 API 的變更請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)，規格選項請參閱 [OpenAPI](/zh-Hant/reference/api/openapi)。
 :::
 
 在 CLI 建立的 `my-app` 專案中新增 `GET /user/:id` 控制器，將請求路徑中的整數以 JSON 回應傳回。接著說明如何接收查詢參數、標頭和請求主體，以及各種回應型別。
 
-本頁依功能劃分的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。CLI `v0.4.2` 預設產生依角色劃分的 `layered-v1` 結構。兩種布局都使用 Spine `v0.6.5` 與 Echo 平台 `v0.1.0`。
+本頁的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的 `my-app`。預設的 `layered-v1` 版面依角色劃分目錄。
 
 完成[第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)的安裝與專案建立後，請在專案根目錄進行操作。如果已執行過 `spine generate resource user`，請略過產生步驟並確認檔案。
 
@@ -45,10 +37,9 @@ src/user/
 ```go
 package user
 
-import (
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-)
+import "github.com/NARUBROWN/spine/pkg/httpx"
+
+type UserPath struct { ID int64 `path:"id"` }
 
 type UserController struct { service *UserService }
 
@@ -56,14 +47,82 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
-    return httpx.Response[map[string]any]{Body: map[string]any{"id": id.Value}}
+func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": params.ID}}
 }
 ```
 
 ::: info
 `resource` 會產生包含查詢路由與相依性註冊的基本結構。資料庫、領域模型、資料傳輸物件（DTO），以及新增或修改功能，都需要自行實作。
 :::
+
+
+## 執行 v0.7.1 輸入與路由範例
+
+以下是獨立應用程式。將它儲存為另一個 Go 模組的 `main.go`，安裝 Spine `v0.7.1` 與相容 HTTP 平台，然後執行 `go run .`。群組路由依路徑、處理器、選用選項的順序註冊。請求本文、路徑、查詢與標頭使用獨立輸入。
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+)
+
+type UserController struct{}
+type SearchQuery struct {
+	Name string `query:"name"`
+}
+type RequestHeaders struct {
+	RequestID string `header:"X-Request-ID"`
+}
+type CreateUser struct {
+	Name string `json:"name"`
+}
+type User struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func (*UserController) Constructor() *UserController { return &UserController{} }
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	users := r.Group("/users", api.Tags("Users"))
+	users.GET("/search", func(q input.Query[SearchQuery], h *RequestHeaders) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"name": q.Name, "request_id": h.RequestID}}
+	})
+	users.GET("/id/:id", func(id input.Path[int64]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{ID: *id}}
+	}, api.Summary("Get user"))
+	users.POST("/create", func(body input.Body[CreateUser]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{Name: body.Name}, Options: httpx.ResponseOptions{Status: 201}}
+	})
+}
+
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&UserController{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+在另一個終端機傳送請求。第一個請求回傳名稱與請求 ID，第二個回傳 ID，POST 回傳 201，非數字路徑值回傳 400。
+
+```bash
+curl -H 'X-Request-ID: r1' 'http://localhost:8080/users/search?name=alice'
+curl http://localhost:8080/users/id/12
+curl -i -H 'Content-Type: application/json' -d '{"name":"bob"}' http://localhost:8080/users/create
+curl -i http://localhost:8080/users/id/not-a-number
+```
+
 
 ## 確認產生的路由註冊
 
@@ -125,13 +184,12 @@ Spine 會根據處理器的參數型別傳入請求值，這稱為輸入繫結�
 | 型別 | 說明 | 範例 |
 |------|------|------|
 | `context.Context` | 請求內容 | `ctx context.Context` |
-| `query.Values` | 查詢參數 | `q query.Values` |
-| `query.Pagination` | 分頁 | `page query.Pagination` |
-| `header.Values` | HTTP 標頭 | `headers header.Values` |
+| `input.Query[T]` | 查詢參數 | `q input.Query[SearchQuery]` |
+| `*struct` (`header`) | HTTP 標頭 | `headers *RequestHeaders` |
 | `*struct`（DTO） | JSON 請求主體 | `req *CreateUserRequest` |
 | `*struct`（表單 DTO） | 表單的文字欄位 | `form *CreatePostForm` |
 | `multipart.UploadedFiles` | 多部分上傳檔案 | `files multipart.UploadedFiles` |
-| `path.*` | 路徑參數 | `userId path.Int` |
+| `input.Path[T]` | 路徑參數 | `userId input.Path[int64]` |
 | `spine.Ctx` | 控制器內容 | `spineCtx spine.Ctx` |
 
 ### 支援的回傳型別
@@ -150,115 +208,24 @@ Spine 會根據處理器的參數型別傳入請求值，這稱為輸入繫結�
 
 ### 查詢參數
 
-從 `query.Values` 讀取查詢字串。在下列請求中，`id` 為 `1`、`name` 為 `alice`、`active` 為 `true`。
-
-```go
-// GET /user?id=1&name=alice&active=true
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64，預設值 0
-    name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool，預設值 false
-    _ = name
-    _ = active
-
-    user, _ := c.service.Get(ctx, int(id))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### query.Values 方法
-
-| 方法 | 回傳型別 | 說明 |
-|--------|----------|------|
-| `Get(key)` | `string` | 第一個值（不存在時為空字串） |
-| `String(key)` | `string` | 字串值 |
-| `Int(key, default)` | `int64` | 值不存在或無法轉換為整數時，使用指定的預設值 |
-| `GetBoolByKey(key, default)` | `bool` | 值不存在或無法轉換為布林值時，使用指定的預設值 |
-| `Has(key)` | `bool` | 索引鍵是否存在 |
-
+上面的執行範例中，`input.Query[SearchQuery]` 依 `query` 標籤將查詢值繫結到結構體欄位。沒有標籤的欄位使用 lowerCamel 名稱。
 
 ### 分頁
 
-`query.Pagination` 會將 `page` 和 `size` 查詢參數轉換為整數。值不存在或無法轉換為整數時，分別使用 `1` 和 `20`。負數與 `0` 也會視為整數處理，因此請在應用程式中驗證允許的範圍。
-
-```go
-// GET /user?page=2&size=10
-
-func (c *UserController) ListUsers(
-    ctx context.Context,
-    page query.Pagination,
-) httpx.Response[[]UserResponse] {
-    // page.Page = 2（預設值：1）
-    // page.Size = 10（預設值：20）
-    users, _ := c.service.List(ctx, page.Page, page.Size)
-    return httpx.Response[[]UserResponse]{Body: users}
-}
-```
-
+在查詢 DTO 中宣告 `page` 和 `size` 欄位，並在應用程式中明確處理預設值與範圍。
 
 ### HTTP 標頭
 
-使用 `header.Values` 存取 HTTP 標頭。
-
-```go
-import "github.com/NARUBROWN/spine/pkg/header"
-
-func (c *CommonController) CheckHeader(
-    headers header.Values,
-) httpx.Response[HeaderInfo] {
-    return httpx.Response[HeaderInfo]{
-        Body: HeaderInfo{
-            UserAgent:   headers.Get("User-Agent"),
-            ContentType: headers.Get("Content-Type"),
-        },
-    }
-}
-```
-
-#### header.Values 方法
-
-| 方法 | 回傳型別 | 說明 |
-|--------|----------|------|
-| `Get(key)` | `string` | 標頭值 |
-| `Has(key)` | `bool` | 標頭是否存在 |
-
+透過帶 `header` 標籤的獨立結構體指標接收。上面的 `RequestHeaders` 讀取 `X-Request-ID`。
 
 ### 路徑參數
 
-使用 `path.Int`、`path.String`、`path.Boolean` 接收路由路徑中的參數。路徑中宣告的參數順序，對應到處理器中 `path` 型別參數的順序。Go 變數名稱可以與路徑參數名稱不同。
+在 v0.7.1 中，每個路徑變數對應一個純量 `input.Path[T]` 引數，順序與路由一致。數量必須相同，且不可在同一處理器中混用路徑 DTO 或舊路徑包裝型別。
 
 ```go
-// GET /user/:id
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### path 套件的結構體
-
-```go
-package path
-
-type Int struct {
-    Value int64
-}
-
-type String struct {
-    Value string
-}
-
-type Boolean struct {
-    Value bool
-}
+r.GET("/:id/:name/:address", func(id input.Path[int64], name input.Path[string], address input.Path[string]) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": *id, "name": *name, "address": *address}}
+})
 ```
 
 
@@ -304,16 +271,17 @@ import "github.com/NARUBROWN/spine/pkg/spine"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
     // 讀取攔截器透過 Set 儲存的值
     if v, ok := spineCtx.Get("userRole"); ok {
-        role := v.(string)
-        // ...
+        if role, ok := v.(string); ok {
+            _ = role // Use the role in the application.
+        }
     }
 
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
     return httpx.Response[UserResponse]{Body: user}
 }
 ```
@@ -335,9 +303,9 @@ import "github.com/NARUBROWN/spine/pkg/httpx"
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,  // 200 OK（預設值）
@@ -378,9 +346,9 @@ func (c *UserController) CreateUser(
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,
@@ -450,11 +418,13 @@ type Cookie struct {
 #### 基本重新導向（302 Found）
 
 ```go
+type OAuthQuery struct { Code string `query:"code"` }
+
 func (c *AuthController) OAuthCallback(
     ctx context.Context,
-    q query.Values,
+    q input.Query[OAuthQuery],
 ) httpx.Redirect {
-    code := q.String("code")
+    code := q.Code
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
@@ -524,9 +494,9 @@ import "github.com/NARUBROWN/spine/pkg/httperr"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) error {
-    _, err := c.service.Get(ctx, int(userId.Value))
+    _, err := c.service.Get(ctx, int(*userId))
     if err != nil {
         return httperr.NotFound("유저를 찾을 수 없습니다.")
     }
@@ -557,9 +527,9 @@ func (c *UserController) GetUser(
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userID path.Int,
+    userID input.Path[int64],
 ) (httpx.Response[UserResponse], error) {
-    user, err := c.service.Get(ctx, int(userID.Value))
+    user, err := c.service.Get(ctx, int(*userID))
     if err != nil {
         return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
     }
@@ -678,11 +648,16 @@ curl -X POST http://localhost:8080/upload \
 #### 實作處理器
 
 ```go
+type PageQuery struct {
+    Page int `query:"page"`
+    Size int `query:"size"`
+}
+
 func (c *PostController) Upload(
     ctx context.Context,
     form  *CreatePostForm,           // form fields
     files multipart.UploadedFiles,   // multipart files
-    page  query.Pagination,          // query
+    page  input.Query[PageQuery],          // query
 ) httpx.Response[string] {
     fmt.Println("[FORM] Title  :", form.Title)
     fmt.Println("[FORM] Content:", form.Content)
@@ -698,12 +673,11 @@ func (c *PostController) Upload(
 
 ### 區分輸入型別的依據
 
-JSON 與表單 DTO 以結構體指標接收。查詢參數、路徑與上傳檔案則使用 Spine 支援的值型別接收，例如 `query.Pagination`、`path.Int`、`multipart.UploadedFiles`。宣告任意的結構體值並不會自動繫結。
-
+JSON 與表單 DTO 以結構體指標接收。查詢與路徑可使用 `input.Query[T]` 和 `input.Path[T]`，檔案可使用 `multipart.UploadedFiles`。標頭透過帶 `header` 標籤的獨立結構體指標接收。
 
 ## 處理輸入錯誤時的注意事項
 
-無法將路徑值轉換為整數，或無法解析 JSON 主體時，輸入繫結會在呼叫控制器之前失敗。在 Spine v0.6.5 中，這類失敗不一定會轉換為 HTTP 400。格式錯誤的 JSON 與非整數的路徑值，在預設執行路徑中可能以 HTTP 500 回應，因此請先實作需要的錯誤處理政策，再以實際請求確認。
+格式錯誤的 JSON 與路徑值轉換失敗回傳 HTTP 400，不支援的請求本文 Content-Type 回傳 415，超出本文大小限制回傳 413。繫結失敗發生在控制器呼叫之前。請與業務驗證區分，並透過實際請求確認。
 
 ## 下一步
 

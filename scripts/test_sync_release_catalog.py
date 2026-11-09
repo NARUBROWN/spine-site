@@ -21,6 +21,10 @@ class CatalogTests(unittest.TestCase):
         with patch.object(catalog, "api", side_effect=replies):
             return catalog.collect("spine")
 
+    def test_runtime_http_platforms_are_in_catalog(self):
+        self.assertIn("spine-echo-platform", catalog.REPOSITORIES)
+        self.assertIn("spine-nethttp-platform", catalog.REPOSITORIES)
+
     def test_versions_sort_numerically_and_by_channel(self):
         versions = ["v1.0.0-preview.2", "v1.0.0-rc.1", "v1.0.0-preview.10", "v1.0.0", "v1.0.0-preview.1"]
         result = self.collect(versions)

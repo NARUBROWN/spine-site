@@ -1,18 +1,18 @@
 # Manage transactions
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
+::: info
+The `legacy` layout in this tutorial uses compatibility `app.Route`. See [route migration](/en/learn/migration/preview-controller-routes) for new controllers, [input migration](/en/learn/migration/v0.7.1-preview) for compatibility rules, and [OpenAPI](/en/reference/api/openapi) for specification options.
 :::
 
 Group multiple INSERTs from one HTTP request into a single transaction. Write an interceptor that commits when the request succeeds and rolls back earlier INSERTs if a later operation fails.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
+The `src/user` examples use the app created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). The default `layered-v1` layout uses role-based directories.
 
 Continue with `example.com/my-app` from [Database](/en/learn/tutorial/5-database). Prepare `src/database`, `src/entity`, `src/user`, and the migrations first. Add the transaction code below yourself; the CLI does not provide a Bun transaction or outbox generator.
 
 ## Execution order
 
-In Spine v0.6.5, start the transaction in `PreHandle` and commit or roll it back in `BeforeResponse`. Errors during response preparation, including response serialization, status code and cookie validation, and event publication, also trigger a rollback. Use `AfterCompletion` to log results or clean up resources after completion.
+In Spine v0.7.1, start the transaction in `PreHandle` and commit or roll it back in `BeforeResponse`. Errors during response preparation, including response serialization, status code and cookie validation, and event publication, also trigger a rollback. Use `AfterCompletion` to log results or clean up resources after completion.
 
 ```text
 PreHandle: Begin the transaction

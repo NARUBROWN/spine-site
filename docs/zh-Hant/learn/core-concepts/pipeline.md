@@ -1,16 +1,12 @@
 # 執行管線
 
-::: warning v0.7.0 Preview 輸入 API 移轉
-本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
-
-新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
-
-適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+::: info
+舊建構函式和方法運算式為相容性保留。回呼請參閱[控制器遷移](/zh-Hant/learn/migration/preview-controller-routes)，輸入限制請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)，文件選項請參閱 [OpenAPI](/zh-Hant/reference/api/openapi)。
 :::
 
 Spine 的執行管線會接收請求、選擇處理器、綁定引數，再將回傳值轉成回應。了解攔截器應在哪個時點執行，以及發生錯誤後會進行到哪個階段時，可以依據這個流程判斷。
 
-本文說明 Spine v0.6.5 的 HTTP 執行順序。HTTP、事件消費者與 WebSocket 使用相同的管線實作，但解析輸入的解析器與回應處理設定各不相同。
+本文說明 Spine v0.7.1 的 HTTP 執行順序。HTTP、事件消費者與 WebSocket 使用相同的管線實作，但解析輸入的解析器與回應處理設定各不相同。
 
 控制器範例是要加入[以 CLI 產生的專案](/zh-Hant/learn/tutorial/1-project-structure)的程式碼。請求 DTO 以指標接收，一般成功回應則以 `github.com/NARUBROWN/spine/pkg/httpx` 的 `httpx.Response[T]` 回傳。建構函式與路由在 `BuildApplication` 中註冊。
 
@@ -26,7 +22,7 @@ graph TD
     Router["Router<br>選擇 HandlerMeta"]
     Binding["建立 ParameterMeta<br>以 ArgumentResolver 綁定引數"]
     RoutePre["路由 PreHandle<br>呼叫處理器前的前置處理"]
-    Handler["Invoker<br>呼叫控制器方法"]
+    Handler["Invoker<br>呼叫處理器"]
     Return["ReturnValueHandler<br>準備並驗證成功回應"]
     Hook["PostExecutionHook<br>領域事件後處理"]
     Post["PostHandle<br>先路由再全域，各以反向順序執行"]
@@ -78,7 +74,7 @@ HTTP 配接器會為每個請求建立 `core.ExecutionContext`。管線透過這
 
 - 尚未決定要執行的控制器與方法。
 - Spine 路由器尚未儲存路徑參數。
-- 尚未建立請求 DTO 與 `path.Int` 等控制器引數。
+- 尚未建立請求 DTO 與 `input.Path[int64]` 等控制器引數。
 
 路由成功後執行的 `PostHandle`、`BeforeResponse` 與 `AfterCompletion`，會收到所選處理器的中繼資料。如果在路由前中止或失敗，則以空的中繼資料完成收尾。
 
@@ -93,50 +89,27 @@ HTTP 配接器會為每個請求建立 `core.ExecutionContext`。管線透過這
 type HandlerMeta struct {
     ControllerType reflect.Type   // 從相依性容器中尋找的控制器型別
     Method         reflect.Method // 要呼叫的方法
+    Callback       reflect.Value
     PathKeys       []string       // 路由中宣告的路徑參數順序
     Interceptors   []Interceptor  // 要套用至此處理器的攔截器
 }
 ```
 
-`HandlerMeta` 並不是要求每次請求都建立新的控制器。Invoker 會使用其中的資訊，從相依性容器尋找呼叫目標，並將引數傳給方法。各欄位的詳細說明請參閱 [HandlerMeta](/zh-Hant/learn/core-concepts/handler-meta)。
+`HandlerMeta` 不要求為每個請求建立控制器。舊方法表達式從容器取得控制器；新路由回呼會呼叫準備階段綁定的函式。詳情請參閱 [HandlerMeta](/zh-Hant/learn/core-concepts/handler-meta)。
 
 ## 引數綁定：ParameterMeta 與 ArgumentResolver
 
-選擇處理器後，管線會讀取方法簽章，建立表示各引數型別與位置的 `ParameterMeta`。接著，由已註冊的解析器中第一個支援該型別的解析器建立值。
+選擇處理器後，管線會讀取函式簽章，建立表示各引數型別與位置的 `ParameterMeta`。接著，由已註冊的解析器中第一個支援該型別的解析器建立值。
 
 如果解析器無法建立值，或沒有支援的解析器，就會進入錯誤處理，不會呼叫控制器。**這個階段會在路由攔截器的 `PreHandle` 之前執行。** 因此，不應假設路由攔截器能在主體綁定前執行檢查。
 
-### 路徑參數依宣告順序對應
+### 路徑輸入對應
 
-`path.Int`、`path.String` 與 `path.Boolean` 依路由中參數的宣告順序綁定，不會依 Go 引數名稱對應。
+在 v0.7.1 中，每個路徑變數對應一個純量 `input.Path[T]` 引數，順序與路由一致。數量必須相同，且不可在同一處理器中混用路徑 DTO 或舊路徑包裝型別。
 
-```go
-// 路由：/users/:userId/posts/:postId
-// userId 接收第一個路徑值，postId 接收第二個路徑值。
-func GetPost(userId path.Int, postId path.Int) (httpx.Response[Post], error)
-```
+### HTTP 支援的輸入
 
-即使在中間插入其他種類的引數，路徑型別之間的順序仍須對應。變更路徑參數的數量或型別時，請一併檢查路由宣告與方法簽章。
-
-### HTTP 支援的引數
-
-| 解析器 | 控制器引數型別 | 傳入的值 |
-| --- | --- | --- |
-| `StdContextResolver` | `context.Context` | 請求取消與逾時資訊，以及用於發布事件的內容物件 |
-| `ControllerContextResolver` | `spine.Ctx`、`core.ControllerContext` | 攔截器儲存區的唯讀檢視 |
-| `HeaderResolver` | `header.Values` | HTTP 標頭檢視 |
-| `PathIntResolver` | `path.Int` | 解析路徑值所得的整數 |
-| `PathStringResolver` | `path.String` | 路徑中的字串 |
-| `PathBooleanResolver` | `path.Boolean` | 解析路徑值所得的布林值 |
-| `PaginationResolver` | `query.Pagination` | `page`、`size` 查詢值 |
-| `QueryValuesResolver` | `query.Values` | 所有查詢值的檢視 |
-| `DTOResolver` | `*struct` | 綁定 HTTP 主體的 DTO |
-| `FormDTOResolver` | 含有 `form` 標籤的 `*struct` | 綁定表單或 multipart 主體的 DTO |
-| `UploadedFilesResolver` | `multipart.UploadedFiles` | 上傳的檔案 |
-
-`header`、`path`、`query` 與 `multipart` 都是 `github.com/NARUBROWN/spine/pkg/` 下的套件。表中的 `multipart.UploadedFiles` 須與 Go 標準的 `mime/multipart` 型別區分。
-
-HTTP DTO 宣告為結構指標。只要有任何欄位含有 `form` 標籤，一般 DTO 解析器就會略過，改由表單 DTO 解析器處理。`query.Pagination` 的 `page` 與 `size` 在省略或無法解析為整數時，分別使用 1 與 20。
+除了 `context.Context` 和 `spine.Ctx`，處理器還可接收 `input.Path[T]`、`input.Query[T]` 和 `input.Body[T]`。標頭使用帶 `header` 標籤的獨立結構體指標，檔案使用 `multipart.UploadedFiles`。舊 `path` 包裝型別、`query.Values`、`header.Values` 和 `query.Pagination` 已棄用，不能在同一處理器中與新的 Path、Query 或 Header 輸入混用。
 
 ### 解析器的契約
 
@@ -153,12 +126,12 @@ type ArgumentResolver interface {
 
 ## 路由攔截器：呼叫處理器前的處理
 
-以 `route.WithInterceptors()` 註冊的攔截器，只套用到特定處理器。路由與引數綁定完成後才會呼叫 `PreHandle`，因此可以使用所選的 `HandlerMeta` 與路徑參數。
+以 `api.Interceptors()` / `route.WithInterceptors()` 註冊的攔截器，只套用到特定處理器。路由與引數綁定完成後才會呼叫 `PreHandle`，因此可以使用所選的 `HandlerMeta` 與路徑參數。
 
 | 類別 | 註冊方式 | `PreHandle` 執行時點 | 傳入的中繼資料 |
 | --- | --- | --- | --- |
 | 全域 | `app.Interceptor()` | 路由前 | 空的 `HandlerMeta{}` |
-| 路由 | `route.WithInterceptors()` | 引數綁定後、呼叫處理器前 | 所選的 `HandlerMeta` |
+| 路由 | `api.Interceptors()` / `route.WithInterceptors()` | 引數綁定後、呼叫處理器前 | 所選的 `HandlerMeta` |
 
 兩種方式都會實作 `core.Interceptor` 的四個方法。
 
@@ -178,16 +151,16 @@ type Interceptor interface {
 
 ## Invoker：呼叫控制器
 
-Invoker 會從相依性容器取得控制器執行個體，再以綁定好的引數呼叫方法。控制器會檢查輸入值、呼叫服務，然後回傳結果或錯誤。
+Invoker 以綁定的引數呼叫新路由回呼。對於舊方法表達式，它會先從相依性容器取得控制器執行個體。處理器檢查輸入、呼叫服務並回傳結果或錯誤。
 
-下列方法是要加入已有 `UserController`、`User` 與 `c.repo` 的應用程式的範例。`path`、`httpx` 與 `httperr` 分別從 Spine 的 `pkg/` 套件匯入。
+下列方法是要加入已有 `UserController`、`User` 與 `c.repo` 的應用程式的範例。`input`、`httpx` 與 `httperr` 分別從 Spine 的 `pkg/` 套件匯入。
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
+func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
+    if *userId <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -267,7 +240,7 @@ type ReturnValueHandler interface {
 | 未另行對應的執行錯誤 | 500，`Internal server error` |
 | 實際回應已提交 | 不會重複寫入回應 |
 
-Spine `v0.6.5` 搭配 Echo 平台 `v0.1.0`，對格式錯誤的 JSON、數字或布林路徑值轉換失敗回傳 HTTP 400，對不支援的本文 Content-Type 回傳 415，對超過本文大小限制回傳 413。綁定失敗發生在控制器呼叫之前。請區分綁定失敗與業務驗證，並以實際請求確認。
+Spine `v0.7.1` 搭配 Echo 平台 `v0.2.0-rc.1`，對格式錯誤的 JSON、數字或布林路徑值轉換失敗回傳 HTTP 400，對不支援的本文 Content-Type 回傳 415，對超過本文大小限制回傳 413。綁定失敗發生在控制器呼叫之前。請區分綁定失敗與業務驗證，並以實際請求確認。
 
 實際傳送回應時若發生錯誤，會納入最終執行錯誤。如果回應尚未提交，會嘗試寫入 500 回應。已傳送的回應無法撤回。
 

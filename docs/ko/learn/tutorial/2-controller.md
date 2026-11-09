@@ -1,20 +1,12 @@
 # 컨트롤러
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
-:::
-
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
-
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+::: info
+기존 `app.Route`는 호환을 위해 유지되지만 Deprecated입니다. 새 앱은 [컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요. 이전 입력 API에서의 변경은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 확인하세요.
 :::
 
 CLI로 만든 `my-app` 프로젝트에 `GET /user/:id` 컨트롤러를 추가하고, 요청 경로의 정수를 JSON 응답으로 반환합니다. 이어서 쿼리, 헤더, 요청 본문을 받는 방법과 응답 타입을 살펴봅니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app` 기준입니다. 기본 `layered-v1` 구조는 역할별 디렉터리를 사용합니다.
 
 [첫 번째 앱](/ko/learn/tutorial/1-project-structure)의 설치와 프로젝트 생성을 마친 뒤 프로젝트 루트에서 진행하세요. 이미 `spine generate resource user`를 실행했다면 생성 단계를 건너뛰고 파일을 확인합니다.
 
@@ -45,10 +37,9 @@ src/user/
 ```go
 package user
 
-import (
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
-)
+import "github.com/NARUBROWN/spine/pkg/httpx"
+
+type UserPath struct { ID int64 `path:"id"` }
 
 type UserController struct { service *UserService }
 
@@ -56,14 +47,82 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(id path.Int) httpx.Response[map[string]any] {
-    return httpx.Response[map[string]any]{Body: map[string]any{"id": id.Value}}
+func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": params.ID}}
 }
 ```
 
 ::: info
 `resource`는 조회 라우트와 의존성 등록을 갖춘 기본 구조를 생성합니다. 데이터베이스, 도메인 모델, 데이터 전달 객체(DTO), 생성이나 수정 기능은 직접 구현해야 합니다.
 :::
+
+
+## v0.7.1 입력과 라우트 실행 예제
+
+다음은 독립 실행 앱입니다. Spine `v0.7.1`과 호환 HTTP 플랫폼이 설치된 별도 Go 모듈의 `main.go`에 저장하고 `go run .`으로 실행하세요. 그룹에 경로, 핸들러, 선택 옵션 순서로 등록합니다. 요청 본문과 경로, 쿼리, 헤더는 별도 입력으로 받습니다.
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+)
+
+type UserController struct{}
+type SearchQuery struct {
+	Name string `query:"name"`
+}
+type RequestHeaders struct {
+	RequestID string `header:"X-Request-ID"`
+}
+type CreateUser struct {
+	Name string `json:"name"`
+}
+type User struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func (*UserController) Constructor() *UserController { return &UserController{} }
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	users := r.Group("/users", api.Tags("Users"))
+	users.GET("/search", func(q input.Query[SearchQuery], h *RequestHeaders) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"name": q.Name, "request_id": h.RequestID}}
+	})
+	users.GET("/id/:id", func(id input.Path[int64]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{ID: *id}}
+	}, api.Summary("Get user"))
+	users.POST("/create", func(body input.Body[CreateUser]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{Name: body.Name}, Options: httpx.ResponseOptions{Status: 201}}
+	})
+}
+
+func main() {
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&UserController{}))
+	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+다른 터미널에서 요청합니다. 첫 요청은 이름과 요청 ID를 반환하고, 둘째 요청은 ID를 반환합니다. POST는 201을 반환하며 숫자가 아닌 경로 값은 400입니다.
+
+```bash
+curl -H 'X-Request-ID: r1' 'http://localhost:8080/users/search?name=alice'
+curl http://localhost:8080/users/id/12
+curl -i -H 'Content-Type: application/json' -d '{"name":"bob"}' http://localhost:8080/users/create
+curl -i http://localhost:8080/users/id/not-a-number
+```
+
 
 ## 생성된 라우트 등록 확인
 
@@ -125,13 +184,12 @@ Spine은 핸들러의 파라미터 타입에 맞춰 요청 값을 전달합니�
 | 타입 | 설명 | 예시 |
 |------|------|------|
 | `context.Context` | 요청 컨텍스트 | `ctx context.Context` |
-| `query.Values` | 쿼리 파라미터 | `q query.Values` |
-| `query.Pagination` | 페이지네이션 | `page query.Pagination` |
-| `header.Values` | HTTP 헤더 | `headers header.Values` |
+| `input.Query[T]` | 쿼리 파라미터 | `q input.Query[SearchQuery]` |
+| `*struct` (`header`) | HTTP 헤더 | `headers *RequestHeaders` |
 | `*struct` (DTO) | JSON 요청 본문 | `req *CreateUserRequest` |
 | `*struct` (폼 DTO) | 폼의 텍스트 필드 | `form *CreatePostForm` |
 | `multipart.UploadedFiles` | 멀티파트 업로드 파일 | `files multipart.UploadedFiles` |
-| `path.*` | 경로 파라미터 | `userId path.Int` |
+| `input.Path[T]` | 경로 파라미터 | `userId input.Path[int64]` |
 | `spine.Ctx` | 컨트롤러 컨텍스트 | `spineCtx spine.Ctx` |
 
 ### 지원하는 반환 타입
@@ -150,115 +208,24 @@ Spine은 핸들러의 파라미터 타입에 맞춰 요청 값을 전달합니�
 
 ### 쿼리 파라미터
 
-`query.Values`에서 쿼리 문자열을 읽습니다. 아래 요청에서는 `id`가 `1`, `name`이 `alice`, `active`가 `true`입니다.
-
-```go
-// GET /user?id=1&name=alice&active=true
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    q query.Values,
-) httpx.Response[UserResponse] {
-    id := q.Int("id", 0)                      // int64, 기본값 0
-    name := q.String("name")                  // string
-    active := q.GetBoolByKey("active", false) // bool, 기본값 false
-    _ = name
-    _ = active
-
-    user, _ := c.service.Get(ctx, int(id))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### query.Values 메서드
-
-| 메서드 | 반환 타입 | 설명 |
-|--------|----------|------|
-| `Get(key)` | `string` | 첫 번째 값 (없으면 빈 문자열) |
-| `String(key)` | `string` | 문자열 값 |
-| `Int(key, default)` | `int64` | 값이 없거나 정수로 변환할 수 없으면 지정한 기본값 |
-| `GetBoolByKey(key, default)` | `bool` | 값이 없거나 불리언으로 변환할 수 없으면 지정한 기본값 |
-| `Has(key)` | `bool` | 키 존재 여부 |
-
+위 실행 예제의 `input.Query[SearchQuery]`는 `query` 태그가 지정한 값을 구조체 필드에 바인딩합니다. 태그가 없는 필드는 lowerCamel 이름을 사용합니다.
 
 ### 페이지네이션
 
-`query.Pagination`은 `page`와 `size` 쿼리 파라미터를 정수로 변환합니다. 값이 없거나 정수로 변환할 수 없으면 각각 `1`과 `20`을 사용합니다. 음수나 `0`도 정수로 처리하므로 허용 범위는 앱에서 검증하세요.
-
-```go
-// GET /user?page=2&size=10
-
-func (c *UserController) ListUsers(
-    ctx context.Context,
-    page query.Pagination,
-) httpx.Response[[]UserResponse] {
-    // page.Page = 2 (기본값: 1)
-    // page.Size = 10 (기본값: 20)
-    users, _ := c.service.List(ctx, page.Page, page.Size)
-    return httpx.Response[[]UserResponse]{Body: users}
-}
-```
-
+쿼리 DTO에 `page`, `size` 필드를 선언하고 기본값과 허용 범위를 앱에서 명시적으로 처리하세요.
 
 ### HTTP 헤더
 
-`header.Values`를 사용해 HTTP 헤더에 접근합니다.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/header"
-
-func (c *CommonController) CheckHeader(
-    headers header.Values,
-) httpx.Response[HeaderInfo] {
-    return httpx.Response[HeaderInfo]{
-        Body: HeaderInfo{
-            UserAgent:   headers.Get("User-Agent"),
-            ContentType: headers.Get("Content-Type"),
-        },
-    }
-}
-```
-
-#### header.Values 메서드
-
-| 메서드 | 반환 타입 | 설명 |
-|--------|----------|------|
-| `Get(key)` | `string` | 헤더 값 |
-| `Has(key)` | `bool` | 헤더 존재 여부 |
-
+`header` 태그가 있는 별도 구조체 포인터로 받습니다. 위 예제의 `RequestHeaders`는 `X-Request-ID`를 읽습니다.
 
 ### 경로 파라미터
 
-라우트 경로의 파라미터를 `path.Int`, `path.String`, `path.Boolean`으로 받습니다. 경로에 선언한 파라미터 순서와 핸들러의 `path` 타입 파라미터 순서가 대응합니다. Go 변수명은 경로 파라미터 이름과 달라도 됩니다.
+v0.7.1에서는 경로 변수가 여러 개일 때 스칼라 `input.Path[T]` 인자를 경로에 선언한 순서대로 하나씩 받습니다. 인자 수와 경로 변수 수는 같아야 하며, 스칼라와 경로 DTO 또는 기존 경로 래퍼는 같은 핸들러에서 혼용할 수 없습니다.
 
 ```go
-// GET /user/:id
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId path.Int,
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-#### path 패키지 구조체
-
-```go
-package path
-
-type Int struct {
-    Value int64
-}
-
-type String struct {
-    Value string
-}
-
-type Boolean struct {
-    Value bool
-}
+r.GET("/:id/:name/:address", func(id input.Path[int64], name input.Path[string], address input.Path[string]) httpx.Response[map[string]any] {
+    return httpx.Response[map[string]any]{Body: map[string]any{"id": *id, "name": *name, "address": *address}}
+})
 ```
 
 
@@ -304,16 +271,17 @@ import "github.com/NARUBROWN/spine/pkg/spine"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
     spineCtx spine.Ctx,
 ) httpx.Response[UserResponse] {
     // 인터셉터에서 Set한 값 조회
     if v, ok := spineCtx.Get("userRole"); ok {
-        role := v.(string)
-        // ...
+        if role, ok := v.(string); ok {
+            _ = role // Use the role in the application.
+        }
     }
 
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
     return httpx.Response[UserResponse]{Body: user}
 }
 ```
@@ -335,9 +303,9 @@ import "github.com/NARUBROWN/spine/pkg/httpx"
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,  // 200 OK (기본값)
@@ -378,9 +346,9 @@ func (c *UserController) CreateUser(
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(userId.Value))
+    user, _ := c.service.Get(ctx, int(*userId))
 
     return httpx.Response[UserResponse]{
         Body: user,
@@ -450,11 +418,13 @@ type Cookie struct {
 #### 기본 리다이렉트 (302 Found)
 
 ```go
+type OAuthQuery struct { Code string `query:"code"` }
+
 func (c *AuthController) OAuthCallback(
     ctx context.Context,
-    q query.Values,
+    q input.Query[OAuthQuery],
 ) httpx.Redirect {
-    code := q.String("code")
+    code := q.Code
     c.service.ProcessOAuthCode(ctx, code)
 
     return httpx.Redirect{
@@ -524,9 +494,9 @@ import "github.com/NARUBROWN/spine/pkg/httperr"
 
 func (c *UserController) GetUser(
     ctx context.Context,
-    userId path.Int,
+    userId input.Path[int64],
 ) error {
-    _, err := c.service.Get(ctx, int(userId.Value))
+    _, err := c.service.Get(ctx, int(*userId))
     if err != nil {
         return httperr.NotFound("유저를 찾을 수 없습니다.")
     }
@@ -557,9 +527,9 @@ func (c *UserController) GetUser(
 ```go
 func (c *UserController) GetUser(
     ctx context.Context,
-    userID path.Int,
+    userID input.Path[int64],
 ) (httpx.Response[UserResponse], error) {
-    user, err := c.service.Get(ctx, int(userID.Value))
+    user, err := c.service.Get(ctx, int(*userID))
     if err != nil {
         return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
     }
@@ -678,11 +648,16 @@ curl -X POST http://localhost:8080/upload \
 #### 핸들러 구현
 
 ```go
+type PageQuery struct {
+    Page int `query:"page"`
+    Size int `query:"size"`
+}
+
 func (c *PostController) Upload(
     ctx context.Context,
     form  *CreatePostForm,           // form fields
     files multipart.UploadedFiles,   // multipart files
-    page  query.Pagination,          // query
+    page  input.Query[PageQuery],          // query
 ) httpx.Response[string] {
     fmt.Println("[FORM] Title  :", form.Title)
     fmt.Println("[FORM] Content:", form.Content)
@@ -698,12 +673,11 @@ func (c *PostController) Upload(
 
 ### 입력 타입을 구분하는 기준
 
-JSON과 폼 DTO는 구조체 포인터로 받습니다. 쿼리, 경로, 업로드 파일은 `query.Pagination`, `path.Int`, `multipart.UploadedFiles`처럼 Spine이 지원하는 값 타입으로 받습니다. 임의의 구조체 값을 선언하면 자동으로 바인딩되는 것은 아닙니다.
-
+JSON과 폼 DTO는 구조체 포인터로 받습니다. 쿼리와 경로에는 `input.Query[T]`와 `input.Path[T]`, 파일에는 `multipart.UploadedFiles`를 사용할 수 있습니다. 헤더는 `header` 태그가 있는 별도 구조체 포인터로 받습니다.
 
 ## 입력 오류 처리 시 주의사항
 
-Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요.
+잘못된 JSON과 경로 값 변환 실패는 HTTP 400, 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413으로 처리됩니다. 바인딩 실패는 컨트롤러 호출 전에 발생합니다. 실제 요청으로 업무 검증 오류와 구분해 확인하세요.
 
 ## 다음 단계
 

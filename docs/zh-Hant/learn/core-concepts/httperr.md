@@ -1,30 +1,26 @@
 # httperr 套件
 
-::: warning v0.7.0 Preview 輸入 API 移轉
-本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
-
-新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
-
-適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+::: info
+本頁介紹 Spine `v0.7.1` 的錯誤處理。舊輸入的變更請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)，文件選項請參閱 [OpenAPI](/zh-Hant/reference/api/openapi)。
 :::
 
 `httperr` 套件用來儲存 HTTP 狀態碼和要傳給用戶端的錯誤訊息。控制器回傳 `httperr.NotFound("사용자를 찾을 수 없습니다")` 之類的錯誤時，Spine 會將其轉換為對應的狀態碼和 JSON 錯誤回應。控制器不需要直接操作 Echo 等框架的回應物件。
 
-本頁以 Spine v0.6.5 的 `github.com/NARUBROWN/spine/pkg/httperr` 為基礎。
+本頁以 Spine v0.7.1 的 `github.com/NARUBROWN/spine/pkg/httperr` 為基礎。
 
 ## 在 CLI 專案中使用
 
-以下控制器是加入[CLI 產生的專案](/zh-Hant/learn/tutorial/1-project-structure)中的程式碼片段。`httpx`、`httperr` 和 `path` 分別是 `github.com/NARUBROWN/spine/pkg` 下的套件。請將控制器建構函式和路由連結至 `BuildApplication` 使用的註冊路徑。`User`、儲存庫、服務等業務型別由應用程式定義。
+以下控制器是加入[CLI 產生的專案](/zh-Hant/learn/tutorial/1-project-structure)中的程式碼片段。`httpx`、`httperr` 和 `input` 分別是 `github.com/NARUBROWN/spine/pkg` 下的套件。請將控制器建構函式和路由連結至 `BuildApplication` 使用的註冊路徑。`User`、儲存庫、服務等業務型別由應用程式定義。
 
 成功值以 `httpx.Response[T]` 包裝；失敗時則同時回傳空的回應值和錯誤。接收請求主體的範例中，DTO 應像 `*PaymentRequest` 一樣宣告為指標。
 
 ```go
-func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) {
-    if userId.Value <= 0 {
+func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
+    if *userId <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
     }
@@ -35,7 +31,7 @@ func (c *UserController) GetUser(userId path.Int) (httpx.Response[User], error) 
 
 若將此方法註冊為 `GET /users/:id`，回應如下。範例假設儲存庫的所有查詢錯誤都以 404 處理。實際應用程式應區分查無結果和資料庫故障，再選擇狀態碼。
 
-```bash
+```text
 # 無效 ID
 GET /users/-1
 → 400 {"message": "유효하지 않은 사용자 ID입니다"}
@@ -86,7 +82,7 @@ func (e *HTTPError) Error() string {
 
 ## 基本輔助函式
 
-Spine v0.6.5 提供以下四個輔助函式，皆接收 `msg string` 並回傳 `error`。
+Spine v0.7.1 提供以下四個輔助函式，皆接收 `msg string` 並回傳 `error`。
 
 | 函式 | 狀態碼 | 使用情況 |
 | --- | --- | --- |
@@ -106,7 +102,7 @@ func BadRequest(msg string) error {
 ```
 
 ```go
-if userId.Value <= 0 {
+if *userId <= 0 {
     return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
 }
 ```
@@ -222,14 +218,17 @@ func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt
 不需要成功回應主體的方法，可以只回傳 `error`。
 
 ```go
-func (c *UserController) DeleteUser(userId path.Int) error {
-    exists, err := c.repo.Exists(userId.Value)
-    if err != nil || !exists {
+func (c *UserController) DeleteUser(userId input.Path[int64]) error {
+    exists, err := c.repo.Exists(*userId)
+    if err != nil {
+        return err
+    }
+    if !exists {
         return httperr.NotFound("사용자를 찾을 수 없습니다")
     }
 
-    if err := c.repo.Delete(userId.Value); err != nil {
-        return httperr.BadRequest("삭제할 수 없습니다")
+    if err := c.repo.Delete(*userId); err != nil {
+        return err
     }
 
     return nil  // 成功時回傳 nil
@@ -238,7 +237,7 @@ func (c *UserController) DeleteUser(userId path.Int) error {
 
 回傳 nil 時不會寫入錯誤回應。僅憑這種形式不會指定特定的成功狀態碼。若刪除成功時需要 204 等明確的狀態碼，請使用 `httpx` 回應型別。
 
-為了讓範例保持簡潔，存在性檢查錯誤和刪除錯誤分別以 404、400 處理。實際上必須根據儲存庫錯誤的種類，區分狀態碼和重試政策。
+使用者不存在時回傳 404，儲存庫故障則原樣回傳。請依應用程式中的錯誤型別選擇狀態碼與重試政策。
 
 ## 使用其他錯誤狀態碼
 
@@ -314,6 +313,6 @@ func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta cor
 | 超過請求主體大小限制 | 回應 413 和 `"Request entity too large"` |
 | 實際回應已寫入 | 不再寫入額外的錯誤回應，避免重複回應 |
 
-Spine v0.6.5 會先完成回應前處理，再將準備好的回應寫入實際傳輸層。若 `BeforeResponse` 發生錯誤，準備中的成功回應可能會改為錯誤回應。`AfterCompletion` 在回應處理後執行，因此在這個階段應記錄錯誤和傳輸結果，而不是嘗試寫入新的錯誤回應。
+Spine v0.7.1 會先完成回應前處理，再將準備好的回應寫入實際傳輸層。若 `BeforeResponse` 發生錯誤，準備中的成功回應可能會改為錯誤回應。`AfterCompletion` 在回應處理後執行，因此在這個階段應記錄錯誤和傳輸結果，而不是嘗試寫入新的錯誤回應。
 
 請透過 Go 的回傳值傳遞錯誤。請勿使用 `panic` 表達一般輸入驗證失敗或業務失敗。攔截器的中止與收尾處理，請參閱[攔截器教學](/zh-Hant/learn/tutorial/4-interceptor)。

@@ -1,10 +1,10 @@
-# Preview 控制器与路由迁移
+# v0.7.1 控制器与路由迁移
 
-本文适用于 Spine `v0.7.0-preview.7` 和 CLI `v0.4.3-preview.8`，不适用于稳定版 `v0.6.5`。核心需要 Go 1.25.5 或更高版本，playground 验证器需要 Go 1.26 或更高版本。完整平台组合的晋级状态需要另行确认。
+本文适用于 Spine `v0.7.1`。核心需要 Go 1.25.5 或更高版本，playground 验证器需要 Go 1.26 或更高版本。
 
 ## 在控制器中注册路由 {#routes}
 
-Preview 中，`app.Route` 以及使用构造函数、独立 route.go 和方法表达式的 HTTP 控制器方式已标记为 Deprecated。迁移期间仍可使用，移除版本尚未确定。普通 DI 构造函数并未弃用。
+v0.7.1 中，`app.Route` 以及使用构造函数、独立 route.go 和方法表达式的 HTTP 控制器方式已标记为 Deprecated。迁移期间仍可使用，移除版本尚未确定。普通 DI 构造函数并未弃用。
 
 这是注册示例，并非独立应用。请在应用中添加 HTTP 平台和运行配置。
 
@@ -24,10 +24,10 @@ func (*UserController) Constructor() *UserController { return &UserController{} 
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
     users := r.Group("/users", api.Tags("Users"))
-    users.GET("/:id", api.Options(api.Summary("Get user")),
+    users.GET("/:id",
         func(p input.Path[UserPath]) httpx.Response[User] {
             return httpx.Response[User]{Body: User{ID: p.ID}}
-        })
+        }, api.Summary("Get user"))
 }
 
 func register(app interface{ Constructor(...any) }) {
@@ -45,9 +45,11 @@ Controller 还须实现包含 `RegisterRoutes(*api.Registry)` 的 `api.Controlle
 
 ## 输入与分组 {#groups}
 
-`input.Path[T]`, `input.Query[T]`, `input.Body[T]` 的 `T` 必须是结构体。路径和查询优先使用对应标签，无标签时使用 lowerCamel。请求头使用带 `header` 标签的独立结构体指针。请按来源分离输入。
+`input.Query[T]` 和 `input.Body[T]` 的 `T` 必须是结构体。路径和查询优先使用标签，否则使用 lowerCamel 名称。请求头使用带 `header` 标签的独立结构体指针。
 
-分组方法的参数依次为路径、`api.Options(...)` 和处理器。没有选项时也要传入 `api.Options()`。这与分组外的 `r.GET(path, handler, options...)` 顺序不同。分组继承前缀和标签，并可通过 `api.Interceptors(...)` 添加拦截器。`example` 和 `description` 标签仅用于文档，不是运行时默认值或验证规则。
+在 v0.7.1 中，每个路径变量对应一个标量 `input.Path[T]` 参数，顺序与路由一致。数量必须相同，且不能在同一处理器中混用路径 DTO 或旧路径包装类型。
+
+分组和 Registry 都使用 `GET(path, handler, options...)` 顺序。分组继承前缀和标签，并可通过 `api.Interceptors(...)` 添加拦截器。`example` 和 `description` 标签仅用于文档，不是运行时默认值或验证规则。
 
 ## 弃用输入与兼容性 {#deprecated}
 
@@ -61,5 +63,5 @@ Controller 还须实现包含 `RegisterRoutes(*api.Registry)` 的 `api.Controlle
 
 迁移后运行 `spine contract check` 和 `spine verify`，并检查实际 HTTP 请求与描述。输入迁移和 HTTP v3 的其他限制请参阅以下文档。
 
-- [v0.7.0](/zh-Hans/learn/migration/v0.7.0-preview)
+- [v0.7.1](/zh-Hans/learn/migration/v0.7.1-preview)
 - [HTTP v3](/zh-Hans/learn/migration/preview-features#body)

@@ -1,11 +1,7 @@
 # core.ExecutionContext
 
-::: warning v0.7.0 Preview 入力 API の移行
-このページの既存 API の説明と例は安定版 `v0.6.5` を対象としています。`v0.7.0-preview.1` から入力元別の Path、Query、Header DTO を利用できます。`query.Values`、`header.Values` とその生成および取得 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` は Deprecated です。
-
-新しい DTO 方式は `v0.6.5` にそのまま適用できません。Preview でも、同じハンドラーで新しい DTO と Deprecated な入力を混在させると起動時に拒否されます。既存のボディ DTO とコンテキストは、どちらの方式とも併用できます。
-
-対象バージョンと移行例は [Preview ハンドラー入力の移行](/ja/learn/migration/v0.7.0-preview)、仕様の設定は [ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。
+::: info
+旧入力 API との互換性は[入力の移行](/ja/learn/migration/v0.7.1-preview)、文書設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
 `ExecutionContext`は、インターセプターと実行パイプラインでリクエスト情報を読み取り、処理段階の間で値を共有するためのインターフェースです。HTTPリクエスト、イベント、WebSocketメッセージで共通に使用し、トランスポートごとの追加情報は個別のインターフェースで提供します。
@@ -146,7 +142,7 @@ type WebSocketContext interface {
 
 ### WebSocketの接続リクエスト情報 {#websocket-request-context}
 
-v0.6.5はHTTPアップグレードリクエストの情報をコピーして保持します。次のインターフェースで、ヘッダー、クエリ、Cookie、リモートアドレス、ホスト、リクエストURIを取得できます。
+v0.7.1はHTTPアップグレードリクエストの情報をコピーして保持します。次のインターフェースで、ヘッダー、クエリ、Cookie、リモートアドレス、ホスト、リクエストURIを取得できます。
 
 ```go
 type WebSocketRequestContext interface {
@@ -420,14 +416,20 @@ Get(key string) (any, bool)
 
 以下のコードは、[CLIプロジェクト](/ja/learn/tutorial/1-project-structure)の`src/user/user_controller.go`を拡張する例です。`User`、`AuthUser`、リポジトリのフィールドはアプリで定義します。生成された`user.Register(app)`とルートの`main.go`は維持します。
 
+この抜粋には `core`、`input`、`httpx`、`httperr` パッケージが必要です。認証が必須の場合は値がない場合も拒否するようアプリのポリシーを適用してください。
+
 ```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
+func (c *UserController) GetUser(ctx core.ControllerContext, userId input.Path[int64]) (httpx.Response[User], error) {
     // インターセプターが Set("auth.user", ...) で保存した値を取得
     if authUser, ok := ctx.Get("auth.user"); ok {
-        _ = authUser.(*AuthUser)
+        auth, valid := authUser.(*AuthUser)
+        if !valid || auth == nil {
+            return httpx.Response[User]{}, httperr.Unauthorized("invalid authentication context")
+        }
+        _ = auth
         // ...
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -491,6 +493,8 @@ Bind(out any) error
 HTTPリクエストの本文を構造体にバインドします。
 
 **例**
+
+HTTP v3 のコアリクエストビューが本文を解釈します。パスとクエリは本文 DTO に結合されず、Spine DTO の入力は Echo Binder や JSONSerializer の拡張を呼びません。
 
 ```go
 var req CreateUserRequest
@@ -695,11 +699,11 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 HTTPコントローラーの`context.Context`引数には標準コンテキストとリクエストスコープのイベントバスを渡し、`core.ControllerContext`引数には`Get()`だけを提供するビューを渡します。コンシューマーとWebSocketの標準入力リゾルバーには、`ControllerContext`を注入する機能がありません。ランタイムの入力解釈コードは、次のソースで確認できます。
 
-- [HTTPパスパラメータの解釈](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
-- [標準コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
-- [コントローラーの取得用コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
-- [イベント入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
-- [WebSocket入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
+- [HTTPパスパラメータの解釈](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/scalar_path_resolver.go)
+- [標準コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/std_context_resolver.go)
+- [コントローラーの取得用コンテキストの受け渡し](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/controller_context_resolver.go)
+- [イベント入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/event/consumer/resolver)
+- [WebSocket入力の解釈](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/ws/resolver)
 
 ## プロトコルごとの動作の違い
 

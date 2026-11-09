@@ -1,20 +1,12 @@
 # spine.App
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
+::: info
+`app.Route`는 기존 코드와 호환되지만 Deprecated입니다. 새 컨트롤러는 [라우트 전환](/ko/learn/migration/preview-controller-routes), 입력 규칙은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 설정은 [OpenAPI](/ko/reference/api/openapi)를 참고하세요.
 :::
 
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+Swagger UI와 ReDoc은 `boot.HTTPOptions.OpenAPI.UI`로 선택할 수 있습니다. [HTTP v3와 부팅 옵션](/ko/learn/migration/preview-features#boot)에서 실행 예제와 TLS, HTTP v3 변경을 확인하세요.
 
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
-:::
-
-Swagger UI와 ReDoc은 `boot.HTTPOptions.OpenAPI.UI`로 선택할 수 있습니다. [미리보기 기능과 부팅 옵션](/ko/learn/migration/preview-features#boot)에서 실행 예제와 TLS, HTTP v3 변경을 확인하세요.
-
-`App`은 생성자, HTTP 라우트, 인터셉터, 이벤트 소비자, WebSocket 핸들러와 사용자 정의 전송 방식을 등록하고 애플리케이션을 실행하는 진입점입니다. 이 참조는 Spine v0.6.5의 공개 API와 부트 옵션을 다룹니다.
+`App`은 생성자, HTTP 라우트, 인터셉터, 이벤트 소비자, WebSocket 핸들러와 사용자 정의 전송 방식을 등록하고 애플리케이션을 실행하는 진입점입니다. 이 참조는 Spine v0.7.1의 공개 API와 부트 옵션을 다룹니다.
 
 ```go
 import (
@@ -71,13 +63,13 @@ app.Run(boot.Options{
 
 ## 구현 선택 옵션 {#platform-options}
 
-HTTP는 Echo, WebSocket은 독립 Gorilla 구현을 선택해야 합니다. WS 등록이 있으면 HTTP의 업그레이드 지원과 WS factory가 모두 필요합니다. 검증기를 선택하려면 `playground.New()`의 결과를 `spine.WithValidator`로 전달합니다.
+HTTP는 Echo 또는 net/http, WebSocket은 독립 Gorilla 구현을 선택합니다. WebSocket 경로에는 HTTP 업그레이드 지원과 WS factory가 모두 필요합니다. 검증기는 `playground.New()`의 결과를 `spine.WithValidator`로 전달합니다.
 
 | 옵션 | 연결하는 구현 |
 | --- | --- |
-| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `contract/http` |
+| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `nethttpplatform.Option()` / `contract/http` |
 | `spine.WithWebSocketAdapter(factory)` | `gorillaplatform.Option()` / `contract/websocket` |
-| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / `contract/event` |
+| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / NATS / `contract/event` |
 | `spine.WithValidator(validator)` | playground / `contract/validator` |
 
 [플랫폼과 DTO 검증 선택](/ko/learn/getting-started/platforms)
@@ -90,19 +82,7 @@ HTTP는 Echo, WebSocket은 독립 Gorilla 구현을 선택해야 합니다. WS �
 Constructor(constructors ...any)
 ```
 
-의존성 주입 컨테이너에 생성자 함수를 등록합니다. 생성자의 매개변수 타입에 맞춰 다른 등록된 객체를 주입합니다.
-
-**매개변수**
-
-- `constructors` - 생성자 함수들 (가변 인자)
-
-**생성자 규칙**
-
-- 함수여야 합니다
-- 반환값은 정확히 하나여야 합니다
-- 매개변수 타입을 제공하는 생성자도 등록해야 합니다
-
-**예시**
+생성자 함수와 `constructor.Custom`, `Repository`, `Service`, `Controller`, `Interceptor` 역할 표식을 가변 인자로 받습니다. 일반 함수는 값을 정확히 하나 반환해야 합니다. 객체 역할 표식은 구조체 포인터와 `Constructor(의존성...) *자기타입` 메서드를 사용합니다. 필요한 의존성은 모두 등록해야 하며, Controller와 Interceptor에는 추가 역할 계약이 있습니다. 다음은 기존 함수 생성자의 예시입니다. [역할별 등록 실행 예제](/ko/learn/tutorial/3-dependency-injection)를 참고하세요.
 
 ```go
 // 의존성 없는 생성자
@@ -148,6 +128,8 @@ HTTP 라우트를 등록합니다. `method`의 앞뒤 공백은 제거하고 대
 - `/users/:userId/posts/:postId` - 다중 매개변수
 
 **예시**
+
+아래 `Route` 예제는 각각의 등록 방식을 보여 줍니다. 같은 메서드와 경로를 중복 등록하지 마세요.
 
 ```go
 // 기본 라우트
@@ -309,6 +291,8 @@ type Container interface {
 
 **예시**
 
+`Stop`은 진행 중인 RPC가 끝나기를 기다리되 종료 컨텍스트가 만료되면 서버를 강제 중지합니다. 예제의 `MyService`와 서비스 등록 함수는 앱에서 구현합니다.
+
 ```go
 type GRPCTransport struct {
     server *grpc.Server
@@ -334,8 +318,18 @@ func (t *GRPCTransport) Start() error {
 }
 
 func (t *GRPCTransport) Stop(ctx context.Context) error {
-    t.server.GracefulStop()
-    return nil
+    done := make(chan struct{})
+    go func() {
+        t.server.GracefulStop()
+        close(done)
+    }()
+    select {
+    case <-done:
+        return nil
+    case <-ctx.Done():
+        t.server.Stop()
+        return ctx.Err()
+    }
 }
 
 app.RegisterTransport(&GRPCTransport{})
@@ -348,12 +342,14 @@ RunContext(ctx context.Context, opts boot.Options) error
 Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
 
 type PreparedApplication interface {
-    Handler() http.Handler
+    HTTPAdapter() httpcontract.HTTPAdapter
     Close(ctx context.Context) error
 }
+
+func NetHTTPHandler(prepared PreparedApplication) (http.Handler, error)
 ```
 
-`RunContext`는 context 취소로 정상 종료를 시작합니다. `Prepare`는 리스너 없이 앱을 준비하고 `Handler()`와 `Close(ctx)`를 반환합니다. consumer와 custom transport의 Start는 실행하지 않지만, 설정에 따라 broker readiness와 custom Init에서 네트워크 연결이 발생할 수 있습니다. 준비 결과의 Close와 외부 HTTP 서버의 종료는 호출자가 관리합니다.
+`RunContext`는 context 취소로 정상 종료를 시작합니다. `Prepare`는 리스너 없이 앱을 준비합니다. `HTTPAdapter()`는 준비된 어댑터를 반환하며 HTTP가 비활성화됐으면 nil입니다. `spine.NetHTTPHandler(prepared)`는 지원되는 어댑터의 `http.Handler`와 오류를 반환합니다. 어댑터를 중복 실행하거나 종료하지 말고, 외부 서버 종료와 준비 결과의 `Close`는 호출자가 관리하세요. consumer와 custom transport의 Start는 실행하지 않지만 설정에 따라 브로커 준비 검사나 custom Init에서 네트워크 연결이 발생할 수 있습니다. `httpcontract`는 `github.com/NARUBROWN/spine/contract/http`입니다.
 
 ### Consumers
 
@@ -435,6 +431,8 @@ if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err
 
 WebSocket 핸들러는 `ws` 패키지의 연결 ID와 메시지 DTO를 매개변수로 받습니다. 다음 예는 연결별 전송 객체를 저장하고 메시지를 전체 연결에 전송합니다. `ChatController` 생성자는 `Constructor`로 등록합니다.
 
+예제에는 표준 `context`, `encoding/json`, `strings`, `sync`, `time` import도 필요합니다. 연결 목록은 메모리에 저장되며 종료된 연결은 다음 전송 실패 때 제거됩니다.
+
 ```go
 import "github.com/NARUBROWN/spine/pkg/ws"
 
@@ -507,7 +505,7 @@ func (c *ChatController) OnMessage(
 }
 ```
 
-WebSocket은 HTTP 서버와 같은 Echo 인스턴스에 경로를 등록하므로 `boot.Options.HTTP`가 필요합니다. 출처, 연결 수와 인증 설정은 [보안 설정](/ko/reference/security-configuration#websocket)을 참고하십시오.
+WebSocket 경로는 HTTP 플랫폼에 등록되므로 `boot.Options.HTTP`와 업그레이드를 지원하는 HTTP 플랫폼이 필요합니다. 출처, 연결 수와 인증 설정은 [보안 설정](/ko/reference/security-configuration#websocket)을 참고하세요.
 
 ### Validate
 
@@ -550,7 +548,7 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
-미리보기의 추가 부팅 옵션은 [런타임 OpenAPI 설정](/ko/reference/api/openapi#options)을 참고하세요. JSON 명세는 `v0.7.0-preview.1`부터, `HTTP.OpenAPI.UI`를 통한 Swagger UI와 ReDoc 등록은 `v0.7.0-preview.2`부터 사용할 수 있습니다. [UI 등록 예제](/ko/reference/api/openapi#tools)에서 import와 설정을 확인하세요.
+[런타임 OpenAPI 설정](/ko/reference/api/openapi#options)에서 JSON 명세와 내장 UI 옵션을 확인하세요. [UI 등록 예제](/ko/reference/api/openapi#tools)에서 import와 설정을 보여줍니다.
 
 `boot.Options`는 HTTP 실행과 종료 정책을 지정합니다. HTTP를 실행할 때 `HTTP`를 지정합니다. 이벤트 연결과 역할은 외부 플랫폼 `Config`와 `spine.WithEventAdapter`에서 선택합니다.
 
@@ -569,6 +567,8 @@ type Options struct {
 }
 
 type HTTPOptions struct {
+    TLS               *tls.Config
+    OpenAPI           OpenAPIOptions
     GlobalPrefix      string
     DisableRecover    bool
     ReadHeaderTimeout time.Duration
@@ -577,6 +577,7 @@ type HTTPOptions struct {
     IdleTimeout       time.Duration
     MaxHeaderBytes    int
     MaxBodyBytes      int64
+    MultipartMemoryBytes int64
     WebSocket         WebSocketOptions
 }
 ```
@@ -590,6 +591,9 @@ type HTTPOptions struct {
 
 | `HTTPOptions` 필드 | `0` 또는 생략했을 때 | 제약 |
 | --- | --- | --- |
+| `TLS` | `nil`, 평문 HTTP | 인증서가 있는 `*tls.Config` 또는 인증서 선택 콜백 |
+| `OpenAPI` | 비활성화 | 명세와 선택적 UI 설정 |
+| `MultipartMemoryBytes` | 32 MiB | 양수 또는 0, 요청 전체의 메모리 상한은 아님 |
 | `GlobalPrefix` | 접두사 없음 | 아래 경로 규칙 적용 |
 | `DisableRecover` | `false`, panic을 HTTP 500으로 바꾸는 복구 미들웨어 사용 | `true`이면 미들웨어 비활성화 |
 | `ReadHeaderTimeout` | 5초 | 음수 불가 |
@@ -599,6 +603,9 @@ type HTTPOptions struct {
 | `MaxHeaderBytes` | 1 MiB | 음수 불가 |
 | `MaxBodyBytes` | 32 MiB | 음수이면 본문 크기 제한 비활성화 |
 | `WebSocket` | [WebSocket 기본값](/ko/reference/security-configuration#websocket) | `boot.WebSocketOptions` |
+
+
+net/http 플랫폼은 `DisableRecover: true`를 지원하지 않습니다.
 
 ### GlobalPrefix 검증 규칙
 
@@ -788,33 +795,24 @@ spine verify
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-	"os"
-
+	controller "example.com/my-app/src/controller"
 	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
 	"github.com/NARUBROWN/spine/pkg/boot"
-	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"os"
 )
 
-type HealthController struct{}
-
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-// BuildApplication은 서버 실행, 계약 검사와 오프라인 검증이 함께 사용하는 앱 구성 함수입니다.
 func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
-	app.Constructor(NewHealthController)
-	app.Route("GET", "/health", (*HealthController).Get)
-
+	app.Constructor(
+		constructor.Controller(&controller.HealthController{}),
+	)
 	address := ":8080"
 	if port := os.Getenv("SPINE_PORT"); port != "" {
 		address = ":" + port
 	}
-	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 
@@ -824,7 +822,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 이 준비가 끝난 뒤 소비자와 사용자 정의 전송 방식의 `Start`를 별도 고루틴에서 실행하고, 마지막에 HTTP 서버를 시작합니다. HTTP 라우트는 같은 메서드에서 경로가 모호하게 겹치면 시작에 실패합니다. 예를 들어 `/users/:id`와 `/users/me`는 겹치는 경로로 검사합니다.
 
-종료 시에는 WebSocket과 HTTP로 들어오는 요청을 먼저 닫고, 소비자가 멈출 때까지 기다린 뒤 사용자 정의 전송 방식의 `Stop`을 초기화 역순으로 호출합니다. 이후 이벤트 발행기의 자원을 정리합니다. 구체적인 구현은 [v0.6.5 시작 및 종료 코드](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/bootstrap/bootstrap.go)를 참고하십시오.
+종료 시에는 WebSocket과 HTTP로 들어오는 요청을 먼저 닫고, 소비자가 멈출 때까지 기다린 뒤 사용자 정의 전송 방식의 `Stop`을 초기화 역순으로 호출합니다. 이후 이벤트 발행기의 자원을 정리합니다. 구체적인 구현은 [v0.7.1 시작 및 종료 코드](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/bootstrap/bootstrap.go)를 참고하십시오.
 
 ## 제약과 오류
 

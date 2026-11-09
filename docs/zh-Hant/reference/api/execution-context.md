@@ -1,11 +1,7 @@
 # core.ExecutionContext
 
-::: warning v0.7.0 Preview 輸入 API 移轉
-本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
-
-新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
-
-適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
+::: info
+舊輸入 API 的相容規則請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)，文件選項請參閱 [OpenAPI](/zh-Hant/reference/api/openapi)。
 :::
 
 `ExecutionContext` 是在攔截器與執行管線中讀取請求資訊，並在處理階段之間共用值的介面。HTTP 請求、事件與 WebSocket 訊息共用此介面，各傳輸方式則透過其他介面提供額外資訊。
@@ -146,7 +142,7 @@ type WebSocketContext interface {
 
 ### WebSocket 連線請求資訊 {#websocket-request-context}
 
-v0.6.5 會複製並保留 HTTP 升級請求資訊。可透過以下介面查詢標頭、查詢參數、Cookie、遠端位址、主機與請求 URI。
+v0.7.1 會複製並保留 HTTP 升級請求資訊。可透過以下介面查詢標頭、查詢參數、Cookie、遠端位址、主機與請求 URI。
 
 ```go
 type WebSocketRequestContext interface {
@@ -420,14 +416,20 @@ Get(key string) (any, bool)
 
 以下程式碼是擴充 [CLI 專案](/zh-Hant/learn/tutorial/1-project-structure)中 `src/user/user_controller.go` 的範例。`User`、`AuthUser` 與儲存庫欄位由應用程式定義。保留產生的 `user.Register(app)` 與根目錄的 `main.go`。
 
+此片段需要 `core`、`input`、`httpx`、`httperr` 套件。如果必須驗證，也應依應用程式政策拒絕缺失值。
+
 ```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId path.Int) (httpx.Response[User], error) {
+func (c *UserController) GetUser(ctx core.ControllerContext, userId input.Path[int64]) (httpx.Response[User], error) {
     // 讀取攔截器透過 Set("auth.user", ...) 儲存的值
     if authUser, ok := ctx.Get("auth.user"); ok {
-        _ = authUser.(*AuthUser)
+        auth, valid := authUser.(*AuthUser)
+        if !valid || auth == nil {
+            return httpx.Response[User]{}, httperr.Unauthorized("invalid authentication context")
+        }
+        _ = auth
         // ...
     }
-    user, err := c.repo.FindByID(userId.Value)
+    user, err := c.repo.FindByID(*userId)
     if err != nil {
         return httpx.Response[User]{}, err
     }
@@ -491,6 +493,8 @@ Bind(out any) error
 將 HTTP 請求本文繫結至結構。
 
 **範例**
+
+HTTP v3 核心請求檢視解析本文。路徑和查詢不會合併至本文 DTO，Spine DTO 輸入也不會呼叫 Echo Binder 或 JSONSerializer 擴充。
 
 ```go
 var req CreateUserRequest
@@ -695,11 +699,11 @@ func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
 
 HTTP 控制器的 `context.Context` 參數會收到標準內容物件與請求範圍的事件匯流排；`core.ControllerContext` 參數則會收到只提供 `Get()` 的檢視。消費者與 WebSocket 的預設輸入解析器不提供 `ControllerContext` 注入功能。執行階段的輸入解析程式碼可在以下原始碼中查看。
 
-- [HTTP 路徑參數解析](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/path_int_resolver.go)
-- [傳遞標準內容物件](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/std_context_resolver.go)
-- [傳遞控制器查詢內容物件](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/resolver/controller_context_resolver.go)
-- [事件輸入解析](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/event/consumer/resolver)
-- [WebSocket 輸入解析](https://github.com/NARUBROWN/spine/tree/v0.6.5/internal/ws/resolver)
+- [HTTP 路徑參數解析](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/scalar_path_resolver.go)
+- [傳遞標準內容物件](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/std_context_resolver.go)
+- [傳遞控制器查詢內容物件](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/controller_context_resolver.go)
+- [事件輸入解析](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/event/consumer/resolver)
+- [WebSocket 輸入解析](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/ws/resolver)
 
 ## 各通訊協定的行為差異
 

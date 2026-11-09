@@ -1,20 +1,12 @@
 # 데이터베이스 연결
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
-:::
-
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
-
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+::: info
+이 튜토리얼의 `legacy` 레이아웃은 호환 `app.Route`를 사용합니다. 새 컨트롤러는 [라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요. 입력 호환 규칙은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 확인하세요.
 :::
 
 Bun으로 MySQL에 연결하고, 생성된 `GET /user/:id`가 데이터베이스에서 사용자를 조회하도록 확장합니다. 테이블을 만드는 마이그레이션과 저장소의 기본 쿼리도 함께 작성합니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 앱을 사용합니다. 기본 `layered-v1` 레이아웃은 역할별 디렉터리를 사용합니다.
 
 ## CLI 프로젝트 준비
 
@@ -49,9 +41,11 @@ go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
 # PostgreSQL을 사용한다면
-# go get github.com/uptrace/bun/dialect/pgdialect
-# go get github.com/jackc/pgx/v5/stdlib
+# go get github.com/uptrace/bun/dialect/pgdialect@v1.2.16
+# go get github.com/jackc/pgx/v5/stdlib@v5.12.0
 ```
+
+Bun 코어와 사용하는 방언은 같은 버전으로 유지하세요. 버전이 다르면 초기화 중 오류가 발생합니다.
 
 
 ## 데이터베이스 연결
@@ -339,7 +333,7 @@ import (
     "example.com/my-app/src/entity"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type UserController struct{ service *UserService }
@@ -348,8 +342,8 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(ctx context.Context, id path.Int) (httpx.Response[*entity.User], error) {
-    user, err := c.service.FindByID(ctx, id.Value)
+func (c *UserController) Get(ctx context.Context, id input.Path[int64]) (httpx.Response[*entity.User], error) {
+    user, err := c.service.FindByID(ctx, *id)
     if errors.Is(err, sql.ErrNoRows) {
         return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
     }
@@ -581,14 +575,14 @@ count, err := r.db.NewSelect().
 ### 조인
 
 ```go
-// SELECT * FROM users JOIN orders ON users.id = orders.user_id
+// Load the Orders relation configured on User.
 err := r.db.NewSelect().
     Model(&users).
     Relation("Orders").
     Scan(ctx)
 ```
 
-조인 예제의 `Orders` 관계는 별도 엔티티와 Bun 관계 태그를 정의해야 동작합니다. 위의 기본 `User` 모델에는 포함되지 않습니다.
+조인 예제의 `Orders` 관계는 별도 엔티티와 Bun 관계 태그를 정의해야 동작합니다. 위의 기본 `User` 모델에는 포함되지 않습니다. 관계 종류에 따라 Bun이 별도 조회를 실행할 수 있으므로 이 호출을 항상 단일 SQL JOIN으로 가정하지 마세요.
 
 ## 검증
 

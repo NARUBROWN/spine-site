@@ -4,7 +4,7 @@ pageClass: release-versions
 
 # Version catalog
 
-Find published tags, next target versions, and changes across the eight Spine ecosystem repositories. Each repository has its own version.
+Find published tags, next target versions, and changes across the Spine ecosystem repositories. Each repository has its own version.
 
 <ReleaseCatalog />
 

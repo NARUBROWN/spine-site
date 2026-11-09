@@ -1,20 +1,12 @@
 # spine.App
 
-::: warning Preview
-本頁包含穩定版 `v0.6.5` 範例。Preview 中的 `app.Route` 已標記為 Deprecated。請參閱[控制器與路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
+::: info
+`app.Route` 為相容性保留，但已棄用。請參閱[路由遷移](/zh-Hant/learn/migration/preview-controller-routes)、[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)和 [OpenAPI](/zh-Hant/reference/api/openapi)。
 :::
 
-::: warning v0.7.0 Preview 輸入 API 移轉
-本頁既有 API 說明與範例以穩定版 `v0.6.5` 為基準。自 `v0.7.0-preview.1` 起，可依輸入來源使用獨立的 Path、Query 與 Header DTO。`query.Values`、`header.Values` 及其建構與讀取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均標記為 Deprecated。
+可透過 `boot.HTTPOptions.OpenAPI.UI` 選擇 Swagger UI 與 ReDoc。請參閱 [HTTP v3 與啟動選項](/zh-Hant/learn/migration/preview-features#boot)，了解執行範例、TLS 與 HTTP v3 變更。
 
-新的 DTO 方式無法直接用於 `v0.6.5`。在 Preview 中，同一處理器混用新 DTO 與 Deprecated 輸入也會在啟動時遭到拒絕。既有本文 DTO 與情境仍可搭配任一方式使用。
-
-適用版本與移轉範例請見 [Preview 處理器輸入移轉](/zh-Hant/learn/migration/v0.7.0-preview)，規格選項請見 [執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。
-:::
-
-可透過 `boot.HTTPOptions.OpenAPI.UI` 選擇 Swagger UI 與 ReDoc。請參閱 [Preview 功能與啟動選項](/zh-Hant/learn/migration/preview-features#boot)，了解執行範例、TLS 與 HTTP v3 變更。
-
-`App` 是註冊建構函式、HTTP 路由、攔截器、事件消費者、WebSocket 處理器與自訂傳輸方式，並執行應用程式的入口。此參考涵蓋 Spine v0.6.5 的公開 API 與啟動選項。
+`App` 是註冊建構函式、HTTP 路由、攔截器、事件消費者、WebSocket 處理器與自訂傳輸方式，並執行應用程式的入口。此參考涵蓋 Spine v0.7.1 的公開 API 與啟動選項。
 
 ```go
 import (
@@ -71,13 +63,13 @@ app.Run(boot.Options{
 
 ## 實作選擇選項 {#platform-options}
 
-HTTP 選擇 Echo，WebSocket 選擇獨立的 Gorilla 實作。註冊 WS 路由需要 HTTP 升級支援與 WS factory。啟用驗證時將 `playground.New()` 的結果傳給 `spine.WithValidator`。
+HTTP 可選擇 Echo 或 net/http，WebSocket 選擇獨立的 Gorilla 實作。WS 路由需要 HTTP 升級支援和 WS factory。驗證時將 `playground.New()` 的結果傳給 `spine.WithValidator`。
 
 | 選項 | 實作 |
 | --- | --- |
-| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `contract/http` |
+| `spine.WithHTTPAdapter(factory)` | `echoplatform.Option()` / `nethttpplatform.Option()` / `contract/http` |
 | `spine.WithWebSocketAdapter(factory)` | `gorillaplatform.Option()` / `contract/websocket` |
-| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / `contract/event` |
+| `spine.WithEventAdapter(name, factory, options...)` | Kafka / RabbitMQ / NATS / `contract/event` |
 | `spine.WithValidator(validator)` | playground / `contract/validator` |
 
 [選擇平台與 DTO 驗證](/zh-Hant/learn/getting-started/platforms)
@@ -90,19 +82,7 @@ HTTP 選擇 Echo，WebSocket 選擇獨立的 Gorilla 實作。註冊 WS 路由�
 Constructor(constructors ...any)
 ```
 
-將建構函式註冊到相依性注入容器。容器會依建構函式的參數型別，注入其他已註冊的物件。
-
-**參數**
-
-- `constructors` - 建構函式（可變參數）
-
-**建構函式規則**
-
-- 必須是函式
-- 必須恰好有一個回傳值
-- 也必須註冊提供參數型別的建構函式
-
-**範例**
+接收建構函式和 `constructor.Custom`、`Repository`、`Service`、`Controller`、`Interceptor` 角色標記。函式必須恰好回傳一個值。物件角色標記使用結構體指標和 `Constructor(相依性...) *自身型別` 方法。必須註冊所需相依性，Controller 和 Interceptor 還有額外角色契約。以下是舊建構函式範例，另請參閱[角色註冊範例](/zh-Hant/learn/tutorial/3-dependency-injection)。
 
 ```go
 // 無相依性的建構函式
@@ -148,6 +128,8 @@ Route(method string, path string, handler any, opts ...router.RouteOption)
 - `/users/:userId/posts/:postId` - 多個參數
 
 **範例**
+
+以下 `Route` 是不同的註冊範例。請勿重複註冊相同方法和路徑。
 
 ```go
 // 基本路由
@@ -309,6 +291,8 @@ type Container interface {
 
 **範例**
 
+`Stop` 會等待執行中的 RPC，在關閉情境到期時強制停止伺服器。`MyService` 與服務註冊函式由應用程式實作。
+
 ```go
 type GRPCTransport struct {
     server *grpc.Server
@@ -334,8 +318,18 @@ func (t *GRPCTransport) Start() error {
 }
 
 func (t *GRPCTransport) Stop(ctx context.Context) error {
-    t.server.GracefulStop()
-    return nil
+    done := make(chan struct{})
+    go func() {
+        t.server.GracefulStop()
+        close(done)
+    }()
+    select {
+    case <-done:
+        return nil
+    case <-ctx.Done():
+        t.server.Stop()
+        return ctx.Err()
+    }
 }
 
 app.RegisterTransport(&GRPCTransport{})
@@ -348,12 +342,14 @@ RunContext(ctx context.Context, opts boot.Options) error
 Prepare(ctx context.Context, opts boot.Options) (PreparedApplication, error)
 
 type PreparedApplication interface {
-    Handler() http.Handler
+    HTTPAdapter() httpcontract.HTTPAdapter
     Close(ctx context.Context) error
 }
+
+func NetHTTPHandler(prepared PreparedApplication) (http.Handler, error)
 ```
 
-`RunContext` 在 context 取消時開始正常關閉。`Prepare` 不啟動監聽器即可準備應用程式，並回傳 `Handler()` 與 `Close(ctx)`。它不會啟動 consumer 或 custom transport，但依設定，broker readiness 與 custom Init 可能建立網路連線。呼叫方負責關閉準備結果與外部 HTTP 伺服器。
+`RunContext` 在 context 取消時開始正常關閉。`Prepare` 不啟動監聽器即可準備應用程式。`HTTPAdapter()` 回傳已準備的配接器，HTTP 停用時回傳 nil。`spine.NetHTTPHandler(prepared)` 對支援的配接器回傳 `http.Handler` 和錯誤。不要重複啟動或關閉配接器；呼叫方負責關閉外部伺服器和準備結果。它不會啟動 consumer 或 custom transport，但依設定，代理就緒檢查或 custom Init 可能建立網路連線。`httpcontract` 是 `github.com/NARUBROWN/spine/contract/http`。
 
 ### Consumers
 
@@ -435,6 +431,8 @@ if err := app.WebSocket().Register("/ws/chat", (*ChatController).OnMessage); err
 
 WebSocket 處理器接收 `ws` 套件的連線 ID 與訊息 DTO 作為參數。以下範例儲存各連線的傳送物件，並將訊息傳送至所有連線。請透過 `Constructor` 註冊 `ChatController` 的建構函式。
 
+範例還需要匯入標準函式庫 `context`、`encoding/json`、`strings`、`sync` 和 `time`。連線清單保存在記憶體中，已中斷的連線會在後續傳送失敗時移除。
+
 ```go
 import "github.com/NARUBROWN/spine/pkg/ws"
 
@@ -507,7 +505,7 @@ func (c *ChatController) OnMessage(
 }
 ```
 
-WebSocket 會將路徑註冊至與 HTTP 伺服器相同的 Echo 實例，因此需要 `boot.Options.HTTP`。來源、連線數與驗證設定請參閱[安全性設定](/zh-Hant/reference/security-configuration#websocket)。
+WebSocket 路徑註冊至 HTTP 平台，因此需要 `boot.Options.HTTP` 和支援升級的 HTTP 平台。來源、連線數和驗證設定請參閱[安全性設定](/zh-Hant/reference/security-configuration#websocket)。
 
 ### Validate
 
@@ -550,7 +548,7 @@ if err := app.Run(boot.Options{
 
 ## boot.Options
 
-Preview 中新增的啟動選項請參閱[執行階段 OpenAPI 設定](/zh-Hant/reference/api/openapi#options)。JSON 規格從 `v0.7.0-preview.1` 起可用，透過 `HTTP.OpenAPI.UI` 註冊 Swagger UI 與 ReDoc 則從 `v0.7.0-preview.2` 起可用。[UI 註冊範例](/zh-Hant/reference/api/openapi#tools)包含 import 與設定。
+JSON 文件與內建 UI 選項請參閱[執行階段 OpenAPI 設定](/zh-Hant/reference/api/openapi#options)。[UI 註冊範例](/zh-Hant/reference/api/openapi#tools)展示 import 和設定。
 
 `boot.Options` 設定 HTTP 執行與關閉政策。執行 HTTP 時設定 `HTTP`。事件連線與角色透過外部平台 `Config` 與 `spine.WithEventAdapter` 選擇。
 
@@ -569,6 +567,8 @@ type Options struct {
 }
 
 type HTTPOptions struct {
+    TLS               *tls.Config
+    OpenAPI           OpenAPIOptions
     GlobalPrefix      string
     DisableRecover    bool
     ReadHeaderTimeout time.Duration
@@ -577,6 +577,7 @@ type HTTPOptions struct {
     IdleTimeout       time.Duration
     MaxHeaderBytes    int
     MaxBodyBytes      int64
+    MultipartMemoryBytes int64
     WebSocket         WebSocketOptions
 }
 ```
@@ -590,6 +591,9 @@ type HTTPOptions struct {
 
 | `HTTPOptions` 欄位 | 為 `0` 或省略時 | 限制 |
 | --- | --- | --- |
+| `TLS` | `nil`，明文 HTTP | 包含憑證或憑證選擇回呼的 `*tls.Config` |
+| `OpenAPI` | 停用 | 文件與選用 UI 設定 |
+| `MultipartMemoryBytes` | 32 MiB | 正數或 0，不是整個請求的記憶體上限 |
 | `GlobalPrefix` | 無前綴 | 套用下方的路徑規則 |
 | `DisableRecover` | `false`，使用將 panic 轉為 HTTP 500 的復原中介軟體 | `true` 表示停用中介軟體 |
 | `ReadHeaderTimeout` | 5 秒 | 不得為負數 |
@@ -599,6 +603,9 @@ type HTTPOptions struct {
 | `MaxHeaderBytes` | 1 MiB | 不得為負數 |
 | `MaxBodyBytes` | 32 MiB | 負數表示停用本文大小限制 |
 | `WebSocket` | [WebSocket 預設值](/zh-Hant/reference/security-configuration#websocket) | `boot.WebSocketOptions` |
+
+
+net/http 平台不支援 `DisableRecover: true`。
 
 ### GlobalPrefix 驗證規則
 
@@ -788,33 +795,24 @@ spine verify
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-	"os"
-
+	controller "example.com/my-app/src/controller"
 	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
 	"github.com/NARUBROWN/spine/pkg/boot"
-	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"os"
 )
 
-type HealthController struct{}
-
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-// BuildApplication 是伺服器執行、契約檢查與離線驗證共用的應用程式組態函式。
 func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
-	app.Constructor(NewHealthController)
-	app.Route("GET", "/health", (*HealthController).Get)
-
+	app.Constructor(
+		constructor.Controller(&controller.HealthController{}),
+	)
 	address := ":8080"
 	if port := os.Getenv("SPINE_PORT"); port != "" {
 		address = ":" + port
 	}
-	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+	return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 
@@ -824,7 +822,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
 
 完成準備後，在各自的 goroutine 中執行消費者與自訂傳輸方式的 `Start`，最後啟動 HTTP 伺服器。若同一個 HTTP 方法的路由路徑存在模糊重疊，啟動會失敗。例如，`/users/:id` 與 `/users/me` 會被判定為重疊路徑。
 
-關閉時，先停止接收 WebSocket 與 HTTP 請求，等待消費者停止後，再依初始化的反向順序呼叫自訂傳輸方式的 `Stop`。最後清理事件發布器的資源。具體實作請參閱 [v0.6.5 啟動與關閉程式碼](https://github.com/NARUBROWN/spine/blob/v0.6.5/internal/bootstrap/bootstrap.go)。
+關閉時，先停止接收 WebSocket 與 HTTP 請求，等待消費者停止後，再依初始化的反向順序呼叫自訂傳輸方式的 `Stop`。最後清理事件發布器的資源。具體實作請參閱 [v0.7.1 啟動與關閉程式碼](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/bootstrap/bootstrap.go)。
 
 ## 限制與錯誤
 

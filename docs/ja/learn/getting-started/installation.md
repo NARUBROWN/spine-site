@@ -24,9 +24,16 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+以下のチャンネル選択コマンドと生成結果には CLI `v0.4.3-rc.1` 以降が必要です。`@latest` が古いバージョンをインストールする場合は、以下の互換 RC を使ってください。互換性のある安定版プラットフォームタグが利用できない場合はプロジェクト作成時に `--channel rc` を使い、`go.mod` を確認してください。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
 CLI自体を更新する場合は、上の `go install` コマンドを再実行します。`spine update` は選択したレシピのプロジェクト依存関係を更新し、CLI実行ファイルやアプリのソースは変更しません。
 
-`spine version` でインストール済み CLI のバージョンを確認してください。0.6.5レシピにはCLI 0.4.2以上に更新してください。
+`spine version` でインストール済み CLI のバージョンを確認してください。
 
 `spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
 
@@ -37,23 +44,27 @@ spine version
 
 ## Preview CLI のインストール {#preview-cli}
 
-v0.7.0 Preview を使う場合は、`@preview` で CLI の Preview ブランチの最新コミットをインストールします。公開タグ間の変更も含まれる場合があります。通常の安定版インストールには `@latest` を使用します。
+Preview CLI は `@preview` でインストールできます。これは更新されるブランチです。アプリの依存関係チャンネルは `spine new --channel` で別に選び、正式版には `main` を使用します。
+
+```
+
+RC チャンネルは実行時により新しいコア RC を選択する場合があります。コア `v0.7.1` を再現するには生成したプロジェクトで以下を実行し、互換プラットフォームのバージョンも `go.mod` で確認してください。後の `spine update` はチャンネルに従ってバージョンを変更する場合があります。
 
 ```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
-
-`spine version` で実際にインストールされたタグまたは pseudo-version を確認してください。新しいプロジェクトの `platform-contracts-preview` レシピは、コアと選択したプラットフォーム、playground をそれぞれ `@preview` で解決し、そのバージョンを `go.mod` に記録します。下の `spine.toml` は安定版レシピの例です。Preview の `--skip-install` もバージョン解決には Go とネットワークまたはモジュールプロキシのキャッシュが必要で、インストールとビルドの検証のみ省略します。
-
-CLI のインストールだけでは既存アプリのレシピは変わりません。既存アプリの移行と Swagger UI、ReDoc の有効化は [Preview 移行ガイド](/ja/learn/migration/v0.7.0-preview)を参照してください。
 
 ## 新しいプロジェクトの生成
 
 プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。
 
 ```bash
-spine new my-app --module example.com/my-app
+spine new my-app --module example.com/my-app --channel main --no-interactive
 cd my-app
 ```
 
@@ -68,9 +79,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `internal/application/application.go`の`BuildApplication()`が構成要素と`GET /health`を登録します。生成された`main.go`はこの関数を呼び出し、`app.Validate(options)`で構成を検証してから、`app.Run(options)`でサーバーを実行します。

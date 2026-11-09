@@ -24,9 +24,16 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
+以下渠道选择命令与生成结果需要 CLI `v0.4.3-rc.1` 或更高版本。如果 `@latest` 安装了较旧版本，请使用以下兼容 RC。如果兼容的稳定版平台标签尚不可用，创建项目时请使用 `--channel rc` 并检查 `go.mod`。
+
+```bash
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+spine version
+```
+
 更新 CLI 本身时，重新运行上面的 `go install` 命令。`spine update` 更新所选配方的项目依赖，不会更新 CLI 可执行文件或改写应用源码。
 
-使用 `spine version` 确认已安装的 CLI 版本。使用 0.6.5 配方需要更新到 CLI 0.4.2 或更高版本。
+使用 `spine version` 确认已安装的 CLI 版本。
 
 如果找不到 `spine` 命令，且未单独设置 `GOBIN`，请在 Bash 或 Zsh 中运行以下命令，将安装路径添加到当前会话中。要持久保存此设置，请将相同配置写入 Shell 启动文件。如果已设置 `GOBIN`，则应添加该目录。
 
@@ -37,23 +44,27 @@ spine version
 
 ## 安装 Preview CLI {#preview-cli}
 
-使用 v0.7.0 Preview 时，通过 `@preview` 安装 CLI 的 Preview 分支最新提交，其中可能包含已发布标签之间的变更。常规稳定版安装使用 `@latest`。
+可通过 `@preview` 安装 Preview CLI。该分支会持续更新，应用依赖渠道通过 `spine new --channel` 单独选择。正式应用使用 `main`。
+
+```
+
+RC 渠道可能在运行时选择更新的核心 RC。要复现核心 `v0.7.1`，请在生成的项目中运行以下命令，并在 `go.mod` 中检查兼容平台版本。之后的 `spine update` 可能根据渠道再次更改版本。
 
 ```bash
+go get github.com/NARUBROWN/spine@v0.7.1
+go mod tidy
+```
+bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
-
-使用 `spine version` 查看实际安装的标签或伪版本。新项目的 `platform-contracts-preview` 配方分别解析核心及所选平台、playground 的 `@preview`，并将解析后的版本记录在 `go.mod` 中。下方的 `spine.toml` 示例使用稳定版配方。Preview 的 `--skip-install` 仍需 Go 和网络访问或模块代理缓存来解析版本，仅跳过安装与构建验证。
-
-仅安装 CLI 不会更改现有应用的配方。迁移现有应用和启用 Swagger UI、ReDoc，请参阅 [Preview 迁移指南](/zh-Hans/learn/migration/v0.7.0-preview)。
 
 ## 创建新项目
 
 在准备存放项目的父目录中运行。如果已存在同名的 `my-app` 目录，请使用其他名称。
 
 ```bash
-spine new my-app --module example.com/my-app
+spine new my-app --module example.com/my-app --channel main --no-interactive
 cd my-app
 ```
 
@@ -68,9 +79,11 @@ composition = "./internal/application"
 port = 8080
 layout = "layered-v1"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 `internal/application/application.go` 中的 `BuildApplication()` 注册组件和 `GET /health`。生成的 `main.go` 调用此函数，通过 `app.Validate(options)` 验证配置后，再通过 `app.Run(options)` 运行服务器。

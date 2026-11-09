@@ -1,7 +1,7 @@
 # プロジェクト構造
 
-::: warning Preview
-このページには安定版 `v0.6.5` の例が含まれます。Preview では `app.Route` は Deprecated です。[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を確認してください。
+::: info
+この例は `legacy` レイアウトの互換登録方式を使います。`app.Route` は非推奨です。新しいコントローラーは[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を参照してください。
 :::
 
 Spine CLIでプロジェクトを作成し、ユーザーリソースを追加します。生成されたファイルを確認しながら、アプリの構成コードを置く場所と、コントローラー、サービス、リポジトリの役割を学びます。
@@ -14,7 +14,7 @@ Spine CLIでプロジェクトを作成し、ユーザーリソースを追加�
 
 ```sh
 spine version
-spine new my-app --layout legacy --module example.com/my-app
+spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -51,9 +51,11 @@ composition = "./internal/application"
 port = 8080
 layout = "legacy"
 platform = "echo"
-recipe = "platform-contracts-v0.6.5"
+recipe = "platform-contracts-preview"
+dependency_channel = "main"
 websocket_platform = "none"
 validator = "none"
+frontend_enabled = false
 ```
 
 | キー | 役割 |
@@ -63,7 +65,7 @@ validator = "none"
 | `composition` | アプリ構成を検査し、生成したコードを自動登録する場所 |
 | `port` | 開発サーバーで使用するポート |
 | `layout` | 生成ファイルの配置 (`legacy` または `layered-v1`) |
-| `platform` | HTTPプラットフォーム (`echo` または `none`) |
+| `platform` | HTTPプラットフォーム (`echo`、`nethttp` または `none`) |
 | `recipe` | 互換依存関係を選ぶレシピ |
 | `websocket_platform` | WebSocket実装 (`none` または `gorilla`) |
 | `validator` | DTO検証器 (`none` または `playground`) |
@@ -127,7 +129,7 @@ func BuildApplication() (spine.App, boot.Options, error) {
     if port := os.Getenv("SPINE_PORT"); port != "" {
         address = ":" + port
     }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 

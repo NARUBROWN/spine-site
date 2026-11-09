@@ -1,22 +1,14 @@
 # 创建用户 CRUD API
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
-
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
-
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info
+此示例使用 `v0.7.1` 的控制器回调和路径输入。兼容规则请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)与[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，文档设置请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 创建用于新增、列出、查询、修改和删除用户的 HTTP API。示例使用内存存储库，不依赖 ORM，因此无需准备数据库即可运行。
 
 ## 开始前的准备
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。本示例在使用 CLI 0.4.2 创建的基础应用中手动添加完整 CRUD 代码。CLI 的 `resource` 提供 GET 骨架，`slice --storage memory` 提供创建和查询骨架。修改和删除功能包含在下方代码中。
+请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。使用 CLI `v0.4.3-rc.1` 或更高版本创建应用，并手动添加 CRUD 代码。`resource` 生成 GET 框架，`slice --storage memory` 生成创建和查询框架。
 
 服务器进程结束后，保存的用户数据会消失。
 
@@ -38,8 +30,10 @@ graph TD
 
 创建基础应用，检查依赖和项目配置。后续命令均在 `crud-example/` 中运行。
 
+以下命令选择正式依赖渠道。兼容的正式平台标签尚不可用时，可使用 `--channel rc` 验证，并在 `go.mod` 中确认所选版本。
+
 ```sh
-spine new crud-example --layout legacy --module example.com/crud-example
+spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -348,7 +342,8 @@ import (
 
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/api"
+    "github.com/NARUBROWN/spine/pkg/input"
 
     "example.com/crud-example/src/dto"
     "example.com/crud-example/src/repository"
@@ -359,8 +354,16 @@ type UserController struct {
     service *service.UserService
 }
 
-func NewUserController(service *service.UserService) *UserController {
+func (*UserController) Constructor(service *service.UserService) *UserController {
     return &UserController{service: service}
+}
+
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+    r.GET("/users", c.List)
+    r.GET("/users/:id", c.GetByID)
+    r.POST("/users", c.Create)
+    r.PUT("/users/:id", c.Update)
+    r.DELETE("/users/:id", c.Delete)
 }
 
 // GET /users
@@ -369,12 +372,12 @@ func (c *UserController) List() httpx.Response[dto.UserListResponse] {
 }
 
 // GET /users/:id
-func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error) {
-    if id.Value <= 0 {
+func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+    if *id <= 0 {
         return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    user, err := c.service.GetUserByID(id.Value)
+    user, err := c.service.GetUserByID(*id)
     if err != nil {
         return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
     }
@@ -400,8 +403,8 @@ func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.
 }
 
 // PUT /users/:id
-func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
-    if id.Value <= 0 {
+func (c *UserController) Update(id input.Path[int64], req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
+    if *id <= 0 {
         return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
     if req.Name == "" {
@@ -411,7 +414,7 @@ func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.
         return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
     }
 
-    user, err := c.service.UpdateUser(id.Value, req)
+    user, err := c.service.UpdateUser(*id, req)
     if err != nil {
         return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
     }
@@ -420,12 +423,12 @@ func (c *UserController) Update(id path.Int, req *dto.UpdateUserRequest) (httpx.
 }
 
 // DELETE /users/:id
-func (c *UserController) Delete(id path.Int) error {
-    if id.Value <= 0 {
+func (c *UserController) Delete(id input.Path[int64]) error {
+    if *id <= 0 {
         return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
     }
 
-    err := c.service.DeleteUser(id.Value)
+    err := c.service.DeleteUser(*id)
     if err != nil {
         return toHTTPError(err)
     }
@@ -441,7 +444,7 @@ func toHTTPError(err error) error {
     case errors.Is(err, repository.ErrEmailAlreadyExists):
         return httperr.BadRequest("이미 사용 중인 이메일입니다")
     default:
-        return httperr.BadRequest(err.Error())
+        return err
     }
 }
 ```
@@ -465,6 +468,7 @@ import (
     "github.com/NARUBROWN/spine"
     "github.com/NARUBROWN/spine/interceptor/cors"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
@@ -472,13 +476,8 @@ func BuildApplication() (spine.App, boot.Options, error) {
     app.Constructor(
         repository.NewUserRepository,
         service.NewUserService,
-        controller.NewUserController,
+        constructor.Controller(&controller.UserController{}),
     )
-    app.Route("GET", "/users", (*controller.UserController).List)
-    app.Route("GET", "/users/:id", (*controller.UserController).GetByID)
-    app.Route("POST", "/users", (*controller.UserController).Create)
-    app.Route("PUT", "/users/:id", (*controller.UserController).Update)
-    app.Route("DELETE", "/users/:id", (*controller.UserController).Delete)
 
     corsInterceptor, err := cors.NewValidated(cors.Config{
         AllowOrigins: []string{"*"},
@@ -644,11 +643,11 @@ curl -X POST http://localhost:8080/users \
 
 ### 通过语义类型接收请求值
 
-控制器接收 `path.Int` 等语义类型作为参数，代替 HTTP 请求对象。错误通过 `httperr` 表示。
+控制器接收 `input.Path[int64]` 等语义类型作为参数，代替 HTTP 请求对象。错误通过 `httperr` 表示。
 
 ```go
 // 通过语义类型接收输入
-func (c *UserController) GetByID(id path.Int) (httpx.Response[dto.UserResponse], error)
+func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
 
 // 通过 httperr 表达错误含义
 return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
@@ -663,7 +662,7 @@ return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을
 app.Constructor(
     repository.NewUserRepository,  // 无依赖
     service.NewUserService,        // 依赖 Repository
-    controller.NewUserController,  // 依赖 Service
+    constructor.Controller(&controller.UserController{}),  // 依赖 Service
 )
 ```
 

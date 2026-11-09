@@ -1,10 +1,10 @@
-# Preview 컨트롤러와 라우트 전환
+# v0.7.1 컨트롤러와 라우트 전환
 
-이 안내는 Spine `v0.7.0-preview.7`과 CLI `v0.4.3-preview.8` 기준입니다. 정식 `v0.6.5`에는 적용되지 않습니다. 코어는 Go 1.25.5 이상, playground 검증기는 Go 1.26 이상이 필요합니다. 전체 플랫폼 조합의 승격 여부는 별도 확인하세요.
+이 안내는 Spine `v0.7.1` 기준입니다. 코어는 Go 1.25.5 이상, playground 검증기는 Go 1.26 이상이 필요합니다.
 
 ## 컨트롤러에 라우트 등록 {#routes}
 
-기존 `app.Route`와 생성자 함수, 별도 route.go 및 메서드 표현식을 사용하는 HTTP 컨트롤러 방식은 Preview에서 Deprecated입니다. 전환 기간에 계속 동작하며 제거 버전은 미정입니다. 일반 DI 생성자 함수 자체는 Deprecated가 아닙니다.
+기존 `app.Route`와 생성자 함수, 별도 route.go 및 메서드 표현식을 사용하는 HTTP 컨트롤러 방식은 v0.7.1에서 Deprecated입니다. 전환 기간에 계속 동작하며 제거 버전은 미정입니다. 일반 DI 생성자 함수 자체는 Deprecated가 아닙니다.
 
 다음 코드는 독립 실행 앱이 아닌 등록 예제입니다. 앱에 HTTP 플랫폼과 실행 설정을 추가하세요.
 
@@ -24,10 +24,10 @@ func (*UserController) Constructor() *UserController { return &UserController{} 
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
     users := r.Group("/users", api.Tags("Users"))
-    users.GET("/:id", api.Options(api.Summary("Get user")),
+    users.GET("/:id",
         func(p input.Path[UserPath]) httpx.Response[User] {
             return httpx.Response[User]{Body: User{ID: p.ID}}
-        })
+        }, api.Summary("Get user"))
 }
 
 func register(app interface{ Constructor(...any) }) {
@@ -45,9 +45,11 @@ Controller는 `api.Controller`의 `RegisterRoutes(*api.Registry)`를, Intercepto
 
 ## 입력과 그룹 {#groups}
 
-`input.Path[T]`, `input.Query[T]`, `input.Body[T]`의 `T`는 구조체입니다. 경로와 쿼리는 해당 태그가 우선이며 태그가 없으면 lowerCamel 이름을 사용합니다. 헤더는 별도 `header` 태그 구조체 포인터로 받습니다. 본문, 경로, 쿼리, 헤더를 출처별로 분리하세요.
+`input.Query[T]`와 `input.Body[T]`의 `T`는 구조체입니다. 경로와 쿼리는 태그가 우선이며 태그가 없으면 lowerCamel 이름을 사용합니다. 헤더는 별도 `header` 태그 구조체 포인터로 받습니다.
 
-그룹 메서드는 경로, `api.Options(...)`, 핸들러 순서입니다. 옵션이 없어도 `api.Options()`를 전달합니다. 그룹 밖 `r.GET(path, handler, options...)`와 순서가 다릅니다. 그룹은 접두사와 태그를 상속하고 `api.Interceptors(...)`로 인터셉터를 더할 수 있습니다. `example`과 `description` 태그는 문서용이며 런타임 기본값이나 검증 규칙이 아닙니다.
+v0.7.1에서는 경로 변수가 여러 개일 때 스칼라 `input.Path[T]` 인자를 경로에 선언한 순서대로 하나씩 받습니다. 인자 수와 경로 변수 수는 같아야 하며, 스칼라와 경로 DTO 또는 기존 경로 래퍼는 같은 핸들러에서 혼용할 수 없습니다.
+
+그룹과 Registry 모두 경로, 핸들러, 선택 옵션 순서인 `GET(path, handler, options...)`를 사용합니다. 그룹은 접두사와 태그를 상속하고 `api.Interceptors(...)`로 인터셉터를 더할 수 있습니다. `example`과 `description` 태그는 문서용이며 런타임 기본값이나 검증 규칙이 아닙니다.
 
 ## 폐기 예정 입력과 호환성 {#deprecated}
 
@@ -61,5 +63,5 @@ Controller는 `api.Controller`의 `RegisterRoutes(*api.Registry)`를, Intercepto
 
 전환 후 `spine contract check`과 `spine verify`을 실행하고 실제 HTTP 요청 및 명세를 확인하세요. 입력 전환과 HTTP v3의 추가 제한은 다음 문서를 참고하세요.
 
-- [v0.7.0](/ko/learn/migration/v0.7.0-preview)
+- [v0.7.1](/ko/learn/migration/v0.7.1-preview)
 - [HTTP v3](/ko/learn/migration/preview-features#body)

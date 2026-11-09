@@ -1,20 +1,6 @@
 # 런타임 OpenAPI
 
-::: warning Preview
-이 페이지는 정식 `v0.6.5` 예제를 포함합니다. Preview에서 `app.Route`는 Deprecated입니다. [새 컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 확인하세요.
-:::
-
-Spine `v0.7.0-preview.1`부터 실제 등록한 HTTP 라우트, 핸들러 타입과 validator 설명 계약으로 OpenAPI 3.1.2 JSON을 생성할 수 있습니다.
-
-`boot.OpenAPIOptions.UI`와 임베드 Swagger UI, ReDoc은 `v0.7.0-preview.2`부터 사용할 수 있습니다. JSON 명세 생성의 최초 버전인 `v0.7.0-preview.1`과 구분하세요.
-
-::: warning v0.7.0 미리보기 API
-이 API는 안정 버전 `v0.6.5`에 포함되지 않습니다. 현재 미리보기는 코어와 선택한 HTTP 플랫폼을 `@preview`로 함께 조회하세요. HTTP v3는 코어 `v0.7.0-preview.3`, Echo `v0.2.0-preview.2`, net/http `v0.1.0-preview.1`부터 공개됐습니다. 최신 부팅 옵션과 병합 변경은 [미리보기 기능 안내](/ko/learn/migration/preview-features)를 확인하세요.
-:::
-
-::: warning net/http 문서 UI의 현재 제한
-2026-11-06 확인: 코어 `83b1e03`과 net/http `v0.1.0-preview.2` 조합은 문서와 자산의 Content-Type을 `text/plain`으로 덮어써 Swagger UI와 ReDoc이 정상 렌더링되지 않습니다. 아래 UI 실행 예제는 Echo `v0.2.0-preview.3` 조합을 기준으로 합니다.
-:::
+Spine `v0.7.1`은 등록된 HTTP 라우트, 핸들러 타입과 validator 설명 계약으로 OpenAPI 3.1.2 JSON을 생성합니다. Swagger UI와 ReDoc을 내장해 선택적으로 제공할 수 있습니다.
 
 ## 활성화와 부팅 옵션 {#options}
 
@@ -41,9 +27,9 @@ options := boot.Options{
 | `Path` | `/openapi.json` | GET과 HEAD로 제공할 정적 절대 경로 |
 | `Title` | `Spine API` | OpenAPI `info.title` |
 | `Version` | `unversioned` | 앱의 `info.version`, 프레임워크 버전과 별개 |
-| `UI` | `nil` | `v0.7.0-preview.2`부터 제공하는 `[]boot.OpenAPIUI`. 생략하면 JSON 명세만 제공 |
+| `UI` | `nil` | `[]boot.OpenAPIUI`. 생략하면 JSON 명세만 제공 |
 
-`HTTP: nil`이면 HTTP와 명세 리소스가 모두 꺼집니다. `Path`, `Title`이나 `Version`만 지정해도 활성화되지 않습니다. 끄려면 `Enabled: false`로 설정하거나 OpenAPI 옵션을 생략하세요. 미발행 작업 소스에서 사용했던 `Disabled` 대신 공개 미리보기의 `Enabled`를 사용합니다.
+`HTTP: nil`이면 HTTP와 명세 리소스가 모두 꺼집니다. `Path`, `Title`이나 `Version`만 지정해도 활성화되지 않습니다. 끄려면 `Enabled: false`로 설정하거나 OpenAPI 옵션을 생략하세요.
 
 명세 경로는 `GlobalPrefix`와 독립적입니다. 위 옵션은 업무 API에 `/api`를 적용하지만 명세는 `/openapi.json`에서 제공합니다. 준비한 앱은 명세 스냅샷을 재사용하며 파일을 자동으로 저장하지 않습니다.
 
@@ -84,6 +70,24 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 명시적인 `DescribeHTTP`와 `openapi.Generate`는 자동 HTTP 제공을 끈 상태에서도 사용할 수 있습니다. 설명 기능이 없는 사용자 정의 App은 `ErrHTTPDescriptionUnavailable`을 반환합니다.
 
+새 `api.Controller`의 라우트는 앱 준비 과정에서 수집하므로 위의 `DescribeHTTP`는 `spine.ErrRoutesNotCollected`를 반환합니다. 아래 함수는 호출자가 `Prepare`한 앱을 받습니다. 호출자는 준비한 앱의 `Close`를 책임집니다. 준비 단계에서는 생성자와 초기화 코드가 실행될 수 있습니다.
+
+```go
+func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.OpenAPIOptions, output io.Writer) error {
+    description, err := spine.DescribePreparedHTTP(prepared)
+    if err != nil {
+        return err
+    }
+    document, err := openapi.Generate(description, options)
+    if err != nil {
+        return err
+    }
+    _, err = output.Write(document)
+    return err
+}
+```
+
+
 ## validator와 설명 범위 {#validation}
 
 | 등록 상태 | 생성하는 정보 |
@@ -104,10 +108,10 @@ validator가 없으면 입력 파라미터, 요청과 응답 모델, 오류 상�
 
 ## Swagger UI와 ReDoc 제공 {#tools}
 
-`v0.7.0-preview.2`부터 `boot.Options.HTTP.OpenAPI.UI`로 화면을 선택합니다. `Enabled: true`와 UI 등록을 함께 지정하고 JSON만 제공하려면 `UI`를 생략합니다. 다음 명령은 현재 미리보기 브랜치를 조회합니다. 재현할 버전은 해석된 `go.mod`와 `go.sum`으로 보관하세요.
+`boot.Options.HTTP.OpenAPI.UI`에서 화면을 선택합니다. `Enabled: true`로 설정하고 UI를 등록하세요. JSON만 제공하려면 `UI`를 생략합니다. 다음은 호환되는 Echo RC를 고정한 예제입니다. `go.mod`와 `go.sum`을 보관하세요.
 
 ```bash
-go get github.com/NARUBROWN/spine@preview github.com/NARUBROWN/spine-echo-platform@preview
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
 ```
 
 다음은 사용할 UI를 등록하는 독립 앱의 `main.go` 예제입니다. 기존 앱에는 import와 `OpenAPI.UI` 설정을 현재 composition에 반영하세요.
@@ -120,7 +124,9 @@ import (
 
     "github.com/NARUBROWN/spine"
     echoplatform "github.com/NARUBROWN/spine-echo-platform"
+    "github.com/NARUBROWN/spine/pkg/api"
     "github.com/NARUBROWN/spine/pkg/boot"
+    "github.com/NARUBROWN/spine/pkg/constructor"
     "github.com/NARUBROWN/spine/pkg/httpx"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
     "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
@@ -128,14 +134,17 @@ import (
 
 type Controller struct{}
 
-func (*Controller) Hello() httpx.Response[string] {
-    return httpx.Response[string]{Body: "hello"}
+func (*Controller) Constructor() *Controller { return &Controller{} }
+
+func (c *Controller) RegisterRoutes(r *api.Registry) {
+    r.GET("/hello", func() httpx.Response[string] {
+        return httpx.Response[string]{Body: "hello"}
+    })
 }
 
 func main() {
     app := spine.New(echoplatform.Option())
-    app.Constructor(func() *Controller { return &Controller{} })
-    app.Route("GET", "/hello", (*Controller).Hello)
+    app.Constructor(constructor.Controller(&Controller{}))
 
     options := boot.Options{
         Address: ":8080",
@@ -188,4 +197,4 @@ type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
 
 기존 GET, HEAD 또는 WebSocket 라우트와 문서 및 자산 경로가 겹치면 `OPENAPI_PATH_CONFLICT`로 준비를 거부합니다. nil 제공자나 잘못된 UI 옵션은 `OPENAPI_UI_INVALID`, 잘못된 리소스 경로나 Content-Type은 `OPENAPI_UI_RESOURCE_INVALID`입니다.
 
-안정 버전 `v0.6.5`의 별도 UI 구성은 [Swagger와 OpenAPI 튜토리얼](/ko/learn/tutorial/8-swagger)을 참고하세요. 입력 모델은 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 안정 버전 API는 [spine.App](/ko/reference/api/spine-app)에서 확인하세요.
+[Swagger와 OpenAPI 튜토리얼](/ko/learn/tutorial/8-swagger)에서 전체 실행 예제를 확인하세요. 입력 모델은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 앱 API는 [spine.App](/ko/reference/api/spine-app)을 참고하세요.

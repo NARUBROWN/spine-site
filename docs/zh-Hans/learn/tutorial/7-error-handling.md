@@ -1,20 +1,12 @@
 # 错误处理
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
-
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
-
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info
+本教程的 `legacy` 布局使用兼容的 `app.Route`。新控制器请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)，输入兼容规则请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，规范选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 根据用户查询失败的原因返回 HTTP 400 或 404，并在响应中隐藏意外错误的内部详情。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
+本页的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的应用。默认 `layered-v1` 布局按角色划分目录。
 
 使用[第一个应用](/zh-Hans/learn/tutorial/1-project-structure)和[控制器](/zh-Hans/learn/tutorial/2-controller)中的 CLI 项目。需要通过 `spine generate resource user` 生成的 `src/user`。以下步骤将 GET 处理器替换为只读的内存查询，请与数据库教程分开应用。将领域错误映射到 HTTP 状态的代码需要手动编写。
 
@@ -83,7 +75,7 @@ import (
 
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type UserController struct{ service *UserService }
@@ -92,11 +84,11 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(id path.Int) (httpx.Response[User], error) {
-    if id.Value <= 0 {
+func (c *UserController) Get(id input.Path[int64]) (httpx.Response[User], error) {
+    if *id <= 0 {
         return httpx.Response[User]{}, httperr.BadRequest("invalid user ID")
     }
-    user, err := c.service.Find(id.Value)
+    user, err := c.service.Find(*id)
     if err != nil {
         return httpx.Response[User]{}, toHTTPError(err)
     }
@@ -264,7 +256,7 @@ curl -i http://localhost:8080/user/2
 | `/user/0` | 400 | `{"message":"invalid user ID"}` |
 | `/user/2` | 404 | `{"message":"user not found"}` |
 
-上述请求检查的是传递到处理器的整数 ID 的处理逻辑。无法解析为数字的路径值所触发的错误处理，与本示例中的 `id.Value <= 0` 验证相互独立。
+上述请求检查的是传递到处理器的整数 ID 的处理逻辑。无法解析为数字的路径值所触发的错误处理，与本示例中的 `*id <= 0` 验证相互独立。
 
 连接实际数据库或认证服务后，也需要主动请求这些服务的失败路径并检查结果。仅凭静态契约检查无法验证外部服务的错误映射。
 

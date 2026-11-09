@@ -17,7 +17,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs/.vitepress/theme/releases/catalog.json"
 REPOSITORIES = (
-    "spine", "spine-cli", "spine-echo-platform", "spine-gorilla-platform",
+    "spine", "spine-cli", "spine-echo-platform", "spine-nethttp-platform", "spine-gorilla-platform",
     "spine-kafka-platform", "spine-rabbitmq-platform", "spine-nats-platform",
     "spine-validator-playground",
 )
@@ -92,7 +92,7 @@ def validate(catalog):
         raise ValueError("버전 목록 스키마가 잘못됐다")
     dt.datetime.fromisoformat(catalog["checked_at"].replace("Z", "+00:00"))
     if [repo["name"] for repo in catalog["repositories"]] != list(REPOSITORIES):
-        raise ValueError("대상 저장소 8개와 순서를 확인해야 한다")
+        raise ValueError("대상 저장소 목록과 순서를 확인해야 한다")
     for repo in catalog["repositories"]:
         version_key(repo["target_version"])
         for tag in repo["tags"]:
@@ -112,7 +112,7 @@ def main():
     args = parser.parse_args()
     if args.check:
         validate(json.loads(OUTPUT.read_text()))
-        print("버전 목록 검사 통과: 저장소 8개")
+        print(f"버전 목록 검사 통과: 저장소 {len(REPOSITORIES)}개")
         return
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         repositories = list(pool.map(collect, REPOSITORIES))
@@ -127,7 +127,7 @@ def main():
         file.write("\n")
         temporary = Path(file.name)
     temporary.replace(OUTPUT)
-    print("버전 목록 갱신 완료: 저장소 8개")
+    print(f"버전 목록 갱신 완료: 저장소 {len(REPOSITORIES)}개")
 
 
 if __name__ == "__main__":

@@ -1,18 +1,14 @@
 # 실행 컨텍스트 (ExecutionContext)
 
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
-
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
-
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
+::: info
+입력 DTO와 기존 입력 API의 호환 규칙은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 확인하세요.
 :::
 
 Spine은 요청이나 메시지마다 실행 컨텍스트를 만들어 입력 정보와 실행 상태를 파이프라인에 전달합니다. 인터셉터는 `core.ExecutionContext`로 실행 상태를 읽고 쓰며, HTTP 컨트롤러는 의미 타입과 읽기 전용 `spine.Ctx`로 필요한 값만 받습니다.
 
-이 페이지의 기능별 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 `my-app`을 기준으로 합니다. CLI `v0.4.2`의 기본 `new`는 역할별 `layered-v1` 구조를 생성합니다. 두 레이아웃 모두 Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`을 사용합니다.
+이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)의 `legacy` 레이아웃을 사용합니다.
 
-이 구분을 이해하면 인터셉터에서 저장한 값을 컨트롤러로 전달하고, HTTP, 이벤트 컨슈머, WebSocket에서 사용할 수 있는 입력을 판단할 수 있습니다. 이 문서의 인터페이스와 동작은 Spine v0.6.5를 기준으로 합니다.
+이 구분을 이해하면 인터셉터에서 저장한 값을 컨트롤러로 전달하고, HTTP, 이벤트 컨슈머, WebSocket에서 사용할 수 있는 입력을 판단할 수 있습니다. 이 문서의 인터페이스와 동작은 Spine v0.7.1를 기준으로 합니다.
 
 앱 핸들러 예제는 [CLI로 만든 프로젝트](/ko/learn/tutorial/1-project-structure)에 추가하는 수동 확장입니다. 생성된 `BuildApplication`과 오류를 확인하는 `user.Register(app)` 호출을 유지하세요. `core/` 인터페이스는 공개 계약이며, `internal/` 구현을 앱에 복사할 필요는 없습니다.
 
@@ -24,7 +20,7 @@ Spine은 요청이나 메시지마다 실행 컨텍스트를 만들어 입력 �
 | --- | --- | --- |
 | HTTP 컨트롤러 | `context.Context` | 취소와 타임아웃 전달, 도메인 이벤트 발행 |
 | HTTP 컨트롤러 | `pkg/spine.Ctx` | 인터셉터가 저장한 값 조회 |
-| HTTP 컨트롤러 | `path.Int`, `query.Values`, DTO 등 | 바인딩한 요청 입력 |
+| HTTP 컨트롤러 | `input.Path[T]`, `input.Query[T]`, DTO 등 | 바인딩한 요청 입력 |
 | 인터셉터 | `core.ExecutionContext` | 요청 정보 조회, 저장소 읽기와 쓰기, 실행 전후 처리 |
 | HTTP 인자 리졸버 | `core.HttpRequestContext` | HTTP 본문, 헤더, 폼 등 입력 해석 |
 | 컨슈머 인자 리졸버 | `core.ConsumerRequestContext` | 이벤트 이름과 페이로드 해석 |
@@ -183,11 +179,11 @@ type Ctx interface {
 
 ### 인터셉터가 저장한 인증 정보 읽기
 
-다음 메서드는 인증 인터셉터가 `auth.user`를 저장한 앱의 `UserController`에 추가하는 예입니다. `context`, `github.com/NARUBROWN/spine/pkg/spine`, `pkg/path`, `pkg/httpx`를 가져옵니다. 실제 앱에서는 `authInfo`의 존재 여부와 타입을 인증 정책에 맞게 검사하세요.
+다음 메서드는 인증 인터셉터가 `auth.user`를 저장한 앱의 `UserController`에 추가하는 예입니다. `context`, `github.com/NARUBROWN/spine/pkg/spine`, `pkg/input`, `pkg/httpx`를 가져옵니다. 실제 앱에서는 `authInfo`의 존재 여부와 타입을 인증 정책에 맞게 검사하세요.
 
 ```go
 // src/user/user_controller.go
-func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId path.Int) httpx.Response[any] {
+func (c *UserController) GetUser(ctx context.Context, cc spine.Ctx, userId input.Path[int64]) httpx.Response[any] {
     authInfo, _ := cc.Get("auth.user")
     return httpx.Response[any]{Body: authInfo}
 }
@@ -235,11 +231,9 @@ type HttpRequestContext interface {
 
 ### HTTP 어댑터의 동작
 
-Spine의 HTTP 어댑터는 Echo를 사용합니다. `Param()`은 Spine 라우터가 저장한 값을 먼저 찾고, 없으면 Echo의 경로 값을 확인합니다. `Params()`는 원본 경로 맵을 바꾸지 않도록 복사본을 반환합니다.
+HTTP v3에서는 Echo 또는 net/http 플랫폼이 원시 요청을 제공하고 코어 요청 뷰가 경로, 쿼리, 헤더와 본문 입력을 해석합니다. 플랫폼마다 전체 헤더 맵의 소유권이 다를 수 있으므로 반환된 값을 읽기 용도로 사용하세요.
 
-반면 HTTP `Headers()`는 요청의 헤더 맵을 그대로 반환합니다. 모든 조회 결과가 복사본이라고 가정하지 말고 읽기 용도로 사용하세요.
-
-`Bind()`와 `MultipartForm()`은 Echo의 입력 처리에 위임합니다. 기본 HTTP DTO 리졸버는 구조체 포인터를 만들고 `Bind()`에 전달합니다. 앱의 컨트롤러에서도 다음과 같이 포인터를 선언합니다.
+`Bind()`와 `MultipartForm()`은 코어의 요청 뷰에서 제공됩니다. 일반 본문 DTO 리졸버는 `Bind()`를 사용하며, 경로와 쿼리는 본문 DTO에 합쳐지지 않습니다. Spine DTO 입력은 Echo Binder나 JSONSerializer 확장을 호출하지 않습니다.
 
 ```go
 func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User], error)
@@ -247,7 +241,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 이 코드는 메서드 시그니처의 예이며, `CreateUserRequest`와 `User`는 앱에서 정의하는 타입입니다. 폼 DTO는 필드에 `form` 태그를 사용하며, 업로드 파일은 `pkg/multipart.UploadedFiles`로 받을 수 있습니다.
 
-Spine `v0.6.5`와 Echo 플랫폼 `v0.1.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요. [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)
+Spine `v0.7.1`와 Echo 플랫폼 `v0.2.0-rc.1`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요. [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: 이벤트 입력 해석
 
@@ -405,10 +399,10 @@ WebSocket에 적용하도록 등록한 `core.Interceptor`가 이 계약도 구�
 
 ```go
 // src/user/user_controller.go
-func (c *UserController) CreateOrder(ctx context.Context, orderId path.Int) httpx.Response[string] {
+func (c *UserController) CreateOrder(ctx context.Context, orderId input.Path[int64]) httpx.Response[string] {
     // context.Context에 연결된 EventBus로 이벤트를 수집합니다.
     publish.Event(ctx, OrderCreated{
-        OrderID: orderId.Value,
+        OrderID: *orderId,
         At:      time.Now(),
     })
 

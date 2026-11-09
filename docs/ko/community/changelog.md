@@ -4,52 +4,20 @@
 
 Preview, RC, 정식 채널의 선택과 발행 절차는 [릴리스 채널과 설치](/ko/community/release-channels)에서 확인하세요.
 
-::: warning v0.7.0 미리보기 입력 API 전환
-이 페이지의 기존 API 설명과 예제는 안정 버전 `v0.6.5` 기준입니다. `v0.7.0-preview.1`부터 출처별 Path, Query, Header DTO를 지원하며 `query.Values`, `header.Values`와 해당 생성/조회 API, `query.Pagination`, `path.Int`, `path.String`, `path.Boolean`은 Deprecated입니다.
+## Spine v0.7.1
 
-새 DTO 방식은 `v0.6.5`에 그대로 적용할 수 없습니다. 미리보기에서도 한 핸들러 안에서 새 DTO와 Deprecated 입력을 혼용하면 부팅 시 거부합니다. 기존 본문 DTO와 context는 계속 함께 사용할 수 있습니다.
+Spine `v0.7.1`은 컨트롤러 라우트와 역할별 생성자, 출처별 HTTP 입력, 런타임 OpenAPI와 HTTP v3를 제공합니다. 이전 입력 API는 호환되지만 Deprecated이며 새 입력과 같은 핸들러에서 혼용할 수 없습니다.
 
-적용 버전과 전환 예제는 [미리보기 핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview), 명세 옵션은 [런타임 OpenAPI](/ko/reference/api/openapi)를 확인하세요.
-:::
-
-일반 설치는 `@latest`를 사용합니다. 현재 문서 기준은 Spine v0.6.5와 CLI v0.4.2입니다. 설치된 CLI는 `spine version`, 실제 의존성은 생성된 `go.mod`에서 확인하세요.
+[v0.7.1 전환 안내](/ko/learn/migration/v0.7.1)와 [런타임 OpenAPI](/ko/reference/api/openapi)를 참고하세요. CLI 버전과 앱 의존성은 별도로 선택합니다. 설치한 CLI는 `spine version`, 실제 의존성은 `go.mod`에서 확인하세요. 아래 항목은 해당 버전의 과거 기록입니다.
 
 ## Preview CLI @preview {#cli-preview-branch}
 
-CLI와 새 앱의 의존성은 Preview 브랜치를 따라갈 수 있습니다. CLI 설치는 `@preview`, 새 앱의 레시피는 `platform-contracts-preview`를 사용합니다. 생성과 `spine update`는 코어와 선택한 플랫폼의 `@preview`를 조회하고 실제 버전을 `go.mod`에 기록합니다. 기존 버전별 레시피는 직접 바꾸기 전까지 고정 버전을 유지합니다.
+CLI는 `@preview`로 설치할 수 있습니다. 앱 의존성은 CLI 채널과 별도로 `spine new --channel preview`, `rc`, `main` 중에서 선택합니다. Preview 채널은 선택한 의존성의 이동하는 `@preview` 브랜치를 조회합니다. 재현하려면 앱 소스와 `go.mod`, `go.sum`을 보관하세요.
 
 ```bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
-
-## Spine CLI v0.4.3-preview.3 {#cli-preview}
-
-Preview CLI `v0.4.3-preview.3`의 새 프로젝트는 `platform-contracts-v0.7.0-preview.2` 레시피를 사용합니다. 코어는 `v0.7.0-preview.2`, Echo, Gorilla, Kafka, RabbitMQ와 playground는 선택한 항목에 한해 `v0.2.0-preview.1`을 사용합니다.
-
-CLI 설치만으로 기존 앱의 레시피를 바꾸거나 Swagger UI, ReDoc을 활성화하지 않습니다. 기존 Preview 1 및 정식 레시피는 명시적으로 변경하기 전까지 유지합니다.
-
-[Preview 설치](/ko/learn/getting-started/installation#preview-cli), [기존 앱 전환](/ko/learn/migration/v0.7.0-preview), [CLI 태그](https://github.com/NARUBROWN/spine-cli/tree/v0.4.3-preview.3), [세 운영체제의 발행 검증](https://github.com/NARUBROWN/spine-cli/actions/runs/41971655264)을 확인하세요.
-
-## Spine v0.7.0 미리보기 2 {#spine-preview-ui}
-
-코어 `v0.7.0-preview.2`부터 `boot.OpenAPIOptions.UI`로 Swagger UI와 ReDoc을 선택적으로 제공합니다. UI 자산과 라이선스 고지를 바이너리에 포함하며 기본 경로는 `/docs`와 `/redoc`입니다. 각 UI는 `Path`와 `Title`을 설정할 수 있습니다.
-
-런타임 OpenAPI JSON은 `v0.7.0-preview.1`부터 제공하며, `UI` 등록 옵션과 두 임베드 UI 패키지는 `v0.7.0-preview.2`부터 제공합니다. HTTP용 Echo는 `v0.2.0-preview.1`을 사용합니다. 정식 버전 `v0.6.5`와 구분해서 설치하세요.
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.0-preview.2 github.com/NARUBROWN/spine-echo-platform@v0.2.0-preview.1
-```
-
-[부팅 옵션](/ko/reference/api/openapi#options), [UI 등록과 실행 예제](/ko/reference/api/openapi#tools), [코어 태그](https://github.com/NARUBROWN/spine/tree/v0.7.0-preview.2)를 확인하세요.
-
-## Spine v0.7.0 미리보기 1 {#spine-preview}
-
-미리보기로 공개한 태그는 코어 `v0.7.0-preview.1`과 각 독립 플랫폼 및 playground `v0.2.0-preview.1`입니다. 안정 문서의 기준인 `v0.6.5`와 구분해서 선택하세요.
-
-출처별 Path, Query, Header DTO와 기존 입력 API의 Deprecated, 혼용 시 부팅 거부와 본문 바인딩 변경을 안내합니다. 표준 OpenAPI는 `Enabled: true`로 명시적으로 켭니다.
-
-[핸들러 입력 전환](/ko/learn/migration/v0.7.0-preview)과 [런타임 OpenAPI 참조](/ko/reference/api/openapi)에서 적용 버전, 호환성 범위와 사용법을 확인하세요.
 
 ## Spine v0.6.5 / CLI v0.4.2
 

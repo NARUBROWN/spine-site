@@ -1,20 +1,12 @@
 # Connect to a database
 
-::: warning Preview
-This page includes stable `v0.6.5` examples. `app.Route` is Deprecated in Preview. See [controller and route migration](/en/learn/migration/preview-controller-routes).
-:::
-
-::: warning v0.7.0 Preview input API migration
-The existing API descriptions and examples on this page target stable `v0.6.5`. From `v0.7.0-preview.1`, source-specific Path, Query, and Header DTOs are supported. `query.Values`, `header.Values` and their construction and lookup APIs, `query.Pagination`, `path.Int`, `path.String`, and `path.Boolean` are Deprecated.
-
-The new DTO approach cannot be applied unchanged to `v0.6.5`. In Preview, mixing new DTOs with Deprecated inputs in one handler fails during boot. Existing body DTOs and contexts can still be used alongside either approach.
-
-See [Preview handler input migration](/en/learn/migration/v0.7.0-preview) for versions and migration examples, and [Runtime OpenAPI](/en/reference/api/openapi) for specification options.
+::: info
+The `legacy` layout in this tutorial uses compatibility `app.Route`. See [route migration](/en/learn/migration/preview-controller-routes) for new controllers, [input migration](/en/learn/migration/v0.7.1-preview) for compatibility rules, and [OpenAPI](/en/reference/api/openapi) for specification options.
 :::
 
 Connect to MySQL with Bun and extend the generated `GET /user/:id` handler to look up users in the database. You will also write a migration to create the table and basic repository queries.
 
-The feature-based `src/user` examples on this page use the `my-app` project created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). CLI `v0.4.2` defaults to the role-based `layered-v1` layout. Both layouts use Spine `v0.6.5` and Echo platform `v0.1.0`.
+The `src/user` examples use the app created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). The default `layered-v1` layout uses role-based directories.
 
 ## Prepare the CLI project
 
@@ -49,9 +41,11 @@ go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
 # If using PostgreSQL
-# go get github.com/uptrace/bun/dialect/pgdialect
-# go get github.com/jackc/pgx/v5/stdlib
+# go get github.com/uptrace/bun/dialect/pgdialect@v1.2.16
+# go get github.com/jackc/pgx/v5/stdlib@v5.12.0
 ```
+
+Keep Bun core and its dialect on the same version. Mismatched versions fail during initialization.
 
 
 ## Connect to the database
@@ -339,7 +333,7 @@ import (
     "example.com/my-app/src/entity"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type UserController struct{ service *UserService }
@@ -348,8 +342,8 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(ctx context.Context, id path.Int) (httpx.Response[*entity.User], error) {
-    user, err := c.service.FindByID(ctx, id.Value)
+func (c *UserController) Get(ctx context.Context, id input.Path[int64]) (httpx.Response[*entity.User], error) {
+    user, err := c.service.FindByID(ctx, *id)
     if errors.Is(err, sql.ErrNoRows) {
         return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
     }
@@ -581,14 +575,14 @@ count, err := r.db.NewSelect().
 ### Join tables
 
 ```go
-// SELECT * FROM users JOIN orders ON users.id = orders.user_id
+// Load the Orders relation configured on User.
 err := r.db.NewSelect().
     Model(&users).
     Relation("Orders").
     Scan(ctx)
 ```
 
-The `Orders` relationship in the join example requires a separate entity and Bun relationship tags. It is not included in the basic `User` model above.
+The `Orders` relationship in the join example requires a separate entity and Bun relationship tags. It is not included in the basic `User` model above. Depending on the relation type, Bun may issue a separate query; do not assume this always produces a single SQL JOIN.
 
 ## Verify
 

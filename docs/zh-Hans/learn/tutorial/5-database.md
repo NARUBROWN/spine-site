@@ -1,20 +1,12 @@
 # 数据库连接
 
-::: warning Preview
-本页包含稳定版 `v0.6.5` 示例。Preview 中的 `app.Route` 已标记为 Deprecated。请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
-
-::: warning v0.7.0 Preview 输入 API 迁移
-本页现有 API 说明和示例以稳定版 `v0.6.5` 为基准。从 `v0.7.0-preview.1` 起，可按输入来源使用独立的 Path、Query 和 Header DTO。`query.Values`、`header.Values` 及其构造和读取 API、`query.Pagination`、`path.Int`、`path.String`、`path.Boolean` 均标记为 Deprecated。
-
-新的 DTO 方式不能直接用于 `v0.6.5`。在 Preview 中，同一处理器混用新 DTO 和 Deprecated 输入也会在启动时被拒绝。现有请求体 DTO 和上下文仍可与任一方式一起使用。
-
-适用版本和迁移示例见 [Preview 处理器输入迁移](/zh-Hans/learn/migration/v0.7.0-preview)，规范选项见 [运行时 OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info
+本教程的 `legacy` 布局使用兼容的 `app.Route`。新控制器请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)，输入兼容规则请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，规范选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
 使用 Bun 连接 MySQL，并扩展生成的 `GET /user/:id`，使其从数据库查询用户。同时编写用于建表的迁移和仓储的基本查询。
 
-本页按功能划分的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的 `my-app`。CLI `v0.4.2` 默认生成按角色划分的 `layered-v1` 结构。两种布局都使用 Spine `v0.6.5` 和 Echo 平台 `v0.1.0`。
+本页的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的应用。默认 `layered-v1` 布局按角色划分目录。
 
 ## 准备 CLI 项目
 
@@ -49,9 +41,11 @@ go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
 go get github.com/go-sql-driver/mysql@v1.9.3
 
 # 如果使用 PostgreSQL
-# go get github.com/uptrace/bun/dialect/pgdialect
-# go get github.com/jackc/pgx/v5/stdlib
+# go get github.com/uptrace/bun/dialect/pgdialect@v1.2.16
+# go get github.com/jackc/pgx/v5/stdlib@v5.12.0
 ```
+
+请让 Bun 核心和所用方言保持相同版本。版本不一致会导致初始化失败。
 
 
 ## 数据库连接
@@ -339,7 +333,7 @@ import (
     "example.com/my-app/src/entity"
     "github.com/NARUBROWN/spine/pkg/httperr"
     "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/path"
+    "github.com/NARUBROWN/spine/pkg/input"
 )
 
 type UserController struct{ service *UserService }
@@ -348,8 +342,8 @@ func NewUserController(service *UserService) *UserController {
     return &UserController{service: service}
 }
 
-func (c *UserController) Get(ctx context.Context, id path.Int) (httpx.Response[*entity.User], error) {
-    user, err := c.service.FindByID(ctx, id.Value)
+func (c *UserController) Get(ctx context.Context, id input.Path[int64]) (httpx.Response[*entity.User], error) {
+    user, err := c.service.FindByID(ctx, *id)
     if errors.Is(err, sql.ErrNoRows) {
         return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
     }
@@ -581,14 +575,14 @@ count, err := r.db.NewSelect().
 ### 连接查询
 
 ```go
-// SELECT * FROM users JOIN orders ON users.id = orders.user_id
+// Load the Orders relation configured on User.
 err := r.db.NewSelect().
     Model(&users).
     Relation("Orders").
     Scan(ctx)
 ```
 
-连接查询示例中的 `Orders` 关系需要另行定义实体和 Bun 关系标签才能工作。上面的基本 `User` 模型不包含此关系。
+连接查询示例中的 `Orders` 关系需要另行定义实体和 Bun 关系标签才能工作。上面的基本 `User` 模型不包含此关系。 根据关联类型，Bun 可能执行单独的查询，因此不要假设此调用总是生成单个 SQL JOIN。
 
 ## 验证
 
