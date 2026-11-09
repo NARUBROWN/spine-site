@@ -1,6 +1,6 @@
 {
   "schema_version": "spine.site-releases/v1",
-  "checked_at": "2026-11-09T11:17:18Z",
+  "checked_at": "2026-11-09T11:37:10Z",
   "repositories": [
     {
       "name": "spine",
@@ -412,6 +412,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine-cli/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-cli/actions",
       "tags": [
+        {
+          "version": "v0.4.4-preview.2",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.4-preview.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.4.4-preview.1",
           "channel": "preview",
