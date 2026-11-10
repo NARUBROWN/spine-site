@@ -101,6 +101,17 @@ def protected_blocks(text):
     return [(m[1].strip(), example_code(m[1].strip(), m[2])[0]) for m in FENCE.finditer(text) if m[1].strip() in EXECUTABLE]
 
 
+def localized_blocks_match(source, translated, locale):
+    """Only the explicitly mapped example text may vary between locales."""
+    localizations = json.loads((ROOT / "scripts/example-localizations.json").read_text(encoding="utf-8"))[locale]
+    expected = []
+    for language, code in protected_blocks(source):
+        for original, replacement in sorted(localizations.items(), key=lambda item: len(item[0]), reverse=True):
+            code = code.replace(original, replacement)
+        expected.append((language, code))
+    return expected == protected_blocks(translated)
+
+
 def untranslated_comments(text):
     return [comment for match in FENCE.finditer(text)
             for comment in example_code(match[1].strip(), match[2])[1]
@@ -146,7 +157,8 @@ def prepare(locale, paths, destination):
         def protect(match):
             if match[1].strip() not in EXECUTABLE:
                 return match[0]
-            if untranslated_comments(match[0]):
+            localizations = json.loads((ROOT / "scripts/example-localizations.json").read_text(encoding="utf-8"))[locale]
+            if untranslated_comments(match[0]) or any(original in match[2] for original in localizations):
                 return match[0]
             marker = f"<!-- SPINE_CODE_{len(blocks):03d} -->"
             blocks.append({"marker": marker, "text": match[0]})
@@ -174,7 +186,7 @@ def apply_bundle(path):
             raise ValueError(f"고정 섹션 ID가 한국어와 다릅니다: {item['target']}")
         if link_destinations(source) != link_destinations(translated):
             raise ValueError(f"링크 대상이나 순서가 한국어와 다릅니다: {item['target']}")
-        if protected_blocks(source) != protected_blocks(translated):
+        if not localized_blocks_match(source, translated, bundle["locale"]):
             raise ValueError(f"실행 예제가 한국어와 다릅니다: {item['target']}")
         if untranslated_comments(translated):
             raise ValueError(f"코드 설명 주석에 한국어가 남아 있습니다: {item['target']}")
@@ -209,7 +221,7 @@ def check():
                 errors.append(f"{target.relative_to(ROOT)}: 고정 섹션 ID 불일치")
             if link_destinations(original) != link_destinations(translated):
                 errors.append(f"{target.relative_to(ROOT)}: 링크 대상 또는 순서 불일치")
-            if protected_blocks(original) != protected_blocks(translated):
+            if not localized_blocks_match(original, translated, locale):
                 errors.append(f"{target.relative_to(ROOT)}: 실행 예제 불일치")
             if untranslated_comments(translated):
                 errors.append(f"{target.relative_to(ROOT)}: 코드 설명 주석에 한국어가 남아 있음")

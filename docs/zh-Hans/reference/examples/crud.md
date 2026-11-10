@@ -374,7 +374,7 @@ func (c *UserController) List() httpx.Response[dto.UserListResponse] {
 // GET /users/:id
 func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
     if *id <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
     }
 
     user, err := c.service.GetUserByID(*id)
@@ -388,10 +388,10 @@ func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserR
 // POST /users
 func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("名称为必填项")
     }
     if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("邮箱为必填项")
     }
 
     user, err := c.service.CreateUser(req)
@@ -405,13 +405,13 @@ func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.
 // PUT /users/:id
 func (c *UserController) Update(id input.Path[int64], req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
     if *id <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
     }
     if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("名称为必填项")
     }
     if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
+        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("邮箱为必填项")
     }
 
     user, err := c.service.UpdateUser(*id, req)
@@ -425,7 +425,7 @@ func (c *UserController) Update(id input.Path[int64], req *dto.UpdateUserRequest
 // DELETE /users/:id
 func (c *UserController) Delete(id input.Path[int64]) error {
     if *id <= 0 {
-        return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+        return httperr.BadRequest("用户 ID 无效")
     }
 
     err := c.service.DeleteUser(*id)
@@ -440,9 +440,9 @@ func (c *UserController) Delete(id input.Path[int64]) error {
 func toHTTPError(err error) error {
     switch {
     case errors.Is(err, repository.ErrUserNotFound):
-        return httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httperr.NotFound("未找到用户")
     case errors.Is(err, repository.ErrEmailAlreadyExists):
-        return httperr.BadRequest("이미 사용 중인 이메일입니다")
+        return httperr.BadRequest("邮箱已被使用")
     default:
         return err
     }
@@ -524,13 +524,13 @@ spine dev
 ```bash
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "홍길동", "email": "hong@example.com"}'
+  -d '{"name": "爱丽丝", "email": "hong@example.com"}'
 ```
 
 ```json
 {
   "id": 1,
-  "name": "홍길동",
+  "name": "爱丽丝",
   "email": "hong@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:00:00Z"
@@ -550,7 +550,7 @@ curl http://localhost:8080/users
   "users": [
     {
       "id": 1,
-      "name": "홍길동",
+      "name": "爱丽丝",
       "email": "hong@example.com",
       "created_at": "2025-01-19T10:00:00Z",
       "updated_at": "2025-01-19T10:00:00Z"
@@ -571,7 +571,7 @@ curl http://localhost:8080/users/1
 ```json
 {
   "id": 1,
-  "name": "홍길동",
+  "name": "爱丽丝",
   "email": "hong@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:00:00Z"
@@ -585,13 +585,13 @@ curl http://localhost:8080/users/1
 ```bash
 curl -X PUT http://localhost:8080/users/1 \
   -H "Content-Type: application/json" \
-  -d '{"name": "홍길동(수정)", "email": "hong2@example.com"}'
+  -d '{"name": "爱丽丝（已更新）", "email": "hong2@example.com"}'
 ```
 
 ```json
 {
   "id": 1,
-  "name": "홍길동(수정)",
+  "name": "爱丽丝（已更新）",
   "email": "hong2@example.com",
   "created_at": "2025-01-19T10:00:00Z",
   "updated_at": "2025-01-19T10:05:00Z"
@@ -617,7 +617,7 @@ curl http://localhost:8080/users/999
 
 ```json
 {
-  "message": "사용자를 찾을 수 없습니다"
+  "message": "未找到用户"
 }
 ```
 
@@ -626,16 +626,16 @@ curl http://localhost:8080/users/999
 ```bash
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "홍길동", "email": "hong@example.com"}'
+  -d '{"name": "爱丽丝", "email": "hong@example.com"}'
 # 重复邮箱
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "김철수", "email": "hong@example.com"}'
+  -d '{"name": "鲍勃", "email": "hong@example.com"}'
 ```
 
 ```json
 {
-  "message": "이미 사용 중인 이메일입니다"
+  "message": "邮箱已被使用"
 }
 ```
 
@@ -650,7 +650,7 @@ curl -X POST http://localhost:8080/users \
 func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
 
 // 通过 httperr 表达错误含义
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+return httpx.Response[dto.UserResponse]{}, httperr.NotFound("未找到用户")
 ```
 
 ### 依赖注入

@@ -502,7 +502,7 @@ func (c *UserController) GetUser(
 ) error {
     _, err := c.service.Get(ctx, int(*userId))
     if err != nil {
-        return httperr.NotFound("유저를 찾을 수 없습니다.")
+        return httperr.NotFound("The user could not be found.")
     }
     return nil
 }
@@ -520,7 +520,7 @@ The error response body for the example above is:
 
 ```json
 {
-  "message": "유저를 찾을 수 없습니다."
+  "message": "The user could not be found."
 }
 ```
 

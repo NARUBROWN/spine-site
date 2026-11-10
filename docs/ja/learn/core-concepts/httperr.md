@@ -4,7 +4,7 @@
 このページは Spine `v0.7.1` のエラー処理を説明します。従来の入力からの変更は[入力の移行](/ja/learn/migration/v0.7.1-preview)、文書設定は [OpenAPI](/ja/reference/api/openapi)を参照してください。
 :::
 
-`httperr`は、HTTPステータスコードとクライアントに伝えるエラーメッセージを保持するパッケージです。コントローラーから`httperr.NotFound("사용자를 찾을 수 없습니다")`のようにエラーを返すと、SpineがステータスコードとJSONエラーレスポンスに変換します。コントローラーでEchoなどのレスポンスオブジェクトを直接扱う必要はありません。
+`httperr`は、HTTPステータスコードとクライアントに伝えるエラーメッセージを保持するパッケージです。コントローラーから`httperr.NotFound("ユーザーが見つかりません")`のようにエラーを返すと、SpineがステータスコードとJSONエラーレスポンスに変換します。コントローラーでEchoなどのレスポンスオブジェクトを直接扱う必要はありません。
 
 このページでは、Spine v0.7.1の`github.com/NARUBROWN/spine/pkg/httperr`を基準に説明します。
 
@@ -17,12 +17,12 @@
 ```go
 func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
     if *userId <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+        return httpx.Response[User]{}, httperr.BadRequest("無効なユーザーIDです")
     }
 
     user, err := c.repo.FindByID(*userId)
     if err != nil {
-        return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
     }
 
     return httpx.Response[User]{Body: user}, nil
@@ -34,11 +34,11 @@ func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User]
 ```text
 # 不正な ID
 GET /users/-1
-→ 400 {"message": "유효하지 않은 사용자 ID입니다"}
+→ 400 {"message": "無効なユーザーIDです"}
 
 # 存在しないユーザー
 GET /users/999
-→ 404 {"message": "사용자를 찾을 수 없습니다"}
+→ 404 {"message": "ユーザーが見つかりません"}
 
 # 正常
 GET /users/123
@@ -76,7 +76,7 @@ func (e *HTTPError) Error() string {
 | `Message` | `string` | JSONレスポンスの`message`フィールドに送信するメッセージ |
 | `Cause` | `error` | アプリが保持する原因エラー。JSONレスポンスには含まれない |
 
-ヘルパー関数は`error`インターフェース型を返しますが、実際の値は`*httperr.HTTPError`です。`errors.As`でこの型を取得できます。`fmt.Errorf("문맥: %w", err)`のようにエラーをラップしても、Spineは内部の`HTTPError`を探し、そのステータスコードと`Message`を使用します。
+ヘルパー関数は`error`インターフェース型を返しますが、実際の値は`*httperr.HTTPError`です。`errors.As`でこの型を取得できます。`fmt.Errorf("コンテキスト: %w", err)`のようにエラーをラップしても、Spineは内部の`HTTPError`を探し、そのステータスコードと`Message`を使用します。
 
 `Message`はクライアントにそのまま渡されます。SQL、秘密の値、内部パスのように公開すべきでない情報をメッセージに含めず、原因エラーやログに保持してください。
 
@@ -103,7 +103,7 @@ func BadRequest(msg string) error {
 
 ```go
 if *userId <= 0 {
-    return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+    return httpx.Response[User]{}, httperr.BadRequest("無効なユーザーIDです")
 }
 ```
 
@@ -119,7 +119,7 @@ func Unauthorized(msg string) error {
 
 ```go
 if !c.auth.IsValid(token) {
-    return httpx.Response[User]{}, httperr.Unauthorized("인증이 필요합니다")
+    return httpx.Response[User]{}, httperr.Unauthorized("認証が必要です")
 }
 ```
 
@@ -136,7 +136,7 @@ func NotFound(msg string) error {
 ```go
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+    return httpx.Response[User]{}, httperr.NotFound("ユーザーが見つかりません")
 }
 ```
 
@@ -153,7 +153,7 @@ func InternalServerError(msg string) error {
 ```go
 result, err := c.externalService.Call()
 if err != nil {
-    return httpx.Response[Result]{}, httperr.InternalServerError("외부 서비스 호출에 실패했습니다")
+    return httpx.Response[Result]{}, httperr.InternalServerError("外部サービスの呼び出しに失敗しました")
 }
 ```
 
@@ -187,20 +187,20 @@ JSONの成功値は、`httpx.Response[T]`に入れて返してください。リ
 ```go
 func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt], error) {
     if req.Amount <= 0 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("결제 금액은 0보다 커야 합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("支払額はゼロより大きくなければなりません")
     }
 
     if req.Amount > 10000000 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("1회 결제 한도를 초과했습니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("1回の支払限度額を超えています")
     }
 
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return httpx.Response[Receipt]{}, httperr.NotFound("지갑을 찾을 수 없습니다")
+        return httpx.Response[Receipt]{}, httperr.NotFound("ウォレットが見つかりません")
     }
 
     if balance < req.Amount {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("잔액이 부족합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("残高が不足しています")
     }
 
     receipt, err := c.processPayment(req)
@@ -224,7 +224,7 @@ func (c *UserController) DeleteUser(userId input.Path[int64]) error {
         return err
     }
     if !exists {
-        return httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httperr.NotFound("ユーザーが見つかりません")
     }
 
     if err := c.repo.Delete(*userId); err != nil {
@@ -280,7 +280,7 @@ func WithCause(status int, msg string, cause error) error {
 // 使用例
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)
+    return httpx.Response[User]{}, WithCause(404, "ユーザーが見つかりません", err)
 }
 ```
 

@@ -264,12 +264,12 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     token := ctx.Header("Authorization")
 
     if token == "" {
-        return httperr.Unauthorized("인증이 필요합니다.")
+        return httperr.Unauthorized("需要身分驗證。")
     }
 
     user, err := validateToken(token)
     if err != nil {
-        return httperr.Unauthorized("유효하지 않은 토큰입니다.")
+        return httperr.Unauthorized("權杖無效。")
     }
 
     ctx.Set("currentUser", user)
@@ -457,7 +457,7 @@ curl -i http://localhost:8080/user/1 \
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     if token == "" {
-        return httperr.Unauthorized("인증이 필요합니다.")
+        return httperr.Unauthorized("需要身分驗證。")
     }
     return nil
 }
@@ -549,9 +549,9 @@ func (i *AuditInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handle
 ```go
 func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     if meta.ControllerType != nil {
-        log.Printf("컨트롤러: %s", meta.ControllerType.String())
+        log.Printf("控制器: %s", meta.ControllerType.String())
     }
-    log.Printf("메서드: %s", meta.Method.Name)              // GetUser
+    log.Printf("方法: %s", meta.Method.Name)              // GetUser
     return nil
 }
 ```

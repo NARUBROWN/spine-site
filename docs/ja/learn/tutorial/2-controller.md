@@ -502,7 +502,7 @@ func (c *UserController) GetUser(
 ) error {
     _, err := c.service.Get(ctx, int(*userId))
     if err != nil {
-        return httperr.NotFound("유저를 찾을 수 없습니다.")
+        return httperr.NotFound("該当ユーザーが見つかりません。")
     }
     return nil
 }
@@ -520,7 +520,7 @@ func (c *UserController) GetUser(
 
 ```json
 {
-  "message": "유저를 찾을 수 없습니다."
+  "message": "該当ユーザーが見つかりません。"
 }
 ```
 

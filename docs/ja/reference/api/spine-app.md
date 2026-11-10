@@ -395,8 +395,8 @@ func (c *OrderConsumer) OnCreated(
     eventName string,
     event OrderCreated,
 ) error {
-    log.Println("이벤트 수신:", eventName)
-    log.Println("주문 ID:", event.OrderID)
+    log.Println("イベント受信:", eventName)
+    log.Println("注文 ID:", event.OrderID)
     return nil
 }
 

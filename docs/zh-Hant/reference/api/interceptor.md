@@ -36,11 +36,11 @@ type Interceptor interface {
 func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
     token := ctx.Header("Authorization")
     if token == "" {
-        return httperr.Unauthorized("인증이 필요합니다")
+        return httperr.Unauthorized("需要身分驗證")
     }
     user, err := i.auth.Validate(token)
     if err != nil {
-        return httperr.Unauthorized("유효하지 않은 토큰입니다")
+        return httperr.Unauthorized("無效權杖")
     }
     ctx.Set("auth.user", user)
     return nil

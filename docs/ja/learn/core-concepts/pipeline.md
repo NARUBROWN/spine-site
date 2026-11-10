@@ -158,7 +158,7 @@ Invoker は新しいルートコールバックをバインドした引数で呼
 ```go
 func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
     if *userId <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
+        return httpx.Response[User]{}, httperr.BadRequest("無効なユーザー識別子")
     }
     user, err := c.repo.FindByID(*userId)
     if err != nil {

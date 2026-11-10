@@ -4,7 +4,7 @@
 本页介绍 Spine `v0.7.1` 的错误处理。旧输入的变更请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，文档选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
 :::
 
-`httperr` 是用于保存 HTTP 状态码和向客户端传递的错误消息的包。控制器返回 `httperr.NotFound("사용자를 찾을 수 없습니다")` 这样的错误时，Spine 会将其转换为状态码和 JSON 错误响应。控制器无需直接操作 Echo 等框架的响应对象。
+`httperr` 是用于保存 HTTP 状态码和向客户端传递的错误消息的包。控制器返回 `httperr.NotFound("未找到用户")` 这样的错误时，Spine 会将其转换为状态码和 JSON 错误响应。控制器无需直接操作 Echo 等框架的响应对象。
 
 本页以 Spine v0.7.1 的 `github.com/NARUBROWN/spine/pkg/httperr` 为准。
 
@@ -17,12 +17,12 @@
 ```go
 func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
     if *userId <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+        return httpx.Response[User]{}, httperr.BadRequest("用户 ID 无效")
     }
 
     user, err := c.repo.FindByID(*userId)
     if err != nil {
-        return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httpx.Response[User]{}, httperr.NotFound("未找到用户")
     }
 
     return httpx.Response[User]{Body: user}, nil
@@ -34,11 +34,11 @@ func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User]
 ```text
 # 无效 ID
 GET /users/-1
-→ 400 {"message": "유효하지 않은 사용자 ID입니다"}
+→ 400 {"message": "用户 ID 无效"}
 
 # 不存在的用户
 GET /users/999
-→ 404 {"message": "사용자를 찾을 수 없습니다"}
+→ 404 {"message": "未找到用户"}
 
 # 正常情况
 GET /users/123
@@ -76,7 +76,7 @@ func (e *HTTPError) Error() string {
 | `Message` | `string` | 发送到 JSON 响应 `message` 字段的消息 |
 | `Cause` | `error` | 应用保存的原始错误，不包含在 JSON 响应中 |
 
-辅助函数返回 `error` 接口类型，但实际值是 `*httperr.HTTPError`。可以通过 `errors.As` 查找此类型。即使使用 `fmt.Errorf("문맥: %w", err)` 这样的形式包装错误，Spine 也会找到内部的 `HTTPError`，并使用它的状态码和 `Message`。
+辅助函数返回 `error` 接口类型，但实际值是 `*httperr.HTTPError`。可以通过 `errors.As` 查找此类型。即使使用 `fmt.Errorf("上下文: %w", err)` 这样的形式包装错误，Spine 也会找到内部的 `HTTPError`，并使用它的状态码和 `Message`。
 
 `Message` 会原样传给客户端。SQL、机密值、内部路径等不应公开的信息不要放在消息中，应保存在原始错误或日志中。
 
@@ -103,7 +103,7 @@ func BadRequest(msg string) error {
 
 ```go
 if *userId <= 0 {
-    return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+    return httpx.Response[User]{}, httperr.BadRequest("用户 ID 无效")
 }
 ```
 
@@ -119,7 +119,7 @@ func Unauthorized(msg string) error {
 
 ```go
 if !c.auth.IsValid(token) {
-    return httpx.Response[User]{}, httperr.Unauthorized("인증이 필요합니다")
+    return httpx.Response[User]{}, httperr.Unauthorized("需要身份验证")
 }
 ```
 
@@ -136,7 +136,7 @@ func NotFound(msg string) error {
 ```go
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+    return httpx.Response[User]{}, httperr.NotFound("未找到用户")
 }
 ```
 
@@ -153,7 +153,7 @@ func InternalServerError(msg string) error {
 ```go
 result, err := c.externalService.Call()
 if err != nil {
-    return httpx.Response[Result]{}, httperr.InternalServerError("외부 서비스 호출에 실패했습니다")
+    return httpx.Response[Result]{}, httperr.InternalServerError("调用外部服务失败")
 }
 ```
 
@@ -187,20 +187,20 @@ Spine 会先在控制器返回值中查找非 nil 的错误。如果存在错误
 ```go
 func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt], error) {
     if req.Amount <= 0 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("결제 금액은 0보다 커야 합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("付款金额必须大于零")
     }
 
     if req.Amount > 10000000 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("1회 결제 한도를 초과했습니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("超过单笔付款限额")
     }
 
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return httpx.Response[Receipt]{}, httperr.NotFound("지갑을 찾을 수 없습니다")
+        return httpx.Response[Receipt]{}, httperr.NotFound("未找到钱包")
     }
 
     if balance < req.Amount {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("잔액이 부족합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("余额不足")
     }
 
     receipt, err := c.processPayment(req)
@@ -224,7 +224,7 @@ func (c *UserController) DeleteUser(userId input.Path[int64]) error {
         return err
     }
     if !exists {
-        return httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httperr.NotFound("未找到用户")
     }
 
     if err := c.repo.Delete(*userId); err != nil {
@@ -280,7 +280,7 @@ func WithCause(status int, msg string, cause error) error {
 // 使用方式
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)
+    return httpx.Response[User]{}, WithCause(404, "未找到用户", err)
 }
 ```
 

@@ -4,7 +4,7 @@
 This page describes error handling in Spine `v0.7.1`. See [input migration](/en/learn/migration/v0.7.1-preview) for changes from legacy inputs and [OpenAPI](/en/reference/api/openapi) for document options.
 :::
 
-`httperr` contains HTTP status codes and error messages to send to clients. When a controller returns an error such as `httperr.NotFound("사용자를 찾을 수 없습니다")`, Spine converts it to a status code and a JSON error response. Controllers do not need to work directly with response objects from Echo or similar frameworks.
+`httperr` contains HTTP status codes and error messages to send to clients. When a controller returns an error such as `httperr.NotFound("User not found")`, Spine converts it to a status code and a JSON error response. Controllers do not need to work directly with response objects from Echo or similar frameworks.
 
 This page describes `github.com/NARUBROWN/spine/pkg/httperr` in Spine v0.7.1.
 
@@ -17,12 +17,12 @@ Wrap successful values in `httpx.Response[T]`. On failure, return an empty respo
 ```go
 func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
     if *userId <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+        return httpx.Response[User]{}, httperr.BadRequest("Invalid user ID")
     }
 
     user, err := c.repo.FindByID(*userId)
     if err != nil {
-        return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httpx.Response[User]{}, httperr.NotFound("User not found")
     }
 
     return httpx.Response[User]{Body: user}, nil
@@ -34,11 +34,11 @@ If this method is registered for `GET /users/:id`, it responds as follows. The e
 ```text
 # Invalid ID
 GET /users/-1
-→ 400 {"message": "유효하지 않은 사용자 ID입니다"}
+→ 400 {"message": "Invalid user ID"}
 
 # User does not exist
 GET /users/999
-→ 404 {"message": "사용자를 찾을 수 없습니다"}
+→ 404 {"message": "User not found"}
 
 # Valid request
 GET /users/123
@@ -76,7 +76,7 @@ func (e *HTTPError) Error() string {
 | `Message` | `string` | Message to send in the JSON response's `message` field |
 | `Cause` | `error` | Underlying error retained by the app. Not included in the JSON response |
 
-The helper functions return the `error` interface type, but the concrete value is a `*httperr.HTTPError`. Use `errors.As` to find this type. Even when an error is wrapped with `fmt.Errorf("문맥: %w", err)`, Spine finds the inner `HTTPError` and uses its status code and `Message`.
+The helper functions return the `error` interface type, but the concrete value is a `*httperr.HTTPError`. Use `errors.As` to find this type. Even when an error is wrapped with `fmt.Errorf("context: %w", err)`, Spine finds the inner `HTTPError` and uses its status code and `Message`.
 
 `Message` is sent to the client as is. Keep information that must not be public, such as SQL, secrets, or internal paths, in the underlying error or logs rather than in the message.
 
@@ -103,7 +103,7 @@ func BadRequest(msg string) error {
 
 ```go
 if *userId <= 0 {
-    return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+    return httpx.Response[User]{}, httperr.BadRequest("Invalid user ID")
 }
 ```
 
@@ -119,7 +119,7 @@ func Unauthorized(msg string) error {
 
 ```go
 if !c.auth.IsValid(token) {
-    return httpx.Response[User]{}, httperr.Unauthorized("인증이 필요합니다")
+    return httpx.Response[User]{}, httperr.Unauthorized("Authentication required")
 }
 ```
 
@@ -136,7 +136,7 @@ func NotFound(msg string) error {
 ```go
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+    return httpx.Response[User]{}, httperr.NotFound("User not found")
 }
 ```
 
@@ -153,7 +153,7 @@ func InternalServerError(msg string) error {
 ```go
 result, err := c.externalService.Call()
 if err != nil {
-    return httpx.Response[Result]{}, httperr.InternalServerError("외부 서비스 호출에 실패했습니다")
+    return httpx.Response[Result]{}, httperr.InternalServerError("External service call failed")
 }
 ```
 
@@ -187,20 +187,20 @@ Even after receiving a request body, you must check app-defined conditions such 
 ```go
 func (c *PaymentController) Process(req *PaymentRequest) (httpx.Response[Receipt], error) {
     if req.Amount <= 0 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("결제 금액은 0보다 커야 합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("Payment amount must be greater than zero")
     }
 
     if req.Amount > 10000000 {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("1회 결제 한도를 초과했습니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("Payment exceeds the per-transaction limit")
     }
 
     balance, err := c.wallet.GetBalance(req.UserID)
     if err != nil {
-        return httpx.Response[Receipt]{}, httperr.NotFound("지갑을 찾을 수 없습니다")
+        return httpx.Response[Receipt]{}, httperr.NotFound("Wallet not found")
     }
 
     if balance < req.Amount {
-        return httpx.Response[Receipt]{}, httperr.BadRequest("잔액이 부족합니다")
+        return httpx.Response[Receipt]{}, httperr.BadRequest("Insufficient balance")
     }
 
     receipt, err := c.processPayment(req)
@@ -224,7 +224,7 @@ func (c *UserController) DeleteUser(userId input.Path[int64]) error {
         return err
     }
     if !exists {
-        return httperr.NotFound("사용자를 찾을 수 없습니다")
+        return httperr.NotFound("User not found")
     }
 
     if err := c.repo.Delete(*userId); err != nil {
@@ -280,7 +280,7 @@ func WithCause(status int, msg string, cause error) error {
 // Usage
 user, err := c.repo.FindByID(id)
 if err != nil {
-    return httpx.Response[User]{}, WithCause(404, "사용자를 찾을 수 없습니다", err)
+    return httpx.Response[User]{}, WithCause(404, "User not found", err)
 }
 ```
 

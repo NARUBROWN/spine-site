@@ -17,6 +17,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs/ko"
+LOCALIZATIONS = json.loads((ROOT / "scripts/example-localizations.json").read_text(encoding="utf-8"))
+
+
+def translated_message(original):
+    return LOCALIZATIONS.get(DOCS.name, {}).get(original, original)
 GO_MOD = '''module example.com/spine-doc-example
 
 go 1.25.5
@@ -139,11 +144,13 @@ func main() { app, opts, err := application.BuildApplication(); if err != nil { 
                 assert status == 200 and json.loads(body)["total"] == 1
                 status, _, body = request(port, "/users/1")
                 assert status == 200 and json.loads(body)["name"] == "Alice"
-                assert request(port, "/users", data=b'{"name":"Other","email":"alice@example.com"}', headers=headers)[0] == 400
+                status, _, body = request(port, "/users", data=b'{"name":"Other","email":"alice@example.com"}', headers=headers)
+                assert status == 400 and json.loads(body)["message"] == translated_message("이미 사용 중인 이메일입니다")
                 status, _, body = request(port, "/users/1", method="PUT", data=b'{"name":"Bob","email":"bob@example.com"}', headers=headers)
                 assert status == 200 and json.loads(body)["name"] == "Bob"
                 assert request(port, "/users/1", method="DELETE")[0] == 200
-                assert request(port, "/users/1")[0] == 404
+                status, _, body = request(port, "/users/1")
+                assert status == 404 and json.loads(body)["message"] == translated_message("사용자를 찾을 수 없습니다")
                 assert request(port, "/users/not-a-number")[0] == 400
             finally:
                 process.terminate()
@@ -200,7 +207,8 @@ func main() { app, opts, err := application.BuildApplication(); if err != nil { 
                 status, _, body = request(port, "/login", data=b'{"email":"alice@example.com","password":"1234"}', headers=headers)
                 token = json.loads(body)["token"]
                 assert status == 200 and token
-                assert request(port, "/me")[0] == 401
+                status, _, body = request(port, "/me")
+                assert status == 401 and json.loads(body)["message"] == translated_message("토큰이 필요합니다.")
                 assert request(port, "/me", headers={"Authorization": "Bearer invalid"})[0] == 401
                 status, _, body = request(port, "/me", headers={"Authorization": "Bearer " + token})
                 assert status == 200 and json.loads(body)["email"] == "alice@example.com"
@@ -355,3 +363,9 @@ if __name__ == "__main__":
     exercise("learn/migration/preview-features.md", "swaggerui.New", verify_openapi)
     exercise("reference/api/openapi.md", "swaggerui.New", verify_openapi)
     exercise("learn/tutorial/8-swagger.md", "swaggerui.New", verify_openapi)
+
+    for locale in ("en", "ja", "zh-Hans", "zh-Hant"):
+        DOCS = ROOT / "docs" / locale
+        verify_crud_example()
+        verify_login_example()
+        print(f"PASS {locale} localized CRUD and login responses")

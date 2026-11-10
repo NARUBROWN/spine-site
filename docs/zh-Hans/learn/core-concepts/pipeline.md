@@ -158,7 +158,7 @@ Invoker 使用绑定的参数调用新路由回调。对于旧方法表达式，
 ```go
 func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
     if *userId <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
+        return httpx.Response[User]{}, httperr.BadRequest("用户标识符无效")
     }
     user, err := c.repo.FindByID(*userId)
     if err != nil {

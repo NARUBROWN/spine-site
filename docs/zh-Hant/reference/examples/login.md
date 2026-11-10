@@ -175,13 +175,13 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     // 從 Authorization 標頭中擷取權杖
     authHeader := ctx.Header("Authorization")
     if authHeader == "" {
-        return httperr.Unauthorized("토큰이 필요합니다.")
+        return httperr.Unauthorized("需要權杖。")
     }
 
     // 解析 "Bearer {token}" 格式
     parts := strings.Split(authHeader, " ")
     if len(parts) != 2 || parts[0] != "Bearer" {
-        return httperr.Unauthorized("잘못된 토큰 형식입니다.")
+        return httperr.Unauthorized("權杖格式無效。")
     }
 
     tokenString := parts[1]
@@ -189,19 +189,19 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     // 驗證 JWT 權杖
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("잘못된 서명 방식입니다.")
+            return nil, httperr.Unauthorized("簽章方法無效。")
         }
         return JWTSecret, nil
     }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
     if err != nil || !token.Valid {
-        return httperr.Unauthorized("유효하지 않은 토큰입니다.")
+        return httperr.Unauthorized("權杖無效。")
     }
 
     // 從權杖中擷取使用者 ID
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return httperr.Unauthorized("토큰 클레임을 읽을 수 없습니다.")
+        return httperr.Unauthorized("無法讀取權杖聲明。")
     }
 
     rawID, ok := claims["user_id"].(float64)
@@ -264,7 +264,7 @@ func (c *AuthController) RegisterRoutes(r *api.Registry) {
 // 註冊帳號 — 無須身分驗證
 func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
-        return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
+        return httpx.Response[model.User]{}, httperr.BadRequest("請填寫所有欄位。")
     }
 
     user, err := c.userStore.Create(req.Email, req.Password, req.Name)
@@ -278,17 +278,17 @@ func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.
 // 登入 — 無須身分驗證
 func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("請輸入電子郵件和密碼。")
     }
 
     user, err := c.userStore.FindByEmail(req.Email)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
     }
 
     // 檢查密碼（實際應用中使用 bcrypt 等比較雜湊）
     if user.Password != req.Password {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
     }
 
     // 產生 JWT 權杖
@@ -316,7 +316,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
     // 讀取 AuthInterceptor 儲存的 userID
     userIDValue, ok := ctx.Get("userID")
     if !ok {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
+        return httpx.Response[model.User]{}, httperr.Unauthorized("找不到身分驗證資訊。")
     }
 
     userID, valid := userIDValue.(int64)
@@ -325,7 +325,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
     }
     user, err := c.userStore.FindByID(userID)
     if err != nil {
-        return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
+        return httpx.Response[model.User]{}, httperr.NotFound("找不到使用者。")
     }
 
     return httpx.Response[model.User]{Body: *user}, nil
@@ -446,7 +446,7 @@ curl http://localhost:8080/me
 
 ```json
 {
-  "message": "토큰이 필요합니다."
+  "message": "需要權杖。"
 }
 ```
 

@@ -158,7 +158,7 @@ Invoker 以綁定的引數呼叫新路由回呼。對於舊方法表達式，它
 ```go
 func (c *UserController) GetUser(userId input.Path[int64]) (httpx.Response[User], error) {
     if *userId <= 0 {
-        return httpx.Response[User]{}, httperr.BadRequest("유효하지 않은 사용자 ID")
+        return httpx.Response[User]{}, httperr.BadRequest("使用者識別碼無效")
     }
     user, err := c.repo.FindByID(*userId)
     if err != nil {

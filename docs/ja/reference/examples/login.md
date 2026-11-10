@@ -175,13 +175,13 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     // Authorization ヘッダーからトークンを取得
     authHeader := ctx.Header("Authorization")
     if authHeader == "" {
-        return httperr.Unauthorized("토큰이 필요합니다.")
+        return httperr.Unauthorized("トークンが必要です。")
     }
 
     // "Bearer {token}" 形式を解析
     parts := strings.Split(authHeader, " ")
     if len(parts) != 2 || parts[0] != "Bearer" {
-        return httperr.Unauthorized("잘못된 토큰 형식입니다.")
+        return httperr.Unauthorized("トークンの形式が正しくありません。")
     }
 
     tokenString := parts[1]
@@ -189,19 +189,19 @@ func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.Handler
     // JWT トークンを検証
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("잘못된 서명 방식입니다.")
+            return nil, httperr.Unauthorized("署名方式が正しくありません。")
         }
         return JWTSecret, nil
     }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
     if err != nil || !token.Valid {
-        return httperr.Unauthorized("유효하지 않은 토큰입니다.")
+        return httperr.Unauthorized("トークンは無効です。")
     }
 
     // トークンからユーザー ID を取得
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok {
-        return httperr.Unauthorized("토큰 클레임을 읽을 수 없습니다.")
+        return httperr.Unauthorized("トークンのクレームを読み取れません。")
     }
 
     rawID, ok := claims["user_id"].(float64)
@@ -264,7 +264,7 @@ func (c *AuthController) RegisterRoutes(r *api.Registry) {
 // ユーザー登録 — 認証不要
 func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
     if req.Email == "" || req.Password == "" || req.Name == "" {
-        return httpx.Response[model.User]{}, httperr.BadRequest("모든 필드를 입력해주세요.")
+        return httpx.Response[model.User]{}, httperr.BadRequest("すべての項目を入力してください。")
     }
 
     user, err := c.userStore.Create(req.Email, req.Password, req.Name)
@@ -278,17 +278,17 @@ func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.
 // ログイン — 認証不要
 func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
     if req.Email == "" || req.Password == "" {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("이메일과 비밀번호를 입력해주세요.")
+        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("メールアドレスとパスワードを入力してください。")
     }
 
     user, err := c.userStore.FindByEmail(req.Email)
     if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールアドレスまたはパスワードが正しくありません。")
     }
 
     // パスワードを確認 (実際には bcrypt などでハッシュを比較)
     if user.Password != req.Password {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールアドレスまたはパスワードが正しくありません。")
     }
 
     // JWT トークンを生成
@@ -316,7 +316,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
     // AuthInterceptor が保存した userID を取得
     userIDValue, ok := ctx.Get("userID")
     if !ok {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
+        return httpx.Response[model.User]{}, httperr.Unauthorized("認証情報が見つかりません。")
     }
 
     userID, valid := userIDValue.(int64)
@@ -325,7 +325,7 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
     }
     user, err := c.userStore.FindByID(userID)
     if err != nil {
-        return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
+        return httpx.Response[model.User]{}, httperr.NotFound("ユーザーが見つかりません。")
     }
 
     return httpx.Response[model.User]{Body: *user}, nil
@@ -446,7 +446,7 @@ HTTP 401 と次のエラーメッセージが返されます。
 
 ```json
 {
-  "message": "토큰이 필요합니다."
+  "message": "トークンが必要です。"
 }
 ```
 
