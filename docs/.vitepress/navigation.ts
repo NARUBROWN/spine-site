@@ -31,7 +31,8 @@ const sectionPaths = {
         "reference/api/spine-app",
         "reference/api/execution-context",
         "reference/api/interceptor",
-        "reference/api/query-values"
+        "reference/api/query-values",
+        "reference/api/openapi"
     ],
     "examples": [
         "reference/examples/crud",
@@ -46,8 +47,7 @@ const sectionPaths = {
         "learn/migration/v0.7.1",
         "learn/migration/preview-features",
         "learn/migration/preview-controller-routes",
-        "learn/migration/v0.7.1-preview",
-        "reference/api/openapi"
+        "learn/migration/v0.7.1-preview"
     ],
     "releases": [
         "community/versions",
@@ -70,7 +70,7 @@ const copy = {
     "ko": {
         "docs": "문서",
         "map": "문서 안내",
-        "preview": "v0.7.1 전환",
+        "preview": "마이그레이션",
         "releases": "릴리스",
         "community": "커뮤니티",
         "support": "기업 지원",
@@ -82,7 +82,7 @@ const copy = {
             "API 참조",
             "예제",
             "운영",
-            "v0.7.1 전환",
+            "마이그레이션",
             "릴리스",
             "커뮤니티",
             "제품과 지원"
@@ -91,7 +91,7 @@ const copy = {
     "en": {
         "docs": "Docs",
         "map": "Documentation map",
-        "preview": "v0.7.1",
+        "preview": "Migration",
         "releases": "Releases",
         "community": "Community",
         "support": "Business support",
@@ -103,7 +103,7 @@ const copy = {
             "API reference",
             "Examples",
             "Operations",
-            "v0.7.1",
+            "Migration",
             "Releases",
             "Community",
             "Product and support"
@@ -112,7 +112,7 @@ const copy = {
     "ja": {
         "docs": "ドキュメント",
         "map": "ドキュメント案内",
-        "preview": "v0.7.1",
+        "preview": "移行",
         "releases": "リリース",
         "community": "コミュニティ",
         "support": "企業向け支援",
@@ -124,7 +124,7 @@ const copy = {
             "API リファレンス",
             "サンプル",
             "運用",
-            "v0.7.1",
+            "移行",
             "リリース",
             "コミュニティ",
             "製品とサポート"
@@ -133,7 +133,7 @@ const copy = {
     "zh-Hans": {
         "docs": "文档",
         "map": "文档导航",
-        "preview": "v0.7.1",
+        "preview": "迁移",
         "releases": "版本发布",
         "community": "社区",
         "support": "企业支持",
@@ -145,7 +145,7 @@ const copy = {
             "API 参考",
             "示例",
             "运维",
-            "v0.7.1",
+            "迁移",
             "版本发布",
             "社区",
             "产品与支持"
@@ -154,7 +154,7 @@ const copy = {
     "zh-Hant": {
         "docs": "文件",
         "map": "文件導覽",
-        "preview": "v0.7.1",
+        "preview": "移轉",
         "releases": "版本發佈",
         "community": "社群",
         "support": "企業支援",
@@ -166,7 +166,7 @@ const copy = {
             "API 參考",
             "範例",
             "維運",
-            "v0.7.1",
+            "移轉",
             "版本發佈",
             "社群",
             "產品與支援"
@@ -197,7 +197,7 @@ const pageLabels: Record<SiteLocale, Record<string, string>> = {
         "learn/core-concepts/handler-meta": "HandlerMeta",
         "learn/core-concepts/query-values": "쿼리 입력 사용법",
         "learn/core-concepts/httperr": "httperr 패키지",
-        "learn/migration/v0.7.1": "v0.7.1 개요",
+        "learn/migration/v0.7.1": "v0.7.1로 전환",
         "learn/migration/preview-features": "HTTP v3와 부팅 옵션",
         "learn/migration/preview-controller-routes": "컨트롤러와 라우트 전환",
         "learn/migration/v0.7.1-preview": "핸들러 입력 전환",
@@ -239,7 +239,7 @@ const pageLabels: Record<SiteLocale, Record<string, string>> = {
         "learn/core-concepts/handler-meta": "HandlerMeta",
         "learn/core-concepts/query-values": "Read query inputs",
         "learn/core-concepts/httperr": "httperr",
-        "learn/migration/v0.7.1": "v0.7.1 overview",
+        "learn/migration/v0.7.1": "Migrate to v0.7.1",
         "learn/migration/preview-features": "HTTP v3 and boot options",
         "learn/migration/preview-controller-routes": "Controller and route migration",
         "learn/migration/v0.7.1-preview": "Handler input migration",
@@ -281,7 +281,7 @@ const pageLabels: Record<SiteLocale, Record<string, string>> = {
         "learn/core-concepts/handler-meta": "HandlerMeta",
         "learn/core-concepts/query-values": "クエリ入力の使い方",
         "learn/core-concepts/httperr": "httperr パッケージ",
-        "learn/migration/v0.7.1": "v0.7.1 の概要",
+        "learn/migration/v0.7.1": "v0.7.1 への移行",
         "learn/migration/preview-features": "HTTP v3 と起動オプション",
         "learn/migration/preview-controller-routes": "コントローラーとルートの移行",
         "learn/migration/v0.7.1-preview": "ハンドラー入力の移行",
@@ -323,7 +323,7 @@ const pageLabels: Record<SiteLocale, Record<string, string>> = {
         "learn/core-concepts/handler-meta": "HandlerMeta",
         "learn/core-concepts/query-values": "读取查询输入",
         "learn/core-concepts/httperr": "httperr",
-        "learn/migration/v0.7.1": "v0.7.1 概览",
+        "learn/migration/v0.7.1": "迁移到 v0.7.1",
         "learn/migration/preview-features": "HTTP v3 与启动选项",
         "learn/migration/preview-controller-routes": "控制器与路由迁移",
         "learn/migration/v0.7.1-preview": "处理器输入迁移",
@@ -365,7 +365,7 @@ const pageLabels: Record<SiteLocale, Record<string, string>> = {
         "learn/core-concepts/handler-meta": "HandlerMeta",
         "learn/core-concepts/query-values": "讀取查詢輸入",
         "learn/core-concepts/httperr": "httperr",
-        "learn/migration/v0.7.1": "v0.7.1 概覽",
+        "learn/migration/v0.7.1": "移轉至 v0.7.1",
         "learn/migration/preview-features": "HTTP v3 與啟動選項",
         "learn/migration/preview-controller-routes": "控制器與路由遷移",
         "learn/migration/v0.7.1-preview": "處理器輸入移轉",
@@ -410,7 +410,7 @@ export function siteNavigation(locale: SiteLocale): Pick<DefaultTheme.Config, 'n
     const sections = documentationSections(locale)
     const docs: DefaultTheme.SidebarItem[] = [
         page(locale, 'docs'),
-        ...sections.slice(0, 6).map(section => ({
+        ...sections.slice(0, 7).map(section => ({
             text: section.text,
             items: section.items,
             ...(section.id === 'getting-started' || section.id === 'operations' ? {} : { collapsed: true })
@@ -420,8 +420,7 @@ export function siteNavigation(locale: SiteLocale): Pick<DefaultTheme.Config, 'n
         [`/${locale}/docs`]: docs,
         [`/${locale}/learn/`]: docs,
         [`/${locale}/reference/`]: docs,
-        [`/${locale}/learn/migration/`]: [sections[6]],
-        [`/${locale}/reference/api/openapi`]: [sections[6]],
+        [`/${locale}/learn/migration/`]: docs,
         [`/${locale}/community/versions`]: [sections[7]],
         [`/${locale}/community/release-channels`]: [sections[7]],
         [`/${locale}/community/changelog`]: [sections[7]],
@@ -429,8 +428,7 @@ export function siteNavigation(locale: SiteLocale): Pick<DefaultTheme.Config, 'n
     }
     return {
         nav: [
-            { text: text.docs, link: `/${locale}/docs`, activeMatch: `^/${locale}/(?:docs(?:\\.html)?$|learn/(?!migration/)|reference/(?!api/openapi))` },
-            { text: text.preview, link: `/${locale}/learn/migration/v0.7.1`, activeMatch: `^/${locale}/(?:learn/migration/|reference/api/openapi)` },
+            { text: text.docs, link: `/${locale}/docs`, activeMatch: `^/${locale}/(?:docs(?:\\.html)?$|learn/|reference/)` },
             { text: text.releases, link: `/${locale}/community/versions`, activeMatch: `^/${locale}/community/(?:versions|release-channels|changelog)` },
             { text: text.community, link: `/${locale}/community/`, activeMatch: `^/${locale}/community/(?:$|index|contributing)` },
             { text: text.support, link: `/${locale}/enterprise-support` }
