@@ -61,6 +61,10 @@ func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
 
 This is a standalone application. Save it as `main.go` in a separate Go module with Spine `v0.7.1` and a compatible HTTP platform, then run `go run .`. Group routes take path, handler, then optional options. Body, path, query, and headers use separate inputs.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

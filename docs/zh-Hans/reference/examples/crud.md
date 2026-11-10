@@ -8,7 +8,7 @@
 
 ## 开始前的准备
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。使用 CLI `v0.4.3-rc.1` 或更高版本创建应用，并手动添加 CRUD 代码。`resource` 生成 GET 框架，`slice --storage memory` 生成创建和查询框架。
+请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。使用 CLI `v0.4.3` 或更高版本创建应用，并手动添加 CRUD 代码。`resource` 生成 GET 框架，`slice --storage memory` 生成创建和查询框架。
 
 服务器进程结束后，保存的用户数据会消失。
 
@@ -30,7 +30,7 @@ graph TD
 
 创建基础应用，检查依赖和项目配置。后续命令均在 `crud-example/` 中运行。
 
-以下命令选择正式依赖渠道。兼容的正式平台标签尚不可用时，可使用 `--channel rc` 验证，并在 `go.mod` 中确认所选版本。
+以下命令使用正式依赖渠道。请在 `go.mod` 中确认所选版本。
 
 ```sh
 spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive

@@ -11,10 +11,10 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-以下のチャンネル選択コマンドと生成結果には CLI `v0.4.3-rc.1` 以降が必要です。`@latest` が古いバージョンをインストールする場合は、以下の互換 RC を使ってください。互換性のある安定版プラットフォームタグが利用できない場合はプロジェクト作成時に `--channel rc` を使い、`go.mod` を確認してください。
+以下の例は正式 CLI `v0.4.3` を対象とします。このバージョンを固定してインストールするには次を実行します。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 
@@ -31,12 +31,6 @@ spine new hello-spine --module example.com/hello-spine --channel main --no-inter
 cd hello-spine
 ```
 
-RC チャンネルは実行時により新しいコア RC を選択する場合があります。コア `v0.7.1` を再現するには生成したプロジェクトで以下を実行し、互換プラットフォームのバージョンも `go.mod` で確認してください。後の `spine update` はチャンネルに従ってバージョンを変更する場合があります。
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1
-go mod tidy
-```
 
 
 `new` はインストール済み CLI の検証済みレシピで互換性のある Spine、Echo プラットフォーム、Echo のバージョンを選択し、依存関係のインストール、静的契約の検査、ビルドを完了します。選択されたバージョンは生成された `go.mod` で確認してください。`--skip-install` を使った場合は、別途 `go mod tidy` と `go mod download all` を実行します。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。

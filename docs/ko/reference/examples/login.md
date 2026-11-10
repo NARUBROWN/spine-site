@@ -8,7 +8,7 @@
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation)를 완료한 뒤 CLI `v0.4.3-rc.1` 이상으로 프로젝트를 만듭니다. JWT 인증 코드는 직접 추가하고 `github.com/golang-jwt/jwt/v5`를 설치합니다.
+[CLI 설치](/ko/learn/getting-started/installation)를 완료한 뒤 CLI `v0.4.3` 이상으로 프로젝트를 만듭니다. JWT 인증 코드는 직접 추가하고 `github.com/golang-jwt/jwt/v5`를 설치합니다.
 
 이 예제는 인증 흐름을 익히기 위해 메모리 저장소, 평문 비밀번호 비교, 코드에 고정한 JWT 비밀키를 사용합니다. 서버를 종료하면 가입 정보가 사라집니다. 실제 서비스에 적용하기 전에는 비밀번호 해시와 환경변수로 관리하는 JWT 비밀키를 사용해야 합니다.
 
@@ -16,7 +16,7 @@
 
 기본 앱과 JWT 의존성을 준비합니다. 이후 명령은 `login-example/`에서 실행합니다.
 
-아래 명령은 정식 의존성 채널을 선택합니다. 호환되는 정식 플랫폼 태그가 아직 없다면 검증에 `--channel rc`를 사용하고, 선택된 버전을 `go.mod`에서 확인하세요.
+아래 명령은 정식 의존성 채널을 사용합니다. 선택된 버전을 `go.mod`에서 확인하세요.
 
 ```sh
 spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive

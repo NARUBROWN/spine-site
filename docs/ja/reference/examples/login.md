@@ -8,7 +8,7 @@
 
 ## 事前準備
 
-[CLI のインストール](/ja/learn/getting-started/installation)後、CLI `v0.4.3-rc.1` 以降でプロジェクトを作成します。JWT コードを手動で追加し、`github.com/golang-jwt/jwt/v5` をインストールします。
+[CLI のインストール](/ja/learn/getting-started/installation)後、CLI `v0.4.3` 以降でプロジェクトを作成します。JWT コードを手動で追加し、`github.com/golang-jwt/jwt/v5` をインストールします。
 
 この例では、認証フローを学ぶために、メモリ上のストア、平文のパスワード比較、コードに固定した JWT の秘密鍵を使用します。サーバーを終了すると登録情報は失われます。実際のサービスに適用する前に、パスワードハッシュと、環境変数で管理する JWT の秘密鍵を使用する必要があります。
 
@@ -16,7 +16,7 @@
 
 基本アプリと JWT の依存関係を準備します。以降のコマンドは `login-example/` で実行します。
 
-以下のコマンドは正式依存関係チャンネルを選びます。互換性のある正式プラットフォームタグがない場合は検証に `--channel rc` を使い、選択されたバージョンを `go.mod` で確認してください。
+以下のコマンドは正式依存関係チャンネルを使います。選択されたバージョンを `go.mod` で確認してください。
 
 ```sh
 spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive

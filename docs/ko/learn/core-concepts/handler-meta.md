@@ -14,6 +14,10 @@
 
 다음 독립 앱은 라우트 인터셉터에서 `HandlerName()`과 `ArgumentOffset()`을 읽어 요청 컨텍스트에 저장합니다. Spine `v0.7.1`과 호환 Echo 플랫폼을 설치한 별도 Go 모듈에 `main.go`로 저장하고 `go run .`으로 실행하세요.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

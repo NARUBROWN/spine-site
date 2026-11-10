@@ -4,11 +4,11 @@ Spine `v0.7.1` の OpenAPI UI、HTTP v3 の入力処理、TLS、終了動作を�
 
 ## 例の対象バージョン {#versions}
 
-独立例はコア `v0.7.1` と Echo `v0.2.0-rc.1` を使い、Go 1.25.5 以上が必要です。新しいディレクトリでモジュールを作成し、依存関係を固定してから以下のコードを `main.go` に保存します。正式プラットフォーム公開後は検証済みの互換タグを選び、`go.mod` と `go.sum` を保存してください。
+独立例は正式版コア `v0.7.1` と Echo `v0.2.0` を使い、Go 1.25.5 以上が必要です。新しいディレクトリでモジュールを作成し、依存関係をインストールして以下のコードを `main.go` に保存します。`go.mod` と `go.sum` を保存してください。
 
 ```bash
 go mod init example.com/boot-example
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 ## Swagger UI と ReDoc の起動オプション {#boot}

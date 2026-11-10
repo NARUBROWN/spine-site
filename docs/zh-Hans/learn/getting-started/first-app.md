@@ -11,10 +11,10 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-以下渠道选择命令与生成结果需要 CLI `v0.4.3-rc.1` 或更高版本。如果 `@latest` 安装了较旧版本，请使用以下兼容 RC。如果兼容的稳定版平台标签尚不可用，创建项目时请使用 `--channel rc` 并检查 `go.mod`。
+以下示例以正式 CLI `v0.4.3` 为基准。要固定安装此版本，请运行以下命令。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 
@@ -31,12 +31,6 @@ spine new hello-spine --module example.com/hello-spine --channel main --no-inter
 cd hello-spine
 ```
 
-RC 渠道可能在运行时选择更新的核心 RC。要复现核心 `v0.7.1`，请在生成的项目中运行以下命令，并在 `go.mod` 中检查兼容平台版本。之后的 `spine update` 可能根据渠道再次更改版本。
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1
-go mod tidy
-```
 
 
 `new` 根据已安装 CLI 的验证配方选择兼容的 Spine、Echo 平台和 Echo 版本，并完成依赖安装、静态契约检查和构建。请在生成的 `go.mod` 中查看所选版本。使用 `--skip-install` 时，请单独运行 `go mod tidy` 和 `go mod download all`。安装过程不会初始化应用、运行测试或启动监听器。

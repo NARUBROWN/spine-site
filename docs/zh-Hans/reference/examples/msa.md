@@ -8,7 +8,7 @@
 
 ## 开始前的准备
 
-完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用 CLI `v0.4.3-rc.1` 或更高版本生成 Kafka 平台和消费者框架。
+完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用 CLI `v0.4.3` 或更高版本生成 Kafka 平台和消费者框架。
 
 要确认消息传递，需要在 `localhost:9092` 运行 Kafka broker，并创建 `order.created` 主题。本示例使用隔离本地环境中的明文连接。库存消费者会记录事件日志，但不会修改实际库存数量。
 
@@ -16,7 +16,7 @@
 
 创建工作目录，先预览将要生成的文件。
 
-以下命令选择正式依赖渠道。兼容的正式平台标签尚不可用时，可使用 `--channel rc` 验证，并在 `go.mod` 中确认所选版本。
+以下命令使用正式依赖渠道。请在 `go.mod` 中确认所选版本。
 
 ```sh
 mkdir spine-msa

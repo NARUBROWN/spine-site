@@ -28,6 +28,10 @@ func NewUserService(repository *UserRepository) *UserService {
 
 次の独立アプリは `Constructor` メソッドと役割マーカーでリポジトリ、サービス、コントローラーを登録します。逆順に登録しても依存型に従って解決されます。別の Go モジュールに Spine `v0.7.1` と互換 Echo プラットフォームをインストールし、`main.go` に保存して実行してください。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

@@ -4,10 +4,10 @@ Spine `v0.7.1` は登録された HTTP ルートから OpenAPI JSON を生成し
 
 ## 1. アプリを準備する
 
-別の Go モジュールに次の依存関係をインストールします。Echo RC はこの例で検証した組み合わせです。デプロイ時は公開済みの互換プラットフォームタグと `go.mod`、`go.sum` を固定してください。
+別の Go モジュールに次の正式版の依存関係をインストールします。再現のために `go.mod` と `go.sum` を保管してください。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 次のコードを `main.go` に保存し、`go run .` で実行します。`Enabled` を省略すると自動提供は無効です。JSON のみを提供する場合は `UI` を省略します。

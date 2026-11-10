@@ -14,6 +14,10 @@
 
 この独立アプリはルートインターセプターで `HandlerName()` と `ArgumentOffset()` を読み、リクエストコンテキストに保存します。別の Go モジュールに Spine `v0.7.1` と互換 Echo プラットフォームをインストールし、`main.go` に保存して `go run .` で実行します。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

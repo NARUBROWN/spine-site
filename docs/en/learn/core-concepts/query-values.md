@@ -6,6 +6,10 @@ In Spine `v0.7.1`, receive query parameters in a source-specific struct. In `inp
 
 Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module. Save the following as `main.go` and run `go run .`. This example uses page 1 only when the value is absent.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

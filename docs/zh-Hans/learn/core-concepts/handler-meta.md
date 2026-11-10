@@ -14,6 +14,10 @@
 
 以下独立应用在路由拦截器中读取 `HandlerName()` 和 `ArgumentOffset()` 并存入请求上下文。在独立 Go 模块中安装 Spine `v0.7.1` 和兼容 Echo 平台，保存为 `main.go` 并运行 `go run .`。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

@@ -47,7 +47,7 @@ RC ブランチの現在のコードをインストールします。Preview の
 
 ## CLI チャンネルとアプリの依存関係 {#dependencies}
 
-インストールした CLI とアプリの依存関係チャンネルは別です。`spine new` で `--channel main` を選ぶと正式タグを使用します。`rc` は RC またはより高い正式タグを選び、`preview` は Preview ブランチを参照します。対話形式の既定は Preview のため、正式版には Main を明示的に選んでください。
+CLI のインストールとアプリの依存関係チャンネルは別です。CLI `v0.4.3` 以降、新規プロジェクトは対話型の作成でも `main` が既定です。`rc` は RC またはそれより新しい正式タグを選び、`preview` は Preview ブランチを参照します。既存プロジェクトのチャンネルは自動変更されません。
 
 ```bash
 spine new channel-check --module example.com/channel-check --channel main
@@ -93,10 +93,10 @@ CLI はコアと異なるバージョンと日程でリリースします。コ�
 
 ## バージョンの固定と復元 {#pin}
 
-CI や本番環境では、実際に公開された CLI タグを固定し、アプリのソース、`go.mod`、`go.sum` も一緒にバージョン管理します。CLI タグが固定するのはツールのコードだけです。Preview の動的レシピは同じ CLI でも `new` や `update` の実行時に `@preview` を再度解決するため、アプリの再現には保存したソースと依存関係を使ってください。次の例は公開済みの互換 CLI RC `v0.4.3-rc.1` に固定するもので、最新バージョンの指定ではありません。
+CI や本番環境では、実際に公開された CLI タグを固定し、アプリのソース、`go.mod`、`go.sum` も一緒にバージョン管理します。CLI タグが固定するのはツールのコードだけです。Preview の動的レシピは同じ CLI でも `new` や `update` の実行時に `@preview` を再度解決するため、アプリの再現には保存したソースと依存関係を使ってください。次の例は公開済みの正式 CLI `v0.4.3` に固定するもので、最新バージョンの指定ではありません。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 

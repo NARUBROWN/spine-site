@@ -4,10 +4,10 @@ Spine `v0.7.1`은 등록된 HTTP 라우트에서 OpenAPI JSON을 만들고 내�
 
 ## 1. 실행할 앱 준비
 
-별도 Go 모듈에서 다음 의존성을 설치합니다. Echo RC는 아래 예제를 검증한 조합이며, 배포할 때는 공개된 호환 플랫폼 태그와 `go.mod`, `go.sum`을 함께 고정하세요.
+별도 Go 모듈에서 다음 정식 의존성을 설치합니다. 재현을 위해 `go.mod`와 `go.sum`을 함께 보관하세요.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 아래 코드를 `main.go`에 저장하고 `go run .`으로 실행합니다. `Enabled`를 생략하면 자동 제공이 꺼집니다. `UI`를 생략하면 JSON만 제공합니다.

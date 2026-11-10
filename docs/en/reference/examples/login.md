@@ -8,7 +8,7 @@ Build signup and login APIs, then retrieve your profile using the JWT issued at 
 
 ## Prerequisites
 
-After [installing the CLI](/en/learn/getting-started/installation), create the project with CLI `v0.4.3-rc.1` or later. Add the JWT code manually and install `github.com/golang-jwt/jwt/v5`.
+After [installing the CLI](/en/learn/getting-started/installation), create the project with CLI `v0.4.3` or later. Add the JWT code manually and install `github.com/golang-jwt/jwt/v5`.
 
 This example uses an in-memory store, plaintext password comparison, and a JWT secret hardcoded in the source to teach the authentication flow. Registered users disappear when the server stops. Before using this in a real service, use password hashing and a JWT secret managed through environment variables.
 
@@ -16,7 +16,7 @@ This example uses an in-memory store, plaintext password comparison, and a JWT s
 
 Prepare a basic app and the JWT dependency. Run subsequent commands from `login-example/`.
 
-The commands below select the stable dependency channel. If a compatible stable platform tag is not yet available, use `--channel rc` for validation and check the selected versions in `go.mod`.
+The commands below use the stable dependency channel. Check the selected versions in `go.mod`.
 
 ```sh
 spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive

@@ -12,6 +12,10 @@
 
 以下獨立應用程式透過 `api.Interceptors` 將驗證攔截器連接至一個路由。在獨立 Go 模組中安裝 Spine `v0.7.1` 和相容 Echo 平台，儲存為 `main.go` 並執行。此權杖僅用於示範。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

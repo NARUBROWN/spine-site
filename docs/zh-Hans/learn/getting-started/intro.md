@@ -6,6 +6,13 @@ Spine 是通过 Go 代码配置构造函数、路由和拦截器的后端框架�
 
 以下独立应用配置了注入服务和仓库的控制器。在独立 Go 模块中安装 Spine `v0.7.1` 和兼容 Echo 平台，保存为 `main.go` 并运行 `go run .`。
 
+在新目录中创建 Go 模块并安装正式版依赖。
+
+```bash
+go mod init example.com/spine-intro
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

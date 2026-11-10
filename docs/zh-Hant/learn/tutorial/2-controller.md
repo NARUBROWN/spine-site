@@ -61,6 +61,10 @@ func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
 
 以下是獨立應用程式。將它儲存為另一個 Go 模組的 `main.go`，安裝 Spine `v0.7.1` 與相容 HTTP 平台，然後執行 `go run .`。群組路由依路徑、處理器、選用選項的順序註冊。請求本文、路徑、查詢與標頭使用獨立輸入。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

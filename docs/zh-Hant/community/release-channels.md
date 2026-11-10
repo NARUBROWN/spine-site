@@ -47,7 +47,7 @@ spine version
 
 ## CLI 通道與應用程式相依套件 {#dependencies}
 
-安裝的 CLI 與應用程式相依套件通道彼此獨立。使用 `spine new --channel main` 選擇正式標籤。`rc` 選擇 RC 或更高的正式標籤，`preview` 查詢 Preview 分支。互動式建立預設使用 Preview，正式應用程式請明確選擇 Main。
+安裝的 CLI 與應用程式相依套件通道彼此獨立。從 CLI `v0.4.3` 起，新專案包括互動式建立均預設使用 `main`。`rc` 選擇 RC 或更高的正式標籤，`preview` 查詢 Preview 分支。既有專案的通道不會自動變更。
 
 ```bash
 spine new channel-check --module example.com/channel-check --channel main
@@ -93,10 +93,10 @@ CLI 使用獨立的版本和發佈時程。核心版本變更時，不要求 CLI
 
 ## 固定與復原版本 {#pin}
 
-在 CI 與正式環境中，請固定實際已發佈的 CLI 標籤，並對應用程式原始碼、`go.mod` 和 `go.sum` 一起進行版本管理。CLI 標籤僅固定工具程式碼。動態 Preview 配方即使由同一 CLI 執行 `new` 或 `update`，仍會重新解析 `@preview`；重現應用程式時請使用保存的原始碼和相依套件。以下範例固定至已發佈的相容 CLI RC `v0.4.3-rc.1`，並不代表最新版本。
+在 CI 與正式環境中，請固定實際已發佈的 CLI 標籤，並對應用程式原始碼、`go.mod` 和 `go.sum` 一起進行版本管理。CLI 標籤僅固定工具程式碼。動態 Preview 配方即使由同一 CLI 執行 `new` 或 `update`，仍會重新解析 `@preview`；重現應用程式時請使用保存的原始碼和相依套件。以下範例固定至已發佈的正式 CLI `v0.4.3`，並不代表最新版本。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 

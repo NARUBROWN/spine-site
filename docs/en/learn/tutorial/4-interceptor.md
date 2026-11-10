@@ -12,6 +12,10 @@ The `src/user` examples use the app created with `--layout legacy` in [Project S
 
 This standalone app attaches an authentication interceptor to one route with `api.Interceptors`. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save it as `main.go`, and run it. The token is only for demonstration.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

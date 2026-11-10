@@ -8,7 +8,7 @@
 
 ## 事前準備
 
-先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI `v0.4.3-rc.1` 以降でアプリを作成し、CRUD コードを手動で追加します。`resource` は GET のひな形、`slice --storage memory` は作成と取得のひな形を生成します。
+先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。CLI `v0.4.3` 以降でアプリを作成し、CRUD コードを手動で追加します。`resource` は GET のひな形、`slice --storage memory` は作成と取得のひな形を生成します。
 
 保存したユーザーは、サーバープロセスを終了すると失われます。
 
@@ -30,7 +30,7 @@ graph TD
 
 基本アプリを作成し、依存関係とプロジェクト設定を確認します。以降のコマンドは `crud-example/` で実行します。
 
-以下のコマンドは正式依存関係チャンネルを選びます。互換性のある正式プラットフォームタグがない場合は検証に `--channel rc` を使い、選択されたバージョンを `go.mod` で確認してください。
+以下のコマンドは正式依存関係チャンネルを使います。選択されたバージョンを `go.mod` で確認してください。
 
 ```sh
 spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive

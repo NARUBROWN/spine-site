@@ -6,6 +6,10 @@
 
 在独立 Go 模块中安装 Spine `v0.7.1` 和兼容的 Echo 平台，将以下代码保存为 `main.go` 并运行 `go run .`。此示例仅在缺少页码时使用 1。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

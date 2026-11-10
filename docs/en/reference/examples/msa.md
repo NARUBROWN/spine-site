@@ -8,7 +8,7 @@ Create an order HTTP service and a stock consumer service, and pass `order.creat
 
 ## Prerequisites
 
-After [CLI installation](/en/learn/getting-started/installation), use CLI `v0.4.3-rc.1` or later to generate the Kafka platform and consumer skeleton.
+After [CLI installation](/en/learn/getting-started/installation), use CLI `v0.4.3` or later to generate the Kafka platform and consumer skeleton.
 
 To test message delivery, you need a Kafka broker at `localhost:9092` and an `order.created` topic. This example uses a plaintext connection in an isolated local environment. The stock consumer logs events; it does not change actual stock quantities.
 
@@ -16,7 +16,7 @@ To test message delivery, you need a Kafka broker at `localhost:9092` and an `or
 
 Create a working directory and preview the files to be generated.
 
-The commands below select the stable dependency channel. If a compatible stable platform tag is not yet available, use `--channel rc` for validation and check the selected versions in `go.mod`.
+The commands below use the stable dependency channel. Check the selected versions in `go.mod`.
 
 ```sh
 mkdir spine-msa

@@ -11,10 +11,10 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-The channel selection commands and generated output below require CLI `v0.4.3-rc.1` or later. If `@latest` installs an older version, install the compatible RC below. If compatible stable platform tags are not yet available, use `--channel rc` when creating the project and check its `go.mod`.
+The examples below target the stable CLI `v0.4.3`. To install this exact version, use:
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 
@@ -31,12 +31,6 @@ spine new hello-spine --module example.com/hello-spine --channel main --no-inter
 cd hello-spine
 ```
 
-The RC channel may select a newer core RC when you run it. To reproduce core `v0.7.1`, run the following in the generated project and check the compatible platform version in `go.mod`. A later `spine update` can change the version according to the channel.
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1
-go mod tidy
-```
 
 
 `new` uses the installed CLI’s verified recipe to select compatible Spine, Echo platform, and Echo versions, installs dependencies, checks the static contract, and builds the app. Check the generated `go.mod` for selected versions. If you use `--skip-install`, run `go mod tidy` and `go mod download all` separately. Installation does not initialize the app, run tests, or open a listener.

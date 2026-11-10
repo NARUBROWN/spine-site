@@ -8,7 +8,7 @@
 
 ## 開始前的準備
 
-完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用 CLI `v0.4.3-rc.1` 以上版本建立專案。手動新增 JWT 程式碼並安裝 `github.com/golang-jwt/jwt/v5`。
+完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用 CLI `v0.4.3` 以上版本建立專案。手動新增 JWT 程式碼並安裝 `github.com/golang-jwt/jwt/v5`。
 
 此範例為了說明驗證流程，使用記憶體儲存庫、明文密碼比對，以及寫死在程式碼中的 JWT 密鑰。伺服器結束後，註冊資訊就會消失。套用於實際服務前，必須使用密碼雜湊，並透過環境變數管理 JWT 密鑰。
 
@@ -16,7 +16,7 @@
 
 準備基本應用程式和 JWT 相依套件。後續命令均在 `login-example/` 中執行。
 
-以下指令選擇正式相依套件通道。相容的正式平台標籤尚未提供時，可使用 `--channel rc` 驗證，並在 `go.mod` 中確認所選版本。
+以下指令使用正式相依套件通道。請在 `go.mod` 中確認所選版本。
 
 ```sh
 spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive

@@ -4,7 +4,7 @@ Spine `v0.7.1` keeps public HTTP, WebSocket, event, and DTO validation contracts
 
 ## Choose with the CLI
 
-Install CLI `v0.4.3-rc.1` or later, then run each command below in a separate directory. `--channel main` selects published stable tags. If a compatible stable platform tag is unavailable, use `--channel rc` for RC validation. The CLI installation channel and application dependency channel are independent.
+Install stable CLI `v0.4.3` or later, then run each command below in a separate directory. `--channel main` selects published stable tags. The CLI installation channel and application dependency channel are independent.
 
 ```sh
 spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive

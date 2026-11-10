@@ -24,10 +24,10 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-The channel selection commands and generated output below require CLI `v0.4.3-rc.1` or later. If `@latest` installs an older version, install the compatible RC below. If compatible stable platform tags are not yet available, use `--channel rc` when creating the project and check its `go.mod`.
+The examples below target the stable CLI `v0.4.3`. To install this exact version, use:
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 
@@ -46,15 +46,7 @@ spine version
 
 Install the Preview CLI with `@preview`. This is a moving branch; choose the application dependency channel separately with `spine new --channel`. Use `main` for stable applications.
 
-```
-
-The RC channel may select a newer core RC when you run it. To reproduce core `v0.7.1`, run the following in the generated project and check the compatible platform version in `go.mod`. A later `spine update` can change the version according to the channel.
-
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1
-go mod tidy
-```
-bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```

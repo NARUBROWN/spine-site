@@ -24,10 +24,10 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-以下渠道选择命令与生成结果需要 CLI `v0.4.3-rc.1` 或更高版本。如果 `@latest` 安装了较旧版本，请使用以下兼容 RC。如果兼容的稳定版平台标签尚不可用，创建项目时请使用 `--channel rc` 并检查 `go.mod`。
+以下示例以正式 CLI `v0.4.3` 为基准。要固定安装此版本，请运行以下命令。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 
@@ -46,15 +46,7 @@ spine version
 
 可通过 `@preview` 安装 Preview CLI。该分支会持续更新，应用依赖渠道通过 `spine new --channel` 单独选择。正式应用使用 `main`。
 
-```
-
-RC 渠道可能在运行时选择更新的核心 RC。要复现核心 `v0.7.1`，请在生成的项目中运行以下命令，并在 `go.mod` 中检查兼容平台版本。之后的 `spine update` 可能根据渠道再次更改版本。
-
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1
-go mod tidy
-```
-bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```

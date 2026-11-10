@@ -6,6 +6,13 @@ Spine is a Go backend framework configured with constructors, routes, and interc
 
 This standalone app configures a controller with an injected service and repository. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save it as `main.go`, and run `go run .`.
 
+In a new directory, create a Go module and install the stable dependencies.
+
+```bash
+go mod init example.com/spine-intro
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

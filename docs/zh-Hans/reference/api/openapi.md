@@ -108,10 +108,10 @@ func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.Open
 
 ## 提供 Swagger UI 与 ReDoc {#tools}
 
-通过 `boot.Options.HTTP.OpenAPI.UI` 选择界面。设置 `Enabled: true` 并注册 UI，仅提供 JSON 时省略 `UI`。以下示例固定兼容的 Echo RC，请保存 `go.mod` 和 `go.sum` 以便复现。
+通过 `boot.Options.HTTP.OpenAPI.UI` 选择界面。设置 `Enabled: true` 并注册 UI，仅提供 JSON 时省略 `UI`。以下示例固定正式版 Echo，请保存 `go.mod` 和 `go.sum` 以便复现。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 以下是注册所选 UI 的独立应用 `main.go`。在现有应用中，将 import 和 `OpenAPI.UI` 配置添加到当前 composition。

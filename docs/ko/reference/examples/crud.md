@@ -8,7 +8,7 @@
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. CLI `v0.4.3-rc.1` 이상으로 앱을 생성하고 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다.
+[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. CLI `v0.4.3` 이상으로 앱을 생성하고 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다.
 
 저장한 사용자는 서버 프로세스를 종료하면 사라집니다.
 
@@ -30,7 +30,7 @@ graph TD
 
 기본 앱을 생성하고 의존성과 프로젝트 설정을 확인합니다. 이후 명령은 `crud-example/`에서 실행합니다.
 
-아래 명령은 정식 의존성 채널을 선택합니다. 호환되는 정식 플랫폼 태그가 아직 없다면 검증에 `--channel rc`를 사용하고, 선택된 버전을 `go.mod`에서 확인하세요.
+아래 명령은 정식 의존성 채널을 사용합니다. 선택된 버전을 `go.mod`에서 확인하세요.
 
 ```sh
 spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive

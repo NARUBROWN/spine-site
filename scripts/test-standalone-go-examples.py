@@ -23,7 +23,7 @@ go 1.25.5
 
 require (
     github.com/NARUBROWN/spine v0.7.1
-    github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1
+    github.com/NARUBROWN/spine-echo-platform v0.2.0
 )
 '''
 
@@ -351,7 +351,7 @@ if __name__ == "__main__":
     exercise("reference/api/interceptor.md", "constructor.Interceptor(&Auth{})", verify_interceptor)
     exercise("reference/security-configuration.md", "maxAge := 60", verify_cors)
     exercise("learn/migration/preview-controller-routes.md", 'users.GET("/:id"', verify_controller_migration, wrap=True)
-    exercise("learn/migration/v0.7.1-preview.md", "type UpdateBody struct", verify_input_migration, "\nrequire github.com/NARUBROWN/spine-validator-playground v0.2.0-rc.1\n")
+    exercise("learn/migration/v0.7.1-preview.md", "type UpdateBody struct", verify_input_migration, "\nrequire github.com/NARUBROWN/spine-validator-playground v0.2.0\n")
     exercise("learn/migration/preview-features.md", "swaggerui.New", verify_openapi)
     exercise("reference/api/openapi.md", "swaggerui.New", verify_openapi)
     exercise("learn/tutorial/8-swagger.md", "swaggerui.New", verify_openapi)

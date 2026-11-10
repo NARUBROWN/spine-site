@@ -241,7 +241,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 이 코드는 메서드 시그니처의 예이며, `CreateUserRequest`와 `User`는 앱에서 정의하는 타입입니다. 폼 DTO는 필드에 `form` 태그를 사용하며, 업로드 파일은 `pkg/multipart.UploadedFiles`로 받을 수 있습니다.
 
-Spine `v0.7.1`와 Echo 플랫폼 `v0.2.0-rc.1`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요. [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)
+Spine `v0.7.1`와 Echo 플랫폼 `v0.2.0`은 잘못된 JSON과 숫자 또는 불리언 경로 변환 실패를 HTTP 400으로 처리합니다. 지원하지 않는 본문 Content-Type은 415, 본문 크기 제한 초과는 413입니다. 바인딩 실패는 컨트롤러 호출 전에 발생하며, 핸들러의 업무 검증 오류와 구분해 실제 요청으로 확인하세요. [실행 파이프라인](/ko/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: 이벤트 입력 해석
 

@@ -4,9 +4,9 @@
 
 ## Version and sources
 
-This guide targets Spine `v0.7.1`. CLI `v0.4.3-rc.1` or later supports the current controller and dependency-channel features. Install a published stable CLI with `go install github.com/NARUBROWN/spine-cli/cmd/spine@latest`; check `spine version` before using these commands. Until a compatible stable CLI is published, the explicit candidate is `go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1`. CLI version and application dependency channel are independent.
+This guide targets Spine `v0.7.1`. CLI `v0.4.3` supports the current controller and dependency-channel features. Install it with `go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3`, or use `@latest` for the latest stable release. Check `spine version` before using these commands. CLI version and application dependency channel are independent.
 
-Core and CLI require Go 1.25.5 or later; playground validator and NATS require Go 1.26 or later. Core `v0.7.1` is published. The documented examples were tested with Echo `v0.2.0-rc.1`, net/http `v0.1.0-rc.1`, and playground `v0.2.0-rc.1`. Select published compatible stable platform tags when available. Preserve application source, `go.mod`, and `go.sum`; do not infer current publication state from an intended release.
+Core and CLI require Go 1.25.5 or later; playground validator and NATS require Go 1.26 or later. Core `v0.7.1` is published. The documented stable combination uses Echo `v0.2.0`, net/http `v0.1.0`, and playground `v0.2.0`. Preserve application source, `go.mod`, and `go.sum`; do not infer current publication state from an intended release.
 
 - Documentation: /en/docs
 - Installation: /en/learn/getting-started/installation
@@ -34,7 +34,7 @@ spine verify
 spine dev
 ```
 
-`--channel main` chooses published stable dependency tags, `rc` selects a published RC or higher stable tag, and `preview` resolves the moving Preview branch. The interactive wizard defaults to Preview: select Main explicitly for a stable project. The selected value is stored as `dependency_channel` and reused by `spine update`. A new tool installation does not rewrite an existing app. When compatible stable platform tags are unavailable, use `--channel rc`; it may select a newer core RC. To reproduce core `v0.7.1` in a generated app, run `go get github.com/NARUBROWN/spine@v0.7.1` followed by `go mod tidy`, verify compatible platform versions, and retain the resolved files. `--skip-install` still resolves versions and metadata but skips installation and build verification.
+`--channel main` chooses published stable dependency tags, `rc` selects a published RC or higher stable tag, and `preview` resolves the moving Preview branch. CLI `v0.4.3` defaults to the Main channel, including in the interactive wizard. The selected value is stored as `dependency_channel` and reused by `spine update`. A new tool installation does not rewrite an existing app. To reproduce an application, retain its source, `go.mod`, and `go.sum`; `spine update` can resolve newer versions in its configured channel. `--skip-install` still resolves versions and metadata but skips installation and build verification.
 
 `spine contract check` analyzes source without starting the application. `spine verify` also runs formatting, `go vet`, and tests; neither proves real HTTP, database, broker, or WebSocket behavior. After a `--skip-install` generation or dependency changes, run `go mod tidy` and `go mod download all` before the offline contract check. Test external dependencies separately.
 

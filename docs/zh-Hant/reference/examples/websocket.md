@@ -10,7 +10,7 @@
 
 建立專案並產生 WebSocket 處理器。後續命令均在 `chat-app/` 中執行。
 
-需要 CLI `v0.4.3-rc.1` 以上版本。`--channel main` 選擇正式相依套件；相容的平台正式標籤尚未提供時，可使用 `--channel rc` 驗證。
+需要 CLI `v0.4.3` 以上版本。`--channel main` 選擇正式相依套件。
 
 ```sh
 spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla --channel main --no-interactive

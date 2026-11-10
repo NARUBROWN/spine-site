@@ -240,7 +240,7 @@ After `BeforeResponse` finishes, execution errors are converted into HTTP error 
 | Execution error without a separate mapping | 500, `Internal server error` |
 | Actual response already committed | Do not write a second response |
 
-Spine `v0.7.1` with Echo platform `v0.2.0-rc.1` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests.
+Spine `v0.7.1` with Echo platform `v0.2.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests.
 
 An error during actual response transmission becomes part of the final execution error. If the response has not yet been committed, the pipeline attempts to write a 500 response. A response that has already been sent cannot be rolled back.
 

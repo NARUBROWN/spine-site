@@ -8,7 +8,7 @@
 
 ## 開始前的準備
 
-請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。使用 CLI `v0.4.3-rc.1` 以上版本建立應用程式，並手動新增 CRUD 程式碼。`resource` 產生 GET 骨架，`slice --storage memory` 產生建立和查詢骨架。
+請先完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)。使用 CLI `v0.4.3` 以上版本建立應用程式，並手動新增 CRUD 程式碼。`resource` 產生 GET 骨架，`slice --storage memory` 產生建立和查詢骨架。
 
 伺服器程序結束後，已儲存的使用者資料就會消失。
 
@@ -30,7 +30,7 @@ graph TD
 
 建立基本應用程式，並檢查相依套件和專案設定。後續命令均在 `crud-example/` 中執行。
 
-以下指令選擇正式相依套件通道。相容的正式平台標籤尚未提供時，可使用 `--channel rc` 驗證，並在 `go.mod` 中確認所選版本。
+以下指令使用正式相依套件通道。請在 `go.mod` 中確認所選版本。
 
 ```sh
 spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive

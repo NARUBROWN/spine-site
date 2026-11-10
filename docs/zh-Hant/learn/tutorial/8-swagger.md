@@ -4,10 +4,10 @@ Spine `v0.7.1` 可以根據已註冊的 HTTP 路由產生 OpenAPI JSON，並提�
 
 ## 1. 準備應用程式
 
-在獨立 Go 模組中安裝以下相依套件。Echo RC 是此範例驗證過的組合。部署時請固定已公開的相容平台標籤以及 `go.mod`、`go.sum`。
+在獨立 Go 模組中安裝以下正式版相依套件。請保留 `go.mod` 和 `go.sum` 以便重現。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 將以下程式碼儲存為 `main.go` 並執行 `go run .`。省略 `Enabled` 時自動提供功能關閉；僅提供 JSON 時省略 `UI`。

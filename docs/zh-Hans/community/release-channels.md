@@ -47,7 +47,7 @@ spine version
 
 ## CLI 渠道与应用依赖 {#dependencies}
 
-安装的 CLI 与应用依赖渠道相互独立。使用 `spine new --channel main` 选择正式标签。`rc` 选择 RC 或更高的正式标签，`preview` 查询 Preview 分支。交互式创建默认使用 Preview，正式应用请明确选择 Main。
+安装的 CLI 与应用依赖渠道相互独立。从 CLI `v0.4.3` 起，新项目包括交互式创建均默认使用 `main`。`rc` 选择 RC 或更高的正式标签，`preview` 查询 Preview 分支。现有项目的渠道不会自动更改。
 
 ```bash
 spine new channel-check --module example.com/channel-check --channel main
@@ -93,10 +93,10 @@ CLI 使用独立的版本与发布时间表。核心版本变化时，不要求 
 
 ## 固定与恢复版本 {#pin}
 
-在 CI 和生产环境中，请固定实际已发布的 CLI 标签，并对应用源码、`go.mod` 和 `go.sum` 一同进行版本管理。CLI 标签仅固定工具代码。动态 Preview 配方即使由同一 CLI 执行 `new` 或 `update`，仍会重新解析 `@preview`；复现应用时请使用保存的源码和依赖。以下示例固定到已发布的兼容 CLI RC `v0.4.3-rc.1`，并不代表最新版本。
+在 CI 和生产环境中，请固定实际已发布的 CLI 标签，并对应用源码、`go.mod` 和 `go.sum` 一同进行版本管理。CLI 标签仅固定工具代码。动态 Preview 配方即使由同一 CLI 执行 `new` 或 `update`，仍会重新解析 `@preview`；复现应用时请使用保存的源码和依赖。以下示例固定到已发布的正式 CLI `v0.4.3`，并不代表最新版本。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 

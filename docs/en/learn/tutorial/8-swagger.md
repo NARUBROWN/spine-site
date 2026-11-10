@@ -4,10 +4,10 @@ Spine `v0.7.1` can generate OpenAPI JSON from registered HTTP routes and serve e
 
 ## 1. Prepare the application
 
-Install these dependencies in a separate Go module. The Echo RC is the combination tested for this example. For deployment, pin a published compatible platform tag together with `go.mod` and `go.sum`.
+Install these stable dependencies in a separate Go module. Keep `go.mod` and `go.sum` for reproducibility.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 Save the following as `main.go` and run `go run .`. Automatic serving is disabled unless `Enabled` is set. Omit `UI` to serve JSON only.

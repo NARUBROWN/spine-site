@@ -28,6 +28,10 @@ func NewUserService(repository *UserRepository) *UserService {
 
 以下独立应用使用 `Constructor` 方法和角色标记注册仓库、服务及控制器。即使逆序注册，依赖仍按类型解析。在独立 Go 模块中安装 Spine `v0.7.1` 与兼容 Echo 平台，保存为 `main.go` 后运行。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

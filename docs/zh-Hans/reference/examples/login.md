@@ -8,7 +8,7 @@
 
 ## 开始前的准备
 
-完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用 CLI `v0.4.3-rc.1` 或更高版本创建项目。手动添加 JWT 代码并安装 `github.com/golang-jwt/jwt/v5`。
+完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用 CLI `v0.4.3` 或更高版本创建项目。手动添加 JWT 代码并安装 `github.com/golang-jwt/jwt/v5`。
 
 本示例使用内存存储库、明文密码比较和硬编码的 JWT 密钥，帮助你了解认证流程。服务器结束后，注册信息会消失。在实际服务中使用前，必须改用密码哈希，并通过环境变量管理 JWT 密钥。
 
@@ -16,7 +16,7 @@
 
 准备基础应用和 JWT 依赖。后续命令均在 `login-example/` 中运行。
 
-以下命令选择正式依赖渠道。兼容的正式平台标签尚不可用时，可使用 `--channel rc` 验证，并在 `go.mod` 中确认所选版本。
+以下命令使用正式依赖渠道。请在 `go.mod` 中确认所选版本。
 
 ```sh
 spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive

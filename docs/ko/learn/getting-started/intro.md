@@ -6,6 +6,13 @@ Spine은 생성자, 라우트와 인터셉터를 Go 코드로 구성하는 백�
 
 아래 독립 앱은 저장소와 서비스를 주입받는 컨트롤러를 구성합니다. 별도 Go 모듈에 Spine `v0.7.1`과 호환 Echo 플랫폼을 설치하고 `main.go`로 저장한 뒤 `go run .`을 실행하세요.
 
+새 디렉터리에서 Go 모듈을 만들고 정식 의존성을 설치합니다.
+
+```bash
+go mod init example.com/spine-intro
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

@@ -24,10 +24,10 @@ go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-아래 채널 선택 명령과 생성 결과는 CLI `v0.4.3-rc.1` 이상을 기준으로 합니다. `@latest`가 더 낮은 버전을 설치한다면 다음 명령으로 호환 RC를 설치하세요. 호환되는 정식 플랫폼 태그가 아직 없다면 프로젝트 생성 시 `--channel rc`를 사용하고 생성된 `go.mod`를 확인하세요.
+아래 예제는 정식 CLI `v0.4.3`을 기준으로 합니다. 정확히 이 버전을 설치하려면 다음 명령을 사용하세요.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 
@@ -46,15 +46,7 @@ spine version
 
 Preview CLI는 `@preview`로 설치할 수 있습니다. 이는 이동하는 브랜치이며, 앱의 의존성 채널은 `spine new --channel`로 별도 선택합니다. 정식 앱에는 `main`을 사용하세요.
 
-```
-
-RC 채널은 실행 시점에 더 최신 코어 RC를 선택할 수 있습니다. 코어 `v0.7.1`을 재현하려면 생성된 프로젝트에서 다음을 실행하고 호환 플랫폼 버전도 `go.mod`에서 확인하세요. `spine update`는 채널에 따라 이 버전을 다시 바꿀 수 있습니다.
-
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1
-go mod tidy
-```
-bash
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```

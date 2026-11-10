@@ -12,6 +12,10 @@
 
 다음 독립 앱은 `api.Interceptors`로 인증 인터셉터를 한 라우트에 연결합니다. Spine `v0.7.1`과 호환 Echo 플랫폼을 설치한 별도 Go 모듈의 `main.go`에 저장해 실행하세요. 토큰은 동작 확인용으로만 사용합니다.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

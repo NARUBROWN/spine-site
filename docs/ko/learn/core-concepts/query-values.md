@@ -6,6 +6,10 @@ Spine `v0.7.1`에서 쿼리는 출처별 구조체로 받습니다. `input.Query
 
 독립된 Go 모듈에 Spine `v0.7.1`과 호환되는 Echo 플랫폼을 설치한 뒤 다음 코드를 `main.go`로 저장하고 `go run .`으로 실행하세요. 이 예제는 페이지가 누락된 경우에만 1을 사용합니다.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

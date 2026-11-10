@@ -12,6 +12,10 @@
 
 次の独立アプリは `api.Interceptors` で認証インターセプターを一つのルートに接続します。別の Go モジュールに Spine `v0.7.1` と互換 Echo プラットフォームをインストールし、`main.go` に保存して実行してください。トークンは動作確認専用です。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

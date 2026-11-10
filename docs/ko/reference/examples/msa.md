@@ -8,7 +8,7 @@
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation)를 완료한 뒤 CLI `v0.4.3-rc.1` 이상으로 Kafka 플랫폼과 소비자 골격을 생성합니다.
+[CLI 설치](/ko/learn/getting-started/installation)를 완료한 뒤 CLI `v0.4.3` 이상으로 Kafka 플랫폼과 소비자 골격을 생성합니다.
 
 메시지 전달을 확인하려면 `localhost:9092`의 Kafka 브로커와 `order.created` 토픽이 필요합니다. 이 예제는 격리된 로컬 환경의 평문 연결을 사용합니다. 재고 소비자는 이벤트를 로그로 남기며, 실제 재고 수량은 변경하지 않습니다.
 
@@ -16,7 +16,7 @@
 
 작업 디렉터리를 만들고 생성할 파일을 먼저 확인합니다.
 
-아래 명령은 정식 의존성 채널을 선택합니다. 호환되는 정식 플랫폼 태그가 아직 없다면 검증에 `--channel rc`를 사용하고, 선택된 버전을 `go.mod`에서 확인하세요.
+아래 명령은 정식 의존성 채널을 사용합니다. 선택된 버전을 `go.mod`에서 확인하세요.
 
 ```sh
 mkdir spine-msa

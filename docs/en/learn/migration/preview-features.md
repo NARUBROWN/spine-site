@@ -4,11 +4,11 @@ This guide covers OpenAPI UI, HTTP v3 input handling, TLS, and shutdown in Spine
 
 ## Versions for the example {#versions}
 
-The standalone example uses core `v0.7.1` and Echo `v0.2.0-rc.1`. Go 1.25.5 or later is required. Create a module in a new directory, pin the dependencies, and save the code below as `main.go`. When stable platforms are published, select verified compatible tags and retain `go.mod` and `go.sum`.
+This standalone example uses stable core `v0.7.1` and Echo `v0.2.0`. Go 1.25.5 or later is required. Create a module in a new directory, install the dependencies, and save the code below as `main.go`. Retain `go.mod` and `go.sum`.
 
 ```bash
 go mod init example.com/boot-example
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 ## Swagger UI and ReDoc boot options {#boot}

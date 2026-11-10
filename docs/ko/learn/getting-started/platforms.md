@@ -4,7 +4,7 @@ Spine `v0.7.1`은 HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 �
 
 ## CLI로 선택하기
 
-CLI `v0.4.3-rc.1` 이상을 설치한 뒤 다음 명령을 각각 별도 디렉터리에서 실행합니다. `--channel main`은 공개된 정식 태그를 선택합니다. 호환되는 정식 플랫폼 태그가 없다면 RC 검증에는 `--channel rc`를 사용하세요. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
+정식 CLI `v0.4.3` 이상을 설치한 뒤 다음 명령을 각각 별도 디렉터리에서 실행합니다. `--channel main`은 공개된 정식 태그를 선택합니다. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
 
 ```sh
 spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive

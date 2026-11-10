@@ -10,7 +10,7 @@ Complete [Installation and Your First App](/en/learn/getting-started/first-app) 
 
 Generate the project and WebSocket handler. Run subsequent commands from `chat-app/`.
 
-CLI `v0.4.3-rc.1` or later is required. `--channel main` selects stable dependencies; use `--channel rc` for validation if a compatible platform stable tag is not yet available.
+CLI `v0.4.3` or later is required. `--channel main` selects stable dependencies.
 
 ```sh
 spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla --channel main --no-interactive

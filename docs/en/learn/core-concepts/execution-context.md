@@ -241,7 +241,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 This code is a method signature example; `CreateUserRequest` and `User` are types defined by the app. Form DTOs use `form` tags on their fields, and uploaded files can be received as `pkg/multipart.UploadedFiles`.
 
-Spine `v0.7.1` with Echo platform `v0.2.0-rc.1` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests. [Execution Pipeline](/en/learn/core-concepts/pipeline#error-responses)
+Spine `v0.7.1` with Echo platform `v0.2.0` returns HTTP 400 for malformed JSON and invalid numeric or boolean path values, 415 for unsupported body Content-Type, and 413 when the request-body limit is exceeded. Binding fails before the controller runs. Distinguish these failures from business validation and verify them with actual requests. [Execution Pipeline](/en/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: Interpreting Event Input
 

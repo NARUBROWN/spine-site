@@ -61,6 +61,10 @@ func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
 
 다음은 독립 실행 앱입니다. Spine `v0.7.1`과 호환 HTTP 플랫폼이 설치된 별도 Go 모듈의 `main.go`에 저장하고 `go run .`으로 실행하세요. 그룹에 경로, 핸들러, 선택 옵션 순서로 등록합니다. 요청 본문과 경로, 쿼리, 헤더는 별도 입력으로 받습니다.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

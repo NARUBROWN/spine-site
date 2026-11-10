@@ -4,7 +4,7 @@ Spine `v0.7.1` 将 HTTP、WebSocket、事件和 DTO 验证的公开契约保留�
 
 ## 使用 CLI 选择
 
-安装 CLI `v0.4.3-rc.1` 或更高版本后，在不同目录中分别运行以下命令。`--channel main` 选择已公开的正式标签。如果兼容的正式平台标签尚不可用，可使用 `--channel rc` 验证 RC。CLI 安装渠道和应用依赖渠道相互独立。
+安装正式 CLI `v0.4.3` 或更高版本后，在不同目录中分别运行以下命令。`--channel main` 选择已公开的正式标签。CLI 安装渠道和应用依赖渠道相互独立。
 
 ```sh
 spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive

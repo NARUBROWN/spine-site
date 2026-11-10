@@ -6,6 +6,13 @@ Spine 是透過 Go 程式碼設定建構函式、路由和攔截器的後端框�
 
 以下獨立應用程式設定了注入服務和儲存庫的控制器。在獨立 Go 模組中安裝 Spine `v0.7.1` 和相容 Echo 平台，儲存為 `main.go` 並執行 `go run .`。
 
+在新目錄中建立 Go 模組並安裝正式版相依套件。
+
+```bash
+go mod init example.com/spine-intro
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

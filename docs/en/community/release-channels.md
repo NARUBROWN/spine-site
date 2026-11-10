@@ -47,7 +47,7 @@ This installs the current RC branch. Preview changes appear after promotion; ear
 
 ## CLI channels and application dependencies {#dependencies}
 
-The installed CLI and application dependency channel are independent. Select `--channel main` with `spine new` for stable tags. `rc` selects RC or higher stable tags, and `preview` queries Preview branches. Interactive creation defaults to Preview, so select Main explicitly for a stable application.
+The installed CLI and application dependency channel are independent. Since CLI `v0.4.3`, new projects default to `main`, including interactive creation. `rc` selects RC or higher stable tags, and `preview` queries Preview branches. Existing project channels do not change automatically.
 
 ```bash
 spine new channel-check --module example.com/channel-check --channel main
@@ -93,10 +93,10 @@ See [Current Release](/en/community/changelog) for tags and published versions. 
 
 ## Pin or restore a version {#pin}
 
-For CI and production, pin an actually published CLI tag and version application source, `go.mod`, and `go.sum` together. A CLI tag pins the tool’s code only. The dynamic Preview recipe still resolves `@preview` when the same CLI runs `new` or `update`, so reproduce an app from its saved source and dependencies. This example pins the published compatible CLI RC `v0.4.3-rc.1`; it does not select the latest version.
+For CI and production, pin an actually published CLI tag and version application source, `go.mod`, and `go.sum` together. A CLI tag pins the tool’s code only. The dynamic Preview recipe still resolves `@preview` when the same CLI runs `new` or `update`, so reproduce an app from its saved source and dependencies. This example pins the published stable CLI `v0.4.3`; it does not select the latest version.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3-rc.1
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
 spine version
 ```
 

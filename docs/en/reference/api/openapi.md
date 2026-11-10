@@ -108,10 +108,10 @@ The T in `httpx.Response[T]` describes the response body type. Status codes and 
 
 ## Serve Swagger UI and ReDoc {#tools}
 
-Select UIs with `boot.Options.HTTP.OpenAPI.UI`. Set `Enabled: true` and register the UIs; omit `UI` for JSON only. This example pins a compatible Echo RC. Retain `go.mod` and `go.sum` for reproducibility.
+Select UIs with `boot.Options.HTTP.OpenAPI.UI`. Set `Enabled: true` and register the UIs; omit `UI` for JSON only. This example pins the stable Echo version. Retain `go.mod` and `go.sum` for reproducibility.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 The following `main.go` is a standalone app that registers the selected UIs. In an existing app, add the imports and `OpenAPI.UI` settings to your current composition.

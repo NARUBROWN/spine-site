@@ -108,10 +108,10 @@ validator がない場合、入力パラメーター、リクエストモデル�
 
 ## Swagger UI と ReDoc の提供 {#tools}
 
-`boot.Options.HTTP.OpenAPI.UI` で画面を選択します。`Enabled: true` を設定して UI を登録し、JSON のみなら `UI` を省略します。以下は互換性のある Echo RC を固定する例です。再現のため `go.mod` と `go.sum` を保存してください。
+`boot.Options.HTTP.OpenAPI.UI` で画面を選択します。`Enabled: true` を設定して UI を登録し、JSON のみなら `UI` を省略します。以下は正式版 Echo を固定する例です。再現のため `go.mod` と `go.sum` を保存してください。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 以下は、使用する UI を登録する独立したアプリの `main.go` です。既存アプリでは、現在の composition に import と `OpenAPI.UI` の設定を追加してください。

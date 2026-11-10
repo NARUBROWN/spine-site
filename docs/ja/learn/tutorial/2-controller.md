@@ -61,6 +61,10 @@ func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
 
 以下は独立したアプリです。Spine `v0.7.1` と互換 HTTP プラットフォームを導入した別の Go モジュールの `main.go` に保存し、`go run .` で実行します。グループの登録順はパス、ハンドラー、選択オプションです。ボディ、パス、クエリ、ヘッダーは別の入力で受け取ります。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

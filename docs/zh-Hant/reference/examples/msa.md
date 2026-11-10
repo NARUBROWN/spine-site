@@ -8,7 +8,7 @@
 
 ## 開始前的準備
 
-完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用 CLI `v0.4.3-rc.1` 以上版本產生 Kafka 平台和消費者骨架。
+完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用 CLI `v0.4.3` 以上版本產生 Kafka 平台和消費者骨架。
 
 若要確認訊息傳遞，需要在 `localhost:9092` 執行的 Kafka broker，以及 `order.created` 主題。此範例使用隔離本機環境中的明文連線。庫存消費者會將事件寫入日誌，不會實際變更庫存數量。
 
@@ -16,7 +16,7 @@
 
 建立工作目錄，先確認將產生的檔案。
 
-以下指令選擇正式相依套件通道。相容的正式平台標籤尚未提供時，可使用 `--channel rc` 驗證，並在 `go.mod` 中確認所選版本。
+以下指令使用正式相依套件通道。請在 `go.mod` 中確認所選版本。
 
 ```sh
 mkdir spine-msa

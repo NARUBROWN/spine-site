@@ -4,11 +4,11 @@
 
 ## 範例版本 {#versions}
 
-獨立範例使用核心 `v0.7.1` 和 Echo `v0.2.0-rc.1`，需要 Go 1.25.5 以上版本。在新目錄中建立模組、固定相依套件，然後將以下程式碼儲存為 `main.go`。正式平台公開後，請選擇經驗證的相容標籤並保留 `go.mod` 和 `go.sum`。
+獨立範例使用正式版核心 `v0.7.1` 和 Echo `v0.2.0`，需要 Go 1.25.5 以上版本。在新目錄中建立模組並安裝相依套件，然後將以下程式碼儲存為 `main.go`。請保留 `go.mod` 和 `go.sum`。
 
 ```bash
 go mod init example.com/boot-example
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 ## Swagger UI 與 ReDoc 啟動選項 {#boot}

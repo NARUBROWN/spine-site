@@ -220,7 +220,7 @@ func TestPreparedApplication(t *testing.T) {
 '''
     with tempfile.TemporaryDirectory(prefix="spine-doc-prepared-") as temp:
         folder = Path(temp)
-        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1\n")
+        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0\n")
         (folder / "example_test.go").write_text(test)
         subprocess.run(["go", "mod", "tidy"], cwd=folder, check=True, capture_output=True, text=True)
         subprocess.run(["go", "test", "-buildvcs=false", "./..."], cwd=folder, check=True)
@@ -290,7 +290,7 @@ def verify_generated_app():
     source = block("reference/api/spine-app.md", "controller.HealthController{}")
     with tempfile.TemporaryDirectory(prefix="spine-doc-app-") as temp:
         folder = Path(temp)
-        (folder / "go.mod").write_text("module example.com/my-app\n\ngo 1.25.5\n\nrequire (\n github.com/NARUBROWN/spine v0.7.1\n github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1\n)\n")
+        (folder / "go.mod").write_text("module example.com/my-app\n\ngo 1.25.5\n\nrequire (\n github.com/NARUBROWN/spine v0.7.1\n github.com/NARUBROWN/spine-echo-platform v0.2.0\n)\n")
         (folder / "application").mkdir()
         (folder / "application/application.go").write_text(source)
         controller = folder / "src/controller"
@@ -401,7 +401,7 @@ func TestErrorTutorial(t *testing.T) {
 """
     with tempfile.TemporaryDirectory(prefix="spine-doc-error-tutorial-") as temp:
         folder = Path(temp)
-        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1\n")
+        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0\n")
         (folder / "repository.go").write_text(repository)
         (folder / "service.go").write_text("package user\ntype UserService struct { repository *UserRepository }\nfunc NewUserService(repository *UserRepository) *UserService { return &UserService{repository:repository} }\n" + service_method)
         (folder / "controller.go").write_text(controller)
@@ -541,7 +541,7 @@ func TestFactoryExamples(t *testing.T) {
 """
     with tempfile.TemporaryDirectory(prefix="spine-doc-broker-factory-") as temp:
         folder = Path(temp)
-        (folder / "go.mod").write_text(GO_MOD + "\nrequire (\n github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1\n github.com/NARUBROWN/spine-kafka-platform v0.2.0-rc.1\n github.com/NARUBROWN/spine-rabbitmq-platform v0.2.0-rc.1\n)\n")
+        (folder / "go.mod").write_text(GO_MOD + "\nrequire (\n github.com/NARUBROWN/spine-echo-platform v0.2.0\n github.com/NARUBROWN/spine-kafka-platform v0.2.0\n github.com/NARUBROWN/spine-rabbitmq-platform v0.2.0\n)\n")
         (folder / "example_test.go").write_text(test)
         subprocess.run(["go", "mod", "tidy"], cwd=folder, check=True, capture_output=True, text=True)
         subprocess.run(["go", "test", "-buildvcs=false", "./..."], cwd=folder, check=True)
@@ -625,7 +625,7 @@ func TestLegacyQueryHandlers(t *testing.T) {
 """
     with tempfile.TemporaryDirectory(prefix="spine-doc-query-values-") as temp:
         folder = Path(temp)
-        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1\n")
+        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0\n")
         (folder / "example_test.go").write_text(test)
         subprocess.run(["go", "mod", "tidy"], cwd=folder, check=True, capture_output=True, text=True)
         subprocess.run(["go", "test", "-buildvcs=false", "./..."], cwd=folder, check=True)
@@ -669,7 +669,7 @@ func TestMultipartExamples(t *testing.T) {
 """
     with tempfile.TemporaryDirectory(prefix="spine-doc-multipart-") as temp:
         folder = Path(temp)
-        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1\n")
+        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0\n")
         (folder / "example_test.go").write_text(test)
         subprocess.run(["go", "mod", "tidy"], cwd=folder, check=True, capture_output=True, text=True)
         subprocess.run(["go", "test", "-buildvcs=false", "./..."], cwd=folder, check=True)
@@ -707,7 +707,7 @@ func TestPreparedExport(t *testing.T) {
 """
     with tempfile.TemporaryDirectory(prefix="spine-doc-export-") as temp:
         folder = Path(temp)
-        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0-rc.1\n")
+        (folder / "go.mod").write_text(GO_MOD + "\nrequire github.com/NARUBROWN/spine-echo-platform v0.2.0\n")
         (folder / "example_test.go").write_text(test)
         subprocess.run(["go", "mod", "tidy"], cwd=folder, check=True, capture_output=True, text=True)
         subprocess.run(["go", "test", "-buildvcs=false", "./..."], cwd=folder, check=True)

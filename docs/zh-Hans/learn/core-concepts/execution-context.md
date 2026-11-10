@@ -241,7 +241,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 这段代码是方法签名示例，`CreateUserRequest` 和 `User` 是应用自行定义的类型。表单 DTO 在字段上使用 `form` 标签，上传文件可通过 `pkg/multipart.UploadedFiles` 接收。
 
-Spine `v0.7.1` 配合 Echo 平台 `v0.2.0-rc.1`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。 [执行流水线](/zh-Hans/learn/core-concepts/pipeline#error-responses)
+Spine `v0.7.1` 配合 Echo 平台 `v0.2.0`，对格式错误的 JSON、数字或布尔路径值转换失败返回 HTTP 400，对不支持的正文 Content-Type 返回 415，对超出正文大小限制返回 413。绑定失败发生在控制器调用之前。请区分绑定失败与业务验证，并通过实际请求确认。 [执行流水线](/zh-Hans/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext：解析事件输入
 

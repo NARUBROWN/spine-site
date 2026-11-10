@@ -241,7 +241,7 @@ func (c *UserController) CreateUser(req *CreateUserRequest) (httpx.Response[User
 
 このコードはメソッドシグネチャの例で、`CreateUserRequest` と `User` はアプリで定義する型です。フォーム DTO はフィールドに `form` タグを使い、アップロードファイルは `pkg/multipart.UploadedFiles` で受け取れます。
 
-Spine `v0.7.1` と Echo プラットフォーム `v0.2.0-rc.1` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。 [実行パイプライン](/ja/learn/core-concepts/pipeline#error-responses)
+Spine `v0.7.1` と Echo プラットフォーム `v0.2.0` は、不正な JSON や数値や真偽値のパス変換エラーに HTTP 400、未対応の本文 Content-Type に 415、本文サイズ制限の超過に 413 を返します。バインディング失敗はコントローラーの呼び出し前に発生します。業務検証のエラーと区別し、実際のリクエストで確認してください。 [実行パイプライン](/ja/learn/core-concepts/pipeline#error-responses)
 
 ## ConsumerRequestContext: イベント入力の解釈
 

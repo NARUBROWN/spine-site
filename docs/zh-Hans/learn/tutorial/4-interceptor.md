@@ -12,6 +12,10 @@
 
 以下独立应用通过 `api.Interceptors` 将认证拦截器连接到一个路由。在独立 Go 模块中安装 Spine `v0.7.1` 和兼容 Echo 平台，保存为 `main.go` 并运行。该令牌仅用于演示。
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

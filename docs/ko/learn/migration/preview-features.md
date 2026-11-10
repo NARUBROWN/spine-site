@@ -4,11 +4,11 @@ Spine `v0.7.1`의 OpenAPI UI, HTTP v3 입력 처리, TLS와 종료 동작을 설
 
 ## 실행할 버전 {#versions}
 
-독립 예제는 코어 `v0.7.1`과 Echo `v0.2.0-rc.1`을 사용합니다. Go 1.25.5 이상이 필요합니다. 새 디렉터리에서 모듈을 만들고 의존성을 고정한 뒤 아래 코드를 `main.go`에 저장하세요. 정식 플랫폼이 공개되면 검증된 호환 태그로 교체하고 `go.mod`와 `go.sum`을 보관하세요.
+독립 예제는 정식 코어 `v0.7.1`과 Echo `v0.2.0`을 사용합니다. Go 1.25.5 이상이 필요합니다. 새 디렉터리에서 모듈을 만들고 의존성을 설치한 뒤 아래 코드를 `main.go`에 저장하세요. `go.mod`와 `go.sum`을 보관하세요.
 
 ```bash
 go mod init example.com/boot-example
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0-rc.1
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
 ```
 
 ## Swagger UI와 ReDoc 부팅 옵션 {#boot}

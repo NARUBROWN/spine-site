@@ -14,6 +14,10 @@ A global `PreHandle` runs before routing and receives empty metadata. In that ca
 
 This standalone app reads `HandlerName()` and `ArgumentOffset()` in a route interceptor and stores them in the request context. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save this as `main.go`, and run `go run .`.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 

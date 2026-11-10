@@ -8,7 +8,7 @@ Build an HTTP API to create, list, retrieve, update, and delete users. The examp
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. Create the application with CLI `v0.4.3-rc.1` or later and add the CRUD code manually. The CLI `resource` generates a GET skeleton; `slice --storage memory` generates create and read skeletons.
+Complete [CLI installation](/en/learn/getting-started/installation) first. Create the application with CLI `v0.4.3` or later and add the CRUD code manually. The CLI `resource` generates a GET skeleton; `slice --storage memory` generates create and read skeletons.
 
 Stored users disappear when the server process stops.
 
@@ -30,7 +30,7 @@ graph TD
 
 Create a basic app and check its dependencies and project configuration. Run subsequent commands from `crud-example/`.
 
-The commands below select the stable dependency channel. If a compatible stable platform tag is not yet available, use `--channel rc` for validation and check the selected versions in `go.mod`.
+The commands below use the stable dependency channel. Check the selected versions in `go.mod`.
 
 ```sh
 spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive

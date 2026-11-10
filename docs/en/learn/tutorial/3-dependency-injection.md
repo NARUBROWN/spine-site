@@ -28,6 +28,10 @@ func NewUserService(repository *UserRepository) *UserService {
 
 This standalone app registers a repository, service, and controller using `Constructor` methods and role markers. Dependencies resolve by type even though registration is in reverse order. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save this as `main.go`, and run it.
 
+```bash
+go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```
+
 ```go
 package main
 
