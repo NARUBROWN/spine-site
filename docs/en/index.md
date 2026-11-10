@@ -31,6 +31,10 @@ features:
 
 <BenchmarkSection />
 
+<SpineCloudSection />
+
+<AgentStart />
+
 <section class="home-start">
 
 ## Build your first app
@@ -55,3 +59,9 @@ features:
 </div>
 
 </section>
+
+<div class="home-support">
+
+<EnterpriseSupportBanner />
+
+</div>

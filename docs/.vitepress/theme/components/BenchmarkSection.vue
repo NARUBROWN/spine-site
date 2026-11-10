@@ -4,12 +4,15 @@ import { useData, withBase } from 'vitepress'
 import { benchmarkCopy } from '../benchmark/copy'
 import { assetRoot, common, number, throughput } from '../benchmark/data'
 import { vmCostCopy } from '../benchmark/vm-cost-copy'
+import { spineCloudCopy, spineCloudURL } from '../cloud/copy'
 import BenchmarkRows from './BenchmarkRows.vue'
 import VmCostMethod from './VmCostMethod.vue'
+import SpineCloudBrand from './SpineCloudBrand.vue'
 
 const { lang } = useData()
 const copy = computed(() => benchmarkCopy(lang.value))
 const costCopy = computed(() => vmCostCopy(copy.value.path))
+const cloudCopy = computed(() => spineCloudCopy(copy.value.path))
 const metrics = ['throughput', 'memory', 'cost'] as const
 const mode = ref<typeof metrics[number]>('throughput')
 
@@ -72,6 +75,11 @@ function selectWithKeyboard(event: KeyboardEvent) {
         </div>
       </div>
       <div id="benchmark-comparison-panel" :aria-describedby="mode === 'cost' ? 'vm-cost-note-home' : mode === 'throughput' ? 'benchmark-condition benchmark-capacity-note' : 'benchmark-condition'" role="tabpanel" :aria-labelledby="`benchmark-tab-${mode}`" tabindex="0">
+        <div v-if="mode === 'cost'" class="cloud-cost-offer">
+          <a class="cloud-cost-link" :href="spineCloudURL(copy.path)"><SpineCloudBrand variant="dark" class="cloud-cost-brand" /></a>
+          <p class="cloud-cost-price"><span>{{ cloudCopy.costLead }}</span><strong>{{ cloudCopy.cost }}</strong></p>
+          <p class="cloud-cost-note">{{ cloudCopy.costNote }}</p>
+        </div>
         <p v-if="mode === 'throughput'" class="capacity-assumption">{{ copy.capacityAssumption }}</p>
         <p v-else-if="mode === 'cost'" class="capacity-assumption">{{ costCopy.assumption }}</p>
         <BenchmarkRows :metric="mode" />
@@ -134,6 +142,12 @@ function selectWithKeyboard(event: KeyboardEvent) {
 .metric-tabs button:hover { background: var(--vp-c-default-soft); }
 .metric-tabs button[aria-selected='true'] { background: var(--vp-c-brand-3); color: var(--vp-c-white); }
 #benchmark-comparison-panel { grid-area: chart; min-width: 0; }
+.cloud-cost-offer { --cloud-mint: #12a876; margin-bottom: 32px; }
+.cloud-cost-link { display: inline-block; margin-bottom: 12px; }
+.cloud-cost-brand { width: 184px; }
+.benchmark-section .cloud-cost-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; color: var(--cloud-mint); font-size: 20px; font-weight: 600; line-height: 1.5; }
+.cloud-cost-price strong { font-size: 40px; font-weight: 650; letter-spacing: -.04em; white-space: nowrap; }
+.benchmark-section .cloud-cost-note { margin-top: 4px; color: var(--vp-c-text-2); font-size: 14px; }
 .benchmark-section .capacity-assumption { margin-bottom: 24px; color: var(--vp-c-text-1); font-size: 14px; font-weight: 550; line-height: 1.8; }
 .comparison-notes { grid-area: notes; align-self: start; }
 .benchmark-section .chart-condition, .benchmark-section .capacity-note { max-width: 48ch; color: var(--vp-c-text-2); font-size: 14px; line-height: 1.85; }

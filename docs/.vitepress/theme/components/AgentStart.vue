@@ -102,10 +102,10 @@ function choose(id: string) { selected.value = id; status.value = '' }
 </template>
 
 <style scoped>
-.agent-start { padding: 24px var(--home-gutter) 70px; }
+.agent-start { padding: 80px var(--home-gutter) 0; }
 .agent-start-inner { max-width: var(--home-width); margin: 0 auto; padding: clamp(24px, 4vw, 44px); background: var(--vp-c-default-soft); display: grid; grid-template-columns: .8fr 1.2fr; gap: 48px; }
-.agent-intro h2 { margin: 0; font-size: clamp(26px, 3vw, 36px); font-weight: 700; line-height: 1.3; letter-spacing: -.035em; word-break: keep-all; }
-.agent-intro p { margin: 18px 0 0; font-size: 16px; line-height: 1.7; word-break: keep-all; }
+.agent-start .agent-intro h2 { margin: 0; padding: 0; border: 0; font-size: clamp(26px, 3vw, 36px); font-weight: 700; line-height: 1.3; letter-spacing: -.035em; word-break: keep-all; }
+.agent-start .agent-intro p { margin: 18px 0 0; font-size: 16px; line-height: 1.7; word-break: keep-all; }
 .agent-panel { min-width: 0; }
 .agent-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .agent-option { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 64px; padding: 10px; background: var(--vp-c-bg); border: 2px solid transparent; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -123,5 +123,6 @@ function choose(id: string) { selected.value = id; status.value = '' }
 .agent-fallback { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; background: var(--vp-c-bg); font-size: 13px; line-height: 1.7; }
 .agent-start :is(button, a):focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 3px; }
 @media (max-width: 800px) { .agent-start-inner { grid-template-columns: 1fr; gap: 24px; } }
-@media (max-width: 540px) { .agent-start { padding-top: 12px; padding-bottom: 44px; } .agent-options { grid-template-columns: 1fr; } .agent-option { justify-content: flex-start; min-height: 52px; } .agent-actions > * { flex: 1 1 auto; } }
+@media (max-width: 640px) { .agent-start { padding-top: 40px; } }
+@media (max-width: 540px) { .agent-options { grid-template-columns: 1fr; } .agent-option { justify-content: flex-start; min-height: 52px; } .agent-actions > * { flex: 1 1 auto; } }
 </style>

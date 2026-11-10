@@ -31,6 +31,10 @@ features:
 
 <BenchmarkSection />
 
+<SpineCloudSection />
+
+<AgentStart />
+
 <section class="home-start">
 
 ## 创建第一个应用
@@ -55,3 +59,9 @@ features:
 </div>
 
 </section>
+
+<div class="home-support">
+
+<EnterpriseSupportBanner />
+
+</div>

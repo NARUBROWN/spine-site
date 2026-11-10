@@ -6,6 +6,7 @@ import TerminalBoot from './components/TerminalBoot.vue'
 import AgentStart from './components/AgentStart.vue'
 import Footer from './components/Footer.vue'
 import BenchmarkSection from './components/BenchmarkSection.vue'
+import SpineCloudSection from './components/SpineCloudSection.vue'
 import BenchmarkReport from './components/BenchmarkReport.vue'
 import SpineWorkbench from './components/SpineWorkbench.vue'
 import EnterpriseSupport from './components/EnterpriseSupport.vue'
@@ -19,15 +20,16 @@ export default {
     Layout: () => {
         return h(DefaultTheme.Layout, null, {
             'home-hero-image': () => h(SpineWorkbench),
-            'home-hero-actions-after': () => h(EnterpriseSupportBanner),
-            'home-hero-after': () => h(AgentStart),
             'layout-bottom': () => h(Footer)
         })
     },
     enhanceApp({ app }) {
         app.component('FrameworkTabs', FrameworkTabs)
         app.component('TerminalBoot', TerminalBoot)
+        app.component('AgentStart', AgentStart)
+        app.component('EnterpriseSupportBanner', EnterpriseSupportBanner)
         app.component('BenchmarkSection', BenchmarkSection)
+        app.component('SpineCloudSection', SpineCloudSection)
         app.component('BenchmarkReport', BenchmarkReport)
         app.component('EnterpriseSupport', EnterpriseSupport)
         app.component('ReleaseCatalog', ReleaseCatalog)

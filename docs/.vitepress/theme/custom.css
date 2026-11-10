@@ -118,7 +118,8 @@
 .VPHome .vp-doc h2 { margin-top: 0; padding-top: 0; border-top: 0; font-size: clamp(28px, 3vw, 40px); line-height: 1.35; letter-spacing: -.04em; }
 .VPHome .vp-doc p { color: var(--vp-c-text-1); font-size: 16px; line-height: 1.85; }
 .VPHome:lang(ko) .VPFeature, .VPHome:lang(ko) .vp-doc { word-break: keep-all; overflow-wrap: break-word; }
-.home-start { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 72px; max-width: calc(var(--home-width) + 2 * var(--home-gutter)); margin: 0 auto; padding: 80px var(--home-gutter) 88px; }
+.home-start { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 72px; max-width: calc(var(--home-width) + 2 * var(--home-gutter)); margin: 0 auto; padding: 40px var(--home-gutter) 48px; }
+.home-support { max-width: calc(var(--home-width) + 2 * var(--home-gutter)); margin: 0 auto; padding: 0 var(--home-gutter) 88px; }
 .VPHome .home-start h2 { margin: 0; }
 .home-next-steps { display: grid; gap: 28px; }
 .home-next-steps a { display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--vp-c-text-1); }
@@ -152,7 +153,8 @@
   .VPHome .VPFeature .title { font-size: 18px; }
   .VPHome .VPFeature .details { font-size: 15px; line-height: 1.7; }
   .VPHome .VPFeature .link-text-value { font-size: 14px; }
-  .home-start { grid-template-columns: minmax(0, 1fr); gap: 22px; padding-top: 40px; padding-bottom: 44px; }
+  .home-start { grid-template-columns: minmax(0, 1fr); gap: 22px; padding-top: 32px; padding-bottom: 32px; }
+  .home-support { padding-bottom: 44px; }
   .VPHome .home-start h2 { font-size: 26px; }
   .home-next-steps { gap: 22px; }
   .home-next-steps a { gap: 8px; }
