@@ -1,10 +1,10 @@
 # 选择平台和 DTO 验证
 
-Spine `v0.7.1` 将 HTTP、WebSocket、事件和 DTO 验证的公开契约保留在核心中，并将实现作为独立模块选择。应用只需连接所需实现。
+Spine `v0.7.5` 将 HTTP、WebSocket、事件和 DTO 验证的公开契约保留在核心中，并将实现作为独立模块选择。应用只需连接所需实现。
 
 ## 使用 CLI 选择
 
-安装正式 CLI `v0.4.3` 或更高版本后，在不同目录中分别运行以下命令。`--channel main` 选择已公开的正式标签。CLI 安装渠道和应用依赖渠道相互独立。
+按[安装指南](/zh-Hans/learn/getting-started/installation)安装正式版 Spine CLI。本示例使用 CLI `v0.4.4` 和核心 `v0.7.5`。
 
 ```sh
 spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
@@ -29,8 +29,8 @@ HTTP 使用 `contract/http` 与 Echo 或 net/http，WebSocket 使用 `contract/w
 
 ```go
 type CreateUserRequest struct {
-    Email string `json:"email" validate:"required,email"`
-    Age   int    `json:"age" validate:"gte=18"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
 }
 ```
 
@@ -44,4 +44,4 @@ type CreateUserRequest struct {
 spine update --dry-run
 ```
 
-请参阅[发布渠道与安装](/zh-Hans/community/release-channels)、[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)和 [HTTP v3 与启动选项](/zh-Hans/learn/migration/preview-features)。
+请参阅[发布渠道与安装](/zh-Hans/community/release-channels)、[输入迁移](/zh-Hans/learn/migration/v0.7.5)和 [HTTP v3 与启动选项](/zh-Hans/learn/migration/v0.7.5)。

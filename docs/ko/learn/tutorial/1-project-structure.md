@@ -1,190 +1,122 @@
 # 프로젝트 구조
 
-::: info
-이 예제는 `legacy` 레이아웃의 호환 등록 방식으로 작성되었습니다. `app.Route`는 Deprecated이며 새 컨트롤러는 [컨트롤러와 라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요.
-:::
+기본 layered-v1 레이아웃에서 조립, HTTP 컨트롤러와 실행을 분리합니다. Deprecated 라우트 등록 코드를 새로 작성하지 않습니다.
 
-Spine CLI로 프로젝트를 만들고 사용자 리소스를 추가합니다. 생성된 파일을 살펴보면서 앱 구성 코드를 둘 위치와 컨트롤러, 서비스, 리포지토리의 역할을 익힙니다.
+## 프로젝트 생성
 
-먼저 [CLI 설치](/ko/learn/getting-started/installation)를 완료하세요. 이 튜토리얼은 기능별 패키지를 사용하므로 새 디렉터리에서 `--layout legacy`로 `my-app`을 생성합니다. [첫 번째 앱](/ko/learn/getting-started/first-app)의 기본 `layered-v1` 앱과 구조가 다르며, 기존 앱을 자동 변환하지 않습니다.
-
-## CLI로 프로젝트 생성
-
-프로젝트를 둘 상위 디렉터리에서 실행합니다. 같은 이름의 `my-app` 디렉터리가 이미 있다면 다른 이름을 사용하세요.
+Spine CLI `v0.4.4`로 앱을 만듭니다. 생성된 `go.mod`에서 코어와 플랫폼 버전을 확인하세요.
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
 ```
 
-`my-app` 디렉터리가 생성되고 의존성이 준비됩니다. `doctor`가 도구와 프로젝트 설정을 진단하며, `inspect`에서 기본 경로인 `GET /health` 등록을 확인할 수 있습니다.
-
-## 생성되는 기본 구조
-
-위에서 실행한 `new`는 `go.sum`을 포함한 프로젝트 파일을 만들고 의존성 설치와 빌드를 완료합니다.
-
 ```text
 my-app/
-├── .gitignore
-├── README.md
-├── go.mod
-├── go.sum
 ├── main.go
+├── go.mod
 ├── spine.toml
-└── internal/
-    └── application/
-        ├── application.go
-        └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/controller/health_controller.go
 ```
 
-## CLI 설정
+## 실행과 조립
 
-`spine.toml`은 모듈, 진입점, 앱 구성 위치, 포트, 레이아웃과 플랫폼을 설정합니다. DB와 인증 등 앱 설정은 별도로 관리합니다.
-
-```toml
-module = "example.com/my-app"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "legacy"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
-```
-
-| 키 | 역할 |
-| --- | --- |
-| `module` | Go 모듈 경로. `go.mod`의 모듈 경로와 일치해야 합니다. |
-| `entrypoint` | 실행하거나 빌드할 대상 |
-| `composition` | 앱 구성을 검사하고 생성한 코드를 자동으로 등록할 위치 |
-| `port` | 개발 서버에서 사용할 포트 |
-| `layout` | 생성기의 파일 배치 (`legacy` 또는 `layered-v1`) |
-| `platform` | HTTP 플랫폼 (`echo`, `nethttp` 또는 `none`) |
-| `recipe` | 호환 의존성 조합을 선택하는 레시피 |
-| `websocket_platform` | WebSocket 구현 (`none` 또는 `gorilla`) |
-| `validator` | DTO 검증 구현 (`none` 또는 `playground`) |
-| `event_platforms` | 이름과 종류로 선택한 이벤트 플랫폼 목록 |
-
-## 실행과 앱 구성 분리
-
-`main.go`는 앱 구성 함수를 호출하고, 구성을 검증한 뒤 서버를 실행합니다. 생성자, 라우트, 인터셉터는 `internal/application/application.go`의 `BuildApplication`에 등록합니다.
+아래 세 파일은 역할 분리의 최소 예제입니다. 기존 생성 파일을 바꿀 때 해당 파일을 교체하며 같은 타입과 등록을 중복 추가하지 않습니다. main은 조립, Validate, Run을 호출하고 BuildApplication은 서버를 시작하지 않습니다.
 
 ```go
+// main.go
 package main
 
 import (
-    "log"
-
-    "example.com/my-app/internal/application"
+	"example.com/my-app/internal/application"
+	"log"
 )
 
 func main() {
-    app, options, err := application.BuildApplication()
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Validate(options); err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := application.BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-`BuildApplication`은 서버를 시작하지 않고 앱과 실행 옵션을 반환합니다. 생성된 코드는 기본 HTTP 경로인 `GET /health`를 등록합니다.
-
 ```go
-package application
+// src/controller/health_controller.go
+package controller
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "os"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type HealthController struct{}
 
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(NewHealthController)
-    app.Route("GET", "/health", (*HealthController).Get)
-
-    address := ":8080"
-    if port := os.Getenv("SPINE_PORT"); port != "" {
-        address = ":" + port
-    }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
-
-## CLI로 기능 추가
-
-프로젝트 루트에서 사용자 리소스를 생성합니다. 기존 프로젝트에 이미 생성했다면 이 명령은 건너뜁니다.
-
-```sh
-spine generate resource user
-```
-
-```text
-src/user/
-├── user_route.go
-├── user_repository.go
-├── user_service.go
-└── user_controller.go
-```
-
-명령이 끝나면 `src/user`에 네 파일이 생성됩니다. CLI는 기본적으로 `BuildApplication`에 다음 등록 코드를 추가합니다. 생성 결과를 확인하고, 같은 코드를 직접 다시 등록하지 마세요.
 
 ```go
-if err := user.Register(app); err != nil {
-    return nil, boot.Options{}, err
+// internal/application/application.go
+package application
+
+import (
+	"example.com/my-app/src/controller"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+)
+
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&controller.HealthController{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 
-`user_route.go`는 생성자와 `GET /user/:id`를 등록합니다. 나머지 파일의 역할은 다음과 같습니다.
+## 생성기로 기능 추가
 
-| 파일 | 역할 |
-| --- | --- |
-| `user_controller.go` | HTTP 요청을 받아 서비스에 전달하고 응답을 반환합니다. |
-| `user_service.go` | 비즈니스 로직을 처리합니다. |
-| `user_repository.go` | 데이터 접근을 담당합니다. |
+```sh
+spine generate resource user --dry-run
+spine generate resource user
+spine --help
+```
 
-리소스 생성기는 ID를 반환하는 GET 핸들러의 기본 코드만 생성합니다. 데이터베이스 모델이나 데이터를 영구 저장하는 기능은 직접 구현해야 합니다.
+기본 layered-v1의 resource는 조회 골격을 만듭니다. 전체 CRUD와 DB 및 업무 규칙은 직접 구현합니다. 생성기가 추가한 역할 등록을 중복 작성하지 마세요. 컨트롤러의 RegisterRoutes와 Constructor 역할 등록을 확인합니다. 레이아웃별 지원 생성기는 spine --help으로 확인할 수 있습니다.
 
-타입이 있는 생성, 조회 예제가 필요하면 별도 이름으로 `spine generate slice order --storage memory --field name:string`을 사용하세요. 이 명령의 메모리 저장소는 개발용이며 앱을 종료하면 데이터가 사라집니다.
-
-## 등록 규칙과 검증
-
-CLI가 등록 코드를 검사할 수 있도록 `BuildApplication() (spine.App, boot.Options, error)` 함수 본문의 최상위에 `app := spine.New(echoplatform.Option())`를 유지하세요. 등록 코드를 조건문, 반복문, 임의의 보조 함수 안으로 옮기지 않습니다. `Register(app)`가 반환한 오류도 확인해 반환해야 합니다.
-
-앱 구성을 검사한 뒤 서버를 실행합니다.
+## 검증과 실행
 
 ```sh
 spine contract check
 spine verify
 spine dev
+# In another terminal
+curl http://localhost:8080/health
 ```
 
-`contract check`는 등록 코드에서 추출한 실행 계약을 검사합니다. `verify`는 계약 검사와 `gofmt`, `go vet`, Go 테스트를 실행합니다. 두 명령이 오류 없이 끝나면 `dev`가 개발 서버를 시작합니다. 실제 HTTP 동작과 외부 데이터베이스, 메시지 브로커 연결은 실행 환경에서 별도로 확인해야 합니다.
+기대 응답은 {"status":"ok"}입니다. contract check는 정적 계약, verify는 계약과 포맷, vet, Go 테스트를 확인합니다. app.Validate도 실제 생성자 실행이나 외부 연결 성공을 보장하지 않습니다. HTTP와 외부 자원은 실제 요청으로 확인합니다.
 
 ## 다음 단계
 
-- [컨트롤러](/ko/learn/tutorial/2-controller)
-- [의존성 주입](/ko/learn/tutorial/3-dependency-injection)
-- [인터셉터](/ko/learn/tutorial/4-interceptor)
+[컨트롤러](/ko/learn/tutorial/2-controller) / [DI](/ko/learn/tutorial/3-dependency-injection) / [인터셉터](/ko/learn/tutorial/4-interceptor)

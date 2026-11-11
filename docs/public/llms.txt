@@ -1,59 +1,80 @@
-# Spine: CLI-first application guide
+# Spine 0.7.5 API guide
 
-> Create projects with Spine CLI, keep assembly in `BuildApplication`, and verify the execution contract and real behavior.
+> Assemble once in BuildApplication, declare input sources, use public context views, and verify real behavior.
 
-## Version and sources
+This guide targets Spine core v0.7.5 and CLI v0.4.4. Check /en/community/versions for published tags and compatible platform versions. CLI installation and app dependency channels are independent. Use Go 1.26 or later for the examples, and honor the selected modules' go directives. Preserve source, go.mod and go.sum.
 
-This guide targets Spine `v0.7.1`. CLI `v0.4.3` supports the current controller and dependency-channel features. Install it with `go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3`, or use `@latest` for the latest stable release. Check `spine version` before using these commands. CLI version and application dependency channel are independent.
-
-Core and CLI require Go 1.25.5 or later; playground validator and NATS require Go 1.26 or later. Core `v0.7.1` is published. The documented stable combination uses Echo `v0.2.0`, net/http `v0.1.0`, and playground `v0.2.0`. Preserve application source, `go.mod`, and `go.sum`; do not infer current publication state from an intended release.
-
-- Documentation: /en/docs
-- Installation: /en/learn/getting-started/installation
-- First app: /en/learn/getting-started/first-app
-- Platform choices: /en/learn/getting-started/platforms
-- v0.7.1 migration: /en/learn/migration/v0.7.1
-- HTTP inputs: /en/learn/migration/v0.7.1-preview
-- Runtime OpenAPI: /en/reference/api/openapi
-- Actual published tags: /en/community/versions
-- Framework source: https://github.com/NARUBROWN/spine
-- CLI source and agent contract: https://github.com/NARUBROWN/spine-cli
-
-Use public packages; applications must not import `github.com/NARUBROWN/spine/internal/...`. The CLI produces a project `spine.toml`, `go.mod`, root `main.go`, and composition under `internal/application`. The default `layered-v1` layout organizes code by role; `legacy` is available for existing feature-oriented projects.
-
-## Install and create a project
+## Create and verify
 
 ```sh
 go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
-spine new my-app --module example.com/my-app --channel main --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
+spine inspect
 spine contract check
 spine verify
 spine dev
 ```
 
-`--channel main` chooses published stable dependency tags, `rc` selects a published RC or higher stable tag, and `preview` resolves the moving Preview branch. CLI `v0.4.3` defaults to the Main channel, including in the interactive wizard. The selected value is stored as `dependency_channel` and reused by `spine update`. A new tool installation does not rewrite an existing app. To reproduce an application, retain its source, `go.mod`, and `go.sum`; `spine update` can resolve newer versions in its configured channel. `--skip-install` still resolves versions and metadata but skips installation and build verification.
+The default layout is layered-v1. BuildApplication lives in internal/application/application.go and returns (spine.App, boot.Options, error). Generated main assembles, validates and runs. --validator playground creates playground.New() in BuildApplication and registers spine.WithValidator(engine). The default validator none does not check validate tags. There is no boot option that automatically calls arbitrary DTO Validate methods.
 
-`spine contract check` analyzes source without starting the application. `spine verify` also runs formatting, `go vet`, and tests; neither proves real HTTP, database, broker, or WebSocket behavior. After a `--skip-install` generation or dependency changes, run `go mod tidy` and `go mod download all` before the offline contract check. Test external dependencies separately.
+contract check analyzes static contracts. verify adds formatting, vet and Go tests. Neither proves real HTTP, DB or broker behavior. app.Validate does not execute constructors. Prepare executes DI and route collection without starting listeners or consumer loops; initialization can still touch external resources. Run manages preparation, serving and shutdown. Arbitrary DI Close methods are not automatically called.
 
-For changes made by a generator, review the exact plan and apply the matching base hash:
+## Constructors and routes
 
-```sh
-spine g resource order --dry-run --json
-spine g resource order --if-match <base_hash> --json
-spine update --dry-run --json
-spine update --if-match <base_hash> --json
-```
+Implement Constructor(dependencies...) *Self and register constructor.Repository, Service, Controller, Interceptor, or Custom. Marker fields are not copied. Factories support one return value, not (T, error) or variadic parameters. Ordinary []T parameters are supported. Instances are shared within the app; never overwrite singleton fields with request transactions.
 
-Use the corresponding hash from each plan. A changed project or dependency resolution invalidates a reviewed plan. `spine update` changes the selected project dependencies, not the CLI executable, application source, or implementation selection. See `spine schema --json` and `spine capabilities --json` for the installed CLI's contract.
+Controllers implement RegisterRoutes(*api.Registry). Pass an inline handler to r.GET(path, func(...) { ... }, options...) and use r.Group(prefix, options...) for related routes. A group "/" route refers to its base. api.Interceptors((*Auth)(nil)) resolves a registered interceptor through DI. Group policies are inherited; route policies append. Registration of an interceptor role does not itself apply a scope.
 
-## Controllers and dependency injection
+## Public context
 
-Use `api.Controller.RegisterRoutes(*api.Registry)` and register `constructor.Controller(&Controller{})` through `app.Constructor`. Constructor role markers include `Custom`, `Repository`, `Service`, `Controller`, and `Interceptor`; objects define `Constructor(dependencies...) *Self`. Function constructors remain supported and return exactly one value. Dependencies resolve by type. Existing `app.Route` and method expressions remain compatible but `app.Route` is deprecated. Duplicate method and path pairs are rejected during preparation.
+Handlers and all interceptor hooks use github.com/NARUBROWN/spine/pkg/spine.Ctx, commonly imported as spinectx alongside the root app package. Standard context.Context injection into handlers remains compatible.
 
-This complete application is the tested introduction example. Install `github.com/NARUBROWN/spine@v0.7.1` and a compatible Echo platform in a Go module, save the code as `main.go`, run it, and request `/greeting`.
+- ctx.ExecutionContext().Set/Get shares values within one execution.
+- ctx.ExecutionContext().Context() supplies standard context to services, repositories and publish.Event.
+- ctx.HTTPRequestContext() and HTTPResponseContext() return a view plus a support boolean.
+- ctx.WebSocket() returns the WebSocket view for handshake and message request information.
+- Check the boolean before using a transport view. Consumer executions do not have HTTP views.
+- Views do not expose internal Bind, SetRoute, writer replacement, EventBus or SenderKey.
+- Do not retain request contexts after completion. Stores are released after completion hooks; later Get returns no value and Set does nothing.
+
+## HTTP inputs and DTO validation
+
+Use input.Path[T] for a scalar or DTO, input.Query[T], input.Header[T] and input.Body[T] for DTOs. input.Param does not exist. Bare *DTO HTTP inputs fail with HTTP_INPUT_WRAPPER_REQUIRED.
+
+Path, Query and Header default to lowerCamel names: ID -> id and UserID -> userId. Override with path:"id", query:"name" or header:"X-Request-ID". Body follows JSON/XML/form decoder naming. Read body.Name or path.ID directly and dereference scalar inputs. A path DTO may bind a subset of keys; scalar inputs must match route variable count and order. Do not mix scalar and DTO Path styles.
+
+One handler accepts at most one Body. JSON, XML, URL-encoded form and multipart are supported. Use form-tagged *multipart.FileHeader or []*multipart.FileHeader fields for files; temporary files are cleaned after completion. Malformed or conflicting XML tags fail preparation.
+
+A validator registered with WithValidator checks validate tags after binding and before the handler. Failures return HTTP 400. If tags suffice, do not add a DTO Validate method or duplicate checks in handlers. A custom method is an ordinary Go method called explicitly as (*body).Validate() or (*CreateUser)(body).Validate(). The wrapper does not expose body.Validate(). OpenAPI does not infer custom method bodies.
+
+## Errors and lifecycle
+
+Return one httpx.Response[T], httpx.Binary or httpx.Redirect, optionally with error. Multiple response values fail preparation. HTTPError accepts only 400–599; 200/302 errors and ordinary errors become sanitized 500 responses. Only deliberately public messages belong in httperr.
+
+Both global and route PreHandle hooks run before input binding. Global HTTP hooks run before routing with empty HandlerMeta. Route hooks receive selected metadata. BeforeResponse runs in reverse only after successful PreHandle and sees binding, execution and response-preparation errors. Its error takes response priority over a handler error; the last failing BeforeResponse wins. Previous errors remain available to AfterCompletion.
+
+AfterCompletion runs after the response write attempt and may be called even when PreHandle was not reached. Check resources exist. Commit/rollback belongs in BeforeResponse, not AfterCompletion. Pass request bun.Tx explicitly as bun.IDB to services and repositories. DB commit, event publishing and response delivery are not one atomic transaction; use an outbox when needed.
+
+## OpenAPI and message transports
+
+Enable boot.HTTPOptions.OpenAPI explicitly, and register Swagger UI or ReDoc if needed. playground supplies SchemaDescriber alongside runtime validation. Without a describing validator, do not expect full input models. OpenAPI does not execute validation. Required metadata comes from the validator, including when json:",string" limits other constraints. Custom methods and handler-selected statuses are not inferred.
+
+New controller routes are collected during Prepare. Use spine.DescribePreparedHTTP on the prepared app and close it when finished. spine.NetHTTPHandler(prepared) returns (http.Handler, error) where supported. OpenAPI JSON/UI/assets bypass business interceptors; protect their publication through HTTP middleware or a proxy. CLI static export does not run the validator; inspect its diagnostics and the runtime schema.
+
+WebSocket message DTOs are plain structs, not HTTP Body wrappers. Send with ws.Send(ctx.ExecutionContext().Context(), ws.TextMessage, payload). This has three arguments and addresses the current connection. Do not obtain senders from internal context keys. Event consumers also use plain message DTOs; publish with publish.Event(ctx.ExecutionContext().Context(), event).
+
+## Deprecated compatibility
+
+Keep existing app.Route, route.WithInterceptors, query.Values, header.Values, query.Pagination, legacy path wrappers and multipart.UploadedFiles only for compatibility. New scaffold and example code must use current APIs. Do not mix deprecated HTTP inputs with new Path/Query/Header wrappers in one handler. ctx.Get is deprecated; use ctx.ExecutionContext().Get. Application code must not import spine/internal packages.
+
+If your app uses the retracted Go module version v0.7.1, see /en/learn/migration/v0.7.5#from-v071.
+
+## Complete DI example
+
+Install the documented 0.7.5-compatible core and Echo versions, save as main.go and request /greeting.
 
 ```go
 package main
@@ -65,6 +86,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -81,93 +103,43 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func() httpx.Response[string] {
+	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
+
 	app := spine.New(echoplatform.Option())
-	app.Constructor(
-		constructor.Controller(&Controller{}),
-		constructor.Service(&Service{}),
-		constructor.Repository(&Repository{}),
-	)
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Service(&Service{}), constructor.Repository(&Repository{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-Use `r.GET(path, handler, options...)` and the same order for group methods. Pass `api.Tags`, `api.Summary`, `api.Description`, and `api.Interceptors` after the handler. `api.Options` is not part of this release. Register a DI-managed interceptor's constructor and use a typed nil pointer in the route option when resolution from the container is required. See /en/learn/migration/preview-controller-routes and /en/learn/tutorial/4-interceptor.
+## Reading order
 
-## HTTP input, output, and errors
-
-Use `input.Path[T]` for a struct or supported basic scalar, `input.Query[T]` and `input.Body[T]` for structs, and a separate struct pointer with `header` tags for headers. Struct path and query fields use their source tag or lowerCamel name. In v0.7.1, declare one scalar path input per route variable in route order; do not mix scalar inputs with a path DTO or legacy path wrappers. See /en/learn/tutorial/2-controller and /en/learn/core-concepts/query-values.
-
-`query.Values`, `header.Values`, `query.Pagination`, and legacy `path.Int`, `path.String`, and `path.Boolean` are deprecated but remain compatible. Do not mix a deprecated input and a new Path, Query, or Header input in one handler. Body DTOs and contexts can accompany either. New typed inputs reject malformed numbers with HTTP 400. Use pointer fields to distinguish an absent query from zero; apply application defaults only when absent. Query slices support repeated keys, and comma-separated values when the HTTP platform exposes raw query. Register a validator explicitly for `validate` tags.
-
-HTTP v3 uses core body parsing. It does not merge path or query into a body DTO or call Echo Binder and JSONSerializer extensions for Spine DTO input. The multipart memory threshold is not a total request-memory limit. Uploaded files are available through completion hooks and cleaned up afterwards; copy files needed later. Ordinary non-pointer JSON fields reject explicit null. Read /en/learn/migration/preview-features for content types, TLS, and request lifetime.
-
-Return supported outputs such as `httpx.Response[T]`, `httpx.Redirect`, `httpx.Binary`, or an `error`. Use `httperr` for deliberate client errors; do not expose unexpected internal errors as client messages. Handler-selected status codes and handler-local defaults are not inferred by static OpenAPI.
-
-## Interceptors and prepared applications
-
-Global HTTP `PreHandle` executes before route selection and receives empty `HandlerMeta`; route interceptors run after routing and input binding. If authentication must precede body binding, use an HTTP-scoped global interceptor. `BeforeResponse` runs for interceptors whose `PreHandle` succeeded and may commit or roll back. `AfterCompletion` is for observation and cleanup, not changing an already transmitted response. A database commit, broker publication, and HTTP response are not one atomic operation.
-
-`app.Prepare(ctx, options)` prepares without opening a listener, but may perform broker readiness checks or custom initialization. It returns `PreparedApplication`, whose `HTTPAdapter()` returns the prepared adapter and whose `Close(ctx)` releases resources. `spine.NetHTTPHandler(prepared)` returns `(http.Handler, error)` when supported. The caller shuts down its external server and closes the prepared result; do not start or stop the adapter twice. Prepared cleanup continues after a waiting context expires. See /en/reference/api/spine-app and /en/learn/migration/preview-features#prepared.
-
-## OpenAPI, transports, and security
-
-Runtime OpenAPI is disabled by default. Set `boot.HTTPOptions.OpenAPI.Enabled` and optionally register embedded Swagger UI and ReDoc via `UI`. Documentation paths are separate from `GlobalPrefix`; configure authentication in HTTP middleware or a proxy if needed. The CLI can also export a static document using `spine contract export --format openapi --output openapi.json`. Static analysis does not execute app initialization or infer dynamic code and all runtime validator constraints.
-
-HTTP can use Echo or net/http. WebSocket needs an HTTP platform supporting upgrades and a separate Gorilla platform. Kafka, RabbitMQ, and NATS are independent event platforms. HTTP alone does not add WebSocket. The CLI supports `--platform nethttp`, `--websocket-platform gorilla`, repeated `--event-platform [name:]provider`, and `--validator playground`. Verify actual broker delivery and WebSocket exchanges; source inspection is not runtime evidence.
-
-Use explicit origins, secure broker transports and environment-backed secrets. `cors.NewValidated` checks policy before accepting requests. Allowed preflight receives 204 and denied origin, method, or headers receive 403; ordinary CORS policy does not replace authentication. Kafka failed-offset handling can block a poison record; RabbitMQ requeue can repeat indefinitely. Use idempotent consumers and an outbox when database changes and event delivery require durable coordination. See /en/reference/security-configuration and /en/reference/examples/msa.
-
-## External example details
-
-### Bun ORM + Swagger: spine-user-demo
-
-Reviewed snapshot: [`b07d2bb`](https://github.com/NARUBROWN/spine-user-demo/tree/b07d2bb35d6e0b499c6f6974e1d34f3a4fafffba), Go `1.25.5`, Spine `v0.5.1`.
-
-Follow `HTTP -> controller -> service -> repository -> Bun -> MySQL`. Together, `main.go`, `routes/user_routes.go`, `interceptor/tx_interceptor.go`, `repository/user_repository.go`, and the transaction E2E show DI, `bun.IDB` reuse across `*bun.DB`/`bun.Tx`, response-aware rollback, error mapping, and Swaggo UI. Set `SPINE_DEMO_MYSQL_DSN`, run `go run . -migrate` before the first `go run .`, and open `/swagger/index.html`. Actual CRUD uses `/users?id=1`, not `/users/:id`, with no list endpoint; prefer code over mismatching README/generated fields.
-
-### Kafka MSA: spine-simple-msa-demo
-
-Reviewed snapshot: [`aa3f0fa`](https://github.com/NARUBROWN/spine-simple-msa-demo/tree/aa3f0fae8057ec0999fadaafc9295b7c7987afbb), Go `1.25.5`, Spine `v0.5.1`.
-
-The repository name ends in `-demo`, but its `go.mod` module/import path is `github.com/NARUBROWN/spine-simple-msa`. Do not rewrite imports to add `-demo`.
-
-The flow is `POST order -> order.created -> stock idempotency decision -> stock.reserved|stock.rejected -> order result consumer -> GET status`. Read both app `main.go` files, `shared/events`, and `scenarios/outbox`; run the stock worker then order HTTP service. Docker E2E uses Redpanda port `19092`, while manual defaults use Kafka `9092`. Topic prefix must include its separator and match both processes. JSON/in-memory stores are educational; production provisioning, keys, retention, schemas, retry topics, and DLQ remain application work.
-
-### WebSocket chat: spine-simple-chat-demo
-
-Reviewed snapshot: [`b1fe598`](https://github.com/NARUBROWN/spine-simple-chat-demo/tree/b1fe598329eb79828eb4c84903c7fa3847d35914), Go `1.25.5`, Spine `v0.5.1`.
-
-This single-process in-memory server implements authenticated `join -> message -> leave`, one room per connection, room broadcast, typed errors, and runtime limit tests. Read its main, auth interceptor, controller, and E2E. Query `token` or exact `Authorization: Bearer ...` authenticates the handshake; the header wins, and blank config falls back to public `demo-token`, so production must override it and use `wss://`. There is no frontend, persistence, multi-instance state, or user/room authorization. Disconnect cleanup waits for a failed send; 1000-rune logical messages can exceed the 4096-byte frame limit; `leave` keeps the socket open. Build-tagged E2E requires a running server and `go test -tags=e2e -v ./e2e`.
-
-## Agent implementation checklist
-
-- Identify required transports, then read the closest example's actual `main.go`, handler, test, and `go.mod`.
-- Define DTO/signature contracts, DI direction, idempotency key, transaction/outbox boundary, retry/DLQ policy, and shutdown behavior before wiring routes.
-- Centralize assembly; use semantic inputs, supported outputs, narrow interceptor scopes, and environment-backed secrets.
-- Check every registration/startup error; enable `HTTP` only where a listener is intended.
-- Verify WebSocket origins/auth/capacity, secure broker transport, poison-message behavior, and durable consumer deduplication.
-- Remember that `Validate` does not replace DI warm-up, route-ambiguity checks, or live consumer readiness in `Run`.
-
-For Go changes, format the edited files, then run the CLI gates:
-
-```sh
-gofmt -w <changed-go-files>
-spine contract check --json
-spine verify --json
-```
-
-Run `go test -race ./...` separately when the change affects concurrency.
-
-Run relevant broker/database/WebSocket E2E separately. For the historical external MSA demo only, run this PowerShell example from that demo repository root:
-
-```powershell
-$env:SPINE_DEMO_KAFKA_BROKER = "localhost:19092"
-go run ./stock-app
-```
+- /en/docs
+- /en/learn/tutorial/1-project-structure
+- /en/learn/tutorial/2-controller
+- /en/learn/tutorial/3-dependency-injection
+- /en/learn/tutorial/4-interceptor
+- /en/learn/tutorial/5-database
+- /en/learn/tutorial/6-transaction
+- /en/learn/tutorial/7-error-handling
+- /en/learn/tutorial/8-swagger
+- /en/reference/api/openapi
+- /en/reference/examples/crud
+- /en/reference/examples/login
+- /en/reference/examples/msa
+- /en/reference/examples/websocket

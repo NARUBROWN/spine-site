@@ -1,14 +1,12 @@
 # 인터셉터
 
-인터셉터는 인증, 로깅 같은 공통 처리를 담당합니다. 이 독립 앱은 그룹의 모든 라우트와 개별 라우트에 인증을 적용합니다. 토큰은 데모 전용입니다.
+전역과 라우트 PreHandle은 모두 입력 바인딩 전에 실행합니다. 인증에 실패하면 본문 파싱보다 401이 먼저입니다.
 
-## 그룹과 라우트에 적용
+## 실행 예제
 
-아래 코드를 별도 Go 모듈의 `main.go`에 저장하고 실행하세요.
+[컨트롤러 의존성](/ko/learn/tutorial/2-controller)
 
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
-```
+main.go를 교체합니다. 고정 토큰은 학습용입니다. constructor.Interceptor는 DI 등록, api.Interceptors는 적용 범위입니다. (*Auth)(nil)은 등록한 타입을 DI에서 해결하는 표식입니다.
 
 ```go
 package main
@@ -23,101 +21,111 @@ import (
 	"github.com/NARUBROWN/spine/pkg/httperr"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
 type Auth struct{}
 
-func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-	if ctx.Header("Authorization") != "Bearer demo-token" {
+func (*Auth) Constructor() *Auth { return &Auth{} }
+func (*Auth) PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error {
+	request, ok := ctx.HTTPRequestContext()
+	if !ok {
+		return httperr.InternalServerError("HTTP request context unavailable")
+	}
+	if request.Header("Authorization") != "Bearer demo-token" {
 		return httperr.Unauthorized("unauthorized")
 	}
+	ctx.ExecutionContext().Set("userID", "demo-user")
 	return nil
 }
-func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
-func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
-func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+func (*Auth) PostHandle(spinectx.Ctx, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(spinectx.Ctx, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(spinectx.Ctx, core.HandlerMeta, error)      {}
 
 type Controller struct{}
+type CreateUser struct {
+	Name string `json:"name"`
+}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	users := r.Group("/users", api.Interceptors(&Auth{}))
-	users.GET("/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+	users := r.Group("/users", api.Interceptors((*Auth)(nil)))
+	users.GET("/:id", func(ctx spinectx.Ctx, id input.Path[int64]) httpx.Response[map[string]int64] {
 		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
 	})
-	r.GET("/profile", func() httpx.Response[string] {
+	users.POST("/", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[string] {
+		return httpx.Response[string]{Body: body.Name}
+	})
+	r.GET("/profile", func(ctx spinectx.Ctx) httpx.Response[string] {
 		return httpx.Response[string]{Body: "profile"}
-	}, api.Interceptors(&Auth{}))
+	}, api.Interceptors((*Auth)(nil)))
+}
+func BuildApplication() (spine.App, boot.Options, error) {
+
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Interceptor(&Auth{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 func main() {
-	app := spine.New(echoplatform.Option())
-	app.Constructor(constructor.Controller(&Controller{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-`/users/:id`는 그룹에서 인증을 상속하고 `/profile`은 라우트에 직접 인증을 지정합니다. 중첩 그룹도 상위 그룹의 설정을 상속합니다.
-
-인증 없이 요청하면 401, 토큰을 전달하면 200을 반환합니다. 실제 서비스에서는 안전한 토큰 검증을 구현하세요.
-
-```bash
-curl -i http://localhost:8080/users/1
-curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
-curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/profile
-```
-
-## 인터셉터 수명주기
-
-Spine v0.7.1의 HTTP 요청은 전역 인터셉터, 라우팅과 입력 바인딩, 라우트 인터셉터, 컨트롤러 순서로 실행됩니다. 인터셉터는 네 수명주기 메서드를 모두 구현해야 합니다.
-
-```mermaid
-graph TD
-    Request["요청"] --> GlobalPre["전역 PreHandle"]
-    GlobalPre --> Bind["라우팅, 입력 바인딩"]
-    Bind --> RoutePre["라우트 PreHandle"]
-    RoutePre --> Controller["컨트롤러 메서드"]
-    Controller -- 성공 --> Prepare["응답 직렬화와 검증"]
-    Prepare --> Post["PostHandle<br/>역순 실행"]
-    Post --> Before["BeforeResponse<br/>역순 실행, 커밋 또는 롤백"]
-    GlobalPre -- 오류 --> Before
-    Bind -- 오류 --> Before
-    RoutePre -- 오류 --> Before
-    Controller -- 오류 --> Before
-    Prepare -- 오류 --> Before
-    Before --> Response["응답 기록"]
-    Response --> After["AfterCompletion<br/>역순 실행, 로깅과 리소스 정리"]
-```
-
-입력 바인딩이 실패하면 라우트의 `PreHandle`도 실행되지 않습니다. 본문 형식 검사보다 먼저 인증해야 하는 정책은 전역 인터셉터에서 처리하세요.
-
-
-## 인터페이스
+## 그룹과 라우트
 
 ```go
-type Interceptor interface {
-    PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    PostHandle(ctx ExecutionContext, meta HandlerMeta)
-    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-    AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
+func (*UserController) RegisterRoutes(r *api.Registry) {
+	auth := (*AuthInterceptor)(nil)
+	audit := (*AuditInterceptor)(nil)
+	users := r.Group("/users", api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-| 메서드 | 실행 시점 | 반환 | 용도 |
-|--------|----------|------|------|
-| `PreHandle` | 전역은 라우팅 전, 라우트는 입력 바인딩 후 | `error` | 인증, 검증, 트랜잭션 시작 |
-| `PostHandle` | 컨트롤러와 응답 준비가 성공한 후 | 없음 | 처리 완료 기록, 후속 작업 |
-| `BeforeResponse` | 응답을 실제로 기록하기 전 | `error` | 트랜잭션 커밋 또는 롤백 |
-| `AfterCompletion` | 응답 기록을 시도한 뒤 | 없음 | 로깅, 리소스 정리 |
+이 예제를 적용하려면 Auth와 Audit 인터셉터를 DI에 등록합니다. GET /users는 Auth, DELETE /users/:id는 Auth 다음 Audit을 실행합니다. 하위 그룹은 상위 인터셉터를 상속하고 라우트 옵션은 추가됩니다. HTTP 전역은 InterceptorFor(boot.InterceptorHTTP, ...), HTTP와 WebSocket 전체는 app.Interceptor 또는 InterceptorAll입니다. 같은 인증을 중복 적용하지 않습니다.
 
-`BeforeResponse`는 앞선 실행 오류와 응답 직렬화, 쿠키, 상태 코드 검증 오류를 `executionErr`로 받습니다. `PreHandle`에 성공한 인터셉터만 이 메서드를 실행하므로, 그 단계에서 시작한 트랜잭션을 마무리하기에 적합합니다. 커밋이나 롤백이 실패하면 오류를 반환하세요.
+## 요청 확인
 
-`AfterCompletion`은 오류가 발생해도 전역 인터셉터와 라우팅으로 확인된 라우트 인터셉터에 호출됩니다. `PreHandle`까지 실행되지 않은 인터셉터도 포함될 수 있으므로, 정리할 리소스가 있는지 먼저 확인해야 합니다. 이 시점에는 응답이 이미 기록되었을 수 있어 응답 변경 용도로 사용하지 않습니다.
+```sh
+go run .
+# 다른 터미널
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/profile
+curl -i -H 'Content-Type: application/json' -d '{' http://localhost:8080/users
+curl -i -H 'Authorization: Bearer demo-token' -H 'Content-Type: application/json' -d '{' http://localhost:8080/users
+```
 
+순서대로 401, 200, 200, 401, 400입니다. 손상된 본문도 인증 실패 시 401입니다.
 
+## 수명주기
 
-## 더 알아보기
+PreHandle은 등록 순서, 성공 후 PostHandle과 응답 전 BeforeResponse 및 응답 시도 후 AfterCompletion은 역순입니다. BeforeResponse는 PreHandle이 성공한 대상만 실행하며 바인딩, 핸들러, 직렬화와 응답 검증 오류를 받습니다. AfterCompletion은 PreHandle에 도달하지 않은 대상도 실행될 수 있어 자원 존재를 확인해야 합니다.
 
-전역 등록, 생성자 주입 및 수명주기 세부 사항은 [인터셉터 API](/ko/reference/api/interceptor)에서 확인하세요.
+BeforeResponse 오류는 핸들러 오류보다 응답에 우선합니다. 여러 훅이 실패하면 실행 순서상 마지막 오류를 사용하며 이전 오류도 완료 훅에 전달합니다.
+
+## 공개 컨텍스트
+
+네 훅 모두 spine.Ctx를 받습니다. 값은 ExecutionContext().Set/Get, 표준 컨텍스트는 ExecutionContext().Context(), HTTP는 HTTPRequestContext()의 bool 확인 뒤 접근합니다. 핸들러의 직접 context.Context 주입도 호환 지원합니다.
+
+## 다음 단계
+
+[트랜잭션](/ko/learn/tutorial/6-transaction) / [오류 처리](/ko/learn/tutorial/7-error-handling)

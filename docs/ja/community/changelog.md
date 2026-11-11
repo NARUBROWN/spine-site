@@ -1,14 +1,28 @@
 # リリースノート
 
+現在の API は [0.7.5 移行案内](/ja/learn/migration/v0.7.5)を参照してください。以下の公開情報と過去の記録は各タグの内容です。
+
 最新タグと次の目標バージョンは[バージョン一覧](/ja/community/versions)で確認してください。
 
 Preview、RC、安定版の選択と公開手順は[リリースチャンネルとインストール](/ja/community/release-channels)を参照してください。
+
+## Spine v0.7.5 / CLI v0.4.4
+
+Spine `v0.7.5` では HTTP 入力を `input.Path`、`input.Query`、`input.Header`、`input.Body` で宣言します。HTTP、イベント、WebSocket のハンドラーとインターセプターは共通の `spine.Ctx` を使います。
+
+CLI `v0.4.4` は入力の契約を検査し、生成コードと OpenAPI に反映します。正式版の依存関係チャネルでは、新規 HTTP アプリにコア `v0.7.5` と Echo プラットフォーム `v0.2.1` を選びます。
+
+Go モジュールで撤回された `v0.7.0`、`v0.7.1`、`v0.7.2-preview.1` を使用している場合は、`v0.7.5` に更新してください。
+
+- [Spine v0.7.5 リリース](https://github.com/NARUBROWN/spine/releases/tag/v0.7.5)
+- [CLI v0.4.4 リリース](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.4)
+- [0.7.5 移行ガイド](/ja/learn/migration/v0.7.5)
 
 ## Spine v0.7.1
 
 Spine `v0.7.1` はコントローラールート、役割別コンストラクター、入力元別の HTTP 入力、ランタイム OpenAPI、HTTP v3 を提供します。従来の入力 API は互換性を維持しますが Deprecated で、同じハンドラーで新しい入力と混在できません。
 
-[v0.7.1 移行ガイド](/ja/learn/migration/v0.7.1)と[ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。CLI のバージョンとアプリの依存関係は別々に選択します。CLI は `spine version`、依存関係は `go.mod` で確認します。以下は各バージョンの過去の記録です。
+[0.7.5 移行ガイド](/ja/learn/migration/v0.7.5#from-v071)と[ランタイム OpenAPI](/ja/reference/api/openapi)を参照してください。CLI のバージョンとアプリの依存関係は別々に選択します。CLI は `spine version`、依存関係は `go.mod` で確認します。以下は各バージョンの過去の記録です。
 
 ## Preview CLI @preview {#cli-preview-branch}
 

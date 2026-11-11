@@ -1,6 +1,6 @@
 # 執行階段 OpenAPI
 
-Spine `v0.7.1` 根據已註冊的 HTTP 路由、處理器型別與 validator 描述契約產生 OpenAPI 3.1.2 JSON，也可選擇提供內建 Swagger UI 和 ReDoc。
+Spine `v0.7.5` 根據已註冊的 HTTP 路由、處理器型別與 validator 描述契約產生 OpenAPI 3.1.2 JSON，也可選擇提供內建 Swagger UI 和 ReDoc。
 
 ## 啟用與啟動選項 {#options}
 
@@ -8,16 +8,16 @@ Spine `v0.7.1` 根據已註冊的 HTTP 路由、處理器型別與 validator 描
 
 ```go
 options := boot.Options{
-    Address: ":8080",
-    HTTP: &boot.HTTPOptions{
-        GlobalPrefix: "/api",
-        OpenAPI: boot.OpenAPIOptions{
-            Enabled: true,
-            Path: "/openapi.json",
-            Title: "User API",
-            Version: "1.0.0",
-        },
-    },
+	Address: ":8080",
+	HTTP: &boot.HTTPOptions{
+		GlobalPrefix: "/api",
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true,
+			Path:    "/openapi.json",
+			Title:   "User API",
+			Version: "1.0.0",
+		},
+	},
 }
 ```
 
@@ -50,19 +50,19 @@ curl -I http://localhost:8080/openapi.json
 
 ```go
 func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error {
-    if options.HTTP == nil {
-        return errors.New("HTTP options are required")
-    }
-    description, err := spine.DescribeHTTP(app, options)
-    if err != nil {
-        return err
-    }
-    document, err := openapi.Generate(description, options.HTTP.OpenAPI)
-    if err != nil {
-        return err
-    }
-    _, err = output.Write(document)
-    return err
+	if options.HTTP == nil {
+		return errors.New("HTTP options are required")
+	}
+	description, err := spine.DescribeHTTP(app, options)
+	if err != nil {
+		return err
+	}
+	document, err := openapi.Generate(description, options.HTTP.OpenAPI)
+	if err != nil {
+		return err
+	}
+	_, err = output.Write(document)
+	return err
 }
 ```
 
@@ -74,21 +74,22 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 ```go
 func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.OpenAPIOptions, output io.Writer) error {
-    description, err := spine.DescribePreparedHTTP(prepared)
-    if err != nil {
-        return err
-    }
-    document, err := openapi.Generate(description, options)
-    if err != nil {
-        return err
-    }
-    _, err = output.Write(document)
-    return err
+	description, err := spine.DescribePreparedHTTP(prepared)
+	if err != nil {
+		return err
+	}
+	document, err := openapi.Generate(description, options)
+	if err != nil {
+		return err
+	}
+	_, err = output.Write(document)
+	return err
 }
 ```
 
-
 ## validator 與描述範圍 {#validation}
+
+在 BuildApplication 透過 WithValidator 註冊 playground.New()。必填標籤會在請求中自動檢查，並在規格中表示為 required。OpenAPI 本身不驗證請求，任意 DTO Validate 方法也不會自動執行或產生文件。
 
 | 註冊狀態 | 產生的資訊 |
 | --- | --- |
@@ -111,7 +112,7 @@ func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.Open
 透過 `boot.Options.HTTP.OpenAPI.UI` 選擇畫面。設定 `Enabled: true` 並註冊 UI，僅提供 JSON 時省略 `UI`。以下範例固定正式版 Echo，請保存 `go.mod` 和 `go.sum` 以便重現。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 以下是註冊所選 UI 的獨立應用程式 `main.go`。在既有應用程式中，將 import 與 `OpenAPI.UI` 設定新增至目前的 composition。
@@ -120,49 +121,61 @@ go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platfor
 package main
 
 import (
-    "log"
-
-    "github.com/NARUBROWN/spine"
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
 )
 
+type CreateUser struct {
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
 type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
-
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-    r.GET("/hello", func() httpx.Response[string] {
-        return httpx.Response[string]{Body: "hello"}
-    })
+	r.GET("/hello", func(ctx spinectx.Ctx) httpx.Response[string] {
+		return httpx.Response[string]{Body: "hello"}
+	})
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[CreateUser] {
+		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
+	}, api.Summary("Create user"), api.Tags("Users"))
 }
-
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true, Title: "Example API", Version: "1.0.0",
+			UI: []boot.OpenAPIUI{swaggerui.New(swaggerui.Options{}), redoc.New(redoc.Options{})},
+		},
+	}}
+	return app, options, nil
+}
 func main() {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(constructor.Controller(&Controller{}))
-
-    options := boot.Options{
-        Address: ":8080",
-        HTTP: &boot.HTTPOptions{
-            OpenAPI: boot.OpenAPIOptions{
-                Enabled: true,
-                Title:   "Example API",
-                Version: "1.0.0",
-                UI: []boot.OpenAPIUI{
-                    swaggerui.New(swaggerui.Options{}),
-                    redoc.New(redoc.Options{}),
-                },
-            },
-        },
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -185,9 +198,9 @@ func main() {
 
 ```go
 type OpenAPIResource struct {
-    Path        string
-    ContentType string
-    Body        string
+	Path        string
+	ContentType string
+	Body        string
 }
 
 type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
@@ -197,4 +210,4 @@ type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
 
 文件或資源路徑與既有 GET、HEAD、WebSocket 路由重疊時，準備程序以 `OPENAPI_PATH_CONFLICT` 失敗。nil 提供者或無效 UI 選項產生 `OPENAPI_UI_INVALID`；無效資源路徑或 Content-Type 產生 `OPENAPI_UI_RESOURCE_INVALID`。
 
-完整執行範例請參閱 [Swagger 與 OpenAPI 教學](/zh-Hant/learn/tutorial/8-swagger)，輸入模型請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)，應用程式 API 請參閱 [spine.App](/zh-Hant/reference/api/spine-app)。
+完整執行範例請參閱 [Swagger 與 OpenAPI 教學](/zh-Hant/learn/tutorial/8-swagger)，輸入模型請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.5)，應用程式 API 請參閱 [spine.App](/zh-Hant/reference/api/spine-app)。

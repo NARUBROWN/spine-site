@@ -1,13 +1,13 @@
 # 查詢輸入
 
-在 Spine `v0.7.1` 中，使用依來源劃分的結構體接收查詢參數。`input.Query[T]` 的 `T` 是結構體，處理器可直接讀取欄位。`query` 標籤指定外部名稱，沒有標籤的欄位使用 lowerCamel 名稱。
+在 Spine `v0.7.5` 中，使用依來源劃分的結構體接收查詢參數。`input.Query[T]` 的 `T` 是結構體，處理器可直接讀取欄位。`query` 標籤指定外部名稱，沒有標籤的欄位使用 lowerCamel 名稱。
 
 ## 執行範例
 
-在獨立 Go 模組中安裝 Spine `v0.7.1` 和相容的 Echo 平台，將以下程式碼儲存為 `main.go` 並執行 `go run .`。此範例只在缺少頁碼時使用 1。
+在獨立 Go 模組中安裝 Spine `v0.7.5` 和相容的 Echo 平台，將以下程式碼儲存為 `main.go` 並執行 `go run .`。此範例只在缺少頁碼時使用 1。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ```go
@@ -23,6 +23,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type SearchQuery struct {
@@ -39,7 +40,7 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/search", func(q input.Query[SearchQuery]) httpx.Response[SearchResult] {
+	r.GET("/search", func(ctx spinectx.Ctx, q input.Query[SearchQuery]) httpx.Response[SearchResult] {
 		page := 1
 		if q.Page != nil {
 			page = *q.Page
@@ -47,10 +48,20 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 		return httpx.Response[SearchResult]{Body: SearchResult{Name: q.Name, Page: page, Tags: q.Tags}}
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
 	app.Constructor(constructor.Controller(&Controller{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -77,4 +88,4 @@ curl -i 'http://localhost:8080/search?page=1&page=2'
 
 `query.Values` 和 `query.Pagination` 保留但已棄用。舊 `Int` 對缺失值和轉換失敗都回傳預設值；新 DTO 會拒絕轉換失敗。請勿在同一處理器中混用舊輸入與新的 Path、Query、Header 輸入。
 
-相容規則請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)，維護舊程式碼請參閱 [query.Values 參考](/zh-Hant/reference/api/query-values)。[控制器範例](/zh-Hant/learn/tutorial/2-controller)也介紹標頭與路徑輸入。
+相容規則請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.5)，維護舊程式碼請參閱 [query.Values 參考](/zh-Hant/reference/api/query-values)。[控制器範例](/zh-Hant/learn/tutorial/2-controller)也介紹標頭與路徑輸入。

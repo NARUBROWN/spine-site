@@ -1,14 +1,28 @@
 # 릴리스 노트
 
+현재 API 사용법은 [0.7.5 전환 안내](/ko/learn/migration/v0.7.5)에서 확인하세요. 아래 발행 정보와 과거 릴리스 기록은 각 태그 기준입니다.
+
 [저장소별 버전 현황](/ko/community/versions)에서 최신 태그와 다음 목표 버전을 확인하세요.
 
 Preview, RC, 정식 채널의 선택과 발행 절차는 [릴리스 채널과 설치](/ko/community/release-channels)에서 확인하세요.
+
+## Spine v0.7.5 / CLI v0.4.4
+
+Spine `v0.7.5`는 HTTP 입력을 `input.Path`, `input.Query`, `input.Header`, `input.Body`로 선언합니다. HTTP, 이벤트, WebSocket 핸들러와 인터셉터는 공통 `spine.Ctx`를 사용합니다.
+
+CLI `v0.4.4`는 이 입력 계약을 검사하고 생성 코드와 OpenAPI에 반영합니다. 새 HTTP 앱의 정식 의존성 채널에서 코어 `v0.7.5`와 Echo 플랫폼 `v0.2.1`을 선택합니다.
+
+Go 모듈에서 철회된 `v0.7.0`, `v0.7.1`, `v0.7.2-preview.1`을 사용 중이면 `v0.7.5`로 갱신하세요.
+
+- [Spine v0.7.5 릴리스](https://github.com/NARUBROWN/spine/releases/tag/v0.7.5)
+- [CLI v0.4.4 릴리스](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.4)
+- [0.7.5 전환 안내](/ko/learn/migration/v0.7.5)
 
 ## Spine v0.7.1
 
 Spine `v0.7.1`은 컨트롤러 라우트와 역할별 생성자, 출처별 HTTP 입력, 런타임 OpenAPI와 HTTP v3를 제공합니다. 이전 입력 API는 호환되지만 Deprecated이며 새 입력과 같은 핸들러에서 혼용할 수 없습니다.
 
-[v0.7.1 전환 안내](/ko/learn/migration/v0.7.1)와 [런타임 OpenAPI](/ko/reference/api/openapi)를 참고하세요. CLI 버전과 앱 의존성은 별도로 선택합니다. 설치한 CLI는 `spine version`, 실제 의존성은 `go.mod`에서 확인하세요. 아래 항목은 해당 버전의 과거 기록입니다.
+[0.7.5 전환 안내](/ko/learn/migration/v0.7.5#from-v071)와 [런타임 OpenAPI](/ko/reference/api/openapi)를 참고하세요. CLI 버전과 앱 의존성은 별도로 선택합니다. 설치한 CLI는 `spine version`, 실제 의존성은 `go.mod`에서 확인하세요. 아래 항목은 해당 버전의 과거 기록입니다.
 
 ## Preview CLI @preview {#cli-preview-branch}
 

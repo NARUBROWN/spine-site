@@ -1,10 +1,10 @@
 # 플랫폼과 DTO 검증 선택
 
-Spine `v0.7.1`은 HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 코어에 두고 구현을 독립 모듈로 선택합니다. 필요한 구현만 앱에 연결할 수 있습니다.
+Spine `v0.7.5`는 HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 코어에 두고 구현을 독립 모듈로 선택합니다. 필요한 구현만 앱에 연결할 수 있습니다.
 
 ## CLI로 선택하기
 
-정식 CLI `v0.4.3` 이상을 설치한 뒤 다음 명령을 각각 별도 디렉터리에서 실행합니다. `--channel main`은 공개된 정식 태그를 선택합니다. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
+[CLI 설치](/ko/learn/getting-started/installation)에서 정식 Spine CLI를 설치하세요. 이 예제는 CLI `v0.4.4`와 코어 `v0.7.5`로 확인했습니다.
 
 ```sh
 spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
@@ -29,8 +29,8 @@ HTTP는 `contract/http`와 Echo 또는 net/http, WebSocket은 `contract/websocke
 
 ```go
 type CreateUserRequest struct {
-    Email string `json:"email" validate:"required,email"`
-    Age   int    `json:"age" validate:"gte=18"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
 }
 ```
 
@@ -44,4 +44,4 @@ type CreateUserRequest struct {
 spine update --dry-run
 ```
 
-[릴리스 채널과 설치](/ko/community/release-channels), [입력 전환](/ko/learn/migration/v0.7.1-preview), [HTTP v3와 부팅 옵션](/ko/learn/migration/preview-features)을 참고하세요.
+[릴리스 채널과 설치](/ko/community/release-channels), [입력 전환](/ko/learn/migration/v0.7.5), [HTTP v3와 부팅 옵션](/ko/learn/migration/v0.7.5)을 참고하세요.

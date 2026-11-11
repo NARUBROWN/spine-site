@@ -63,6 +63,8 @@ python3 scripts/check-doc-translations.py
 After building the documentation, also check translated internal paths and section links.
 
 ```bash
+go run scripts/check-go-examples.go docs
+python3 scripts/check-v075-examples.py
 npm run docs:build
 python3 scripts/check-doc-translations.py --check-rendered
 ```

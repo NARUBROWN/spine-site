@@ -1,17 +1,17 @@
 # 安全配置
 
-Spine `v0.7.1` 限制 HTTP 和 WebSocket 的大小、时间与连接数。独立平台负责消息代理传输策略，也请检查所选平台版本和配置。
+Spine `v0.7.5` 限制 HTTP 和 WebSocket 的大小、时间与连接数。独立平台负责消息代理传输策略，也请检查所选平台版本和配置。
 
 ## 配置验证
 
-`App.Validate` 检查启动选项，不打开网络连接。`App.Run` 也会在启动前执行相同检查。此预先验证不包括构造函数和依赖配置是否成功，以及消息代理能否连接。
+App.Validate 无需监听器即可检查启动选项和静态可检查的 DI 配置，Run 也会在启动前检查。实际构造函数执行、数据库或消息代理连接须在准备阶段和真实请求中单独验证。
 
 ```go
 if err := app.Validate(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 if err := app.Run(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 ```
 
@@ -48,18 +48,18 @@ if err := app.Run(options); err != nil {
 
 ```go
 factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
-    Brokers: []string{"kafka.example.com:9093"},
-    Consume: true,
-    Publish: true,
-    GroupID: "orders",
-    TopicPrefix: "prod.",
+	Brokers:     []string{"kafka.example.com:9093"},
+	Consume:     true,
+	Publish:     true,
+	GroupID:     "orders",
+	TopicPrefix: "prod.",
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
-    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
-    spine.WithEventSettlementTimeout(5 * time.Second),
+	spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+	spine.WithEventSettlementTimeout(5*time.Second),
 ))
 ```
 
@@ -75,20 +75,20 @@ Kafka 平台默认应用 TLS 1.2 或更高版本。使用 `TLS`、`Dialer`、`Tr
 
 ```go
 factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
-    URL: "amqps://user:pass@rabbit.example.com/vhost",
-    Exchange: "events",
-    Consume: true,
-    Publish: true,
-    PrefetchCount: 16,
-    FailurePolicy: rabbitmqplatform.FailureReject,
-    DeadLetter: &rabbitmqplatform.DeadLetter{
-        Exchange: "events.dlx",
-        RoutingKey: "events.failed",
-    },
-    OperationTimeout: 5 * time.Second,
+	URL:           "amqps://user:pass@rabbit.example.com/vhost",
+	Exchange:      "events",
+	Consume:       true,
+	Publish:       true,
+	PrefetchCount: 16,
+	FailurePolicy: rabbitmqplatform.FailureReject,
+	DeadLetter: &rabbitmqplatform.DeadLetter{
+		Exchange:   "events.dlx",
+		RoutingKey: "events.failed",
+	},
+	OperationTimeout: 5 * time.Second,
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
@@ -132,16 +132,22 @@ HTTP: &boot.HTTPOptions{
 
 需要连接认证时，请为拦截器同时实现 `core.WebSocketHandshakeInterceptor`。`PreHandshake` 在预留连接名额后、HTTP 升级前执行。它独立于针对每条消息执行的 `PreHandle`。
 
+将此片段添加到已实现四个钩子和 verify 的 AuthInterceptor。spinectx 导入公开 pkg/spine，core 提供元数据，httperr 提供公开错误。
+
 ```go
 func (i *AuthInterceptor) PreHandshake(
-    ctx core.WebSocketHandshakeContext,
-    meta core.HandlerMeta,
+	ctx spinectx.Ctx,
+	meta core.HandlerMeta,
 ) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("missing credentials")
-    }
-    return i.verify(token)
+	request, ok := ctx.WebSocket()
+	if !ok {
+		return httperr.Unauthorized("HTTP request required")
+	}
+	token := request.Header("Authorization")
+	if token == "" {
+		return httperr.Unauthorized("missing credentials")
+	}
+	return i.verify(token)
 }
 ```
 
@@ -157,21 +163,20 @@ CORS 预检由同时存在的 `OPTIONS`、`Origin` 和 `Access-Control-Request-M
 
 ```go
 corsInterceptor, err := cors.NewValidated(cors.Config{
-    AllowOrigins:     []string{"https://app.example.com"},
-    AllowCredentials: true,
+	AllowOrigins:     []string{"https://app.example.com"},
+	AllowCredentials: true,
 })
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
 
 如果 Cookie 的名称、值、路径、域、`SameSite` 或 `Priority` 无效，JSON、字符串、二进制和重定向响应会在写入响应头或响应体之前失败。需要将 Unicode 字符或分隔符恢复为原始值时，请使用 `httpx.EncodeCookieValue` 和 `httpx.DecodeCookieValue`。
 
-
 ### 验证 CORS 预检
 
-将以下独立应用保存为安装 Spine `v0.7.1` 和兼容 Echo 平台的独立 Go 模块中的 `main.go`，然后运行。`Authorization` 已明确列入允许的请求头。
+将以下独立应用保存为安装 Spine `v0.7.5` 和兼容 Echo 平台的独立 Go 模块中的 `main.go`，然后运行。`Authorization` 已明确列入允许的请求头。
 
 ```go
 package main

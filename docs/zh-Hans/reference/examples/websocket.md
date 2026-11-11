@@ -1,147 +1,99 @@
-# 创建 WebSocket 聊天
+# WebSocket 消息收发
 
-创建聊天服务器，将通过 `/ws/chat` 收到的消息广播给已注册的客户端。使用 CLI 生成 WebSocket 组件，实现处理器，然后在浏览器中确认消息收发。
+此独立示例向当前连接回送消息。广播需要另行设计连接生命周期和发送策略的 hub。
 
-## 开始前的准备
-
-请先完成[安装和首个应用](/zh-Hans/learn/getting-started/first-app)。本示例是在单个服务器进程中运行的本地学习代码，不包含认证或多台服务器之间的广播。
-
-## 1. 创建项目和消息处理器
-
-创建项目和 WebSocket 处理器。后续命令均在 `chat-app/` 中运行。
-
-需要 CLI `v0.4.3` 或更高版本。`--channel main` 选择正式依赖。
+## 安装与代码
 
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla --channel main --no-interactive
-cd chat-app
-spine doctor
-spine generate websocket chat --path /ws/chat --field message:string
+go mod init example.com/spine-websocket
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0
 ```
 
-`src/websocket/chat/` 下会生成 `chat_message.go`、`chat_handler.go` 和 `module.go`。`BuildApplication` 中会自动添加 `chatwebsocket.Register(app)` 调用和错误检查代码。请勿重复注册相同路径或构造函数。
-
-## 2. 实现广播处理器
-
-生成的处理器会返回未实现错误。将 `src/websocket/chat/chat_handler.go` 的全部内容替换为下方代码。完整替换后，原有的 `errors` 导入和未实现错误声明也会移除。继续使用 `chat_message.go` 中的 `ChatMessage` 和 `module.go`。
-
-处理器先注册发送消息的连接所使用的发送器，再将非空消息传递给所有已注册的连接。发送失败的连接会从列表中移除。
+使用 Go 1.26 以上版本保存为 main.go，分别选择 HTTP 和 Gorilla。WebSocket 消息 DTO 不使用 HTTP Body 包装。ws.Send 接收标准上下文、消息类型、[]byte 三个参数，仅发送给当前连接。不要保存请求上下文或内部 sender 键。
 
 ```go
-package chat
+package main
 
 import (
-	"context"
 	"encoding/json"
-	"strings"
-	"sync"
-	"time"
-
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	gorillaplatform "github.com/NARUBROWN/spine-gorilla-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"github.com/NARUBROWN/spine/pkg/ws"
+	"log"
+	"strings"
+	"time"
 )
 
-type ChatSocket struct {
-	mu      sync.RWMutex
-	clients map[string]ws.Sender
+type ChatMessage struct {
+	Message string `json:"message"`
 }
-
-func NewChatSocket() *ChatSocket {
-	return &ChatSocket{
-		clients: make(map[string]ws.Sender),
-	}
-}
-
 type ChatEvent struct {
 	Type    string `json:"type"`
 	From    string `json:"from"`
 	Message string `json:"message"`
 	At      string `json:"at"`
 }
+type HealthController struct{}
 
-func (c *ChatSocket) Handle(
-	ctx context.Context,
-	connID ws.ConnectionID,
-	msg ChatMessage,
-) error {
-	sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-	if ok && sender != nil {
-		c.mu.Lock()
-		c.clients[connID.Value] = sender
-		c.mu.Unlock()
-	}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
+}
 
-	message := strings.TrimSpace(msg.Message)
-	if message == "" {
+type ChatSocket struct{}
+
+func (*ChatSocket) Constructor() *ChatSocket { return &ChatSocket{} }
+func (*ChatSocket) Handle(ctx spinectx.Ctx, id ws.ConnectionID, message ChatMessage) error {
+	text := strings.TrimSpace(message.Message)
+	if text == "" {
 		return nil
 	}
-
-	payload, err := json.Marshal(ChatEvent{
-		Type:    "message",
-		From:    connID.Value,
-		Message: message,
-		At:      time.Now().UTC().Format(time.RFC3339),
-	})
+	payload, err := json.Marshal(ChatEvent{Type: "message", From: id.Value, Message: text, At: time.Now().UTC().Format(time.RFC3339)})
 	if err != nil {
 		return err
 	}
-
-	c.mu.RLock()
-	clients := make(map[string]ws.Sender, len(c.clients))
-	for id, client := range c.clients {
-		clients[id] = client
+	return ws.Send(ctx.ExecutionContext().Context(), ws.TextMessage, payload)
+}
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New(echoplatform.Option(), gorillaplatform.Option())
+	app.Constructor(constructor.Controller(&HealthController{}), constructor.Custom(&ChatSocket{}))
+	if err := app.WebSocket().Register("/ws/chat", (*ChatSocket).Handle); err != nil {
+		return nil, boot.Options{}, err
 	}
-	c.mu.RUnlock()
-
-	for id, client := range clients {
-		if err := client.Send(ws.TextMessage, payload); err != nil {
-			c.mu.Lock()
-			delete(c.clients, id)
-			c.mu.Unlock()
-		}
+	return app, boot.Options{Address: ":8080", EnableGracefulShutdown: true, HTTP: &boot.HTTPOptions{
+		WebSocket: boot.WebSocketOptions{MaxConnections: 1024, MaxMessageBytes: 1 << 20,
+			HandshakeTimeout: 10 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 10 * time.Second, PingInterval: 30 * time.Second},
+	}}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
 	}
-	return nil
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## 3. 设置 WebSocket 运行选项
-
-仅将 `internal/application/application.go` 中 `BuildApplication` 返回的选项替换为下方代码，并添加 `time` 导入。保留现有的 health 注册和 `chatwebsocket.Register(app)` 调用。生成的根目录 `main.go` 会依次执行 `BuildApplication`、`Validate` 和 `Run`。
-
-```go
-return app, boot.Options{
-    Address: address,
-    EnableGracefulShutdown: true,
-    ShutdownTimeout: 10 * time.Second,
-    HTTP: &boot.HTTPOptions{
-        WebSocket: boot.WebSocketOptions{
-            MaxConnections: 1024,
-            MaxMessageBytes: 1 << 20,
-            HandshakeTimeout: 10 * time.Second,
-            ReadTimeout: 60 * time.Second,
-            WriteTimeout: 10 * time.Second,
-            PingInterval: 30 * time.Second,
-        },
-    },
-}, nil
-```
-
-## 4. 验证并启动服务器
-
-在项目根目录中检查代码，导出 AsyncAPI 文档，然后启动服务器。
-
 ```sh
-gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
-spine contract check
-spine verify
-spine contract export --format asyncapi --output asyncapi.json
-spine dev
+go run .
 ```
 
-`contract check` 检查静态契约。`verify` 检查静态契约，并运行 gofmt、go vet 和 Go 测试。`contract export` 将已注册的 WebSocket 契约写入 `asyncapi.json`。下一步会确认实际连接和消息交换。
+## 浏览器验证
 
-## 5. 在浏览器中确认消息收发
-
-启动服务器后，在浏览器中打开 `http://localhost:8080/health`。在同一标签页的开发者工具控制台中运行以下代码。
+在打开 `http://localhost:8080/health` 的标签页开发者控制台运行，收到 message: "hello" 的事件。其他标签页不会收到。
 
 ```js
 const socket = new WebSocket('ws://localhost:8080/ws/chat')
@@ -149,20 +101,10 @@ socket.onmessage = (event) => console.log(JSON.parse(event.data))
 socket.onopen = () => socket.send(JSON.stringify({ message: 'hello' }))
 ```
 
-确认控制台输出包含 `type`、`from`、`message` 和 `at` 字段的对象。`message` 的值为 `hello`。在另一个标签页中运行相同代码后，已注册的连接和新连接都能收到消息。
+## 认证与限制
 
-要接收广播，每个连接都必须先发送一条消息来注册发送器。发送器列表仅保存在进程内存中，已关闭的连接会在后续发送失败时清理。如果需要持久化保存连接状态，或在多台服务器之间共享状态，需要另外实现。
+握手认证在 WebSocketHandshakeInterceptor.PreHandshake 中执行，仅消息 PreHandle 无法保护升级。未配置 AllowedOrigins 时，含 Origin 的请求须同源，无 Origin 的客户端允许连接。生产环境配置精确 Origin、可信代理和连接限制。
 
-## 应用于生产环境前需要检查的事项
+## 参考
 
-### 握手认证
-
-要添加认证，请实现 `core.Interceptor` 的四个方法以及 `core.WebSocketHandshakeInterceptor.PreHandshake`，并通过 `app.InterceptorFor(boot.InterceptorWebSocket, auth)` 注册。在 `PreHandshake` 中验证凭据并返回错误，即可在升级为 WebSocket 连接前拒绝请求。仅靠消息处理阶段的 `PreHandle` 无法保护握手。
-
-### Origin 和连接数限制
-
-如果省略 `AllowedOrigins`，带有 Origin 的请求必须使用相同的协议和主机。不带 Origin 的客户端则会被允许。在生产环境中，请设置准确的公开 Origin，并在需要时仅指定可信代理的 CIDR。超过连接数上限时，会返回 HTTP 503、`Retry-After` 和 `WEBSOCKET_CAPACITY_EXCEEDED`。
-
-## 后续步骤
-
-请在[拦截器 API](/zh-Hans/reference/api/interceptor)中查看实现认证所需的方法，并在[安全配置](/zh-Hans/reference/security-configuration)中检查 Origin 和连接限制。
+[拦截器](/zh-Hans/reference/api/interceptor) / [安全设置](/zh-Hans/reference/security-configuration)

@@ -1,91 +1,101 @@
 # Swagger と OpenAPI
 
-Spine `v0.7.1` は登録された HTTP ルートから OpenAPI JSON を生成し、内蔵 Swagger UI と ReDoc を提供できます。このチュートリアルでは独立したアプリで文書と画面を実行し、CLI の静的エクスポートを確認します。
+実行時 OpenAPI JSON、内蔵 Swagger UI、ReDoc を提供します。仕様と実際の入力検証を両方確認します。
 
-## 1. アプリを準備する
+## 独立アプリ
 
-別の Go モジュールに次の正式版の依存関係をインストールします。再現のために `go.mod` と `go.sum` を保管してください。
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```sh
+go mod init example.com/spine-openapi
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
-次のコードを `main.go` に保存し、`go run .` で実行します。`Enabled` を省略すると自動提供は無効です。JSON のみを提供する場合は `UI` を省略します。
+BuildApplication で playground.New() を WithValidator に登録します。必須タグはリクエストで自動検証され、仕様でも required と説明されます。OpenAPI 自体はリクエストを検証せず、任意の DTO Validate メソッドは自動実行も文書化もされません。
 
 ```go
 package main
 
 import (
-    "log"
-
-    "github.com/NARUBROWN/spine"
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
 )
 
+type CreateUser struct {
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
 type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
-
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-    r.GET("/hello", func() httpx.Response[string] {
-        return httpx.Response[string]{Body: "hello"}
-    })
+	r.GET("/hello", func(ctx spinectx.Ctx) httpx.Response[string] {
+		return httpx.Response[string]{Body: "hello"}
+	})
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[CreateUser] {
+		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
+	}, api.Summary("Create user"), api.Tags("Users"))
 }
-
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true, Title: "Example API", Version: "1.0.0",
+			UI: []boot.OpenAPIUI{swaggerui.New(swaggerui.Options{}), redoc.New(redoc.Options{})},
+		},
+	}}
+	return app, options, nil
+}
 func main() {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(constructor.Controller(&Controller{}))
-
-    options := boot.Options{
-        Address: ":8080",
-        HTTP: &boot.HTTPOptions{
-            OpenAPI: boot.OpenAPIOptions{
-                Enabled: true,
-                Title:   "Example API",
-                Version: "1.0.0",
-                UI: []boot.OpenAPIUI{
-                    swaggerui.New(swaggerui.Options{}),
-                    redoc.New(redoc.Options{}),
-                },
-            },
-        },
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## 2. HTTP で確認する
+## リクエストと画面確認
 
-別のターミナルから文書と画面にリクエストします。三つのリソースは 200 を返します。ブラウザーで `/docs` または `/redoc` を開くこともできます。
-
-```bash
+```sh
+go run .
+# In another terminal
 curl -i http://localhost:8080/openapi.json
 curl -I http://localhost:8080/docs
 curl -I http://localhost:8080/redoc
+curl -i -H 'Content-Type: application/json' -d '{}' http://localhost:8080/users
+curl -i -H 'Content-Type: application/json' -d '{"name":"Alice","email":"alice@example.com"}' http://localhost:8080/users
 ```
 
-文書と UI は業務インターセプターを実行しません。アクセスを制限する場合は HTTP ミドルウェアまたはプロキシにポリシーを設定してください。
+仕様と UI は 200、空入力は 400、有効な作成は 201 です。name と email は必須と表示されます。UI と仕様は業務インターセプターを実行しないため、公開範囲は HTTP ミドルウェアやプロキシで管理します。
 
-## 3. CLI で静的文書を出力する
+## CLI の静的 export
 
-[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で作成したアプリのルートで実行します。このコマンドはアプリを実行せずにソースを解析します。既存ファイルを `--force` で置き換える前に内容を確認してください。
+このコマンドは spine.toml のある CLI プロジェクト用です。設定していない上の独立例では実行しません。静的解析はアプリや検証器を実行しないため、診断と実行時仕様を併せて確認します。
 
-```bash
-spine doctor
+```sh
 spine contract check
 spine contract export --format openapi --output openapi.json
 ```
 
-生成した文書で `/health` と `/user/{id}` を確認します。静的解析では動的ルート、実行時 validator のすべての制約、ハンドラーが選ぶ応答ステータスを確定できません。診断を確認し、実際のリクエストと実行時文書も検証してください。
-
 ## 次のステップ
 
-パスの衝突、validator、文書の取得と UI 設定は[ランタイム OpenAPI リファレンス](/ja/reference/api/openapi)を参照してください。[入力の移行](/ja/learn/migration/v0.7.1-preview)では以前の入力 API の互換性を説明します。
+[OpenAPI 参照](/ja/reference/api/openapi) / [入力検証](/ja/learn/tutorial/7-error-handling#validation-modes)

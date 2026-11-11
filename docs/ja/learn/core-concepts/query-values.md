@@ -1,13 +1,13 @@
 # クエリ入力
 
-Spine `v0.7.1` ではクエリを入力元別の構造体で受け取ります。`input.Query[T]` の `T` は構造体で、ハンドラーからフィールドに直接アクセスします。`query` タグで外部名を指定し、タグがない場合は lowerCamel 名を使います。
+Spine `v0.7.5` ではクエリを入力元別の構造体で受け取ります。`input.Query[T]` の `T` は構造体で、ハンドラーからフィールドに直接アクセスします。`query` タグで外部名を指定し、タグがない場合は lowerCamel 名を使います。
 
 ## 実行例
 
-別の Go モジュールに Spine `v0.7.1` と互換性のある Echo プラットフォームをインストールし、次のコードを `main.go` に保存して `go run .` で実行します。この例では値がない場合に限りページ 1 を使います。
+別の Go モジュールに Spine `v0.7.5` と互換性のある Echo プラットフォームをインストールし、次のコードを `main.go` に保存して `go run .` で実行します。この例では値がない場合に限りページ 1 を使います。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ```go
@@ -23,6 +23,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type SearchQuery struct {
@@ -39,7 +40,7 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/search", func(q input.Query[SearchQuery]) httpx.Response[SearchResult] {
+	r.GET("/search", func(ctx spinectx.Ctx, q input.Query[SearchQuery]) httpx.Response[SearchResult] {
 		page := 1
 		if q.Page != nil {
 			page = *q.Page
@@ -47,10 +48,20 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 		return httpx.Response[SearchResult]{Body: SearchResult{Name: q.Name, Page: page, Tags: q.Tags}}
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
 	app.Constructor(constructor.Controller(&Controller{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -77,4 +88,4 @@ curl -i 'http://localhost:8080/search?page=1&page=2'
 
 `query.Values` と `query.Pagination` は非推奨ですが維持されています。以前の `Int` は欠落と変換失敗の両方に既定値を返しますが、新しい DTO は変換失敗を拒否します。一つのハンドラーで従来の入力と新しい Path、Query、Header 入力を混在させないでください。
 
-互換性は[入力の移行](/ja/learn/migration/v0.7.1-preview)、既存コードの保守には [query.Values リファレンス](/ja/reference/api/query-values)を参照してください。[コントローラーの例](/ja/learn/tutorial/2-controller)ではヘッダーとパス入力も説明します。
+互換性は[入力の移行](/ja/learn/migration/v0.7.5)、既存コードの保守には [query.Values リファレンス](/ja/reference/api/query-values)を参照してください。[コントローラーの例](/ja/learn/tutorial/2-controller)ではヘッダーとパス入力も説明します。

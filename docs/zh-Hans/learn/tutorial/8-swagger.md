@@ -1,91 +1,101 @@
 # Swagger 与 OpenAPI
 
-Spine `v0.7.1` 可以根据已注册的 HTTP 路由生成 OpenAPI JSON，并提供内置 Swagger UI 和 ReDoc。本教程先在独立应用中运行文档与界面，再使用 CLI 导出静态文档。
+提供运行时 OpenAPI JSON、内置 Swagger UI 和 ReDoc，同时检查规范和实际输入验证。
 
-## 1. 准备应用
+## 独立应用
 
-在独立 Go 模块中安装以下正式版依赖。请保留 `go.mod` 和 `go.sum` 以便重现。
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```sh
+go mod init example.com/spine-openapi
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
-将以下代码保存为 `main.go` 并运行 `go run .`。省略 `Enabled` 时自动提供功能关闭；仅提供 JSON 时省略 `UI`。
+在 BuildApplication 中通过 WithValidator 注册 playground.New()。必填标签会在请求中自动检查，并在规范中表示为 required。OpenAPI 本身不验证请求，任意 DTO Validate 方法也不会自动执行或生成文档。
 
 ```go
 package main
 
 import (
-    "log"
-
-    "github.com/NARUBROWN/spine"
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
 )
 
+type CreateUser struct {
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
 type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
-
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-    r.GET("/hello", func() httpx.Response[string] {
-        return httpx.Response[string]{Body: "hello"}
-    })
+	r.GET("/hello", func(ctx spinectx.Ctx) httpx.Response[string] {
+		return httpx.Response[string]{Body: "hello"}
+	})
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[CreateUser] {
+		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
+	}, api.Summary("Create user"), api.Tags("Users"))
 }
-
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true, Title: "Example API", Version: "1.0.0",
+			UI: []boot.OpenAPIUI{swaggerui.New(swaggerui.Options{}), redoc.New(redoc.Options{})},
+		},
+	}}
+	return app, options, nil
+}
 func main() {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(constructor.Controller(&Controller{}))
-
-    options := boot.Options{
-        Address: ":8080",
-        HTTP: &boot.HTTPOptions{
-            OpenAPI: boot.OpenAPIOptions{
-                Enabled: true,
-                Title:   "Example API",
-                Version: "1.0.0",
-                UI: []boot.OpenAPIUI{
-                    swaggerui.New(swaggerui.Options{}),
-                    redoc.New(redoc.Options{}),
-                },
-            },
-        },
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## 2. 通过 HTTP 检查
+## 检查请求与界面
 
-在另一个终端请求文档和界面。三个资源都会返回 200，也可以在浏览器中打开 `/docs` 或 `/redoc`。
-
-```bash
+```sh
+go run .
+# In another terminal
 curl -i http://localhost:8080/openapi.json
 curl -I http://localhost:8080/docs
 curl -I http://localhost:8080/redoc
+curl -i -H 'Content-Type: application/json' -d '{}' http://localhost:8080/users
+curl -i -H 'Content-Type: application/json' -d '{"name":"Alice","email":"alice@example.com"}' http://localhost:8080/users
 ```
 
-文档和界面不会运行业务拦截器。如果需要限制访问，请在 HTTP 中间件或代理中配置策略。
+规范与 UI 返回 200，空输入返回 400，有效创建返回 201。规范将 name、email 标为必填。UI 与规范不执行业务拦截器，须通过 HTTP 中间件或代理控制公开范围。
 
-## 3. 使用 CLI 导出静态文档
+## CLI 静态导出
 
-在[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中创建的应用根目录执行。该命令分析源代码而不运行应用。使用 `--force` 覆盖已有文件前，请先检查文件内容。
+在含 spine.toml 的 CLI 项目根目录运行此命令，未配置的上述独立示例不适用。静态分析不执行应用或验证器，须结合诊断与运行时规范检查。
 
-```bash
-spine doctor
+```sh
 spine contract check
 spine contract export --format openapi --output openapi.json
 ```
 
-检查生成文档中的 `/health` 和 `/user/{id}`。静态分析无法确定所有动态路由、运行时 validator 约束或处理器选择的响应状态。请查看诊断，并验证实际请求和运行时文档。
-
 ## 下一步
 
-路径冲突、validator、文档查询与 UI 选项请参阅[运行时 OpenAPI 参考](/zh-Hans/reference/api/openapi)。[输入迁移指南](/zh-Hans/learn/migration/v0.7.1-preview)说明旧输入 API 的兼容规则。
+[OpenAPI 参考](/zh-Hans/reference/api/openapi) / [输入验证](/zh-Hans/learn/tutorial/7-error-handling#validation-modes)

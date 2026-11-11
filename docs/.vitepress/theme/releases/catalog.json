@@ -1,6 +1,6 @@
 {
   "schema_version": "spine.site-releases/v1",
-  "checked_at": "2026-11-11T11:02:10Z",
+  "checked_at": "2026-11-11T23:15:25Z",
   "repositories": [
     {
       "name": "spine",
@@ -10,6 +10,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine/actions",
       "tags": [
+        {
+          "version": "v0.7.5",
+          "channel": "stable",
+          "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.5",
+          "published_at": "2026-11-11T13:09:03Z",
+          "notes_url": "https://github.com/NARUBROWN/spine/releases/tag/v0.7.5",
+          "manifest_url": "https://github.com/NARUBROWN/spine/releases/download/v0.7.5/release-manifest.json"
+        },
         {
           "version": "v0.7.5-rc.1",
           "channel": "rc",
@@ -62,9 +70,9 @@
           "version": "v0.7.1",
           "channel": "stable",
           "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.1",
-          "published_at": "2026-11-09T10:50:51Z",
-          "notes_url": "https://github.com/NARUBROWN/spine/releases/tag/v0.7.1",
-          "manifest_url": "https://github.com/NARUBROWN/spine/releases/download/v0.7.1/release-manifest.json"
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
         },
         {
           "version": "v0.7.1-rc.1",
@@ -86,9 +94,9 @@
           "version": "v0.7.0",
           "channel": "stable",
           "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.0",
-          "published_at": "2026-11-09T09:42:24Z",
-          "notes_url": "https://github.com/NARUBROWN/spine/releases/tag/v0.7.0",
-          "manifest_url": "https://github.com/NARUBROWN/spine/releases/download/v0.7.0/release-manifest.json"
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
         },
         {
           "version": "v0.7.0-rc.1",
@@ -469,9 +477,33 @@
           "manifest_url": null
         },
         {
+          "version": "v0.4.4",
+          "channel": "stable",
+          "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.4",
+          "published_at": "2026-11-11T22:25:21Z",
+          "notes_url": "https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.4",
+          "manifest_url": null
+        },
+        {
+          "version": "v0.4.4-rc.2",
+          "channel": "rc",
+          "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.4-rc.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
+        {
           "version": "v0.4.4-rc.1",
           "channel": "rc",
           "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.4-rc.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
+        {
+          "version": "v0.4.4-preview.6",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.4-preview.6",
           "published_at": null,
           "notes_url": null,
           "manifest_url": null
@@ -734,6 +766,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine-echo-platform/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-echo-platform/actions",
       "tags": [
+        {
+          "version": "v0.2.1",
+          "channel": "stable",
+          "tag_url": "https://github.com/NARUBROWN/spine-echo-platform/tree/v0.2.1",
+          "published_at": "2026-11-11T13:44:09Z",
+          "notes_url": "https://github.com/NARUBROWN/spine-echo-platform/releases/tag/v0.2.1",
+          "manifest_url": "https://github.com/NARUBROWN/spine-echo-platform/releases/download/v0.2.1/release-manifest.json"
+        },
         {
           "version": "v0.2.1-rc.1",
           "channel": "rc",

@@ -1,0 +1,1082 @@
+[
+  {
+    "path": "docs/en/benchmarks/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "028c732dea1327623ef627821946c9a3a4c486be77f1c5c475a3b0617c37fef7"
+  },
+  {
+    "path": "docs/en/community/changelog.md",
+    "status": "updated-for-current-dx",
+    "sha256": "afb159f70377e20f2c111673bbad64f88d37600e85995b2890602159e3eb338c"
+  },
+  {
+    "path": "docs/en/community/contributing.md",
+    "status": "updated-for-current-dx",
+    "sha256": "7fb88555a9fd82b81a8a1c33528680e065b8a003165a5a89d76f19a27bd4e89e"
+  },
+  {
+    "path": "docs/en/community/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "37e5f295a992ba11c3ed944a05f944a196a6f99aae132bde7da13e25e8755ead"
+  },
+  {
+    "path": "docs/en/community/release-channels.md",
+    "status": "updated-for-current-dx",
+    "sha256": "edfdbaac2836bb1117293459315d21e72b937130cc12de650c7959bdb7f1591d"
+  },
+  {
+    "path": "docs/en/community/versions.md",
+    "status": "updated-for-current-dx",
+    "sha256": "d4517adc903f139aad5e4c097734c096d5fa7740c06615c900f17656e336fc72"
+  },
+  {
+    "path": "docs/en/docs.md",
+    "status": "updated-for-current-dx",
+    "sha256": "51aa05bb8b3703860f9f259b50cbd47dd75d55a5f045599b48dee27852260ec1"
+  },
+  {
+    "path": "docs/en/enterprise-support.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "50aaa3c1006529295f205d32f7e13d764824a75b57b31cd894dffffb93fd2c19"
+  },
+  {
+    "path": "docs/en/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "73b04d694ca0139cc17c601eaff240f9dc5be55b120c3e13d4d3b89c96417b08"
+  },
+  {
+    "path": "docs/en/learn/core-concepts/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "1b5d2da67c4dbf0e428795b6c5d419f17e0f91166b0399b674e6ad7461051530"
+  },
+  {
+    "path": "docs/en/learn/core-concepts/handler-meta.md",
+    "status": "updated-for-current-dx",
+    "sha256": "98f58170e341d4df8a8090c180ff98c035253cc7723709f65eb791b69ca87b83"
+  },
+  {
+    "path": "docs/en/learn/core-concepts/httperr.md",
+    "status": "updated-for-current-dx",
+    "sha256": "19426770d64ff471bb0eeb7207114aa2b76c583e49135bff99875bfac43a2592"
+  },
+  {
+    "path": "docs/en/learn/core-concepts/pipeline.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3b695a779b4e708797ae5f83751b818e877e6e7bd31da1125badfbedf1493024"
+  },
+  {
+    "path": "docs/en/learn/core-concepts/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "75f56adf274d3a48fcd15a0b919c3603b3328097ad61f827769e75f6f20ac008"
+  },
+  {
+    "path": "docs/en/learn/getting-started/first-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "4061ec3374de0a1e7fd9bc2f6697e92dd4c7decbc035bfcdfd7d70d7a52007fb"
+  },
+  {
+    "path": "docs/en/learn/getting-started/installation.md",
+    "status": "updated-for-current-dx",
+    "sha256": "4061ec3374de0a1e7fd9bc2f6697e92dd4c7decbc035bfcdfd7d70d7a52007fb"
+  },
+  {
+    "path": "docs/en/learn/getting-started/intro.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b6ff8d5450f11c11ef6ab2143ed7678328060630e33dc06eac361a958426beb1"
+  },
+  {
+    "path": "docs/en/learn/getting-started/platforms.md",
+    "status": "updated-for-current-dx",
+    "sha256": "c3fbe32dca3db8bef7c1d0f7f3231d5bc27600029c270179b6ca86b00f3b34a9"
+  },
+  {
+    "path": "docs/en/learn/migration/preview-controller-routes.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "3b52aedb37d6e22fdf359b7aa52d55d7b3a969ffa2dccc011d8498b3f6732cdb"
+  },
+  {
+    "path": "docs/en/learn/migration/preview-features.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "07be9b11878b77a54ab310c9f9c9170090ddb27d6d331a5e73c403f14c612bf5"
+  },
+  {
+    "path": "docs/en/learn/migration/v0.7.0-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "e9560b3916745b9b5339c8ceebefeaafafaeba04015dcb24bc95d1a054f74aba"
+  },
+  {
+    "path": "docs/en/learn/migration/v0.7.0.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "85a13e8246c9eaa6b4be9d87e017aeec645735eb7fe9a0d0943a17ff8a66b642"
+  },
+  {
+    "path": "docs/en/learn/migration/v0.7.1-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "41d4fe1d70783e6b46005f757445a89dde35199c7bb838c5368a2941ef576f1d"
+  },
+  {
+    "path": "docs/en/learn/migration/v0.7.1.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "bed7084ac5358a2bffc0de1e6e4f7cdedd0a8457128b030a9e57e190454d448c"
+  },
+  {
+    "path": "docs/en/learn/migration/v0.7.5.md",
+    "status": "updated-for-current-dx",
+    "sha256": "cb362b23d287282866aaa3c71a6f1b97fcca9a6a64653f5e4eff612ed7633dd1"
+  },
+  {
+    "path": "docs/en/learn/tutorial/1-project-structure.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3c957ea67fd72cae189f082c63293c55c7b83aaae2c8846b554bc6fba1776ee7"
+  },
+  {
+    "path": "docs/en/learn/tutorial/2-controller.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e84cb5fc10ce900c401dc6af21cbc23fa73a3deda84a81a9a7dbbd0882e01da1"
+  },
+  {
+    "path": "docs/en/learn/tutorial/3-dependency-injection.md",
+    "status": "updated-for-current-dx",
+    "sha256": "350812909703f5143d1ebf6eb834b7a688efbc8e5bfc1f02554d19d775631da3"
+  },
+  {
+    "path": "docs/en/learn/tutorial/4-interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e99a40ceedfc3c1f2337ceca2bd4d4932e5f0d255f09e00b27b127dcba26d14a"
+  },
+  {
+    "path": "docs/en/learn/tutorial/5-database.md",
+    "status": "updated-for-current-dx",
+    "sha256": "f2059e2f9884f5ccd8f1281caba044c68f405ff441c35c77176a7d8a33b7e077"
+  },
+  {
+    "path": "docs/en/learn/tutorial/6-transaction.md",
+    "status": "updated-for-current-dx",
+    "sha256": "7406cdf1ea90298aec9f2b2ba1d9f7e713bf9501273fc627b1c9dd721a286131"
+  },
+  {
+    "path": "docs/en/learn/tutorial/7-error-handling.md",
+    "status": "updated-for-current-dx",
+    "sha256": "00754b9ee277c17afc80bef0768e0a024a28620dc890b20c66af2beb862e5e6e"
+  },
+  {
+    "path": "docs/en/learn/tutorial/8-swagger.md",
+    "status": "updated-for-current-dx",
+    "sha256": "c24607443f58ebdc2142518c60a5242e6e28e4500dfb11e581eee76875ef1534"
+  },
+  {
+    "path": "docs/en/reference/api/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "64b4295344c6249d65712f1732fcf5d8399fa2c38435af8dc2354adfbdbba627"
+  },
+  {
+    "path": "docs/en/reference/api/interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "8d2549ed9f6614ae04d13eb2a140c4a0ca06a1e5bfe39c01fbedb8d1a1c41768"
+  },
+  {
+    "path": "docs/en/reference/api/openapi.md",
+    "status": "updated-for-current-dx",
+    "sha256": "1bbf803eb00c33afeea07d52eec6cccc765ddb101ae92d844231069ca69ee9fe"
+  },
+  {
+    "path": "docs/en/reference/api/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "59b80ad3ae9acc01f4c06363d55a9eab13a18650170b56fcd3598715903f46e5"
+  },
+  {
+    "path": "docs/en/reference/api/spine-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "917ec72405daa1500629c242cf9ed4090e052d0566136f821e5ea072ddaefa72"
+  },
+  {
+    "path": "docs/en/reference/examples/crud.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e6656d79fedff3724867753d129703246a2600f53d46081efa64d55da4973ac8"
+  },
+  {
+    "path": "docs/en/reference/examples/login.md",
+    "status": "updated-for-current-dx",
+    "sha256": "5deaf637c246c0a1f39e92220fd5900e81ba529f7014255fe287a03c4225b43e"
+  },
+  {
+    "path": "docs/en/reference/examples/msa.md",
+    "status": "updated-for-current-dx",
+    "sha256": "758fe693da3b741a0b06db32c8eb34092fbe8839161c79477be8fc4aab778c81"
+  },
+  {
+    "path": "docs/en/reference/examples/websocket.md",
+    "status": "updated-for-current-dx",
+    "sha256": "c013d3f089abc6344ea41a9ff9edeb25bf479c4332ccc39df8d71da027d7c4fb"
+  },
+  {
+    "path": "docs/en/reference/security-configuration.md",
+    "status": "updated-for-current-dx",
+    "sha256": "400512623784334bf9a51fc3307505602e13a63c919ba8f827e7762fa502638a"
+  },
+  {
+    "path": "docs/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "9173308186efde26f2f88cfd7f711615c61efce6b9d73dca218a2140e8c8be21"
+  },
+  {
+    "path": "docs/ja/benchmarks/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "32aff81fde76a110f08276be754c1f929df0cc4f77748c29eeb7d06c38dfc558"
+  },
+  {
+    "path": "docs/ja/community/changelog.md",
+    "status": "updated-for-current-dx",
+    "sha256": "2b5dd459ff49c5d23076ca541bd83048266cca74f2818825df6454d49895aac9"
+  },
+  {
+    "path": "docs/ja/community/contributing.md",
+    "status": "updated-for-current-dx",
+    "sha256": "7054f53df97d297292479bd41350df98b30b5e185557f93f831a42ca97b1b8ff"
+  },
+  {
+    "path": "docs/ja/community/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "5c756c8bb2e3ebfc803f8b9af3d62ae5bf66ea17e4203e2b29f0dbad19692e24"
+  },
+  {
+    "path": "docs/ja/community/release-channels.md",
+    "status": "updated-for-current-dx",
+    "sha256": "9b81b5e06b355787670feed04f10b82abcf276eb7a89e3668908fa5d9716d487"
+  },
+  {
+    "path": "docs/ja/community/versions.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e941a01851677e2af71801d31904c7d844db1c063599b2e0ee2b6f9f6e2bcf9f"
+  },
+  {
+    "path": "docs/ja/docs.md",
+    "status": "updated-for-current-dx",
+    "sha256": "d2d81843b35698e35f878144440d9a916b2f5d41a212e3273e4dcc3a3ce9cacf"
+  },
+  {
+    "path": "docs/ja/enterprise-support.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "2095152fe8b2c117c3d4111972e009dfed662eaea77f930854b72d844c304128"
+  },
+  {
+    "path": "docs/ja/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "0ad4ae811b8b47b31bb727c8524bf1a42a0226c8c29576bb2bbee268159487bd"
+  },
+  {
+    "path": "docs/ja/learn/core-concepts/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "da967320d860c9b51464167ef5eb8355ac77695b4551c8f762c63fca5c3672ad"
+  },
+  {
+    "path": "docs/ja/learn/core-concepts/handler-meta.md",
+    "status": "updated-for-current-dx",
+    "sha256": "75c457cd2dad86595961d8dd244b81f90b2a7ae0dc4f89eb9f06eb0fb23bc7f2"
+  },
+  {
+    "path": "docs/ja/learn/core-concepts/httperr.md",
+    "status": "updated-for-current-dx",
+    "sha256": "114c2598ed9109d558678b2572680cc1749092d35f843262c6ffcae68be72392"
+  },
+  {
+    "path": "docs/ja/learn/core-concepts/pipeline.md",
+    "status": "updated-for-current-dx",
+    "sha256": "d13c14825a46daa81fa2f237552102dddf5bcfa1179cd714913ea424a840831d"
+  },
+  {
+    "path": "docs/ja/learn/core-concepts/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "73f43eee9b435ddac2a4f935aa7284c45e63d79550006af85b5fb0b23123ea28"
+  },
+  {
+    "path": "docs/ja/learn/getting-started/first-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "f96472527e973b14dae71db01b8d542db47c848c11404e488382c6b38daa24ee"
+  },
+  {
+    "path": "docs/ja/learn/getting-started/installation.md",
+    "status": "updated-for-current-dx",
+    "sha256": "f96472527e973b14dae71db01b8d542db47c848c11404e488382c6b38daa24ee"
+  },
+  {
+    "path": "docs/ja/learn/getting-started/intro.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3dbcab7cf1625abb4d87ef57acca3c0928fdd3d2c0c970a3a9d4d7bf99081132"
+  },
+  {
+    "path": "docs/ja/learn/getting-started/platforms.md",
+    "status": "updated-for-current-dx",
+    "sha256": "6f94882b376f09ad6c6e622a1916eafe33468be2dc30c1cbef250015cd2bb0bc"
+  },
+  {
+    "path": "docs/ja/learn/migration/preview-controller-routes.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "f8ce67ab7f5b3771d64aa2703aaca16b2cedb13dc1e90dddb257f26940b78c85"
+  },
+  {
+    "path": "docs/ja/learn/migration/preview-features.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "13d6c25375a6d80b45cccbd808cbce6ac51052544e77d8b86ea793082d5cd82a"
+  },
+  {
+    "path": "docs/ja/learn/migration/v0.7.0-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "d3e83ab6bf96aa5c9042dfa0f5f8a7f14e03e22fcf3ec25142a2591828a459a4"
+  },
+  {
+    "path": "docs/ja/learn/migration/v0.7.0.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "fa8a89be9fde2e8c1b0e4a8ca8ed68bdf97a18eaa6022dae5896863ff9072a97"
+  },
+  {
+    "path": "docs/ja/learn/migration/v0.7.1-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "06c67de7f8e06a098d05a8cd410084005092189fbe4f7bd5ae1ea8a90388a8e4"
+  },
+  {
+    "path": "docs/ja/learn/migration/v0.7.1.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "6b7eb7323bb89c6d204701373c473960e84acdd4f20a9c9fc7501348f0f9feb2"
+  },
+  {
+    "path": "docs/ja/learn/migration/v0.7.5.md",
+    "status": "updated-for-current-dx",
+    "sha256": "252ed845eedc29481c9c081fa336c15fcaf4ae53d440defa0c13fec02139971b"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/1-project-structure.md",
+    "status": "updated-for-current-dx",
+    "sha256": "ab76ade67c794ef51db7130aa2bd75f1e86beaa20750cd98148a225ab09175c1"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/2-controller.md",
+    "status": "updated-for-current-dx",
+    "sha256": "edebf729019585d32baa4160bb994350c924cbde0468cc1414c9e5616aeca97e"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/3-dependency-injection.md",
+    "status": "updated-for-current-dx",
+    "sha256": "c4e8fe59b3390ecd85c21f55a9fb6d465ebb7961c61693e601fcfdde36649d0a"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/4-interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "07332d13387ba4ae0bf0e194db7ec28fd40415859a1c06a8b63600b2a3c08ddc"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/5-database.md",
+    "status": "updated-for-current-dx",
+    "sha256": "bf7aaa5e8c6bde8217074c70d6eaa51b89d42682b4efd479d90323273eb37c50"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/6-transaction.md",
+    "status": "updated-for-current-dx",
+    "sha256": "14d9fd1f6bb8eea1a5fd2bf5194730fdf251df48465c3524a425a692a078face"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/7-error-handling.md",
+    "status": "updated-for-current-dx",
+    "sha256": "24213decc0c2d3e2f4d8662703248d9078575d9aaa7717652f6cbd1800780f87"
+  },
+  {
+    "path": "docs/ja/learn/tutorial/8-swagger.md",
+    "status": "updated-for-current-dx",
+    "sha256": "2991753118daffb542c7db4c1548ec0c4678acfa549811e66c2b18ba9ea78b98"
+  },
+  {
+    "path": "docs/ja/reference/api/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "aa83ca7d6ac498c3c42c11503968da38d397b318cb256c6e106a524dbab10830"
+  },
+  {
+    "path": "docs/ja/reference/api/interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "4a5e1cda22caa279306c97407e244d6936bee3bc8080e1ff9d0a9ff5ba975196"
+  },
+  {
+    "path": "docs/ja/reference/api/openapi.md",
+    "status": "updated-for-current-dx",
+    "sha256": "dcb817ad8a0ae55441601d11ac7826ad3063332ba9a9a7e1bcd759aecb573619"
+  },
+  {
+    "path": "docs/ja/reference/api/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "173d489528296e2be0ba7f004c936be13e9fb24412c2f196af98a43ef003f041"
+  },
+  {
+    "path": "docs/ja/reference/api/spine-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "846c0e4b848f01ae5cbc7e6c91390630e0dd2ab86a9c994a33030dd95aeaa967"
+  },
+  {
+    "path": "docs/ja/reference/examples/crud.md",
+    "status": "updated-for-current-dx",
+    "sha256": "70bfb6c4db2daeff920ba62b51f49a8036c0664807401dfb990188e5cab6d5e6"
+  },
+  {
+    "path": "docs/ja/reference/examples/login.md",
+    "status": "updated-for-current-dx",
+    "sha256": "78046428a17c41e32be0115fdf5e51ba255fbab6509bcbc4944c22fcca50e28c"
+  },
+  {
+    "path": "docs/ja/reference/examples/msa.md",
+    "status": "updated-for-current-dx",
+    "sha256": "bdf432dad34a615c3c66f97a481adfd9e55decb6f903c6a3fae17b3f58d3709d"
+  },
+  {
+    "path": "docs/ja/reference/examples/websocket.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3f561962d6e7d3c11b10900bf4ad46f7ea80138532b34800a1e6370830ea7f68"
+  },
+  {
+    "path": "docs/ja/reference/security-configuration.md",
+    "status": "updated-for-current-dx",
+    "sha256": "0fd8bc8faa3627cf0f931a69d61d813074aca40d8fb55ee95f77b4b75d66dadf"
+  },
+  {
+    "path": "docs/ko/benchmarks/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "ab6340541f788ffd27b3409e56ae572d53e0753892da3f144ea0bf6234bf88e9"
+  },
+  {
+    "path": "docs/ko/community/changelog.md",
+    "status": "updated-for-current-dx",
+    "sha256": "35dedb50fbf1a49848898d5eaa6e3f66c9813f23f183a412421c0930e9ad0a42"
+  },
+  {
+    "path": "docs/ko/community/contributing.md",
+    "status": "updated-for-current-dx",
+    "sha256": "6fe0190ced674f34acb3f99c1da9c361acb0ba3acb4500ac517d58655cf97ffe"
+  },
+  {
+    "path": "docs/ko/community/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "586f0c8bf003ba21102ca2e5bb6d67366b0084532b1123b576302c93aac1f1bd"
+  },
+  {
+    "path": "docs/ko/community/release-channels.md",
+    "status": "updated-for-current-dx",
+    "sha256": "93221ee49fb529bdd99b0c6bff079e35303fbf05278b2cfdde973ac5b86d3223"
+  },
+  {
+    "path": "docs/ko/community/versions.md",
+    "status": "updated-for-current-dx",
+    "sha256": "5ccea33c27b22da73d631fea1b1359ea35fa9ce148cfa99fa90e305bee4dd345"
+  },
+  {
+    "path": "docs/ko/docs.md",
+    "status": "updated-for-current-dx",
+    "sha256": "c4438007029815805915da47bd828e6144d93afee65221b840d2c9eaea026242"
+  },
+  {
+    "path": "docs/ko/enterprise-support.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "bbfd2d92032ce75fa08faf91461823ccd1a3b2f9d381474b5cb064da6d1a1a3f"
+  },
+  {
+    "path": "docs/ko/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "7711e668714cee822866ce725f11b7d1c9fcfa5b9a3948cf07c280758fc40f7b"
+  },
+  {
+    "path": "docs/ko/learn/core-concepts/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "260ccc1d4b6a111ebcf460cd87233945ee76cac95b9a26a594cdcd5fa3b85f6e"
+  },
+  {
+    "path": "docs/ko/learn/core-concepts/handler-meta.md",
+    "status": "updated-for-current-dx",
+    "sha256": "4202d9883a22e11a5b890ea7cd4e8f4b4b273914181f95437119b43871a9f75d"
+  },
+  {
+    "path": "docs/ko/learn/core-concepts/httperr.md",
+    "status": "updated-for-current-dx",
+    "sha256": "2f77f21a199e0a073d3c8f1a181dff02a8b5b602006dfb2607ffb18b05261374"
+  },
+  {
+    "path": "docs/ko/learn/core-concepts/pipeline.md",
+    "status": "updated-for-current-dx",
+    "sha256": "a9ebdee1f5c87667ce7bdc6af71e2d0deed6861f3cb9c5c6da5a4497754d4b02"
+  },
+  {
+    "path": "docs/ko/learn/core-concepts/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "ae5f555db57ae558de519f2270ae8adbb70524be3ff1dfc19ac8f05944d1b617"
+  },
+  {
+    "path": "docs/ko/learn/getting-started/first-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e5e8c3a597a89d76b609aaff8ed0e907f0b4967a4e81e26c17ce590bdc591f6b"
+  },
+  {
+    "path": "docs/ko/learn/getting-started/installation.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e5e8c3a597a89d76b609aaff8ed0e907f0b4967a4e81e26c17ce590bdc591f6b"
+  },
+  {
+    "path": "docs/ko/learn/getting-started/intro.md",
+    "status": "updated-for-current-dx",
+    "sha256": "d8962d04eeff2c6c82921ec63ecdc2f6f2fad427e7842e396fc0cc96eddeb694"
+  },
+  {
+    "path": "docs/ko/learn/getting-started/platforms.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e078fd51c72a04fc5153994b53c672853e42c0f54f142025387e44964b2bfb6c"
+  },
+  {
+    "path": "docs/ko/learn/migration/preview-controller-routes.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "587c59fe3cff64b964f62799616628130619b8c4fe91c3a0bef12c65d56bf6b6"
+  },
+  {
+    "path": "docs/ko/learn/migration/preview-features.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "c44f5a33f104d78589655a548439da9697db2d76b8ef71b734cbb0ac658258d9"
+  },
+  {
+    "path": "docs/ko/learn/migration/v0.7.0-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "f7e2ebf95c9d5398b19a1c9fdf9f62a2f86fcbede4a56354215eae6262701769"
+  },
+  {
+    "path": "docs/ko/learn/migration/v0.7.0.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "4e9a085b876f72959a02ca5f8cfd1ed425587d7fdf8da9ec1028a826c8707d43"
+  },
+  {
+    "path": "docs/ko/learn/migration/v0.7.1-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "a051bd5b0140d9b03641526b6f3c0f26c8a193aa698a471b50c521ded20c46a0"
+  },
+  {
+    "path": "docs/ko/learn/migration/v0.7.1.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "d3615bfb8e7a583ea3a38d2d7a6de4ec187ef9cb04be4babcbb626979a3d07f6"
+  },
+  {
+    "path": "docs/ko/learn/migration/v0.7.5.md",
+    "status": "updated-for-current-dx",
+    "sha256": "2815043e17d17c603f7b0a5363a13e6be66e342509d641eefc9e150dc0f22995"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/1-project-structure.md",
+    "status": "updated-for-current-dx",
+    "sha256": "eaa6cf38e145be3aad8229351a3fbeab4daf98c4ee3fd895dcb69ef4440938e0"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/2-controller.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3c90fcc2a2830b7cfac586c4a683ebdf8bbafc9b84283f14fe046c8b369a9831"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/3-dependency-injection.md",
+    "status": "updated-for-current-dx",
+    "sha256": "d6fe2a1f4fddf8b21d4d9598cf8e043b78759d7391141afe66a1f48d70a9dbda"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/4-interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "8b87405728a41fbc53c4a9c30bfd7e0d17d720cac4fcc312e4a1e53e395071de"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/5-database.md",
+    "status": "updated-for-current-dx",
+    "sha256": "0c7415de77577d2a0244b1359ca8d9c87af87809852ef7a4bf797767e324f152"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/6-transaction.md",
+    "status": "updated-for-current-dx",
+    "sha256": "0dfe27ec3614c5dd37d0842aa153774c2f7d446d92932bb20191ba9aa5010227"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/7-error-handling.md",
+    "status": "updated-for-current-dx",
+    "sha256": "79180a3585b300b6bee38e8ef041c9d40edfc964f16ae8015dc5895156de0b82"
+  },
+  {
+    "path": "docs/ko/learn/tutorial/8-swagger.md",
+    "status": "updated-for-current-dx",
+    "sha256": "818a9f75a9246b45a65877a68e0577936fab84be181d1a5afb67de23ea227db0"
+  },
+  {
+    "path": "docs/ko/reference/api/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "94dd658fdb8dbf8dac042408f0145223dbd667de10ecd7b4c2f4762b666b3f42"
+  },
+  {
+    "path": "docs/ko/reference/api/interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "1dbd9db536012561b9a6cf81a0cca42d75bddfeffa5c4522d25ab84400d74f8e"
+  },
+  {
+    "path": "docs/ko/reference/api/openapi.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b9abc91eed3764aa9761aec35763f5d18161a9a75824b866bd2c7c04b70f8af1"
+  },
+  {
+    "path": "docs/ko/reference/api/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "1c2cbd3eac1d590336b7364b88a9294ade654545da4568d233ee156e7546c6d0"
+  },
+  {
+    "path": "docs/ko/reference/api/spine-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "0e60aef6903ade37fcad045b90e14ed0a765c105b6dd66dc43b35bc44bd87660"
+  },
+  {
+    "path": "docs/ko/reference/examples/crud.md",
+    "status": "updated-for-current-dx",
+    "sha256": "2f3bb91b69fd5db8ca7e2c3aa76c7725e5283b3295f27e1a9273cc5e910495c7"
+  },
+  {
+    "path": "docs/ko/reference/examples/login.md",
+    "status": "updated-for-current-dx",
+    "sha256": "f3be27aac243bb98206d0ba7935ac0d5343725a7935b1d1a30dd2bac76320a69"
+  },
+  {
+    "path": "docs/ko/reference/examples/msa.md",
+    "status": "updated-for-current-dx",
+    "sha256": "ca097916b8324a0c25621614c4bc4c262f458c71b964860d0d9729d4ed347f11"
+  },
+  {
+    "path": "docs/ko/reference/examples/websocket.md",
+    "status": "updated-for-current-dx",
+    "sha256": "f5264fa80199462de6df91550de05fa4b7f89625c9ef575c11b31cea2e3f3f4f"
+  },
+  {
+    "path": "docs/ko/reference/security-configuration.md",
+    "status": "updated-for-current-dx",
+    "sha256": "47a20185c56b286fa8bb9055e7353c29cd8765702f44e6ce3b6e086923ae049f"
+  },
+  {
+    "path": "docs/zh-Hans/benchmarks/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "7b367714f281487fbbe993b285a8bb5c7ae518703f1e11e4108cfe966572b6b3"
+  },
+  {
+    "path": "docs/zh-Hans/community/changelog.md",
+    "status": "updated-for-current-dx",
+    "sha256": "8768cdb421e0c9c18d6269b566eee28930f471005fc75c2482218abdace0eb56"
+  },
+  {
+    "path": "docs/zh-Hans/community/contributing.md",
+    "status": "updated-for-current-dx",
+    "sha256": "749e46132b8a71cdd388b3c4f9c5399f69f0b82d9114ea8cf58495fba11dad21"
+  },
+  {
+    "path": "docs/zh-Hans/community/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "6b5ff4a92d895ed5ccd20e26a8abfa81a91be5b1265cbe13465a25990a08004b"
+  },
+  {
+    "path": "docs/zh-Hans/community/release-channels.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e85faf5827997c37a7d56baeed62932f47e2aed6af4ff1dd3ec961fb1dc51796"
+  },
+  {
+    "path": "docs/zh-Hans/community/versions.md",
+    "status": "updated-for-current-dx",
+    "sha256": "de9f116e9083d9eaaa3c83c125ef64990941321ee4af2feb607dd393f54c640b"
+  },
+  {
+    "path": "docs/zh-Hans/docs.md",
+    "status": "updated-for-current-dx",
+    "sha256": "d8a738e3ebfa64dffe99b3f817af6cb90a7e99a31d23af229c22a1564193fae6"
+  },
+  {
+    "path": "docs/zh-Hans/enterprise-support.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "4125abe65c8f3bd8f43a4e0f3ad5e4445aceaed9583dc043c26d20e823bcbe5c"
+  },
+  {
+    "path": "docs/zh-Hans/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "249930dce4da2254275f8dfc705988480abf1d4a2b16fa973a6d8df3d43323c3"
+  },
+  {
+    "path": "docs/zh-Hans/learn/core-concepts/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "6bb8b1834fd84af51a0d42fd4200ac62b10edcf13a99d77810312485dabd4d96"
+  },
+  {
+    "path": "docs/zh-Hans/learn/core-concepts/handler-meta.md",
+    "status": "updated-for-current-dx",
+    "sha256": "2d1c6e0fd107d2326ac66d5ac7e364ee1501ed0988a68b394a729a4b780cd9f9"
+  },
+  {
+    "path": "docs/zh-Hans/learn/core-concepts/httperr.md",
+    "status": "updated-for-current-dx",
+    "sha256": "a5cf2d715d4e96c220fe0d29ebaca8b0066ded254a18b4d491de5fafa1d778c8"
+  },
+  {
+    "path": "docs/zh-Hans/learn/core-concepts/pipeline.md",
+    "status": "updated-for-current-dx",
+    "sha256": "ead457be9e58aa7dbdaf2e94a5dc51e6453a40aa2e0f013259bdf517c5a98282"
+  },
+  {
+    "path": "docs/zh-Hans/learn/core-concepts/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3d06a6b594a11710c67758aab48d33baef8b71894bedd2be7c028cb9840df1fd"
+  },
+  {
+    "path": "docs/zh-Hans/learn/getting-started/first-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b289c8cc668950b2ff507cf2b7f3bec8a4b22cfb1fbd7e4bea15281418ba8d77"
+  },
+  {
+    "path": "docs/zh-Hans/learn/getting-started/installation.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b289c8cc668950b2ff507cf2b7f3bec8a4b22cfb1fbd7e4bea15281418ba8d77"
+  },
+  {
+    "path": "docs/zh-Hans/learn/getting-started/intro.md",
+    "status": "updated-for-current-dx",
+    "sha256": "d509145c5f4aa1ddb0aa4ec099893a09b4569545e3fd0b2cde492ec51512be66"
+  },
+  {
+    "path": "docs/zh-Hans/learn/getting-started/platforms.md",
+    "status": "updated-for-current-dx",
+    "sha256": "7de2da212a89652b103dde04f2cca32f155a0e2a129335a7634f1926e3afd867"
+  },
+  {
+    "path": "docs/zh-Hans/learn/migration/preview-controller-routes.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "f713c65c842029fb3d1f6716fdbfc037bc9f2598d4ee4641c103d86613f75b01"
+  },
+  {
+    "path": "docs/zh-Hans/learn/migration/preview-features.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "979931dca5b2fd81a9ede391a70bbff157a9cb586bcd3ddb86e16e32404366a4"
+  },
+  {
+    "path": "docs/zh-Hans/learn/migration/v0.7.0-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "b8c612d2198e335187bc391bdc64f54f97c438a7aba115a4e3c155143ada8f0f"
+  },
+  {
+    "path": "docs/zh-Hans/learn/migration/v0.7.0.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "d5b857f41826feefbb2fca8068206ebbd05bda4f6337f43dcb535e6c0d617bf1"
+  },
+  {
+    "path": "docs/zh-Hans/learn/migration/v0.7.1-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "954e8650f138cec0f48f4265fe0f8839a31cd86087487b95ec96ac47e214aba1"
+  },
+  {
+    "path": "docs/zh-Hans/learn/migration/v0.7.1.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "62d487d0153d2547ef452933b71b470db2f270d853138ec95811db895c30fc55"
+  },
+  {
+    "path": "docs/zh-Hans/learn/migration/v0.7.5.md",
+    "status": "updated-for-current-dx",
+    "sha256": "a25a674d49d9df2a88a201bf5b2fa48d8ebc7225cf8c810aec171cad6439a076"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/1-project-structure.md",
+    "status": "updated-for-current-dx",
+    "sha256": "644d05bfb169e9cd4a7947912189e70e7ceb6fc1d94b1f89ddd0bcff606cf5e7"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/2-controller.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e2af6c1a7d045d84f7bedc43738b0aab683d9b88c67290770f3bef0624032eaa"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/3-dependency-injection.md",
+    "status": "updated-for-current-dx",
+    "sha256": "8e45f0520c3accaea5350febf087433e9bf3b0a6462a24f8d8b106ce13eb046d"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/4-interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "8813637815dec0d90ed362d6e272e80b2430649dc6fede8f927376f2b4fadfe8"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/5-database.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b7220e657f630101afc3ab14b929c91511b40b9580b44b6441337f98d2b00f07"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/6-transaction.md",
+    "status": "updated-for-current-dx",
+    "sha256": "6ba6e3c4c1685a21076ede4c08bbabfd955afa651497f386279fd861fca4d81f"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/7-error-handling.md",
+    "status": "updated-for-current-dx",
+    "sha256": "fa703446b8eaaeb5287b574cc0c3f7ed40f8871b44db0f78e5f9a3a4ee47819c"
+  },
+  {
+    "path": "docs/zh-Hans/learn/tutorial/8-swagger.md",
+    "status": "updated-for-current-dx",
+    "sha256": "67a0e5311aec2e50444bc43addbdf82a6739560b87b3284974761c9b8393da49"
+  },
+  {
+    "path": "docs/zh-Hans/reference/api/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "7d0e2c42807366b7088359a00bc11e985f7a9353e310d62820e41a773a13f542"
+  },
+  {
+    "path": "docs/zh-Hans/reference/api/interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b311122efa1de2c369d6101ab09eb176a98fcde25e56fc465853e0476f064572"
+  },
+  {
+    "path": "docs/zh-Hans/reference/api/openapi.md",
+    "status": "updated-for-current-dx",
+    "sha256": "489beb6d1c48fb11e09bfddc9fba961e149a13bcd415cf539bff1279557543dc"
+  },
+  {
+    "path": "docs/zh-Hans/reference/api/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "bfd27089cb50bbb696fc8d049b3a723a77e03e592b9359c472d19d893bd4967e"
+  },
+  {
+    "path": "docs/zh-Hans/reference/api/spine-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "ecd72de076976564feb5940a0510c5e62bbc59ee77eb23cc17bcb5cd6212ad1a"
+  },
+  {
+    "path": "docs/zh-Hans/reference/examples/crud.md",
+    "status": "updated-for-current-dx",
+    "sha256": "a1bdf3194a3af6ea9202bd3bc9deac70fe67e1b96a75f610d6cdcbcdb473720f"
+  },
+  {
+    "path": "docs/zh-Hans/reference/examples/login.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b2095fc1ea74105476f5e9277bc58f3175c40d2dfbc79c5281e1da10efc490cc"
+  },
+  {
+    "path": "docs/zh-Hans/reference/examples/msa.md",
+    "status": "updated-for-current-dx",
+    "sha256": "0fc0b223b7774d7da076d5ceef207eb64f88aceda9087b0309acf0083842fac7"
+  },
+  {
+    "path": "docs/zh-Hans/reference/examples/websocket.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b6d93949e7d39c281c8d491b9aec32bafcd2500542d54a1ecb488fa74e1704be"
+  },
+  {
+    "path": "docs/zh-Hans/reference/security-configuration.md",
+    "status": "updated-for-current-dx",
+    "sha256": "81c12d6e2ca7be0386950e987af757483aed2e8c1e733706183610f9e4750afc"
+  },
+  {
+    "path": "docs/zh-Hant/benchmarks/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "34fc1bb15c6010d3b19569df50e142ae458c419dd1041da05df3bf91e37d3d37"
+  },
+  {
+    "path": "docs/zh-Hant/community/changelog.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b18d2dfb0febf4873106a67157408755a4734a26bb80b982c1325dca1cb434e1"
+  },
+  {
+    "path": "docs/zh-Hant/community/contributing.md",
+    "status": "updated-for-current-dx",
+    "sha256": "1a85cd7045fcdbc91b00ea72624cff0808764c26c0cb5c80a35064b4ca1a6fc8"
+  },
+  {
+    "path": "docs/zh-Hant/community/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "740534def9f4d79339663179e74a49d6e977f45ca107a16dad9af6eedd10e6ae"
+  },
+  {
+    "path": "docs/zh-Hant/community/release-channels.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e44ebbb3cbfcba67c6ff11809a8531ccbb05af24d628afa47d006acb3a760e30"
+  },
+  {
+    "path": "docs/zh-Hant/community/versions.md",
+    "status": "updated-for-current-dx",
+    "sha256": "1636581a93f3925a6b12957069c3cb4cb94510c9563defccbe3242860e57aa51"
+  },
+  {
+    "path": "docs/zh-Hant/docs.md",
+    "status": "updated-for-current-dx",
+    "sha256": "050fdd84791f3ef877caaadaa96fce9b6da5296b1ef49974eee31ccfc578c94e"
+  },
+  {
+    "path": "docs/zh-Hant/enterprise-support.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "bfabb41741570c54788ff7e94a3de9e6481e68ff59f5a2341f441b323b990948"
+  },
+  {
+    "path": "docs/zh-Hant/index.md",
+    "status": "reviewed-no-current-api-example",
+    "sha256": "ad53051936816b81b5a0500fdb6f043f88c9376b5681f73221ced22ff48e99a9"
+  },
+  {
+    "path": "docs/zh-Hant/learn/core-concepts/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "862d0c2784d59f04ea2207d7cd445ca773887dd6a7749fe1218fa64e522be7c0"
+  },
+  {
+    "path": "docs/zh-Hant/learn/core-concepts/handler-meta.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3c3f9941fdc9fb882bdb82f85f192ed8b2b36bb35e45edbbfa499521fac9e23b"
+  },
+  {
+    "path": "docs/zh-Hant/learn/core-concepts/httperr.md",
+    "status": "updated-for-current-dx",
+    "sha256": "c337fdc41811125890ce07f018ff0e6030098ecb9e4307ff4eb9a313d7ed531d"
+  },
+  {
+    "path": "docs/zh-Hant/learn/core-concepts/pipeline.md",
+    "status": "updated-for-current-dx",
+    "sha256": "e6e6199726bf428aa578b2eeb91bc48d340b7398cb5af6161c4855f0acfa4d02"
+  },
+  {
+    "path": "docs/zh-Hant/learn/core-concepts/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "9a6f9205631abf11760eb66f0f5fd7b608b883e412e11562171c91d8e89b186c"
+  },
+  {
+    "path": "docs/zh-Hant/learn/getting-started/first-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "5123bcbe1f48394e14dc1112642178bd6a52a6647002af01d5b40d94a024861d"
+  },
+  {
+    "path": "docs/zh-Hant/learn/getting-started/installation.md",
+    "status": "updated-for-current-dx",
+    "sha256": "5123bcbe1f48394e14dc1112642178bd6a52a6647002af01d5b40d94a024861d"
+  },
+  {
+    "path": "docs/zh-Hant/learn/getting-started/intro.md",
+    "status": "updated-for-current-dx",
+    "sha256": "035d360a61435b3529d7e27387f9256df3936a33273769fc05a1123d8ee7505f"
+  },
+  {
+    "path": "docs/zh-Hant/learn/getting-started/platforms.md",
+    "status": "updated-for-current-dx",
+    "sha256": "5e1c38e7591220ae1594792e4783097d6a6c8df97e33d2e7b0ded3bc2ee16e79"
+  },
+  {
+    "path": "docs/zh-Hant/learn/migration/preview-controller-routes.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "bf2f2eab8d54b9153fe9b967aaf11023ccf627452b0cf1dfd3ce0964821637ed"
+  },
+  {
+    "path": "docs/zh-Hant/learn/migration/preview-features.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "585b12732e12b47d8fb87a15544b04f6b2779bf47a2fa806a62d998c85dae157"
+  },
+  {
+    "path": "docs/zh-Hant/learn/migration/v0.7.0-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "3210ad3c15544d938fcf8424ac44eb3cc7a9feec5069da9136aab5e91cfc6595"
+  },
+  {
+    "path": "docs/zh-Hant/learn/migration/v0.7.0.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "fec45c9bf487131f0d58fff1209efaea60cec4848ac833e7bd1c59a4c2671136"
+  },
+  {
+    "path": "docs/zh-Hant/learn/migration/v0.7.1-preview.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "b5dc00f44a80d40cbe49c57e90f241369354327fedfc1fa3fec267750a4c6a68"
+  },
+  {
+    "path": "docs/zh-Hant/learn/migration/v0.7.1.md",
+    "status": "historical-version-or-redirect",
+    "sha256": "ef1a9839c37dd119ff2998be3312f29d52908002ba549a1b8e716433d289c2c2"
+  },
+  {
+    "path": "docs/zh-Hant/learn/migration/v0.7.5.md",
+    "status": "updated-for-current-dx",
+    "sha256": "59f233307750409f2cf6614ea05059eec82375edbffbf746276509bf992a5e67"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/1-project-structure.md",
+    "status": "updated-for-current-dx",
+    "sha256": "4af9aea2232bfd33299225b7506a65babfa833ca1cb4616d0e96b2951422610a"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/2-controller.md",
+    "status": "updated-for-current-dx",
+    "sha256": "faf8e7fd03baad38cf84337d16affb7db7e75b3deeff1d0c1b527a4dcbbe363f"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/3-dependency-injection.md",
+    "status": "updated-for-current-dx",
+    "sha256": "54922fdca29707161aa6eb1394e50db839811d5fc41f9f7e622184ebba4906bb"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/4-interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "a17121b4a79a5214e5928461b1454c888e72a137b7ec9a678b55f9ed0fe89ed4"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/5-database.md",
+    "status": "updated-for-current-dx",
+    "sha256": "815a7e43d41cf14c84aa8513ff6d73859e50aaa6d0de8e0f6597308165502367"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/6-transaction.md",
+    "status": "updated-for-current-dx",
+    "sha256": "7dfbd84fb429b387e63870077bc783fde49e087e817c6220a40b190eda6a1bde"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/7-error-handling.md",
+    "status": "updated-for-current-dx",
+    "sha256": "6b1b0dbf886825d7befe9656d211118538dda2378625505e05182fe3a2e537c7"
+  },
+  {
+    "path": "docs/zh-Hant/learn/tutorial/8-swagger.md",
+    "status": "updated-for-current-dx",
+    "sha256": "b70cb7953def52101547b6e748dd4382ad1a99955bfddc129a010a03b634d8d7"
+  },
+  {
+    "path": "docs/zh-Hant/reference/api/execution-context.md",
+    "status": "updated-for-current-dx",
+    "sha256": "bff3c66dffaa745e29cfc67411292475b734f09b6efd59c356065ffc85dfb917"
+  },
+  {
+    "path": "docs/zh-Hant/reference/api/interceptor.md",
+    "status": "updated-for-current-dx",
+    "sha256": "3673e7ad8fcaa317cf5d13b1e9e41a510f9bc4221e2376d8f6cf5a18f7dbe66b"
+  },
+  {
+    "path": "docs/zh-Hant/reference/api/openapi.md",
+    "status": "updated-for-current-dx",
+    "sha256": "2382f9779e3cc1fe1c1c5020bfcfeb8382950ad1042eeef0ed7e0346070a9c3a"
+  },
+  {
+    "path": "docs/zh-Hant/reference/api/query-values.md",
+    "status": "updated-for-current-dx",
+    "sha256": "85239e10e68fc94959f974c67fd5821a462204e7841d1aea0be453828eea3a53"
+  },
+  {
+    "path": "docs/zh-Hant/reference/api/spine-app.md",
+    "status": "updated-for-current-dx",
+    "sha256": "224e645aad12ae6ccec1beb374dc4c819d881af33b6009e089e5fc5470509258"
+  },
+  {
+    "path": "docs/zh-Hant/reference/examples/crud.md",
+    "status": "updated-for-current-dx",
+    "sha256": "9d462370f40a8a6bdb6e7ae56e97de879894dd679854b45e5846f3afb0a8486a"
+  },
+  {
+    "path": "docs/zh-Hant/reference/examples/login.md",
+    "status": "updated-for-current-dx",
+    "sha256": "4c1691a7e7ffa05697bb1126a7e0edbab7e92a120ab9fafbc732b09133c4cc22"
+  },
+  {
+    "path": "docs/zh-Hant/reference/examples/msa.md",
+    "status": "updated-for-current-dx",
+    "sha256": "07e887d13cc8e29380e38157feef5c1042b6ea14082f5963a51c87bea5c7be23"
+  },
+  {
+    "path": "docs/zh-Hant/reference/examples/websocket.md",
+    "status": "updated-for-current-dx",
+    "sha256": "0b9cc1fa84af75213575e5596dad313929065da5641705f38670649d821bb36b"
+  },
+  {
+    "path": "docs/zh-Hant/reference/security-configuration.md",
+    "status": "updated-for-current-dx",
+    "sha256": "1a431a10db1636e7ed69479586e18d75324656831a6ebf4779b81dd7e36b23ec"
+  }
+]

@@ -1,14 +1,20 @@
 # 错误处理与输入验证
 
-在 Spine v0.7.1 中结合 DTO 自动验证与自定义规则，并返回输入错误和资源不存在的 HTTP 响应。
+区分自动标签验证和自定义规则。此独立应用不保存数据。
 
-## 可运行示例
+## 组装验证器
 
-需要 Go 1.26 或更高版本。在独立 Go 模块中安装依赖，将代码保存为 `main.go` 并运行。此示例不会保存用户。
+[控制器依赖](/zh-Hans/learn/tutorial/2-controller)
 
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0 github.com/NARUBROWN/spine-validator-playground@v0.2.0
+```sh
+go get github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
+
+engine 是保存 playground.New() 返回值的变量。在 BuildApplication 中创建一次并传给 spine.WithValidator(engine)。playground 实现运行时验证和 OpenAPI SchemaDescriber，也可使用实现公开验证契约的其他引擎。
+
+## 运行示例
+
+替换 main.go，在 BuildApplication 中注册验证器并启用 OpenAPI。
 
 ```go
 package main
@@ -28,6 +34,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/httperr"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type CreateUser struct {
@@ -46,13 +53,13 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.POST("/users", func(body input.Body[CreateUser]) (httpx.Response[CreateUser], error) {
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) (httpx.Response[CreateUser], error) {
 		if err := (*CreateUser)(body).Validate(); err != nil {
 			return httpx.Response[CreateUser]{}, httperr.BadRequest(err.Error())
 		}
 		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
 	})
-	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[map[string]any], error) {
+	r.GET("/users/:id", func(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[map[string]any], error) {
 		if *id <= 0 {
 			return httpx.Response[map[string]any]{}, httperr.BadRequest("invalid user ID")
 		}
@@ -62,14 +69,21 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 		return httpx.Response[map[string]any]{Body: map[string]any{"id": *id, "name": "Alice"}}, nil
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
 	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{OpenAPI: boot.OpenAPIOptions{Enabled: true}}, EnableGracefulShutdown: true}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
 	if err != nil {
 		log.Fatal(err)
 	}
-	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
-	app.Constructor(constructor.Controller(&Controller{}))
-	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
 	if err := app.Validate(options); err != nil {
 		log.Fatal(err)
 	}
@@ -79,32 +93,32 @@ func main() {
 }
 ```
 
-## 验证何时执行
+## 三种验证方式 {#validation-modes}
 
-注册 `spine.WithValidator(engine)` 后，正文绑定成功时会检查 `validate` 标签，失败则在处理函数执行前返回 400。未注册验证器时，仅有标签不会执行验证。
+注册的引擎在绑定后、处理器前检查 validate 标签。request.Validate() 是显式调用自定义普通方法。app.Validate(options) 在运行前检查可验证的配置和 DI。未注册引擎时，标签本身不会执行验证。
 
-DTO 的 `Validate()` 不会自动调用。示例在标签验证通过后由处理函数调用它来检查保留名称。也可以用此方式扩展跨字段或应用规则。只向 `BadRequest` 传递可公开的消息。
+如果标签已满足需求，省略 DTO Validate 和手动调用。本例仅为保留名称规则添加它们，该规则不会自动执行，也不会被 OpenAPI 推断。通过 (*body).Validate() 或 (*CreateUser)(body).Validate() 调用 DTO 方法。参见 [DTO 定义](/zh-Hans/learn/tutorial/2-controller#dto-validation)。
 
-`app.Validate(options)` 在启动前检查应用配置，不会验证请求 DTO，也不会实际执行构造函数或外部服务。
+## 请求与规范
 
-## 检查响应
-
-依次返回 200、400、404、400、400 和 201。第一个 POST 错误包含字段验证信息，第二个来自自定义规则。
-
-```bash
+```sh
+go run .
+#
 curl -i http://localhost:8080/users/1
 curl -i http://localhost:8080/users/0
 curl -i http://localhost:8080/users/2
 curl -i -H 'Content-Type: application/json' -d '{"name":"","email":"bad"}' http://localhost:8080/users
 curl -i -H 'Content-Type: application/json' -d '{"name":"admin","email":"a@example.com"}' http://localhost:8080/users
 curl -i -H 'Content-Type: application/json' -d '{"name":"Alice","email":"a@example.com"}' http://localhost:8080/users
+curl http://localhost:8080/openapi.json
 ```
 
-## 错误映射
+依次为 200、400、404、400、400、201。POST 失败分别来自标签和手动规则。OpenAPI 标记 name、email 必填，但规范本身不执行验证。当验证器提供必填信息时，即使存在 json:",string" 等表达限制，也会保留 Required。CLI 静态 export 不执行引擎，应在准备好的应用中检查引擎生成的规范。
 
-`httperr.BadRequest`、`Unauthorized` 和 `NotFound` 分别返回 400、401 和 404。其他状态可使用 `httperr.HTTPError`。普通错误会转成 500，不要直接公开内部错误。可以使用 `errors.Is` 判断领域错误。
+## 错误响应
 
-## 了解更多
+绑定和标签验证失败在处理器前返回 400。HTTPError 仅允许 400–599，200/302 等无效状态按普通 500 处理。普通错误隐藏内部详情。httperr 仅填写可公开消息。BeforeResponse 错误优先于处理器错误决定响应。
 
-- [httperr](/zh-Hans/learn/core-concepts/httperr)
-- [拦截器](/zh-Hans/learn/tutorial/4-interceptor)
+## 下一步
+
+[拦截器](/zh-Hans/learn/tutorial/4-interceptor) / [OpenAPI](/zh-Hans/reference/api/openapi)

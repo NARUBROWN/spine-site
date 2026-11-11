@@ -1,10 +1,10 @@
 # Choosing platforms and DTO validation
 
-Spine `v0.7.1` keeps public HTTP, WebSocket, event, and DTO validation contracts in core and selects implementations as independent modules. Connect only the implementations your application needs.
+Spine `v0.7.5` keeps public HTTP, WebSocket, event, and DTO validation contracts in core and selects implementations as independent modules. Connect only the implementations your application needs.
 
 ## Choose with the CLI
 
-Install stable CLI `v0.4.3` or later, then run each command below in a separate directory. `--channel main` selects published stable tags. The CLI installation channel and application dependency channel are independent.
+Install the stable [Spine CLI](/en/learn/getting-started/installation). This example uses CLI `v0.4.4` and core `v0.7.5`.
 
 ```sh
 spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
@@ -29,8 +29,8 @@ An app generated with `--validator playground` validates bound DTOs before the h
 
 ```go
 type CreateUserRequest struct {
-    Email string `json:"email" validate:"required,email"`
-    Age   int    `json:"age" validate:"gte=18"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
 }
 ```
 
@@ -44,4 +44,4 @@ Rule violations result in HTTP 400, WebSocket close 1008, or the consumer failur
 spine update --dry-run
 ```
 
-See [release channels and installation](/en/community/release-channels), [input migration](/en/learn/migration/v0.7.1-preview), and [HTTP v3 and boot options](/en/learn/migration/preview-features).
+See [release channels and installation](/en/community/release-channels), [input migration](/en/learn/migration/v0.7.5), and [HTTP v3 and boot options](/en/learn/migration/v0.7.5).

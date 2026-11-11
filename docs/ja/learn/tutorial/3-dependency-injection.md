@@ -1,36 +1,16 @@
 # 依存性注入
 
-::: info
-`legacy` レイアウトの `app.Route` は互換性のため維持されますが非推奨です。新しい登録方法は[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を参照してください。
-:::
+コンストラクターの引数型でリポジトリー、サービス、コントローラーを接続します。この独立アプリは DB なしで GET /greeting に hello を返します。
 
-[コントローラー](/ja/learn/tutorial/2-controller)で作成した `src/user` リソースを使い、コンストラクタの登録と依存性注入（DI）を確認します。この手順を終えると、コントローラー、サービス、リポジトリを接続し、循環依存やコンストラクタの登録漏れを確認できるようになります。
+## 生成契約
 
-このページの `src/user` の例は[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で `--layout legacy` を指定して作成したアプリを使います。既定の `layered-v1` は役割別のディレクトリを使います。
+各型は Constructor(依存...) *Self メソッドを実装します。constructor パッケージで Repository、Service、Controller、Interceptor の役割を登録します。Controller は RegisterRoutes、Interceptor は四つのフックも実装します。Custom は外部生成関数や一般オブジェクト用です。
 
-[最初のアプリ](/ja/learn/tutorial/1-project-structure)のプロジェクトを用意し、`my-app` のルートで進めてください。後半のデータベースとラッパー型の例は、基本リソースに自動で含まれるものではなく、個別の拡張です。
+&Service{} は型の目印です。フィールドはコピーされず、新しい receiver で Constructor が呼ばれます。生成結果はアプリ内で共有されます。
 
+## 実行例
 
-## 基本概念
-
-Spine は、登録されたコンストラクタのパラメーターの型を見て、必要なオブジェクトを先に作成して渡します。`@Autowired` や `@Injectable` のようなアノテーションや、DI 専用の設定ファイルは使いません。`spine.toml` は CLI プロジェクトの設定ファイルです。
-
-次のコンストラクタでは、`*UserRepository` が `UserService` に必要な依存性です。
-
-```go
-// 引数の型に基づいて依存関係を自動注入
-func NewUserService(repository *UserRepository) *UserService {
-    return &UserService{repository: repository}
-}
-```
-
-## 役割別のコンストラクター登録
-
-次の独立アプリは `Constructor` メソッドと役割マーカーでリポジトリ、サービス、コントローラーを登録します。逆順に登録しても依存型に従って解決されます。別の Go モジュールに Spine `v0.7.1` と互換 Echo プラットフォームをインストールし、`main.go` に保存して実行してください。
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
-```
+[コントローラーの依存](/ja/learn/tutorial/2-controller)
 
 ```go
 package main
@@ -42,6 +22,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -58,285 +39,52 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func() httpx.Response[string] {
+	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
+
 	app := spine.New(echoplatform.Option())
-	app.Constructor(
-		constructor.Controller(&Controller{}),
-		constructor.Service(&Service{}),
-		constructor.Repository(&Repository{}),
-	)
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Service(&Service{}), constructor.Repository(&Repository{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-別のターミナルで次を実行すると `hello` が返ります。役割マーカーは型を登録します。インターセプターの全体またはルートへの適用は別に設定します。
+## 依存解決
 
-```bash
+```sh
+go run .
+#
 curl http://localhost:8080/greeting
 ```
 
-## CLI で生成した依存性
+登録順に関係なく依存順に生成し、hello を返します。グラフ検査は型の重複、依存の不足、曖昧なインターフェース、循環を拒否します。nil とパニックは準備時の生成実行で検出します。
 
-まだ生成していない場合は、`my-app` のルートで実行します。すでに生成した場合は、再実行しないでください。
-
-```bash
-spine generate resource user --dry-run
-```
-
-プレビューで生成ファイルと登録コードの変更を確認してから、次のコマンドで生成します。
-
-```bash
-spine generate resource user
-```
-
-以下は、CLI が同じ `user` パッケージ内に生成したコードから、型とコンストラクタだけを抜粋したものです。既存のファイルをこのコードで上書きしないでください。コントローラーの `Get` メソッドは、生成されたファイル内に残します。
+## 外部生成関数
 
 ```go
-// src/user/user_repository.go
-package user
-
-type UserRepository struct{}
-
-func NewUserRepository() *UserRepository { return &UserRepository{} }
+app.Constructor(constructor.Custom(database.NewDB))
 ```
 
-```go
-// src/user/user_service.go
-package user
+database.NewDB の例は func NewDB() *bun.DB です。オブジェクトと関数の生成子は戻り値一つに対応します。(T, error) と可変長引数は拒否し、通常の []T 引数は使用できます。インターフェースは戻り型が一致する提供者を優先し、なければ代入可能な提供者が一つ必要です。
 
-type UserService struct{ repository *UserRepository }
+## 検証と寿命
 
-func NewUserService(repository *UserRepository) *UserService {
-    return &UserService{repository: repository}
-}
-```
-
-```go
-// src/user/user_controller.go
-package user
-
-type UserController struct{ service *UserService }
-
-func NewUserController(service *UserService) *UserController {
-    return &UserController{service: service}
-}
-```
-
-`src/user/user_route.go` の `Register` は、三つのコンストラクタと `GET /user/:id` を登録します。CLI は `internal/application/application.go` の `BuildApplication()` に、`user.Register(app)` の呼び出しとエラー処理を追加します。登録済みのコンストラクタを再度追加しないでください。
-
-```go
-// src/user/user_route.go: Register
-app.Constructor(NewUserRepository, NewUserService, NewUserController)
-app.Route("GET", "/user/:id", (*UserController).Get)
-```
-
-## 登録順序と解決順序
-
-コンストラクタの登録順序で、オブジェクトの生成順序が決まるわけではありません。コントローラーを作るにはサービスが、サービスを作るにはリポジトリが必要なため、リポジトリから生成します。生成したインスタンスはコンテナーが共有し、リクエストごとに新しく作ることはありません。
-
-次のように登録順序を変えても、依存性を解決する順序は同じです。
-
-```go
-// user_route.go の既存の Constructor 呼び出しを置き換える例です。
-app.Constructor(NewUserController, NewUserService, NewUserRepository)
-```
-
-```mermaid
-graph LR
-    Repository["NewUserRepository()"] --> Service["NewUserService(repository)"]
-    Service --> Controller["NewUserController(service)"]
-```
-
-## コンストラクタのルール
-
-### パラメーター
-
-各パラメーターの型を提供するコンストラクタが登録されている必要があります。依存性がなければパラメーターを省略し、複数の依存性が必要ならパラメーターを複数宣言します。
-
-以下はシグネチャだけを示した例です。実際のコードでは、各関数の本体と戻り値の型を実装する必要があります。
-
-```go
-// リポジトリーへの依存関係を宣言
-func NewUserService(repo *UserRepository) *UserService
-
-// 複数の依存関係を宣言
-func NewUserController(svc *UserService, logger *Logger) *UserController
-
-// 依存関係のないコンストラクター
-func NewLogger() *Logger
-```
-
-### 戻り値の型
-
-コンストラクタは、値をちょうど一つ返す必要があります。その戻り値の型がコンテナーに登録される型になります。`(値, error)` を返すコンストラクタはサポートしていません。ポインターやインターフェースを返すコンストラクタが `nil` を返すと、依存性の解決に失敗します。
-
-```go
-func NewUserService(repository *UserRepository) *UserService {
-    return &UserService{repository: repository}
-}
-```
-
-データベースの接続関数も、[データベースの例](/ja/learn/tutorial/5-database)の `database.NewDB() *bun.DB` のように、値を一つだけ返すように実装します。`BuildApplication` でコンストラクタを登録しただけでは、接続関数は呼び出されません。そのため、生成された検証テストの成功は、データベースへの接続成功を意味しません。接続の初期化とエラー処理は、コンストラクタが実行されるアプリの起動段階で確認してください。
-
-```go
-// internal/application/application.go: BuildApplication
-app.Constructor(database.NewDB)
-```
-
-## インターフェースを使う
-
-インターフェース型をパラメーターとして宣言すると、次の順序で依存性を探します。
-
-1. 戻り値の型がそのインターフェースと完全に一致するコンストラクタを使います。
-2. 完全に一致するコンストラクタがなければ、そのインターフェースに代入できる戻り値の型を探します。
-3. 候補が一つなら注入し、複数あれば `multiple constructors registered for interface` エラーを返します。候補がなければ依存性の不足を示すエラーを返します。
-
-以下は、[データベース](/ja/learn/tutorial/5-database)の設定を済ませたアプリに適用する拡張例です。CLI の `resource` による生成結果には、Bun の設定は含まれません。
-
-### データベースとトランザクションに共通する型
-
-リポジトリのフィールドを `*bun.DB` に固定すると、そのフィールドに `bun.Tx` を入れることはできません。
-
-```go
-// このフィールドには *bun.DB のみ格納可能
-type UserRepository struct {
-    db *bun.DB  // bun.Tx は受け取れない
-}
-```
-
-`*bun.DB` と `bun.Tx` の両方が実装する `bun.IDB` を使うと、この二つの型を同じ契約で扱えます。次のコードは、リポジトリのコンストラクタが依存性として `bun.IDB` を受け取る例です。
-
-```go
-// *bun.DB と bun.Tx はどちらも bun.IDB を実装
-type UserRepository struct {
-    db bun.IDB
-}
-
-func NewUserRepository(db bun.IDB) *UserRepository {
-    return &UserRepository{db: db}
-}
-```
-
-### リクエストごとのトランザクションを渡す
-
-コンストラクタ注入と、リクエストごとの値の受け渡しでは、ライフタイムが異なります。コンストラクタで作成したサービスとリポジトリはアプリで共有するため、リクエストごとに作成した `bun.Tx` が既存インスタンスのフィールドに自動で再注入されることはありません。共有フィールドをリクエストごとのトランザクションで上書きすると、他のリクエストと混在するおそれがあります。
-
-リクエストごとのトランザクションは、次の順序で渡します。
-
-1. インターセプターの `PreHandle` でトランザクションを開始し、`ctx.Set("tx", tx)` で保存します。
-2. コントローラーが `spine.Ctx.Get("tx")` で値を読み取り、`bun.Tx` 型かどうかを確認します。
-3. コントローラーがサービスとリポジトリのメソッドに、`bun.IDB` 引数としてトランザクションを明示的に渡します。
-4. インターセプターの `BeforeResponse` で実行結果に応じてコミットまたはロールバックし、その処理で発生したエラーを返します。
-
-インターセプターの四つのライフサイクルメソッドの実装と登録方法は、[依存性注入が必要なインターセプター](/ja/learn/tutorial/4-interceptor)を参照してください。
-
-
-## 機能ごとに登録する
-
-別の機能を CLI で生成すると、各パッケージの `Register` 関数と、アプリを組み立てる `BuildApplication` に接続されます。以下は、独立した `order` リソースを追加する任意の例です。CLI が `order.Register(app)` の呼び出しを追加するため、自分で重複登録しないでください。
-
-```bash
-spine generate resource order --dry-run
-```
-
-プレビューで生成ファイルと登録コードの変更を確認してから、次のコマンドで生成します。
-
-```bash
-spine generate resource order
-```
-
-### コンストラクタの登録を複数の呼び出しに分ける
-
-同じ `Register` 内で、登録を複数の呼び出しに分けることもできます。各型は一度ずつ登録してください。
-
-```go
-// src/user/user_route.go: Register
-app.Constructor(NewUserRepository)
-app.Constructor(NewUserService)
-app.Constructor(NewUserController)
-```
-
-## 同じ型を複数使う
-
-プライマリデータベースとレプリカデータベースを同じ型で登録すると、パラメーター名だけでは区別できません。異なるラッパー型を宣言して区別してください。
-
-以下は、独立したリポジトリ設計の例です。`App`、`UserRepository` の `writer` と `reader` フィールド、`connectToPrimary`、`connectToReplica` は、アプリに合わせて実装する必要があります。
-
-```go
-// 引数名だけではインスタンスを区別できない
-func NewApp(db1 *bun.DB, db2 *bun.DB) *App  // どちらがどのインスタンスか判別できない
-
-// 異なるラッパー型で区別
-type PrimaryDB struct{ *bun.DB }
-type ReplicaDB struct{ *bun.DB }
-
-func NewPrimaryDB() *PrimaryDB {
-    return &PrimaryDB{connectToPrimary()}
-}
-
-func NewReplicaDB() *ReplicaDB {
-    return &ReplicaDB{connectToReplica()}
-}
-
-func NewUserRepository(primary *PrimaryDB, replica *ReplicaDB) *UserRepository {
-    return &UserRepository{
-        writer: primary.DB,
-        reader: replica.DB,
-    }
-}
-```
-
-## 依存性のエラーを確認する
-
-### 循環依存
-
-`A` が `B` を必要とし、`B` も `A` を必要とする場合、どちらのオブジェクトも先に作ることができません。次のコードは、この関係を示す疑似コードです。
-
-```go
-// A → B → A の循環
-func NewA(b *B) *A { ... }
-func NewB(a *A) *B { ... }
-
-// 起動時にエラーが発生
-// circular dependency detected: *user.A -> *user.B -> *user.A
-```
-
-### 依存性の不足
-
-必要な型のコンストラクタがなければ、依存性の解決に失敗します。以下は、`NewUserRepository` の登録を省略した場合です。
-
-```go
-// UserRepository を登録しない場合
-app.Constructor(
-    NewUserService,     // *UserRepository が必要
-    NewUserController,
-)
-
-// 起動時にエラーが発生
-// no constructor registered for *user.UserRepository
-```
-
-## 登録を検証して実行を確認する
-
-プロジェクトルートで、次のコマンドを実行します。
-
-```bash
-spine doctor
-spine contract check
-spine verify
-```
-
-`spine contract check` はソースから抽出した DI の契約を検査し、`spine verify` はフォーマット、`go vet`、テストも検査します。`app.Validate(options)` が成功しただけでは、コンストラクタの実行やインスタンスの初期化まで確認したことにはなりません。
-
-実際の初期化とリクエスト処理は、`spine dev` でアプリを起動してから確認してください。データベースを接続した場合は、実際の接続とクエリも別途確認する必要があります。循環依存やコンストラクタの登録漏れがあると、依存性の解決時にエラーを返します。生成された `main.go` は `Run` のエラーを確認します。
+BuildApplication は組み立てだけを行います。app.Validate は生成子を実行せずに検査し、Prepare は生成子を実行して RegisterRoutes を収集します。Run は準備して起動します。DI の任意の Close は自動実行しないため、DB 資源は所有者が管理します。リクエストのトランザクションは共有フィールドを上書きせず、ExecutionContext().Set/Get と明示的なサービス引数で渡します。
 
 ## 次のステップ
 
-- [チュートリアル: インターセプター](/ja/learn/tutorial/4-interceptor) — リクエストの前後の処理
-- [チュートリアル: データベース](/ja/learn/tutorial/5-database) — Bun ORM の接続
+[インターセプター](/ja/learn/tutorial/4-interceptor) / [データベース](/ja/learn/tutorial/5-database) / [トランザクション](/ja/learn/tutorial/6-transaction)

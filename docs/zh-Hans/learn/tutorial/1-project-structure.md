@@ -1,190 +1,122 @@
 # 项目结构
 
-::: info
-此示例使用 `legacy` 布局的兼容注册方式。`app.Route` 已弃用，新控制器请参阅[控制器与路由迁移](/zh-Hans/learn/migration/preview-controller-routes)。
-:::
+使用默认 layered-v1 布局分离组装、HTTP 控制器和启动代码。新代码使用当前路由注册 API。
 
-使用 Spine CLI 创建项目并添加用户资源。通过阅读生成的文件，了解应用配置代码应放在何处，以及控制器、服务和仓储的作用。
+## 创建项目
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。本教程使用按功能划分的包，因此请在新目录中通过 `--layout legacy` 创建 `my-app`。它与[第一个应用](/zh-Hans/learn/getting-started/first-app)的默认 `layered-v1` 结构不同，不会自动转换现有应用。
-
-## 通过 CLI 创建项目
-
-在准备存放项目的父目录中运行。如果已存在同名的 `my-app` 目录，请使用其他名称。
+使用 Spine CLI `v0.4.4` 创建应用。请在生成的 `go.mod` 中确认核心和平台版本。
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
 ```
 
-命令会创建 `my-app` 目录并准备依赖。`doctor` 诊断工具和项目配置，`inspect` 可以显示默认路径 `GET /health` 的注册情况。
-
-## 生成的基本结构
-
-上述 `new` 命令会创建包括 `go.sum` 在内的项目文件，并完成依赖安装和构建。
-
 ```text
 my-app/
-├── .gitignore
-├── README.md
-├── go.mod
-├── go.sum
 ├── main.go
+├── go.mod
 ├── spine.toml
-└── internal/
-    └── application/
-        ├── application.go
-        └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/controller/health_controller.go
 ```
 
-## CLI 配置
+## 启动与组装
 
-`spine.toml` 配置模块、入口、应用组装位置、端口、布局和平台。数据库、认证等应用配置应单独管理。
-
-```toml
-module = "example.com/my-app"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "legacy"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
-```
-
-| 键 | 作用 |
-| --- | --- |
-| `module` | Go 模块路径，必须与 `go.mod` 中的模块路径一致。 |
-| `entrypoint` | 要运行或构建的目标 |
-| `composition` | 检查应用配置并自动注册生成代码的位置 |
-| `port` | 开发服务器使用的端口 |
-| `layout` | 生成器文件布局（`legacy` 或 `layered-v1`） |
-| `platform` | HTTP 平台（`echo`、`nethttp` 或 `none`） |
-| `recipe` | 选择兼容依赖组合的配方 |
-| `websocket_platform` | WebSocket 实现（`none` 或 `gorilla`） |
-| `validator` | DTO 验证器（`none` 或 `playground`） |
-| `event_platforms` | 选定的事件平台名称和类型 |
-
-## 分离运行入口与应用配置
-
-`main.go` 调用应用配置函数，验证配置后运行服务器。构造函数、路由和拦截器注册在 `internal/application/application.go` 的 `BuildApplication` 中。
+以下三个文件展示最小职责分离。替换对应生成文件，不要重复添加类型或注册。main 调用组装、Validate、Run，BuildApplication 不启动服务器。
 
 ```go
+// main.go
 package main
 
 import (
-    "log"
-
-    "example.com/my-app/internal/application"
+	"example.com/my-app/internal/application"
+	"log"
 )
 
 func main() {
-    app, options, err := application.BuildApplication()
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Validate(options); err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := application.BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-`BuildApplication` 返回应用和运行选项，不会启动服务器。生成的代码注册默认 HTTP 路径 `GET /health`。
-
 ```go
-package application
+// src/controller/health_controller.go
+package controller
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "os"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type HealthController struct{}
 
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(NewHealthController)
-    app.Route("GET", "/health", (*HealthController).Get)
-
-    address := ":8080"
-    if port := os.Getenv("SPINE_PORT"); port != "" {
-        address = ":" + port
-    }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
-
-## 通过 CLI 添加功能
-
-在项目根目录中生成用户资源。如果已有项目中已生成该资源，请跳过此命令。
-
-```sh
-spine generate resource user
-```
-
-```text
-src/user/
-├── user_route.go
-├── user_repository.go
-├── user_service.go
-└── user_controller.go
-```
-
-命令执行完毕后，`src/user` 中会生成四个文件。默认情况下，CLI 会将以下注册代码添加到 `BuildApplication` 中。请确认生成结果，不要手动重复注册相同代码。
 
 ```go
-if err := user.Register(app); err != nil {
-    return nil, boot.Options{}, err
+// internal/application/application.go
+package application
+
+import (
+	"example.com/my-app/src/controller"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+)
+
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&controller.HealthController{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 
-`user_route.go` 注册构造函数和 `GET /user/:id`。其他文件的作用如下。
+## 使用生成器添加功能
 
-| 文件 | 作用 |
-| --- | --- |
-| `user_controller.go` | 接收 HTTP 请求，传递给服务并返回响应。 |
-| `user_service.go` | 处理业务逻辑。 |
-| `user_repository.go` | 负责数据访问。 |
+```sh
+spine generate resource user --dry-run
+spine generate resource user
+spine --help
+```
 
-资源生成器仅生成返回 ID 的 GET 处理器的基础代码。数据库模型和数据持久化功能需要自行实现。
+默认 layered-v1 的 resource 生成查询骨架，完整 CRUD、数据库访问和业务规则须自行实现。不要重复角色注册，检查 RegisterRoutes 和 Constructor 角色。各布局支持的生成器可通过 spine --help 查看。
 
-如果需要带有类型的创建和查询示例，请使用其他名称运行 `spine generate slice order --storage memory --field name:string`。该命令使用的内存存储仅用于开发，应用退出后数据会丢失。
-
-## 注册规则与验证
-
-为使 CLI 能够检查注册代码，请将 `app := spine.New(echoplatform.Option())` 保留在 `BuildApplication() (spine.App, boot.Options, error)` 函数体的顶层。不要将注册代码移入条件语句、循环或任意辅助函数中。还必须检查并返回 `Register(app)` 返回的错误。
-
-检查应用配置后，再运行服务器。
+## 验证与运行
 
 ```sh
 spine contract check
 spine verify
 spine dev
+# In another terminal
+curl http://localhost:8080/health
 ```
 
-`contract check` 检查从注册代码中提取的执行契约。`verify` 检查契约，并运行 `gofmt`、`go vet` 和 Go 测试。两条命令均执行完毕且没有错误后，`dev` 启动开发服务器。实际 HTTP 行为以及外部数据库、消息代理的连接，需要在运行环境中另行确认。
+预期响应为 {"status":"ok"}。contract check 检查静态契约，verify 还检查格式、vet 和 Go 测试。app.Validate 不证明构造函数执行或外部连接成功，HTTP 和外部资源须用实际请求验证。
 
-## 后续步骤
+## 下一步
 
-- [控制器](/zh-Hans/learn/tutorial/2-controller)
-- [依赖注入](/zh-Hans/learn/tutorial/3-dependency-injection)
-- [拦截器](/zh-Hans/learn/tutorial/4-interceptor)
+[控制器](/zh-Hans/learn/tutorial/2-controller) / [DI](/zh-Hans/learn/tutorial/3-dependency-injection) / [拦截器](/zh-Hans/learn/tutorial/4-interceptor)

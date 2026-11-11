@@ -4,6 +4,8 @@ pageClass: release-versions
 
 # 버전 현황
 
+현재 API 사용법은 [0.7.5 전환 안내](/ko/learn/migration/v0.7.5)에서 확인하세요. 아래 발행 정보와 과거 릴리스 기록은 각 태그 기준입니다.
+
 Spine 생태계 저장소의 발행 태그, 다음 목표 버전과 변경사항을 확인하세요. 각 저장소는 자체 버전으로 발행합니다.
 
 <ReleaseCatalog />

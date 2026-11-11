@@ -1,129 +1,71 @@
-# 第一个应用
+# 安装与首个应用
 
-使用 Spine CLI 创建新项目，并确认 `GET /health` 是否返回 `{"status":"ok"}`。通过阅读生成的文件，了解构建、验证并运行应用的流程。
+使用 Spine CLI `v0.4.4` 创建基于核心 `v0.7.5` 的 HTTP 应用。CLI 安装通道和应用依赖通道见[发布通道](/zh-Hans/community/release-channels)。
 
-需要 Go 1.25.5 或更高版本，CLI 推荐使用 Go 1.27.3。首次下载依赖所需的时间因环境而异。
+## 要求
 
-## 1. 安装 CLI 并确认命令
+此示例的验证器需要 Go 1.26 或更高版本。请将 `GOBIN` 或默认的 `GOPATH/bin` 添加到 `PATH`。
 
-```bash
+```sh
+go version
+```
+
+<span id="preview-cli"></span>
+
+## 安装正式版 CLI {#install-cli}
+
+```sh
 go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-以下示例以正式 CLI `v0.4.3` 为基准。要固定安装此版本，请运行以下命令。
+用 `spine version` 确认已安装的版本。要复现此 CLI 版本，请在安装命令中指定 `@v0.4.4`。`spine update` 用于更新应用依赖。
 
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
-spine version
+## 创建项目
+
+```sh
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
+cd my-app
+go list -m all
+spine doctor
+spine inspect
 ```
 
-`--channel main` 选择正式标签，也可以在交互式创建中选择 Main。
-
-使用 `spine version` 确认已安装的 CLI 版本。 如果找不到命令，请在[安装指南](/zh-Hans/learn/getting-started/installation)中检查 PATH 设置。
-
-## 2. 创建项目
-
-在准备存放项目的父目录中运行。如果 `hello-spine` 目录已存在，请使用其他名称。
-
-```bash
-spine new hello-spine --module example.com/hello-spine --channel main --no-interactive
-cd hello-spine
-```
-
-
-
-`new` 根据已安装 CLI 的验证配方选择兼容的 Spine、Echo 平台和 Echo 版本，并完成依赖安装、静态契约检查和构建。请在生成的 `go.mod` 中查看所选版本。使用 `--skip-install` 时，请单独运行 `go mod tidy` 和 `go mod download all`。安装过程不会初始化应用、运行测试或启动监听器。
-
-## 3. 查看生成的结构
+CLI 配方选择兼容版本，请在 go.mod 确认核心 0.7.5 API 及平台组合。默认布局为 layered-v1。--validator playground 在 BuildApplication 组装验证器，默认 validator none 不启用标签验证。生成过程不启动应用资源或监听器。
 
 ```text
-hello-spine/
-├── .gitignore
-├── README.md
-├── go.mod
-├── go.sum
+my-app/
 ├── main.go
+├── go.mod
 ├── spine.toml
 ├── internal/application/
 │   ├── application.go
 │   └── application_test.go
-└── src/
-    └── controller/health_controller.go
+└── src/controller/health_controller.go
 ```
 
-项目包含作为运行入口的 `main.go`，以及存放应用配置代码的 `internal/application` 目录。`spine.toml` 向 CLI 提供模块路径、运行入口、应用配置代码的位置和端口。
+## 验证与运行
 
-```toml
-module = "example.com/hello-spine"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "layered-v1"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
-```
-
-`internal/application/application.go` 中的 `BuildApplication()` 返回应用和运行选项。生成的代码注册 `HealthController` 构造函数和 `GET /health`，并显式指定 HTTP 运行选项 `boot.HTTPOptions`。
-
-添加功能时，将路由、构造函数和拦截器的注册集中放在此函数中，或放在此函数调用的 `Register(app) error` 函数中。详细方法请参阅[项目结构](/zh-Hans/learn/tutorial/1-project-structure)。
-
-`main.go` 已经生成，无需修改。通过以下代码了解应用构建、验证和运行的顺序。
-
-```go
-func main() {
-    app, options, err := application.BuildApplication()
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Validate(options); err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
-}
-```
-
-## 4. 验证应用配置和代码
-
-在生成项目的根目录中运行。
-
-```bash
-spine doctor
-spine inspect
+```sh
 spine contract check
 spine verify
-```
-
-`doctor` 诊断工具和项目配置。`inspect` 展示代码中注册的路由、依赖等应用配置。CLI 从注册代码中提取的这些信息称为执行契约。
-
-`contract check` 检查执行契约，`verify` 除检查契约外，还会运行 `gofmt`、`go vet` 和 Go 测试。生成的 `application_test.go` 也会检查 `BuildApplication()` 和 `app.Validate(options)`，不会启动服务器。如果所有命令均执行完毕且没有错误，就可以启动服务器了。
-
-## 5. 运行并确认响应
-
-```bash
 spine dev
-```
-
-保持服务器运行，打开另一个终端发送请求。
-
-```bash
+# In another terminal
 curl http://localhost:8080/health
 ```
 
-```json
-{"status":"ok"}
+确认 {"status":"ok"}，使用 Ctrl+C 退出。生成的 main 依次调用 BuildApplication、app.Validate、app.Run。Validate 不执行构造函数或连接数据库，还须验证实际请求。
+
+## 恢复依赖元数据
+
+--skip-install 或手动修改后若出现 MODULE_GRAPH_UNAVAILABLE，下载模块元数据。
+
+```sh
+go mod tidy
+go mod download all
+spine contract check
 ```
 
-如果返回上述 JSON 响应，则表示 `GET /health` 已正常工作。在运行服务器的终端中按 `Ctrl+C` 关闭开发服务器。
+## 下一步
 
-## 后续步骤
-
-- 按照[项目结构](/zh-Hans/learn/tutorial/1-project-structure)为生成的项目添加功能。
-- 通过[控制器](/zh-Hans/learn/tutorial/2-controller)了解路由和处理器。
-- 按照[数据库](/zh-Hans/learn/tutorial/5-database)为仓储连接 Bun ORM。
+[项目结构](/zh-Hans/learn/tutorial/1-project-structure) / [控制器](/zh-Hans/learn/tutorial/2-controller) / [平台选择](/zh-Hans/learn/getting-started/platforms)

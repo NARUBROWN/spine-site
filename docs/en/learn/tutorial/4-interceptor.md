@@ -1,14 +1,12 @@
 # Interceptors
 
-Interceptors handle shared concerns such as authentication and logging. This standalone app applies authentication to every route in a group and to an individual route. The token is for demonstration only.
+Global and route PreHandle hooks both run before input binding. Authentication failure returns 401 before body parsing.
 
-## Apply to a group and a route
+## Runnable example
 
-Save the following code as `main.go` in a separate Go module and run it.
+[Controller dependencies](/en/learn/tutorial/2-controller)
 
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
-```
+Replace main.go. The fixed token is for learning. constructor.Interceptor registers DI; api.Interceptors chooses scope. (*Auth)(nil) marks a registered type to resolve from DI.
 
 ```go
 package main
@@ -23,101 +21,111 @@ import (
 	"github.com/NARUBROWN/spine/pkg/httperr"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
 type Auth struct{}
 
-func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-	if ctx.Header("Authorization") != "Bearer demo-token" {
+func (*Auth) Constructor() *Auth { return &Auth{} }
+func (*Auth) PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error {
+	request, ok := ctx.HTTPRequestContext()
+	if !ok {
+		return httperr.InternalServerError("HTTP request context unavailable")
+	}
+	if request.Header("Authorization") != "Bearer demo-token" {
 		return httperr.Unauthorized("unauthorized")
 	}
+	ctx.ExecutionContext().Set("userID", "demo-user")
 	return nil
 }
-func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
-func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
-func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+func (*Auth) PostHandle(spinectx.Ctx, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(spinectx.Ctx, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(spinectx.Ctx, core.HandlerMeta, error)      {}
 
 type Controller struct{}
+type CreateUser struct {
+	Name string `json:"name"`
+}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	users := r.Group("/users", api.Interceptors(&Auth{}))
-	users.GET("/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+	users := r.Group("/users", api.Interceptors((*Auth)(nil)))
+	users.GET("/:id", func(ctx spinectx.Ctx, id input.Path[int64]) httpx.Response[map[string]int64] {
 		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
 	})
-	r.GET("/profile", func() httpx.Response[string] {
+	users.POST("/", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[string] {
+		return httpx.Response[string]{Body: body.Name}
+	})
+	r.GET("/profile", func(ctx spinectx.Ctx) httpx.Response[string] {
 		return httpx.Response[string]{Body: "profile"}
-	}, api.Interceptors(&Auth{}))
+	}, api.Interceptors((*Auth)(nil)))
+}
+func BuildApplication() (spine.App, boot.Options, error) {
+
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Interceptor(&Auth{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 func main() {
-	app := spine.New(echoplatform.Option())
-	app.Constructor(constructor.Controller(&Controller{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-`/users/:id` inherits authentication from its group, while `/profile` declares it on the route. Nested groups inherit their parent configuration.
-
-Requests without authentication return 401; requests with the token return 200. Implement secure token verification in production.
-
-```bash
-curl -i http://localhost:8080/users/1
-curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
-curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/profile
-```
-
-## Interceptor lifecycle
-
-In Spine v0.7.1, HTTP requests run through global interceptors, routing and input binding, route interceptors, and the controller, in that order. Interceptors must implement all four lifecycle methods.
-
-```mermaid
-graph TD
-    Request["Request"] --> GlobalPre["Global PreHandle"]
-    GlobalPre --> Bind["Routing, input binding"]
-    Bind --> RoutePre["Route PreHandle"]
-    RoutePre --> Controller["Controller method"]
-    Controller -- Success --> Prepare["Response serialization and validation"]
-    Prepare --> Post["PostHandle<br/>Reverse order"]
-    Post --> Before["BeforeResponse<br/>Reverse order, commit or roll back"]
-    GlobalPre -- Error --> Before
-    Bind -- Error --> Before
-    RoutePre -- Error --> Before
-    Controller -- Error --> Before
-    Prepare -- Error --> Before
-    Before --> Response["Write response"]
-    Response --> After["AfterCompletion<br/>Reverse order, logging and resource cleanup"]
-```
-
-If input binding fails, the route's `PreHandle` does not run either. Use a global interceptor for policies that require authentication before checking the body format.
-
-
-## Interface
+## Groups and routes
 
 ```go
-type Interceptor interface {
-    PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    PostHandle(ctx ExecutionContext, meta HandlerMeta)
-    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-    AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
+func (*UserController) RegisterRoutes(r *api.Registry) {
+	auth := (*AuthInterceptor)(nil)
+	audit := (*AuditInterceptor)(nil)
+	users := r.Group("/users", api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-| Method | When it runs | Returns | Purpose |
-|--------|----------|------|------|
-| `PreHandle` | Before routing for global interceptors; after input binding for route interceptors | `error` | Authenticate, validate, start transactions |
-| `PostHandle` | After the controller and response preparation succeed | Nothing | Record completion, perform follow-up work |
-| `BeforeResponse` | Before the response is actually written | `error` | Commit or roll back transactions |
-| `AfterCompletion` | After an attempt to write the response | Nothing | Log, clean up resources |
+Register both the Auth and Audit interceptors in DI to use this example. GET /users runs Auth; DELETE /users/:id runs Auth then Audit. Child groups inherit interceptors and route options append to them. Use InterceptorFor(boot.InterceptorHTTP, ...) for HTTP globally, or app.Interceptor / InterceptorAll for HTTP and WebSocket. Avoid applying the same authentication twice.
 
-`BeforeResponse` receives earlier execution errors and errors from response serialization, cookie validation, and status code validation as `executionErr`. Only interceptors whose `PreHandle` succeeded run this method, making it suitable for completing transactions started in that phase. Return an error if committing or rolling back fails.
+## Try the requests
 
-`AfterCompletion` is called on global interceptors and route interceptors identified during routing, even when an error occurs. This can include interceptors whose `PreHandle` did not run, so first check whether there are resources to clean up. The response may already have been written at this point, so do not use this method to change it.
+```sh
+go run .
+#
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/profile
+curl -i -H 'Content-Type: application/json' -d '{' http://localhost:8080/users
+curl -i -H 'Authorization: Bearer demo-token' -H 'Content-Type: application/json' -d '{' http://localhost:8080/users
+```
 
+Expect 401, 200, 200, 401 and 400. Even a malformed body returns 401 when authentication fails.
 
+## Lifecycle
 
-## Learn more
+PreHandle follows registration order; successful PostHandle, pre-write BeforeResponse and post-write-attempt AfterCompletion run in reverse. BeforeResponse runs only after successful PreHandle and receives binding, handler, serialization and response-validation errors. AfterCompletion may run even when PreHandle was never reached, so check resources exist.
 
-See the [interceptor API](/en/reference/api/interceptor) for global registration, constructor injection and lifecycle details.
+A BeforeResponse error takes response priority over a handler error. If multiple hooks fail, the last failing hook wins; completion hooks also receive previous errors.
+
+## Public context
+
+All four hooks receive spine.Ctx. Use ExecutionContext().Set/Get for values, ExecutionContext().Context() for standard context, and check the HTTPRequestContext() boolean before HTTP access. Direct context.Context injection into handlers remains compatible.
+
+## Next steps
+
+[Transactions](/en/learn/tutorial/6-transaction) / [Errors](/en/learn/tutorial/7-error-handling)

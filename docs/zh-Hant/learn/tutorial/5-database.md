@@ -1,604 +1,255 @@
 # 資料庫連線
 
-::: info
-本教學的 `legacy` 版面使用相容的 `app.Route`。新控制器請參閱[路由遷移](/zh-Hant/learn/migration/preview-controller-routes)，輸入相容規則請參閱[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)，規格選項請參閱 [OpenAPI](/zh-Hant/reference/api/openapi)。
-:::
+此獨立專案使用 Bun 查詢 MySQL，請勿與前面的單檔 main.go 合併。
 
-使用 Bun 連線至 MySQL，並擴充產生的 `GET /user/:id`，讓它從資料庫查詢使用者。同時撰寫建立資料表的遷移檔與儲存庫的基本查詢。
+## 準備
 
-本頁的 `src/user` 範例使用[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中以 `--layout legacy` 建立的應用程式。預設 `layered-v1` 版面依角色劃分目錄。
-
-## 準備 CLI 專案
-
-接續 [安裝 CLI 與第一個應用程式](/zh-Hant/learn/tutorial/1-project-structure)和[專案結構](/zh-Hant/learn/tutorial/1-project-structure)中的 `example.com/my-app`。您需要可連線的 MySQL 資料庫，以及具備建立資料表權限的帳號。請在專案根目錄執行命令。
-
-若尚未建立使用者資源，先確認將產生的檔案，再套用變更。已建立的資源不必重新產生。
+準備 Go 1.26 以上版本與 MySQL，在 example.com/my-app 建立所示檔案。不假定 CLI 自動產生資料庫連線或遷移。
 
 ```sh
-spine generate resource user --dry-run
+go mod init example.com/my-app
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
+go get github.com/uptrace/bun@v1.2.16 github.com/uptrace/bun/dialect/mysqldialect@v1.2.16 github.com/go-sql-driver/mysql@v1.9.3
 ```
 
-```sh
-spine generate resource user
-```
-
-CLI 會產生使用者資源的基本檔案與註冊程式碼。Bun 相依套件、資料庫連線、模型與遷移將在以下步驟中自行新增。請保留產生的 `main.go`。
-
-產生的 GET 處理器只會回傳請求中的 ID。撰寫儲存庫後，還需要串接服務與控制器，才能實際查詢資料。儲存、修改與刪除方法只會新增至儲存庫，本文件不會實作對應的 HTTP 路徑。
-
-## 使用 Bun 撰寫查詢
-
-此範例使用 [Bun](https://bun.uptrace.dev/) 撰寫 SQL 查詢，並將結果對應至 Go 結構。Spine 不要求使用特定 ORM。
-
-## 安裝
-
-```bash
-# Bun 核心
-go get github.com/uptrace/bun@v1.2.16
-
-# MySQL 驅動程式 + 方言
-go get github.com/uptrace/bun/dialect/mysqldialect@v1.2.16
-go get github.com/go-sql-driver/mysql@v1.9.3
-
-# 如果使用 PostgreSQL
-# go get github.com/uptrace/bun/dialect/pgdialect@v1.2.16
-# go get github.com/jackc/pgx/v5/stdlib@v5.12.0
-```
-
-請讓 Bun 核心與使用的方言保持相同版本。版本不一致會導致初始化失敗。
-
-
-## 資料庫連線
-
-### 撰寫連線函式
+## 資料庫工廠
 
 ```go
 // src/database/db.go
 package database
 
 import (
-    "context"
-    "database/sql"
-    "os"
-    "time"
-
-    _ "github.com/go-sql-driver/mysql"
-    "github.com/uptrace/bun"
-    "github.com/uptrace/bun/dialect/mysqldialect"
+	"context"
+	"database/sql"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/mysqldialect"
+	"os"
+	"time"
 )
 
 func NewDB() *bun.DB {
-    dsn := os.Getenv("DATABASE_URL")
-    if dsn == "" {
-        panic("DATABASE_URL is required")
-    }
-    sqldb, err := sql.Open("mysql", dsn)
-    if err != nil {
-        panic(err)
-    }
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
-    if err := sqldb.PingContext(ctx); err != nil {
-        _ = sqldb.Close()
-        panic(err)
-    }
-    return bun.NewDB(sqldb, mysqldialect.New())
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		panic("DATABASE_URL is required")
+	}
+	sqlDB, err := sql.Open("mysql", dsn)
+	if err != nil {
+		panic(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		panic(err)
+	}
+	return bun.NewDB(sqlDB, mysqldialect.New())
 }
 ```
 
-`NewDB` 在應用程式執行期間由相依性注入（DI）呼叫時，會檢查連線。若未設定 `DATABASE_URL` 或連線檢查失敗，就會停止應用程式。
+NewDB 在 DI 準備階段檢查連線，只回傳一個 *bun.DB，初始化 panic 導致準備失敗。不會自動呼叫任意 DI Close。應用擁有者負責關閉連線，正式環境資源管理器不在此例範圍內。
 
-Spine 建構函式只支援一個回傳值，因此不要註冊回傳 `(*bun.DB, error)` 的函式。只在 `BuildApplication` 中註冊建構函式。請勿在此函式中直接連線至資料庫，這樣才能在沒有 DB 的情況下執行靜態檢查與產生的驗證測試。
-
-### 在 Spine 中註冊
-
-```go
-// internal/application/application.go
-package application
-
-import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "os"
-
-    "example.com/my-app/src/database"
-    "example.com/my-app/src/user"
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-)
-
-type HealthController struct{}
-
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(NewHealthController, database.NewDB)
-    app.Route("GET", "/health", (*HealthController).Get)
-    if err := user.Register(app); err != nil {
-        return nil, boot.Options{}, err
-    }
-
-    address := ":8080"
-    if port := os.Getenv("SPINE_PORT"); port != "" {
-        address = ":" + port
-    }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
-}
-```
-
-## PostgreSQL 連線
-
-若使用 PostgreSQL，請以以下程式碼取代 MySQL 版的 `src/database/db.go`。兩種實作只能擇一使用，連線字串（DSN）與遷移 SQL 也需要配合所選的 DB 修改。此 PostgreSQL 範例的 `sql.Open` 不會檢查實際連線，因此可能在第一次查詢時才發生連線錯誤。
-
-```go
-// src/database/db.go
-package database
-
-import (
-    "database/sql"
-    "os"
-
-    _ "github.com/jackc/pgx/v5/stdlib"
-    "github.com/uptrace/bun"
-    "github.com/uptrace/bun/dialect/pgdialect"
-)
-
-func NewDB() *bun.DB {
-    dsn := os.Getenv("DATABASE_URL")
-    if dsn == "" {
-        panic("DATABASE_URL is required")
-    }
-    sqldb, err := sql.Open("pgx", dsn)
-    if err != nil {
-        panic(err)
-    }
-    return bun.NewDB(sqldb, pgdialect.New())
-}
-```
-
-
-## 設定連線字串
-
-上方的 `NewDB` 從環境變數 `DATABASE_URL` 讀取連線字串。
-
-```go
-// 節錄自 src/database/db.go 中的 NewDB
-dsn := os.Getenv("DATABASE_URL")
-if dsn == "" {
-    panic("DATABASE_URL is required")
-}
-```
-
-```bash
-export DATABASE_URL="user:password@tcp(localhost:3306)/mydb?parseTime=true&loc=Local"
-spine dev
-```
-
-
-## 定義使用者模型
-
-在 `src/entity/user.go` 中新增對應 `users` 資料表的結構。
+## 使用者模型
 
 ```go
 // src/entity/user.go
 package entity
 
-import "time"
-
 type User struct {
-    ID        int64     `bun:",pk,autoincrement" json:"id"`
-    Name      string    `bun:",notnull" json:"name"`
-    Email     string    `bun:",unique,notnull" json:"email"`
-    CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
-    UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	ID    int64  `bun:",pk,autoincrement" json:"id"`
+	Name  string `bun:",notnull" json:"name"`
+	Email string `bun:",unique,notnull" json:"email"`
 }
 ```
 
-### Bun 標籤
+## 儲存庫與服務
 
-| 標籤 | 說明 |
-|------|------|
-| `pk` | 主索引鍵 |
-| `autoincrement` | 自動遞增 |
-| `notnull` | NOT NULL |
-| `unique` | UNIQUE 限制 |
-| `nullzero` | 將 Go 型別的預設值視為 NULL |
-| `default:value` | 預設值 |
-
-## 撰寫儲存庫
-
-### 使用 bun.IDB 介面
-
-以以下程式碼取代產生的 `src/user/user_repository.go`，再將後續的查詢、儲存、修改與刪除方法新增至同一個檔案。`bun.IDB` 是一般連線 `*bun.DB` 與交易 `bun.Tx` 都有實作的介面。
+FindByID 使用資料庫連線，Save 明確接收 bun.IDB，以便下章傳入請求交易。共享服務與儲存庫接收標準 context.Context，由 HTTP 處理器從 spine.Ctx 取出。
 
 ```go
-// src/user/user_repository.go
-package user
+// src/repository/user_repository.go
+package repository
 
 import (
-    "context"
-    "example.com/my-app/src/entity"
-
-    "github.com/uptrace/bun"
+	"context"
+	"example.com/my-app/src/entity"
+	"github.com/uptrace/bun"
 )
 
-type UserRepository struct {
-    db bun.IDB  // *bun.DB 或 bun.Tx 均可
+type UserRepository struct{ db *bun.DB }
+
+func (*UserRepository) Constructor(db *bun.DB) *UserRepository {
+	return &UserRepository{db: db}
 }
-
-func NewUserRepository(db *bun.DB) *UserRepository {
-    return &UserRepository{db: db}
-}
-```
-
-### 查詢
-
-```go
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, error) {
-    user := new(entity.User)
-
-    err := r.db.NewSelect().
-        Model(user).
-        Where("id = ?", id).
-        Scan(ctx)
-
-    if err != nil {
-        return nil, err
-    }
-
-    return user, nil
+	user := new(entity.User)
+	if err := r.db.NewSelect().Model(user).Where("id = ?", id).Scan(ctx); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
-
-func (r *UserRepository) FindAll(ctx context.Context) ([]entity.User, error) {
-    var users []entity.User
-
-    err := r.db.NewSelect().
-        Model(&users).
-        Scan(ctx)
-
-    return users, err
-}
-
-func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
-    user := new(entity.User)
-
-    err := r.db.NewSelect().
-        Model(user).
-        Where("email = ?", email).
-        Scan(ctx)
-
-    return user, err
+func (r *UserRepository) Save(ctx context.Context, runner bun.IDB, user *entity.User) error {
+	_, err := runner.NewInsert().Model(user).Exec(ctx)
+	return err
 }
 ```
 
-### 建立
-
 ```go
-func (r *UserRepository) Save(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewInsert().
-        Model(user).
-        Exec(ctx)
-
-    return err
-}
-```
-
-### 修改
-
-```go
-func (r *UserRepository) Update(ctx context.Context, user *entity.User) error {
-    _, err := r.db.NewUpdate().
-        Model(user).
-        WherePK().
-        Exec(ctx)
-
-    return err
-}
-```
-
-### 刪除
-
-```go
-func (r *UserRepository) Delete(ctx context.Context, id int) error {
-    _, err := r.db.NewDelete().
-        Model((*entity.User)(nil)).
-        Where("id = ?", id).
-        Exec(ctx)
-
-    return err
-}
-```
-
-
-## 將產生的 GET 串接至 DB 查詢
-
-以以下程式碼取代既有的 `src/user/user_controller.go`，並新增 `src/user/user_read.go`。保留產生的 `GET /user/:id` 路徑與建構函式註冊。
-
-現在 GET 會回傳已儲存的使用者。若沒有符合 ID 的資料列，則回傳 HTTP 404；若發生其他資料庫錯誤，則回傳 HTTP 500。
-
-```go
-// src/user/user_controller.go
-package user
+// src/service/user_service.go
+package service
 
 import (
-    "context"
-    "database/sql"
-    "errors"
-
-    "example.com/my-app/src/entity"
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/input"
+	"context"
+	"example.com/my-app/src/entity"
+	"example.com/my-app/src/repository"
+	"github.com/uptrace/bun"
 )
 
-type UserController struct{ service *UserService }
+type UserService struct{ repository *repository.UserRepository }
 
-func NewUserController(service *UserService) *UserController {
-    return &UserController{service: service}
+func (*UserService) Constructor(repo *repository.UserRepository) *UserService {
+	return &UserService{repository: repo}
 }
-
-func (c *UserController) Get(ctx context.Context, id input.Path[int64]) (httpx.Response[*entity.User], error) {
-    user, err := c.service.FindByID(ctx, *id)
-    if errors.Is(err, sql.ErrNoRows) {
-        return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
-    }
-    if err != nil {
-        return httpx.Response[*entity.User]{}, err
-    }
-    return httpx.Response[*entity.User]{Body: user}, nil
+func (s *UserService) Get(ctx context.Context, id int64) (*entity.User, error) {
+	return s.repository.FindByID(ctx, id)
+}
+func (s *UserService) Create(ctx context.Context, runner bun.IDB, name, email string) (*entity.User, error) {
+	user := &entity.User{Name: name, Email: email}
+	if err := s.repository.Save(ctx, runner, user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 ```
+
+## 查詢控制器
 
 ```go
-// src/user/user_read.go
-package user
+// src/controller/user_controller.go
+package controller
 
 import (
-    "context"
-
-    "example.com/my-app/src/entity"
+	"database/sql"
+	"errors"
+	"example.com/my-app/src/entity"
+	"example.com/my-app/src/service"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
-func (s *UserService) FindByID(ctx context.Context, id int64) (*entity.User, error) {
-    return s.repository.FindByID(ctx, id)
+type UserPath struct {
+	ID int64 `path:"id"`
+}
+type UserController struct{ service *service.UserService }
+
+func (*UserController) Constructor(svc *service.UserService) *UserController {
+	return &UserController{service: svc}
+}
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(ctx spinectx.Ctx, path input.Path[UserPath]) (httpx.Response[*entity.User], error) {
+		user, err := c.service.Get(ctx.ExecutionContext().Context(), path.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
+		}
+		return httpx.Response[*entity.User]{Body: user}, err
+	})
 }
 ```
 
-## 遷移
+sql.ErrNoRows 對應 404，其他一般錯誤對應隱藏內部資訊的 500。
 
-### 撰寫遷移檔
+## 應用組裝
 
-在 `cmd/migrate/migrations` 中建立以下 SQL 檔案。遷移由獨立的 Go 程式執行，並沒有 `spine migrate` 命令。下一個執行步驟會在既有資料庫中新增 `users` 資料表，因此請確認先前設定的 `DATABASE_URL` 指向範例用 DB。
-
-```sql
--- cmd/migrate/migrations/001_create_users.up.sql
-CREATE TABLE users (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-```sql
--- cmd/migrate/migrations/001_create_users.down.sql
-DROP TABLE IF EXISTS users;
-```
-
-### 執行遷移的程式碼
-
-```go
-// cmd/migrate/main.go
-package main
-
-import (
-    "context"
-    "embed"
-    "log"
-
-    "example.com/my-app/src/database"
-    "github.com/uptrace/bun"
-    "github.com/uptrace/bun/migrate"
-)
-
-//go:embed migrations/*.sql
-var sqlMigrations embed.FS
-
-func main() {
-    db := database.NewDB()
-    defer db.Close()
-    if err := runMigrations(context.Background(), db); err != nil {
-        log.Fatal(err)
-    }
-    log.Println("Migrations applied successfully.")
-}
-
-func runMigrations(ctx context.Context, db *bun.DB) error {
-    migrations := migrate.NewMigrations()
-    if err := migrations.Discover(sqlMigrations); err != nil {
-        return err
-    }
-    migrator := migrate.NewMigrator(db, migrations)
-    if err := migrator.Init(ctx); err != nil {
-        return err
-    }
-    _, err := migrator.Migrate(ctx)
-    return err
-}
-```
-
-### 執行
-
-在已設定 `DATABASE_URL` 的終端機中執行。遷移成功後會輸出 `Migrations applied successfully.`，接著即可啟動伺服器。
-
-```bash
-# 執行移轉
-go run ./cmd/migrate
-
-# 啟動伺服器
-spine dev
-```
-
-
-## 完整結構
-
-```text
-my-app/
-├── go.mod
-├── go.sum
-├── main.go
-├── spine.toml
-├── internal/application/
-│   ├── application.go
-│   └── application_test.go
-├── src/
-│   ├── database/db.go
-│   ├── entity/user.go
-│   └── user/
-│       ├── user_route.go
-│       ├── user_repository.go
-│       ├── user_service.go
-│       ├── user_read.go
-│       └── user_controller.go
-└── cmd/migrate/
-    ├── main.go
-    └── migrations/
-        ├── 001_create_users.up.sql
-        └── 001_create_users.down.sql
-```
-
-## 確認應用程式註冊
-
-確認應用程式的註冊狀態，讓新增的檔案能夠使用。`BuildApplication()` 與先前撰寫的內容相同；若已套用，就不需要再次取代。儲存庫建構函式透過 DI 接收具體型別 `*bun.DB`。
+在 BuildApplication 透過 WithValidator 連接 playground.New。資料庫使用 Custom 工廠，其他型別使用角色標記。Validate 成功不代表資料庫連線成功；建構函式在 Run 準備階段執行。
 
 ```go
 // internal/application/application.go
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "os"
-
-    "example.com/my-app/src/database"
-    "example.com/my-app/src/user"
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/httpx"
+	"example.com/my-app/src/controller"
+	"example.com/my-app/src/database"
+	"example.com/my-app/src/repository"
+	"example.com/my-app/src/service"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
 )
 
-type HealthController struct{}
-
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(NewHealthController, database.NewDB)
-    app.Route("GET", "/health", (*HealthController).Get)
-    if err := user.Register(app); err != nil {
-        return nil, boot.Options{}, err
-    }
-
-    address := ":8080"
-    if port := os.Getenv("SPINE_PORT"); port != "" {
-        address = ":" + port
-    }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}}, nil
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(
+		constructor.Custom(database.NewDB),
+		constructor.Repository(&repository.UserRepository{}),
+		constructor.Service(&service.UserService{}),
+		constructor.Controller(&controller.UserController{}),
+	)
+	return app, boot.Options{
+		Address:                ":8080",
+		HTTP:                   &boot.HTTPOptions{OpenAPI: boot.OpenAPIOptions{Enabled: true}},
+		EnableGracefulShutdown: true,
+	}, nil
 }
 ```
 
 ```go
-// src/user/user_repository.go
-// DI 接收具體型別 *bun.DB，內部查詢欄位維持為 bun.IDB。
-func NewUserRepository(db *bun.DB) *UserRepository {
-    return &UserRepository{db: db}
+// main.go
+package main
+
+import (
+	"example.com/my-app/internal/application"
+	"log"
+)
+
+func main() {
+	app, options, err := application.BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## 查詢範例
+## 資料表與請求
 
-以下程式碼是在擴充儲存庫方法時可參考的查詢語法。`users` 與 `ctx` 必須在各方法中宣告。若要使用 `age`、`status` 條件，請先在模型與資料表中新增對應欄位。
+將 SQL 儲存為 migrations/001_users.sql，並套用至尚無範例資料表的資料庫。新資料表的請求結果依序為 200、404、400。編譯通過與真實資料庫連線、查詢驗證是兩回事。
 
-### 條件查詢
-
-```go
-// WHERE name LIKE '%alice%'
-err := r.db.NewSelect().
-    Model(&users).
-    Where("name LIKE ?", "%alice%").
-    Scan(ctx)
-
-// WHERE age > 20 AND status = 'active'
-err := r.db.NewSelect().
-    Model(&users).
-    Where("age > ?", 20).
-    Where("status = ?", "active").
-    Scan(ctx)
-
-// WHERE id IN (1, 2, 3)
-err := r.db.NewSelect().
-    Model(&users).
-    Where("id IN (?)", bun.In([]int{1, 2, 3})).
-    Scan(ctx)
+```sql
+CREATE TABLE users (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE
+);
+INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
 ```
-
-### 排序與分頁
-
-```go
-// ORDER BY created_at DESC LIMIT 10 OFFSET 20
-err := r.db.NewSelect().
-    Model(&users).
-    Order("created_at DESC").
-    Limit(10).
-    Offset(20).
-    Scan(ctx)
-```
-
-### 彙總
-
-```go
-// SELECT COUNT(*) FROM users
-count, err := r.db.NewSelect().
-    Model((*entity.User)(nil)).
-    Count(ctx)
-```
-
-### 聯結
-
-```go
-// Load the Orders relation configured on User.
-err := r.db.NewSelect().
-    Model(&users).
-    Relation("Orders").
-    Scan(ctx)
-```
-
-聯結範例中的 `Orders` 關聯必須另外定義實體與 Bun 關聯標籤才能運作。上方的基本 `User` 模型並未包含這些定義。 依關聯類型而定，Bun 可能執行獨立查詢，因此不要假設此呼叫一定產生單一 SQL JOIN。
-
-## 驗證
-
-執行靜態契約與本機 Go 檢查。`verify` 不會驗證實際的 DB 連線、遷移與查詢。
 
 ```sh
+mysql -u app_user -p app_db < migrations/001_users.sql
+export DATABASE_URL='app_user:password@tcp(127.0.0.1:3306)/app_db?parseTime=true&loc=Local'
+gofmt -w main.go src internal
 go mod tidy
-go mod download all
-gofmt -w src/database/db.go src/entity/user.go src/user/user_repository.go src/user/user_controller.go src/user/user_read.go cmd/migrate/main.go internal/application/application.go
-spine contract check
-spine verify
+go build ./...
+go run .
+#
+curl -i http://localhost:8080/users/1
+curl -i http://localhost:8080/users/999999
+curl -i http://localhost:8080/users/not-a-number
 ```
-
-遷移後，以 `spine dev` 啟動應用程式，並傳送 `GET /user/:id` 請求。空資料表中沒有對應的 ID，因此會回傳 HTTP 404。若要先儲存使用者再查詢，請套用下一篇交易教學中的 POST 範例。
 
 ## 下一步
 
-- [教學：交易](/zh-Hant/learn/tutorial/6-transaction)：以請求為單位儲存使用者並確認回滾
-- [教學：錯誤處理](/zh-Hant/learn/tutorial/7-error-handling)：使用 `httperr` 回傳 HTTP 錯誤
+[交易](/zh-Hant/learn/tutorial/6-transaction) / [輸入驗證](/zh-Hant/learn/tutorial/7-error-handling)

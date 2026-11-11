@@ -1,190 +1,122 @@
-# Project Structure
+# Project structure
 
-::: info
-This example uses the compatibility registration style of the `legacy` layout. `app.Route` is deprecated; see [controller and route migration](/en/learn/migration/preview-controller-routes) for new controllers.
-:::
+Use the default layered-v1 layout to separate assembly, HTTP controllers and startup. New code uses the current route registration API.
 
-Create a project with the Spine CLI and add a user resource. Read the generated files to learn where to put app configuration code and what controllers, services, and repositories do.
+## Create the project
 
-Complete [CLI installation](/en/learn/getting-started/installation) first. This tutorial uses feature packages, so create `my-app` with `--layout legacy` in a new directory. Its layout differs from the default `layered-v1` app in [Your First App](/en/learn/getting-started/first-app); existing apps are not converted automatically.
-
-## Create a Project with the CLI
-
-Run these commands in the parent directory where you want to place the project. If a `my-app` directory already exists, use a different name.
+Create an app with Spine CLI `v0.4.4`. Check the core and platform versions in the generated `go.mod`.
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
 ```
 
-The `my-app` directory is created and its dependencies are prepared. `doctor` diagnoses tools and project settings, and `inspect` lets you check that the default route, `GET /health`, is registered.
-
-## Generated Base Structure
-
-The `new` command above creates the project files including `go.sum`, installs dependencies, and builds the app.
-
 ```text
 my-app/
-├── .gitignore
-├── README.md
-├── go.mod
-├── go.sum
 ├── main.go
+├── go.mod
 ├── spine.toml
-└── internal/
-    └── application/
-        ├── application.go
-        └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/controller/health_controller.go
 ```
 
-## CLI Configuration
+## Startup and assembly
 
-`spine.toml` configures the module, entry point, composition root, port, layout, and platform. Keep DB, authentication, and other application settings separate.
-
-```toml
-module = "example.com/my-app"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "legacy"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
-```
-
-| Key | Purpose |
-| --- | --- |
-| `module` | The Go module path. It must match the module path in `go.mod`. |
-| `entrypoint` | The target to run or build |
-| `composition` | The location where the CLI inspects app configuration and automatically registers generated code |
-| `port` | The port used by the development server |
-| `layout` | Generator file layout (`legacy` or `layered-v1`) |
-| `platform` | HTTP platform (`echo`, `nethttp`, or `none`) |
-| `recipe` | Recipe selecting compatible dependencies |
-| `websocket_platform` | WebSocket implementation (`none` or `gorilla`) |
-| `validator` | DTO validator (`none` or `playground`) |
-| `event_platforms` | Selected event platform names and providers |
-
-## Separate Execution from App Configuration
-
-`main.go` calls the app configuration function, validates the configuration, and starts the server. Register constructors, routes, and interceptors in `BuildApplication` in `internal/application/application.go`.
+These three files show the minimum role separation. Replace the corresponding generated files instead of adding duplicate types or registrations. main calls assembly, Validate and Run; BuildApplication does not start the server.
 
 ```go
+// main.go
 package main
 
 import (
-    "log"
-
-    "example.com/my-app/internal/application"
+	"example.com/my-app/internal/application"
+	"log"
 )
 
 func main() {
-    app, options, err := application.BuildApplication()
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Validate(options); err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := application.BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-`BuildApplication` returns the app and its runtime options without starting the server. The generated code registers the default HTTP route, `GET /health`.
-
 ```go
-package application
+// src/controller/health_controller.go
+package controller
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "os"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type HealthController struct{}
 
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(NewHealthController)
-    app.Route("GET", "/health", (*HealthController).Get)
-
-    address := ":8080"
-    if port := os.Getenv("SPINE_PORT"); port != "" {
-        address = ":" + port
-    }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
-
-## Add a Feature with the CLI
-
-Generate a user resource from the project root. If you have already generated it in an existing project, skip this command.
-
-```sh
-spine generate resource user
-```
-
-```text
-src/user/
-├── user_route.go
-├── user_repository.go
-├── user_service.go
-└── user_controller.go
-```
-
-When the command finishes, four files are created in `src/user`. By default, the CLI adds the following registration code to `BuildApplication`. Check the generated result, and do not register the same code again manually.
 
 ```go
-if err := user.Register(app); err != nil {
-    return nil, boot.Options{}, err
+// internal/application/application.go
+package application
+
+import (
+	"example.com/my-app/src/controller"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+)
+
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&controller.HealthController{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 
-`user_route.go` registers the constructors and `GET /user/:id`. The other files have the following roles:
+## Add features with generators
 
-| File | Purpose |
-| --- | --- |
-| `user_controller.go` | Receives HTTP requests, passes them to the service, and returns responses. |
-| `user_service.go` | Handles business logic. |
-| `user_repository.go` | Handles data access. |
+```sh
+spine generate resource user --dry-run
+spine generate resource user
+spine --help
+```
 
-The resource generator only creates starter code for a GET handler that returns an ID. You must implement database models and persistent data storage yourself.
+The default layered-v1 resource generator creates a lookup skeleton. Implement full CRUD, database access and business rules yourself. Do not duplicate generated role registrations. Check RegisterRoutes and constructor roles. Inspect spine --help for the generators supported by each layout.
 
-For typed creation and lookup examples, use a different name with `spine generate slice order --storage memory --field name:string`. This command's in-memory store is for development, and its data is lost when the app stops.
-
-## Registration Rules and Validation
-
-To let the CLI inspect the registration code, keep `app := spine.New(echoplatform.Option())` at the top level of the body of `BuildApplication() (spine.App, boot.Options, error)`. Do not move registration code into conditionals, loops, or arbitrary helper functions. You must also check and return errors from `Register(app)`.
-
-Inspect the app configuration, then run the server.
+## Verify and run
 
 ```sh
 spine contract check
 spine verify
 spine dev
+# In another terminal
+curl http://localhost:8080/health
 ```
 
-`contract check` checks the execution contract extracted from the registration code. `verify` runs the contract check, `gofmt`, `go vet`, and Go tests. If both commands complete without errors, `dev` starts the development server. Check actual HTTP behavior and connections to external databases and message brokers separately in the runtime environment.
+Expect {"status":"ok"}. contract check checks static contracts; verify also runs formatting, vet and Go tests. app.Validate does not prove constructor execution or external connectivity. Verify HTTP and external resources with actual requests.
 
-## Next Steps
+## Next steps
 
-- [Controllers](/en/learn/tutorial/2-controller)
-- [Dependency Injection](/en/learn/tutorial/3-dependency-injection)
-- [Interceptors](/en/learn/tutorial/4-interceptor)
+[Controllers](/en/learn/tutorial/2-controller) / [DI](/en/learn/tutorial/3-dependency-injection) / [Interceptors](/en/learn/tutorial/4-interceptor)

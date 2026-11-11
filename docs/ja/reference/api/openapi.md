@@ -1,6 +1,6 @@
 # ランタイム OpenAPI
 
-Spine `v0.7.1` は登録された HTTP ルート、ハンドラーの型、validator の記述契約から OpenAPI 3.1.2 JSON を生成します。内蔵の Swagger UI と ReDoc も選択して提供できます。
+Spine `v0.7.5` は登録された HTTP ルート、ハンドラーの型、validator の記述契約から OpenAPI 3.1.2 JSON を生成します。内蔵の Swagger UI と ReDoc も選択して提供できます。
 
 ## 有効化と起動オプション {#options}
 
@@ -8,16 +8,16 @@ Spine `v0.7.1` は登録された HTTP ルート、ハンドラーの型、valid
 
 ```go
 options := boot.Options{
-    Address: ":8080",
-    HTTP: &boot.HTTPOptions{
-        GlobalPrefix: "/api",
-        OpenAPI: boot.OpenAPIOptions{
-            Enabled: true,
-            Path: "/openapi.json",
-            Title: "User API",
-            Version: "1.0.0",
-        },
-    },
+	Address: ":8080",
+	HTTP: &boot.HTTPOptions{
+		GlobalPrefix: "/api",
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true,
+			Path:    "/openapi.json",
+			Title:   "User API",
+			Version: "1.0.0",
+		},
+	},
 }
 ```
 
@@ -50,19 +50,19 @@ curl -I http://localhost:8080/openapi.json
 
 ```go
 func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error {
-    if options.HTTP == nil {
-        return errors.New("HTTP options are required")
-    }
-    description, err := spine.DescribeHTTP(app, options)
-    if err != nil {
-        return err
-    }
-    document, err := openapi.Generate(description, options.HTTP.OpenAPI)
-    if err != nil {
-        return err
-    }
-    _, err = output.Write(document)
-    return err
+	if options.HTTP == nil {
+		return errors.New("HTTP options are required")
+	}
+	description, err := spine.DescribeHTTP(app, options)
+	if err != nil {
+		return err
+	}
+	document, err := openapi.Generate(description, options.HTTP.OpenAPI)
+	if err != nil {
+		return err
+	}
+	_, err = output.Write(document)
+	return err
 }
 ```
 
@@ -74,21 +74,22 @@ func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error 
 
 ```go
 func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.OpenAPIOptions, output io.Writer) error {
-    description, err := spine.DescribePreparedHTTP(prepared)
-    if err != nil {
-        return err
-    }
-    document, err := openapi.Generate(description, options)
-    if err != nil {
-        return err
-    }
-    _, err = output.Write(document)
-    return err
+	description, err := spine.DescribePreparedHTTP(prepared)
+	if err != nil {
+		return err
+	}
+	document, err := openapi.Generate(description, options)
+	if err != nil {
+		return err
+	}
+	_, err = output.Write(document)
+	return err
 }
 ```
 
-
 ## validator と記述の範囲 {#validation}
+
+BuildApplication で playground.New() を WithValidator に登録します。必須タグはリクエストで自動検証され、仕様でも required と説明されます。OpenAPI 自体はリクエストを検証せず、任意の DTO Validate メソッドは自動実行も文書化もされません。
 
 | 登録状態 | 生成する情報 |
 | --- | --- |
@@ -111,7 +112,7 @@ validator がない場合、入力パラメーター、リクエストモデル�
 `boot.Options.HTTP.OpenAPI.UI` で画面を選択します。`Enabled: true` を設定して UI を登録し、JSON のみなら `UI` を省略します。以下は正式版 Echo を固定する例です。再現のため `go.mod` と `go.sum` を保存してください。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 以下は、使用する UI を登録する独立したアプリの `main.go` です。既存アプリでは、現在の composition に import と `OpenAPI.UI` の設定を追加してください。
@@ -120,49 +121,61 @@ go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platfor
 package main
 
 import (
-    "log"
-
-    "github.com/NARUBROWN/spine"
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
 )
 
+type CreateUser struct {
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
 type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
-
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-    r.GET("/hello", func() httpx.Response[string] {
-        return httpx.Response[string]{Body: "hello"}
-    })
+	r.GET("/hello", func(ctx spinectx.Ctx) httpx.Response[string] {
+		return httpx.Response[string]{Body: "hello"}
+	})
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[CreateUser] {
+		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
+	}, api.Summary("Create user"), api.Tags("Users"))
 }
-
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true, Title: "Example API", Version: "1.0.0",
+			UI: []boot.OpenAPIUI{swaggerui.New(swaggerui.Options{}), redoc.New(redoc.Options{})},
+		},
+	}}
+	return app, options, nil
+}
 func main() {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(constructor.Controller(&Controller{}))
-
-    options := boot.Options{
-        Address: ":8080",
-        HTTP: &boot.HTTPOptions{
-            OpenAPI: boot.OpenAPIOptions{
-                Enabled: true,
-                Title:   "Example API",
-                Version: "1.0.0",
-                UI: []boot.OpenAPIUI{
-                    swaggerui.New(swaggerui.Options{}),
-                    redoc.New(redoc.Options{}),
-                },
-            },
-        },
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -185,9 +198,9 @@ func main() {
 
 ```go
 type OpenAPIResource struct {
-    Path        string
-    ContentType string
-    Body        string
+	Path        string
+	ContentType string
+	Body        string
 }
 
 type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
@@ -197,4 +210,4 @@ type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
 
 ドキュメントやアセットのパスが既存の GET、HEAD、WebSocket ルートと重なる場合、準備は `OPENAPI_PATH_CONFLICT` で失敗します。nil の提供者や不正な UI オプションは `OPENAPI_UI_INVALID`、不正なリソースパスや Content-Type は `OPENAPI_UI_RESOURCE_INVALID` になります。
 
-実行例は [Swagger と OpenAPI チュートリアル](/ja/learn/tutorial/8-swagger)、入力モデルは[入力の移行](/ja/learn/migration/v0.7.1-preview)、アプリ API は [spine.App](/ja/reference/api/spine-app)を参照してください。
+実行例は [Swagger と OpenAPI チュートリアル](/ja/learn/tutorial/8-swagger)、入力モデルは[入力の移行](/ja/learn/migration/v0.7.5)、アプリ API は [spine.App](/ja/reference/api/spine-app)を参照してください。

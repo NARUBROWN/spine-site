@@ -4,6 +4,8 @@ pageClass: release-versions
 
 # Version catalog
 
+For current API usage, see the [0.7.5 migration guide](/en/learn/migration/v0.7.5). Publication details and past release records below refer to their individual tags.
+
 Find published tags, next target versions, and changes across the Spine ecosystem repositories. Each repository has its own version.
 
 <ReleaseCatalog />

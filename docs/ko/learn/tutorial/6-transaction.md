@@ -1,286 +1,246 @@
 # 트랜잭션 관리
 
-::: info
-이 튜토리얼의 `legacy` 레이아웃은 호환 `app.Route`를 사용합니다. 새 컨트롤러는 [라우트 전환](/ko/learn/migration/preview-controller-routes)을 참고하세요. 입력 호환 규칙은 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 옵션은 [OpenAPI](/ko/reference/api/openapi)를 확인하세요.
-:::
-
-한 HTTP 요청에서 실행한 여러 INSERT를 하나의 트랜잭션으로 묶습니다. 요청이 성공하면 커밋하고, 중간에 실패하면 앞선 INSERT까지 롤백하는 인터셉터를 작성합니다.
-
-이 페이지의 `src/user` 예제는 [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 `--layout legacy`로 생성한 앱을 사용합니다. 기본 `layered-v1` 레이아웃은 역할별 디렉터리를 사용합니다.
-
-[데이터베이스](/ko/learn/tutorial/5-database)의 `example.com/my-app`에서 이어갑니다. `src/database`, `src/entity`, `src/user`와 마이그레이션을 먼저 준비하세요. 아래 트랜잭션 코드는 직접 추가하며, CLI는 Bun 트랜잭션이나 outbox 생성기를 제공하지 않습니다.
+[DB 프로젝트](/ko/learn/tutorial/5-database)를 먼저 준비합니다. 한 요청의 여러 INSERT를 한 트랜잭션으로 처리합니다.
 
 ## 실행 순서
 
-Spine v0.7.1에서는 `PreHandle`에서 트랜잭션을 시작하고 `BeforeResponse`에서 커밋하거나 롤백합니다. 응답 직렬화, 상태 코드와 쿠키 검증, 이벤트 발행 등 응답 준비 과정에서 발생한 오류도 롤백 조건에 포함됩니다. `AfterCompletion`은 완료 후 로그를 남기거나 자원을 정리할 때 사용합니다.
-
 ```text
-PreHandle: 트랜잭션 시작
-→ 컨트롤러 → 응답 준비 → PostHandle
-→ BeforeResponse: 오류가 있으면 롤백, 없으면 커밋
+PreHandle: BeginTx, 요청별 저장소에 tx 저장
+→ 입력 바인딩과 태그 검증
+→ 컨트롤러 → 서비스 → 저장소
+→ 응답 직렬화와 검증, 성공 후처리
+→ BeforeResponse: 오류가 있으면 Rollback, 없으면 Commit
 → HTTP 응답 전송
-→ AfterCompletion: 로그 기록과 자원 정리
+→ AfterCompletion: 로그와 정리
 ```
 
-## 인터셉터 구현
+바인딩은 트랜잭션 시작 뒤입니다. 바인딩 오류도 롤백으로 이어집니다. 직렬화, 상태 코드와 쿠키 검증은 커밋 전에 수행합니다.
+
+## 인터셉터
 
 ```go
 // src/interceptor/tx_interceptor.go
 package interceptor
 
 import (
-    "errors"
-    "log"
-
-    "github.com/NARUBROWN/spine/core"
-    "github.com/uptrace/bun"
+	"errors"
+	"github.com/NARUBROWN/spine/core"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/uptrace/bun"
+	"log"
 )
 
 type TxInterceptor struct{ db *bun.DB }
 
-func NewTxInterceptor(db *bun.DB) *TxInterceptor {
-    return &TxInterceptor{db: db}
+func (*TxInterceptor) Constructor(db *bun.DB) *TxInterceptor {
+	return &TxInterceptor{db: db}
 }
-
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    if ctx.Context() == nil {
-        return errors.New("execution context has no request context")
-    }
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-    ctx.Set("tx", tx)
-    return nil
+func (i *TxInterceptor) PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error {
+	request, ok := ctx.HTTPRequestContext()
+	if !ok {
+		return errors.New("HTTP request context unavailable")
+	}
+	switch request.Method() {
+	case "GET", "HEAD", "OPTIONS":
+		return nil
+	}
+	tx, err := i.db.BeginTx(ctx.ExecutionContext().Context(), nil)
+	if err != nil {
+		return err
+	}
+	ctx.ExecutionContext().Set("tx", tx)
+	return nil
 }
-
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    value, ok := ctx.Get("tx")
-    if !ok {
-        return nil
-    }
-    tx, ok := value.(bun.Tx)
-    if !ok {
-        return errors.New("transaction has unexpected type")
-    }
-    if executionErr != nil {
-        return tx.Rollback()
-    }
-    return tx.Commit()
+func (*TxInterceptor) PostHandle(spinectx.Ctx, core.HandlerMeta) {}
+func (*TxInterceptor) BeforeResponse(ctx spinectx.Ctx, meta core.HandlerMeta, executionErr error) error {
+	value, ok := ctx.ExecutionContext().Get("tx")
+	if !ok {
+		return nil
+	}
+	tx, ok := value.(bun.Tx)
+	if !ok {
+		return errors.New("transaction has unexpected type")
+	}
+	if executionErr != nil {
+		return tx.Rollback()
+	}
+	return tx.Commit()
 }
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[TX] %s %s: %v", ctx.Method(), ctx.Path(), err)
-    }
+func (*TxInterceptor) AfterCompletion(ctx spinectx.Ctx, meta core.HandlerMeta, err error) {
+	if err != nil {
+		log.Printf("[TX] %s: %v", meta.HandlerName(), err)
+	}
 }
 ```
 
-`Commit()`과 `Rollback()`의 오류를 반환해야 최종 실행 오류에 반영됩니다. `log`와 `errors`를 포함한 import와 네 인터셉터 메서드를 모두 유지하세요.
+읽기 GET/HEAD/OPTIONS는 제외합니다. 트랜잭션이 없으면 종료 훅은 통과합니다. Commit/Rollback 오류도 반환합니다. 훅은 spine.Ctx, 값은 ExecutionContext().Set/Get, DB 컨텍스트는 ExecutionContext().Context()를 사용합니다.
 
-## 생성된 앱에 등록
-
-`internal/application/application.go`의 import 블록에 `example.com/my-app/src/interceptor`를 추가합니다. 데이터베이스 튜토리얼에서 등록한 `database.NewDB`와 health, user 등록을 유지하고, 기존 `app.Constructor` 호출에 `interceptor.NewTxInterceptor`를 추가하세요. 다음 코드는 `BuildApplication()` 안의 등록 부분입니다.
+## 명시적인 전달
 
 ```go
-app.Constructor(
-    NewHealthController,
-    database.NewDB,
-    interceptor.NewTxInterceptor,
-)
-app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
-```
-
-`(*interceptor.TxInterceptor)(nil)`은 인터셉터 타입을 지정합니다. Spine은 이 타입에 해당하는 인스턴스를 DI로 생성하며, `NewTxInterceptor`는 값 하나를 반환해야 합니다.
-
-HTTP 요청에만 적용하려면 위와 같이 `boot.InterceptorHTTP`를 사용하세요. `app.Interceptor(...)`는 WebSocket 메시지에도 적용됩니다. 특정 라우트에만 적용하려면 전역 등록을 생략하고, 해당 `app.Route`에 `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` 옵션을 지정합니다.
-
-## 요청 트랜잭션을 저장소로 전달
-
-`src/user/user_create.go`를 추가해 요청의 트랜잭션으로 사용자를 저장합니다. 생성된 `UserController`의 `service`와 `UserService`의 `repository` 필드를 사용합니다.
-
-요청 DTO는 포인터로 받습니다. `spine.Ctx`는 `github.com/NARUBROWN/spine/pkg/spine`에서 가져옵니다. 아래 코드는 앱 루트 패키지와 이름이 겹치지 않도록 `spinectx`라는 별칭을 사용합니다.
-
-```go
-// src/user/user_create.go
-package user
+// src/controller/user_create.go
+package controller
 
 import (
-    "context"
-    "errors"
-    "net/http"
-
-    "example.com/my-app/src/entity"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    spinectx "github.com/NARUBROWN/spine/pkg/spine"
-    "github.com/uptrace/bun"
+	"errors"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/uptrace/bun"
 )
 
 type CreateUserRequest struct {
-    Name string `json:"name"`
-    Email string `json:"email"`
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
+type CreateUsersRequest struct {
+	Users []CreateUserRequest `json:"users" validate:"required,min=1,dive"`
 }
 
-func (c *UserController) Create(ctx context.Context, values spinectx.Ctx, req *CreateUserRequest) (httpx.Response[*entity.User], error) {
-    value, ok := values.Get("tx")
-    if !ok {
-        return httpx.Response[*entity.User]{}, errors.New("transaction is missing")
-    }
-    tx, ok := value.(bun.Tx)
-    if !ok {
-        return httpx.Response[*entity.User]{}, errors.New("transaction has unexpected type")
-    }
-    user, err := c.service.Create(ctx, tx, req)
-    if err != nil {
-        return httpx.Response[*entity.User]{}, err
-    }
-    return httpx.Response[*entity.User]{
-        Body: user,
-        Options: httpx.ResponseOptions{Status: http.StatusCreated},
-    }, nil
-}
-
-func (s *UserService) Create(ctx context.Context, db bun.IDB, req *CreateUserRequest) (*entity.User, error) {
-    user := &entity.User{Name: req.Name, Email: req.Email}
-    if err := s.repository.Save(ctx, db, user); err != nil {
-        return nil, err
-    }
-    if err := db.NewSelect().Model(user).WherePK().Scan(ctx); err != nil {
-        return nil, err
-    }
-    return user, nil
+func requestTransaction(ctx spinectx.Ctx) (bun.Tx, error) {
+	value, ok := ctx.ExecutionContext().Get("tx")
+	if !ok {
+		return bun.Tx{}, errors.New("transaction is missing")
+	}
+	tx, ok := value.(bun.Tx)
+	if !ok {
+		return bun.Tx{}, errors.New("transaction has unexpected type")
+	}
+	return tx, nil
 }
 ```
 
-서비스는 요청의 트랜잭션을 `bun.IDB`로 받아 저장소에 전달합니다. `*bun.DB`와 `bun.Tx`는 같은 인터페이스를 구현하지만, 요청의 트랜잭션이 저장소 생성자에 자동으로 다시 주입되지는 않습니다.
+컨트롤러에서 bun.Tx의 존재와 타입을 확인해 서비스와 저장소의 bun.IDB로 전달합니다. 앞 장의 Save와 서비스는 그대로 사용합니다. 공유 객체에 요청 트랜잭션을 덮어쓰지 않습니다.
 
-`src/user/user_repository.go`의 기존 `Save` 메서드를 다음 구현으로 교체합니다. 같은 이름의 메서드를 추가로 선언하지 않습니다.
+## 기존 파일 교체
 
-```go
-// src/user/user_repository.go
-func (r *UserRepository) Save(ctx context.Context, db bun.IDB, user *entity.User) error {
-    _, err := db.NewInsert().Model(user).Exec(ctx)
-    return err
-}
-```
-
-`src/user/user_route.go`의 `Register`에 POST 라우트를 직접 추가합니다. 기존 GET 등록은 유지합니다.
+두 파일을 교체합니다. Constructor는 DI 제공, InterceptorFor는 HTTP 범위 적용입니다. 검증기는 계속 BuildApplication에 있어 태그 오류는 핸들러 전에 400입니다. 임의 DTO Validate 메서드를 자동 호출하지 않습니다.
 
 ```go
-app.Route("POST", "/user", (*UserController).Create)
-```
-
-## 여러 쓰기를 묶고 롤백 확인
-
-이번에는 한 요청에서 여러 사용자를 저장합니다. `src/user/user_batch.go`를 만들고, 아래 POST 라우트를 `src/user/user_route.go`의 `Register`에 추가하세요. 두 번째 INSERT가 중복 이메일로 실패하면 첫 번째 INSERT도 롤백되어야 합니다.
-
-```go
-// src/user/user_batch.go
-package user
+// src/controller/user_controller.go
+package controller
 
 import (
-    "context"
-    "errors"
-    "net/http"
+	"database/sql"
+	"errors"
+	"net/http"
 
-    "example.com/my-app/src/entity"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    spinectx "github.com/NARUBROWN/spine/pkg/spine"
-    "github.com/uptrace/bun"
+	"example.com/my-app/src/entity"
+	"example.com/my-app/src/service"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
-type CreateUsersRequest struct {
-    Users []CreateUserRequest `json:"users"`
+type UserPath struct {
+	ID int64 `path:"id"`
 }
+type UserController struct{ service *service.UserService }
 
-func (c *UserController) CreateBatch(ctx context.Context, values spinectx.Ctx, req *CreateUsersRequest) (httpx.Response[[]*entity.User], error) {
-    value, ok := values.Get("tx")
-    if !ok {
-        return httpx.Response[[]*entity.User]{}, errors.New("transaction is missing")
-    }
-    tx, ok := value.(bun.Tx)
-    if !ok {
-        return httpx.Response[[]*entity.User]{}, errors.New("transaction has unexpected type")
-    }
-    users := make([]*entity.User, 0, len(req.Users))
-    for index := range req.Users {
-        user, err := c.service.Create(ctx, tx, &req.Users[index])
-        if err != nil {
-            return httpx.Response[[]*entity.User]{}, err
-        }
-        users = append(users, user)
-    }
-    return httpx.Response[[]*entity.User]{
-        Body: users,
-        Options: httpx.ResponseOptions{Status: http.StatusCreated},
-    }, nil
+func (*UserController) Constructor(svc *service.UserService) *UserController {
+	return &UserController{service: svc}
+}
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", func(ctx spinectx.Ctx, path input.Path[UserPath]) (httpx.Response[*entity.User], error) {
+		user, err := c.service.Get(ctx.ExecutionContext().Context(), path.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
+		}
+		return httpx.Response[*entity.User]{Body: user}, err
+	})
+
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUserRequest]) (httpx.Response[*entity.User], error) {
+		tx, err := requestTransaction(ctx)
+		if err != nil {
+			return httpx.Response[*entity.User]{}, err
+		}
+		user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, body.Name, body.Email)
+		if err != nil {
+			return httpx.Response[*entity.User]{}, err
+		}
+		return httpx.Response[*entity.User]{Body: user, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
+	})
+
+	r.POST("/users/batch", func(ctx spinectx.Ctx, body input.Body[CreateUsersRequest]) (httpx.Response[[]*entity.User], error) {
+		tx, err := requestTransaction(ctx)
+		if err != nil {
+			return httpx.Response[[]*entity.User]{}, err
+		}
+		users := make([]*entity.User, 0, len(body.Users))
+		for _, request := range body.Users {
+			user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, request.Name, request.Email)
+			if err != nil {
+				return httpx.Response[[]*entity.User]{}, err
+			}
+			users = append(users, user)
+		}
+		return httpx.Response[[]*entity.User]{Body: users, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
+	})
 }
 ```
 
 ```go
-app.Route("POST", "/user/batch", (*UserController).CreateBatch)
-```
+// internal/application/application.go
+package application
 
-## 읽기 요청 제외
+import (
+	"example.com/my-app/src/controller"
+	"example.com/my-app/src/database"
+	"example.com/my-app/src/interceptor"
+	"example.com/my-app/src/repository"
+	"example.com/my-app/src/service"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+)
 
-읽기 요청에서 트랜잭션을 시작하지 않으려면 `PreHandle` 맨 앞에 다음 조건을 넣습니다. `BeforeResponse`도 트랜잭션이 없는 경우를 처리해야 하며, 위 구현에는 이 처리가 포함되어 있습니다. 트랜잭션을 사용하는 컨트롤러는 제외 대상에 넣지 마세요.
-
-```go
-if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" {
-    return nil
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(
+		constructor.Custom(database.NewDB),
+		constructor.Interceptor(&interceptor.TxInterceptor{}),
+		constructor.Repository(&repository.UserRepository{}),
+		constructor.Service(&service.UserService{}),
+		constructor.Controller(&controller.UserController{}),
+	)
+	app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
+	return app, boot.Options{
+		Address:                ":8080",
+		HTTP:                   &boot.HTTPOptions{OpenAPI: boot.OpenAPIOptions{Enabled: true}},
+		EnableGracefulShutdown: true,
+	}, nil
 }
 ```
 
-## 검증과 실행
+## 커밋과 롤백 확인
 
-```bash
-gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
-go mod tidy
-go mod download all
-spine doctor
-spine inspect
-spine contract check
-spine verify
-spine dev
+```sh
+gofmt -w src internal
+go build ./...
+go run .
+# 다른 터미널: 앞 장에서 Alice를 넣은 테이블 기준
+curl -i -H 'Content-Type: application/json' -d '{"name":"Bob","email":"bob@example.com"}' http://localhost:8080/users
+curl -i -H 'Content-Type: application/json' -d '{"users":[{"name":"Rollback","email":"rollback@example.com"},{"name":"Duplicate","email":"alice@example.com"}]}' http://localhost:8080/users/batch
+curl -i -H 'Content-Type: application/json' -d '{"name":"","email":"bad"}' http://localhost:8080/users
 ```
-
-계약과 로컬 검사로는 실제 DB의 커밋과 롤백을 확인할 수 없습니다. 앱을 실행하려면 데이터베이스 튜토리얼의 `DATABASE_URL` 설정과 마이그레이션이 필요합니다. 다음 단계에서 성공 요청의 저장과 실패 요청의 롤백을 확인합니다. 커밋과 롤백 자체가 실패하는 경우의 오류 처리는 별도로 확인해야 합니다.
-
-## 실제 DB에서 확인
-
-데이터베이스 튜토리얼대로 마이그레이션을 실행하고 앱을 시작한 뒤, 다른 터미널에서 아래 요청을 보냅니다. 예제의 GET은 새로 만든 테스트 DB에서 첫 사용자의 ID가 1이라고 가정합니다. 기존 DB를 사용한다면 POST 응답의 ID로 GET 경로를 바꾸세요.
-
-첫 POST는 HTTP 201로 저장되고, 응답의 ID로 GET하면 같은 사용자가 반환됩니다. `/user/batch` 요청은 두 번째 이메일이 중복되어 HTTP 500으로 실패합니다. DB 오류를 일반 오류로 반환하므로 응답에 내부 SQL 오류는 노출되지 않습니다.
-
-```bash
-curl -i -X POST http://localhost:8080/user \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice","email":"alice@example.com"}'
-curl -i http://localhost:8080/user/1
-
-curl -i -X POST http://localhost:8080/user/batch \
-  -H 'Content-Type: application/json' \
-  -d '{"users":[{"name":"Rollback","email":"rollback@example.com"},{"name":"Duplicate","email":"alice@example.com"}]}'
-
-curl -i -X POST http://localhost:8080/user \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Bob","email":"bob@example.com"}'
-```
-
-DB 클라이언트에서 다음 SELECT 결과가 각각 1과 0인지 확인하세요. 두 번째 결과가 0이면 실패 전에 실행한 첫 INSERT까지 롤백된 것입니다. 마지막 Bob 요청은 중복되지 않는 이메일을 사용하므로 다시 HTTP 201로 저장되어야 합니다.
 
 ```sql
-SELECT COUNT(*) FROM users WHERE email = 'alice@example.com';
+SELECT COUNT(*) FROM users WHERE email = 'bob@example.com';
 SELECT COUNT(*) FROM users WHERE email = 'rollback@example.com';
 ```
 
-## 원자성 경계
+앞 장의 Alice가 있는 새 테이블 기준으로 201, 중복 batch의 500, 검증 실패 400입니다. SELECT 결과는 1과 0이어야 합니다. batch의 첫 INSERT도 롤백됩니다. 재실행 전 이메일 상태를 확인합니다.
 
-DB 커밋, 브로커의 이벤트 발행, 소켓의 응답 전송은 하나의 원자적 트랜잭션으로 묶이지 않습니다. 이벤트를 발행한 뒤 DB 커밋이 실패할 수 있고, 커밋 후 응답 전송이 실패할 수도 있습니다.
+## 오류와 원자성
 
-DB 변경과 이벤트 기록을 함께 보장해야 한다면 같은 DB 트랜잭션에 outbox 레코드를 저장하고, 별도 전달 작업에서 이벤트를 발행합니다. 재전송에도 같은 이벤트 ID를 사용하고, 소비자는 이 ID로 중복을 판별해야 합니다.
+BeforeResponse 오류가 HTTP 응답에 우선하므로 원래 404도 롤백 실패 시 500이 될 수 있습니다. 이전 오류도 AfterCompletion에 전달합니다. AfterCompletion은 응답 전송 시도 뒤이므로 커밋 장소가 아닙니다. DB, 브로커 발행과 실제 응답 전송은 한 원자적 트랜잭션이 아닙니다. DB와 이벤트 기록을 함께 보장하려면 같은 트랜잭션에 outbox를 저장하고 별도 전달합니다.
 
-- [Interceptor API](/ko/reference/api/interceptor)
-- [데이터베이스 연결](/ko/learn/tutorial/5-database)
+## 다음 단계
+
+[입력 검증](/ko/learn/tutorial/7-error-handling) / [인터셉터](/ko/learn/tutorial/4-interceptor)

@@ -1,14 +1,10 @@
 # JWT 登入範例
 
-::: info
-此範例使用 `v0.7.1` 控制器和路由攔截器。舊註冊方式請參閱[路由遷移](/zh-Hant/learn/migration/preview-controller-routes)。
-:::
-
 建立註冊和登入 API，並使用登入時核發的 JWT 查詢自己的資訊。驗證攔截器只套用於 `/me`，因此註冊和登入請求不需要權杖。
 
 ## 開始前的準備
 
-完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用 CLI `v0.4.3` 以上版本建立專案。手動新增 JWT 程式碼並安裝 `github.com/golang-jwt/jwt/v5`。
+依照[安裝指南](/zh-Hant/learn/getting-started/installation)安裝正式版 Spine CLI。本範例使用 CLI `v0.4.4` 和核心 `v0.7.5`。
 
 此範例為了說明驗證流程，使用記憶體儲存庫、明文密碼比對，以及寫死在程式碼中的 JWT 密鑰。伺服器結束後，註冊資訊就會消失。套用於實際服務前，必須使用密碼雜湊，並透過環境變數管理 JWT 密鑰。
 
@@ -16,10 +12,10 @@
 
 準備基本應用程式和 JWT 相依套件。後續命令均在 `login-example/` 中執行。
 
-以下指令使用正式相依套件通道。請在 `go.mod` 中確認所選版本。
+以下指令選擇 `main` 通道的正式版相依套件。請在產生的 `go.mod` 中確認核心與平台版本。
 
 ```sh
-spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive
+spine new login-example --module example.com/login-example --channel main --validator playground --no-interactive
 cd login-example
 spine doctor
 go get github.com/golang-jwt/jwt/v5@v5.3.1
@@ -54,26 +50,26 @@ login-example/
 package model
 
 type User struct {
-    ID       int64  `json:"id"`
-    Email    string `json:"email"`
-    Password string `json:"-"` // 從 JSON 回應中排除
-    Name     string `json:"name"`
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Password string `json:"-"` // 從 JSON 回應中排除
+	Name     string `json:"name"`
 }
 
 type LoginRequest struct {
-    Email    string `json:"email"`
-    Password string `json:"password"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type LoginResponse struct {
-    Token string `json:"token"`
-    User  User   `json:"user"`
+	Token string `json:"token"`
+	User  User   `json:"user"`
 }
 
 type SignupRequest struct {
-    Email    string `json:"email"`
-    Password string `json:"password"`
-    Name     string `json:"name"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+	Name     string `json:"name" validate:"required"`
 }
 ```
 
@@ -86,68 +82,68 @@ type SignupRequest struct {
 package store
 
 import (
-    "errors"
-    "example.com/login-example/src/model"
-    "sync"
+	"errors"
+	"example.com/login-example/src/model"
+	"sync"
 )
 
 type UserStore struct {
-    mu     sync.RWMutex
-    users  map[int64]*model.User
-    nextID int64
+	mu     sync.RWMutex
+	users  map[int64]*model.User
+	nextID int64
 }
 
 func NewUserStore() *UserStore {
-    return &UserStore{
-        users:  make(map[int64]*model.User),
-        nextID: 1,
-    }
+	return &UserStore{
+		users:  make(map[int64]*model.User),
+		nextID: 1,
+	}
 }
 
 func (s *UserStore) Create(email, password, name string) (*model.User, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-    // 檢查電子郵件是否重複
-    for _, u := range s.users {
-        if u.Email == email {
-            return nil, errors.New("email already exists")
-        }
-    }
+	// 檢查電子郵件是否重複
+	for _, u := range s.users {
+		if u.Email == email {
+			return nil, errors.New("email already exists")
+		}
+	}
 
-    user := &model.User{
-        ID:       s.nextID,
-        Email:    email,
-        Password: password,
-        Name:     name,
-    }
-    s.users[s.nextID] = user
-    s.nextID++
+	user := &model.User{
+		ID:       s.nextID,
+		Email:    email,
+		Password: password,
+		Name:     name,
+	}
+	s.users[s.nextID] = user
+	s.nextID++
 
-    return user, nil
+	return user, nil
 }
 
 func (s *UserStore) FindByEmail(email string) (*model.User, error) {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-    for _, u := range s.users {
-        if u.Email == email {
-            return u, nil
-        }
-    }
-    return nil, errors.New("user not found")
+	for _, u := range s.users {
+		if u.Email == email {
+			return u, nil
+		}
+	}
+	return nil, errors.New("user not found")
 }
 
 func (s *UserStore) FindByID(id int64) (*model.User, error) {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-    user, ok := s.users[id]
-    if !ok {
-        return nil, errors.New("user not found")
-    }
-    return user, nil
+	user, ok := s.users[id]
+	if !ok {
+		return nil, errors.New("user not found")
+	}
+	return user, nil
 }
 ```
 
@@ -160,69 +156,76 @@ func (s *UserStore) FindByID(id int64) (*model.User, error) {
 package interceptor
 
 import (
-    "strings"
+	"strings"
 
-    "github.com/NARUBROWN/spine/core"
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/golang-jwt/jwt/v5"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var JWTSecret = []byte("your-secret-key") // 實際環境中請使用環境變數
 
 type AuthInterceptor struct{}
 
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // 從 Authorization 標頭中擷取權杖
-    authHeader := ctx.Header("Authorization")
-    if authHeader == "" {
-        return httperr.Unauthorized("需要權杖。")
-    }
+func (*AuthInterceptor) Constructor() *AuthInterceptor { return &AuthInterceptor{} }
 
-    // 解析 "Bearer {token}" 格式
-    parts := strings.Split(authHeader, " ")
-    if len(parts) != 2 || parts[0] != "Bearer" {
-        return httperr.Unauthorized("權杖格式無效。")
-    }
+func (i *AuthInterceptor) PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error {
+	// 從 Authorization 標頭中擷取權杖
+	request, ok := ctx.HTTPRequestContext()
+	if !ok {
+		return httperr.Unauthorized("HTTP request required")
+	}
+	authHeader := request.Header("Authorization")
+	if authHeader == "" {
+		return httperr.Unauthorized("需要權杖。")
+	}
 
-    tokenString := parts[1]
+	// 解析 "Bearer {token}" 格式
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return httperr.Unauthorized("權杖格式無效。")
+	}
 
-    // 驗證 JWT 權杖
-    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("簽章方法無效。")
-        }
-        return JWTSecret, nil
-    }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
+	tokenString := parts[1]
 
-    if err != nil || !token.Valid {
-        return httperr.Unauthorized("權杖無效。")
-    }
+	// 驗證 JWT 權杖
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, httperr.Unauthorized("簽章方法無效。")
+		}
+		return JWTSecret, nil
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
-    // 從權杖中擷取使用者 ID
-    claims, ok := token.Claims.(jwt.MapClaims)
-    if !ok {
-        return httperr.Unauthorized("無法讀取權杖聲明。")
-    }
+	if err != nil || !token.Valid {
+		return httperr.Unauthorized("權杖無效。")
+	}
 
-    rawID, ok := claims["user_id"].(float64)
-    if !ok || rawID <= 0 || rawID != float64(int64(rawID)) {
-        return httperr.Unauthorized("Invalid user ID claim.")
-    }
-    userID := int64(rawID)
+	// 從權杖中擷取使用者 ID
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return httperr.Unauthorized("無法讀取權杖聲明。")
+	}
 
-    // 在 ExecutionContext 中儲存使用者 ID
-    ctx.Set("userID", userID)
+	rawID, ok := claims["user_id"].(float64)
+	if !ok || rawID <= 0 || rawID != float64(int64(rawID)) {
+		return httperr.Unauthorized("Invalid user ID claim.")
+	}
+	userID := int64(rawID)
 
-    return nil
+	// 在 ExecutionContext 中儲存使用者 ID
+	ctx.ExecutionContext().Set("userID", userID)
+
+	return nil
 }
 
-func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+func (i *AuthInterceptor) PostHandle(ctx spinectx.Ctx, meta core.HandlerMeta) {}
 
-func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    return nil
+func (i *AuthInterceptor) BeforeResponse(ctx spinectx.Ctx, meta core.HandlerMeta, executionErr error) error {
+	return nil
 }
 
-func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
+func (i *AuthInterceptor) AfterCompletion(ctx spinectx.Ctx, meta core.HandlerMeta, err error) {}
 ```
 
 ## 5. 新增驗證控制器
@@ -234,101 +237,90 @@ func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.H
 package controller
 
 import (
-    "time"
+	"time"
 
-    "example.com/login-example/src/interceptor"
-    "example.com/login-example/src/model"
-    "example.com/login-example/src/store"
+	"example.com/login-example/src/interceptor"
+	"example.com/login-example/src/model"
+	"example.com/login-example/src/store"
 
-    "github.com/NARUBROWN/spine/pkg/api"
-    spinectx "github.com/NARUBROWN/spine/pkg/spine"
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/golang-jwt/jwt/v5"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type AuthController struct {
-    userStore *store.UserStore
+	userStore *store.UserStore
 }
 
 func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
-    return &AuthController{userStore: userStore}
+	return &AuthController{userStore: userStore}
 }
 
 func (c *AuthController) RegisterRoutes(r *api.Registry) {
-    r.POST("/signup", c.Signup)
-    r.POST("/login", c.Login)
-    r.GET("/me", c.GetMe, api.Interceptors(&interceptor.AuthInterceptor{}))
-}
+	// 註冊帳號 — 無須身分驗證
+	r.POST("/signup", func(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
+		user, err := c.userStore.Create(req.Email, req.Password, req.Name)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
+		}
 
-// 註冊帳號 — 無須身分驗證
-func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
-    if req.Email == "" || req.Password == "" || req.Name == "" {
-        return httpx.Response[model.User]{}, httperr.BadRequest("請填寫所有欄位。")
-    }
+		return httpx.Response[model.User]{Body: *user}, nil
+	})
 
-    user, err := c.userStore.Create(req.Email, req.Password, req.Name)
-    if err != nil {
-        return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
-    }
+	// 登入 — 無須身分驗證
+	r.POST("/login", func(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
+		user, err := c.userStore.FindByEmail(req.Email)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
+		}
 
-    return httpx.Response[model.User]{Body: *user}, nil
-}
+		// 檢查密碼（實際應用中使用 bcrypt 等比較雜湊）
+		if user.Password != req.Password {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
+		}
 
-// 登入 — 無須身分驗證
-func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
-    if req.Email == "" || req.Password == "" {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("請輸入電子郵件和密碼。")
-    }
+		// 產生 JWT 權杖
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"user_id": user.ID,
+			"email":   user.Email,
+			"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		})
 
-    user, err := c.userStore.FindByEmail(req.Email)
-    if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
-    }
+		tokenString, err := token.SignedString(interceptor.JWTSecret)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, err
+		}
 
-    // 檢查密碼（實際應用中使用 bcrypt 等比較雜湊）
-    if user.Password != req.Password {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
-    }
+		return httpx.Response[model.LoginResponse]{
+			Body: model.LoginResponse{
+				Token: tokenString,
+				User:  *user,
+			},
+		}, nil
+	})
 
-    // 產生 JWT 權杖
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-        "user_id": user.ID,
-        "email":   user.Email,
-        "exp":     time.Now().Add(24 * time.Hour).Unix(),
-    })
+	// 查詢我的資訊 — 需要身分驗證
+	r.GET("/me", func(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
+		// 讀取 AuthInterceptor 儲存的 userID
+		userIDValue, ok := ctx.ExecutionContext().Get("userID")
+		if !ok {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("找不到身分驗證資訊。")
+		}
 
-    tokenString, err := token.SignedString(interceptor.JWTSecret)
-    if err != nil {
-        return httpx.Response[model.LoginResponse]{}, err
-    }
+		userID, valid := userIDValue.(int64)
+		if !valid {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+		}
+		user, err := c.userStore.FindByID(userID)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.NotFound("找不到使用者。")
+		}
 
-    return httpx.Response[model.LoginResponse]{
-        Body: model.LoginResponse{
-            Token: tokenString,
-            User:  *user,
-        },
-    }, nil
-}
-
-// 查詢我的資訊 — 需要身分驗證
-func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-    // 讀取 AuthInterceptor 儲存的 userID
-    userIDValue, ok := ctx.Get("userID")
-    if !ok {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("找不到身分驗證資訊。")
-    }
-
-    userID, valid := userIDValue.(int64)
-    if !valid {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
-    }
-    user, err := c.userStore.FindByID(userID)
-    if err != nil {
-        return httpx.Response[model.User]{}, httperr.NotFound("找不到使用者。")
-    }
-
-    return httpx.Response[model.User]{Body: *user}, nil
+		return httpx.Response[model.User]{Body: *user}, nil
+	}, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
 }
 ```
 
@@ -341,38 +333,44 @@ func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], er
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "time"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"time"
 
-    "example.com/login-example/src/controller"
-    "example.com/login-example/src/store"
+	"example.com/login-example/src/controller"
+	"example.com/login-example/src/interceptor"
+	"example.com/login-example/src/store"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/interceptor/cors"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/interceptor/cors"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(store.NewUserStore, constructor.Controller(&controller.AuthController{}))
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Custom(store.NewUserStore), constructor.Interceptor(&interceptor.AuthInterceptor{}), constructor.Controller(&controller.AuthController{}))
 
-    corsInterceptor, err := cors.NewValidated(cors.Config{
-        AllowOrigins: []string{"*"},
-        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders: []string{"Content-Type", "Authorization"},
-    })
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+	corsInterceptor, err := cors.NewValidated(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type", "Authorization"},
+	})
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
-    return app, boot.Options{
-        Address: ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout: 10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    }, nil
+	return app, boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+		HTTP:                   &boot.HTTPOptions{},
+	}, nil
 }
 ```
 
@@ -493,7 +491,7 @@ GET /me (受保護)
    ├─→ Auth.PreHandle (路由) ← 驗證權杖
    │       │
    │       ├─ 無權杖 → 401 Unauthorized
-   │       └─ 權杖有效 → ctx.Set("userID", ...)
+   │       └─ 權杖有效 → ctx.ExecutionContext().Set("userID", ...)
    │
    ├─→ AuthController.GetMe
    └─→ Response 200 + 使用者資訊

@@ -1,91 +1,101 @@
 # Swagger and OpenAPI
 
-Spine `v0.7.1` can generate OpenAPI JSON from registered HTTP routes and serve embedded Swagger UI and ReDoc. This tutorial runs the documentation in a standalone app and then exports a static document with the CLI.
+Serve runtime OpenAPI JSON, embedded Swagger UI and ReDoc. Check both the schema and actual input validation.
 
-## 1. Prepare the application
+## Standalone app
 
-Install these stable dependencies in a separate Go module. Keep `go.mod` and `go.sum` for reproducibility.
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+```sh
+go mod init example.com/spine-openapi
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
-Save the following as `main.go` and run `go run .`. Automatic serving is disabled unless `Enabled` is set. Omit `UI` to serve JSON only.
+Register playground.New() with WithValidator in BuildApplication. Required tags are checked automatically on requests and described as required in the schema. OpenAPI itself does not validate requests; arbitrary DTO Validate methods are neither called nor documented automatically.
 
 ```go
 package main
 
 import (
-    "log"
-
-    "github.com/NARUBROWN/spine"
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
 )
 
+type CreateUser struct {
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
 type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
-
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-    r.GET("/hello", func() httpx.Response[string] {
-        return httpx.Response[string]{Body: "hello"}
-    })
+	r.GET("/hello", func(ctx spinectx.Ctx) httpx.Response[string] {
+		return httpx.Response[string]{Body: "hello"}
+	})
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[CreateUser] {
+		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
+	}, api.Summary("Create user"), api.Tags("Users"))
 }
-
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true, Title: "Example API", Version: "1.0.0",
+			UI: []boot.OpenAPIUI{swaggerui.New(swaggerui.Options{}), redoc.New(redoc.Options{})},
+		},
+	}}
+	return app, options, nil
+}
 func main() {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(constructor.Controller(&Controller{}))
-
-    options := boot.Options{
-        Address: ":8080",
-        HTTP: &boot.HTTPOptions{
-            OpenAPI: boot.OpenAPIOptions{
-                Enabled: true,
-                Title:   "Example API",
-                Version: "1.0.0",
-                UI: []boot.OpenAPIUI{
-                    swaggerui.New(swaggerui.Options{}),
-                    redoc.New(redoc.Options{}),
-                },
-            },
-        },
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## 2. Check over HTTP
+## Check requests and UI
 
-Request the document and UIs from another terminal. All three return 200. You can also open `/docs` or `/redoc` in a browser.
-
-```bash
+```sh
+go run .
+# In another terminal
 curl -i http://localhost:8080/openapi.json
 curl -I http://localhost:8080/docs
 curl -I http://localhost:8080/redoc
+curl -i -H 'Content-Type: application/json' -d '{}' http://localhost:8080/users
+curl -i -H 'Content-Type: application/json' -d '{"name":"Alice","email":"alice@example.com"}' http://localhost:8080/users
 ```
 
-The document and UIs do not run business interceptors. If access must be restricted, apply a policy in HTTP middleware or a proxy.
+Schema and UI return 200, empty input returns 400 and valid creation returns 201. The schema marks name and email required. UI and schema bypass business interceptors; control publication through HTTP middleware or a proxy.
 
-## 3. Export a static document with the CLI
+## Static CLI export
 
-Run these commands in the root of the app created in [Project Structure](/en/learn/tutorial/1-project-structure). The command analyzes source without running the app. Review an existing file before replacing it with `--force`.
+Run this in a CLI project root containing spine.toml, not the standalone example unless you configure it. Static analysis does not run the app or validator; review diagnostics alongside the runtime schema.
 
-```bash
-spine doctor
+```sh
 spine contract check
 spine contract export --format openapi --output openapi.json
 ```
 
-Check `/health` and `/user/{id}` in the generated document. Static analysis cannot establish every dynamic route, runtime validator constraint, or response status selected by a handler. Review diagnostics and verify actual requests and the runtime document.
-
 ## Next steps
 
-See the [runtime OpenAPI reference](/en/reference/api/openapi) for path conflicts, validators, document inspection, and UI options. The [input migration guide](/en/learn/migration/v0.7.1-preview) explains compatibility with older input APIs.
+[OpenAPI reference](/en/reference/api/openapi) / [Validation](/en/learn/tutorial/7-error-handling#validation-modes)

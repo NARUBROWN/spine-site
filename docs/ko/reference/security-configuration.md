@@ -1,17 +1,17 @@
 # 보안 설정
 
-Spine `v0.7.1`은 HTTP와 WebSocket의 크기, 시간과 연결 수를 제한합니다. 브로커 전송 정책은 독립 플랫폼이 관리합니다. 사용하는 플랫폼 버전과 설정을 함께 확인하세요.
+Spine `v0.7.5`는 HTTP와 WebSocket의 크기, 시간과 연결 수를 제한합니다. 브로커 전송 정책은 독립 플랫폼이 관리합니다. 사용하는 플랫폼 버전과 설정을 함께 확인하세요.
 
 ## 설정 검증
 
-`App.Validate`는 네트워크 연결을 열지 않고 부트 옵션을 검사합니다. `App.Run`도 시작 전에 같은 검사를 수행합니다. 생성자와 의존성 구성, 브로커 연결의 성공 여부는 이 사전 검증에 포함되지 않습니다.
+App.Validate는 리스너 없이 부트 옵션과 실행 없이 확인 가능한 DI 구성을 검사합니다. Run도 시작 전에 검사합니다. 실제 생성자 실행과 DB 또는 브로커 연결 성공은 준비 단계와 실제 요청에서 따로 확인해야 합니다.
 
 ```go
 if err := app.Validate(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 if err := app.Run(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 ```
 
@@ -48,18 +48,18 @@ if err := app.Run(options); err != nil {
 
 ```go
 factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
-    Brokers: []string{"kafka.example.com:9093"},
-    Consume: true,
-    Publish: true,
-    GroupID: "orders",
-    TopicPrefix: "prod.",
+	Brokers:     []string{"kafka.example.com:9093"},
+	Consume:     true,
+	Publish:     true,
+	GroupID:     "orders",
+	TopicPrefix: "prod.",
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
-    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
-    spine.WithEventSettlementTimeout(5 * time.Second),
+	spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+	spine.WithEventSettlementTimeout(5*time.Second),
 ))
 ```
 
@@ -75,20 +75,20 @@ Kafka 플랫폼은 별도 설정이 없으면 TLS 1.2 이상을 적용합니다.
 
 ```go
 factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
-    URL: "amqps://user:pass@rabbit.example.com/vhost",
-    Exchange: "events",
-    Consume: true,
-    Publish: true,
-    PrefetchCount: 16,
-    FailurePolicy: rabbitmqplatform.FailureReject,
-    DeadLetter: &rabbitmqplatform.DeadLetter{
-        Exchange: "events.dlx",
-        RoutingKey: "events.failed",
-    },
-    OperationTimeout: 5 * time.Second,
+	URL:           "amqps://user:pass@rabbit.example.com/vhost",
+	Exchange:      "events",
+	Consume:       true,
+	Publish:       true,
+	PrefetchCount: 16,
+	FailurePolicy: rabbitmqplatform.FailureReject,
+	DeadLetter: &rabbitmqplatform.DeadLetter{
+		Exchange:   "events.dlx",
+		RoutingKey: "events.failed",
+	},
+	OperationTimeout: 5 * time.Second,
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
@@ -132,16 +132,22 @@ HTTP: &boot.HTTPOptions{
 
 연결 인증이 필요하면 인터셉터에 `core.WebSocketHandshakeInterceptor`도 구현하십시오. `PreHandshake`는 연결 자리를 예약한 뒤 HTTP 업그레이드 전에 실행합니다. 메시지별 `PreHandle`과는 별도입니다.
 
+다음은 이미 네 훅과 verify 메서드를 구현한 AuthInterceptor에 추가하는 조각입니다. spinectx는 공개 pkg/spine, core는 메타데이터, httperr는 공개 오류 패키지입니다.
+
 ```go
 func (i *AuthInterceptor) PreHandshake(
-    ctx core.WebSocketHandshakeContext,
-    meta core.HandlerMeta,
+	ctx spinectx.Ctx,
+	meta core.HandlerMeta,
 ) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("missing credentials")
-    }
-    return i.verify(token)
+	request, ok := ctx.WebSocket()
+	if !ok {
+		return httperr.Unauthorized("HTTP request required")
+	}
+	token := request.Header("Authorization")
+	if token == "" {
+		return httperr.Unauthorized("missing credentials")
+	}
+	return i.verify(token)
 }
 ```
 
@@ -157,21 +163,20 @@ CORS 사전 요청은 `OPTIONS`, `Origin`, `Access-Control-Request-Method`가 �
 
 ```go
 corsInterceptor, err := cors.NewValidated(cors.Config{
-    AllowOrigins:     []string{"https://app.example.com"},
-    AllowCredentials: true,
+	AllowOrigins:     []string{"https://app.example.com"},
+	AllowCredentials: true,
 })
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
 
 쿠키의 이름, 값, 경로, 도메인, `SameSite`, `Priority`가 유효하지 않으면 JSON, 문자열, 바이너리와 리다이렉트 응답은 헤더나 본문을 쓰기 전에 실패합니다. 유니코드나 구분자를 원래 값으로 복원해야 할 때는 `httpx.EncodeCookieValue`와 `httpx.DecodeCookieValue`를 사용하십시오.
 
-
 ### CORS 사전 요청 확인
 
-다음 독립 앱을 Spine `v0.7.1`과 호환 Echo 플랫폼이 있는 별도 Go 모듈의 `main.go`로 저장하고 실행하세요. `Authorization`은 허용 헤더에 명시합니다.
+다음 독립 앱을 Spine `v0.7.5`과 호환 Echo 플랫폼이 있는 별도 Go 모듈의 `main.go`로 저장하고 실행하세요. `Authorization`은 허용 헤더에 명시합니다.
 
 ```go
 package main

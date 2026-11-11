@@ -4,6 +4,8 @@ pageClass: release-versions
 
 # 版本概览
 
+当前 API 用法参见 [0.7.5 迁移指南](/zh-Hans/learn/migration/v0.7.5)。下方发布信息与历史记录以各自标签为准。
+
 查看 Spine 生态中各仓库的已发布标签、下一目标版本和变更。各仓库使用独立版本发布。
 
 <ReleaseCatalog />

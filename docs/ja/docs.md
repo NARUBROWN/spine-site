@@ -6,8 +6,8 @@ description: "インストール、チュートリアル、API、サンプル、
 
 # ドキュメント案内
 
-初めてのアプリ作成や API の確認には、このドキュメント案内を利用してください。文書は Spine `v0.7.1` を基準とします。
+初めてのアプリ作成や API の確認には、このドキュメント案内を利用してください。文書は Spine `v0.7.5` を基準とします。
 
-初めての場合は[インストール](/ja/learn/getting-started/installation)の後に[最初のアプリ](/ja/learn/getting-started/first-app)を進めてください。既存アプリは [v0.7.1 移行ガイド](/ja/learn/migration/v0.7.1)を参照してください。
+初めての場合は[インストール](/ja/learn/getting-started/installation)の後に[最初のアプリ](/ja/learn/getting-started/first-app)を進めてください。既存アプリは [v0.7.5 移行ガイド](/ja/learn/migration/v0.7.5)を参照してください。
 
 <DocumentationMap />

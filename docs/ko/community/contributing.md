@@ -63,6 +63,8 @@ python3 scripts/check-doc-translations.py
 문서를 빌드한 뒤에는 번역된 내부 경로와 섹션 링크도 검사하세요.
 
 ```bash
+go run scripts/check-go-examples.go docs
+python3 scripts/check-v075-examples.py
 npm run docs:build
 python3 scripts/check-doc-translations.py --check-rendered
 ```

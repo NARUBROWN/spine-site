@@ -4,6 +4,8 @@ pageClass: release-versions
 
 # 版本概覽
 
+目前 API 用法參見 [0.7.5 移轉指南](/zh-Hant/learn/migration/v0.7.5)。下方發布資訊與歷史記錄以各自標籤為準。
+
 查看 Spine 生態中各儲存庫的已發佈標籤、下一目標版本和變更。各儲存庫使用獨立版本發佈。
 
 <ReleaseCatalog />

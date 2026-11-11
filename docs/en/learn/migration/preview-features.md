@@ -1,5 +1,10 @@
 # v0.7.1 HTTP and boot options
 
+::: info
+This page records 0.7.1 behavior and migration history. For current inputs, context and validation, use the [0.7.5 migration guide](/en/learn/migration/v0.7.5).
+:::
+
+
 This guide covers OpenAPI UI, HTTP v3 input handling, TLS, and shutdown in Spine `v0.7.1`. When migrating an existing application, review the platform and application code together.
 
 ## Versions for the example {#versions}

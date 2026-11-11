@@ -1,14 +1,28 @@
 # 版本說明
 
+目前 API 用法參見 [0.7.5 移轉指南](/zh-Hant/learn/migration/v0.7.5)。下方發布資訊與歷史記錄以各自標籤為準。
+
 最新標籤與下一目標版本請查看[版本概覽](/zh-Hant/community/versions)。
 
 Preview、RC、穩定版的選擇與發佈流程，請參閱[發佈通道與安裝](/zh-Hant/community/release-channels)。
+
+## Spine v0.7.5 / CLI v0.4.4
+
+Spine `v0.7.5` 使用 `input.Path`、`input.Query`、`input.Header` 和 `input.Body` 宣告 HTTP 輸入。HTTP、事件與 WebSocket 的處理器和攔截器共用 `spine.Ctx`。
+
+CLI `v0.4.4` 檢查輸入契約，並將契約反映在產生的程式碼與 OpenAPI 中。正式版相依套件通道為新的 HTTP 應用程式選擇核心 `v0.7.5` 和 Echo 平台 `v0.2.1`。
+
+如果應用程式使用已撤回的 Go 模組版本 `v0.7.0`、`v0.7.1` 或 `v0.7.2-preview.1`，請升級至 `v0.7.5`。
+
+- [Spine v0.7.5 發布](https://github.com/NARUBROWN/spine/releases/tag/v0.7.5)
+- [CLI v0.4.4 發布](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.4)
+- [0.7.5 移轉指南](/zh-Hant/learn/migration/v0.7.5)
 
 ## Spine v0.7.1
 
 Spine `v0.7.1` 提供控制器路由、依角色註冊建構函式、依來源區分的 HTTP 輸入、執行階段 OpenAPI 和 HTTP v3。舊輸入 API 維持相容但已棄用，同一處理器不能混用新舊輸入。
 
-請參閱 [v0.7.1 移轉指南](/zh-Hant/learn/migration/v0.7.1)和[執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。CLI 版本與應用程式相依套件分別選擇。透過 `spine version` 檢查 CLI，在 `go.mod` 中確認相依套件。以下條目記錄各版本的歷史情況。
+請參閱 [0.7.5 移轉指南](/zh-Hant/learn/migration/v0.7.5#from-v071)和[執行階段 OpenAPI](/zh-Hant/reference/api/openapi)。CLI 版本與應用程式相依套件分別選擇。透過 `spine version` 檢查 CLI，在 `go.mod` 中確認相依套件。以下條目記錄各版本的歷史情況。
 
 ## Preview CLI @preview {#cli-preview-branch}
 

@@ -11,7 +11,7 @@ const bootLog = [
   'Application process started.',
   'Spine development server is watching application sources.',
   '',
-  '[Bootstrap] Spine version: v0.7.1',
+  '[Bootstrap] Spine version: v0.7.5',
   '[Bootstrap] Registering constructors (1)',
   '[Bootstrap] Registering constructor: func() *controller.HealthController',
   '[Bootstrap] Configuring HTTP routes (1 routes)',

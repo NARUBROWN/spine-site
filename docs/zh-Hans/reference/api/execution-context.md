@@ -1,741 +1,85 @@
-# core.ExecutionContext
+# spine.Ctx API
 
-::: info
-旧输入 API 的兼容规则请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，文档选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info 0.7.5
+本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
 :::
 
-`ExecutionContext` 是拦截器和执行流水线用于读取请求信息、在处理阶段之间共享值的接口。HTTP 请求、事件和 WebSocket 消息共用此接口，各传输方式还通过独立接口提供额外信息。
+## 统一入口 {#public-context}
+
+处理器和拦截器接收 `github.com/NARUBROWN/spine/pkg/spine.Ctx`。与根应用包一起导入时使用 `spinectx` 别名。向服务和仓储传递 `ctx.ExecutionContext().Context()` 返回的标准 Go context。仍兼容直接注入 context.Context 的旧处理器。
 
 ```go
-import "github.com/NARUBROWN/spine/core"
-```
+import spinectx "github.com/NARUBROWN/spine/pkg/spine"
 
-## 选择接口
-
-要在 HTTP 控制器中读取拦截器保存的值，请将 `core.ControllerContext` 声明为参数。拦截器中使用 `core.ExecutionContext`。HTTP 和事件的输入解析分别使用 `HttpRequestContext` 和 `ConsumerRequestContext`。
-
-| 接口 | 嵌入的接口 | 提供的功能 |
-| --- | --- | --- |
-| `ContextCarrier` | 无 | Go 标准 `context.Context` |
-| `EventBusCarrier` | 无 | 请求范围的事件总线 |
-| `ExecutionContext` | `ContextCarrier`, `EventBusCarrier` | 请求方法和路径、请求头和参数、值的存储与查询 |
-| `ControllerContext` | 无 | 查询拦截器保存的值 |
-| `HttpRequestContext` | `ContextCarrier`, `EventBusCarrier` | 查询 HTTP 输入、绑定请求体、多部分表单 |
-| `ConsumerRequestContext` | `ContextCarrier`, `EventBusCarrier` | 事件名称和原始请求体 |
-| `WebSocketContext` | `ExecutionContext` | 连接 ID、消息类型和原始消息体 |
-| `WebSocketRequestContext` | `ContextCarrier` | 发起连接的 HTTP 请求信息 |
-| `WebSocketHandshakeContext` | `WebSocketRequestContext` | HTTP 升级前用于认证和授权的请求信息 |
-| `WebSocketMessageContext` | `WebSocketContext`, `WebSocketRequestContext` | 消息和原始连接请求信息 |
-
-`ControllerContext` 不嵌入 `ExecutionContext`，仅提供 `Get`。`HttpRequestContext` 和 `ConsumerRequestContext` 也不嵌入 `ExecutionContext`。运行时提供的实现会同时实现所需接口。
-
-## 接口定义
-
-### 基础接口
-
-```go
-type ContextCarrier interface {
-    Context() context.Context
-}
-
-type EventBusCarrier interface {
-    EventBus() EventBus
+func readRequest(ctx spinectx.Ctx) {
+	execution := ctx.ExecutionContext()
+	execution.Set("userID", "alice")
+	value, exists := execution.Get("userID")
+	goContext := execution.Context()
+	request, supported := ctx.HTTPRequestContext()
+	if supported {
+		_ = request.Header("Authorization")
+	}
+	_, _, _ = value, exists, goContext
 }
 ```
 
-`EventBus()` 返回 `core.EventBus`。该接口提供用于收集事件的 `Publish(events ...publish.DomainEvent)` 和用于取出已收集事件的 `Drain() []publish.DomainEvent`。
-
-### ExecutionContext
+## 公开契约 {#contract}
 
 ```go
-type ExecutionContext interface {
-    ContextCarrier
-    EventBusCarrier
-
-    Method() string
-    Path() string
-    Params() map[string]string
-    Header(name string) string
-    PathKeys() []string
-    SetRoute(params map[string]string, pathKeys []string)
-    Queries() map[string][]string
-    Set(key string, value any)
-    Get(key string) (any, bool)
+type Ctx interface {
+	ExecutionContext() ExecutionContextView
+	HTTPRequestContext() (HTTPRequestView, bool)
+	HTTPResponseContext() (HTTPResponseView, bool)
+	WebSocket() (WebSocketView, bool)
+	Get(key string) (any, bool) // Deprecated
+}
+type ExecutionContextView interface {
+	Context() context.Context
+	Get(key string) (any, bool)
+	Set(key string, value any)
 }
 ```
 
-### ControllerContext
+## 传输视图 {#views}
 
-专供 HTTP 控制器读取值的接口。可以通过 `Get()` 查询拦截器使用 `Set()` 保存的值。默认消费者和 WebSocket 输入解析器不会注入此类型。
+| getter | 可用操作 |
+| --- | --- |
+| `ExecutionContext()` | Go context 和每次执行的 Get/Set |
+| `HTTPRequestContext()` | Method, Path, Param, Query, Header, MultipartForm |
+| `HTTPResponseContext()` | SetHeader, AddHeader, IsCommitted, WriteStatus/JSON/String/Bytes |
+| `WebSocket()` | handshake 请求、ConnID、MessageType、Payload |
+
+不支持的 getter 返回 nil, false。HTTP 执行提供请求和响应视图；WS handshake 和消息提供 WS 视图。事件执行不保证提供 HTTP/WS 视图。Payload 和 multipart 头部均为副本。
+
+## 生命周期与迁移 {#lifetime}
+
+存储按请求或消息隔离，由该次执行的钩子和处理器共享。所有 AfterCompletion 结束后释放引用；此后 Get 返回 nil, false，Set 不执行操作。执行结束本身不会取消 Go context。WS handshake 与后续消息不共享存储。内部 writer 替换、Bind、SetRoute、EventBus 和 SenderKey 不属于公开契约。事件发布使用 `publish.Event(ctx.ExecutionContext().Context(), event)`；发送使用 `ws.Send(ctx.ExecutionContext().Context(), ws.TextMessage, data)`。默认 HTTP DTO 输入使用输入包装类型。
+
+[输入与 DTO](/zh-Hans/learn/tutorial/2-controller) | [拦截器](/zh-Hans/learn/tutorial/4-interceptor)
+
+## WebSocket 请求视图 {#websocket-request-context}
+
+握手 PreHandshake 和消息钩子均接收 spine.Ctx。先检查 request, ok := ctx.WebSocket()，再读取 Header 或 Cookie。握手时 ConnID 为空，尚无消息类型或 payload，不要假定存在 HTTPRequestContext()。握手与每条消息使用独立 Set/Get 存储。
 
 ```go
-type ControllerContext interface {
-    Get(key string) (any, bool)
+type WebSocketRequestView interface {
+	Context() context.Context
+	Path() string
+	Header(string) string
+	Headers() map[string][]string
+	Query(string) string
+	Queries() map[string][]string
+	Cookie(string) (string, bool)
+	Cookies() map[string]string
+	RemoteAddr() string
+	Host() string
+	RequestURI() string
+}
+type WebSocketView interface {
+	WebSocketRequestView
+	ConnID() string
+	MessageType() int
+	Payload() []byte
 }
 ```
-
-### HttpRequestContext
-
-用于读取 HTTP 输入的接口。嵌入 `ContextCarrier` 和 `EventBusCarrier`。
-
-```go
-type HttpRequestContext interface {
-    ContextCarrier
-    EventBusCarrier
-
-    // 逐项访问
-    Param(name string) string
-    Query(name string) string
-    Header(name string) string
-
-    // 访问完整视图
-    Params() map[string]string
-    Queries() map[string][]string
-    Headers() map[string][]string
-
-    // 请求体
-    Bind(out any) error
-
-    // 多部分表单
-    MultipartForm() (*multipart.Form, error)
-}
-```
-
-### HTTPResponseContext
-
-```go
-type HTTPResponseContext interface {
-    ResponseWriter() ResponseWriter
-    SetResponseWriter(ResponseWriter)
-}
-```
-
-`HTTPResponseContext.ResponseWriter()` 返回 HTTP 响应 writer。管道在准备响应时将其替换为 staging writer，并在发送前恢复。控制器通常返回 `httpx.Response[T]`、`httpx.Redirect` 或 `httpx.Binary`，而不是直接访问 writer。
-
-### ConsumerRequestContext
-
-用于读取事件消费者输入的接口。嵌入 `ContextCarrier` 和 `EventBusCarrier`。
-
-```go
-type ConsumerRequestContext interface {
-    ContextCarrier
-    EventBusCarrier
-
-    EventName() string
-    Payload() []byte
-}
-```
-
-### WebSocketContext
-
-用于读取 WebSocket 消息的接口。嵌入 `ExecutionContext`。
-
-```go
-type WebSocketContext interface {
-    ExecutionContext
-
-    ConnID() string
-    MessageType() int
-    Payload() []byte
-}
-```
-
-### WebSocket 连接请求信息 {#websocket-request-context}
-
-v0.7.1 会复制并保留 HTTP 升级请求的信息。通过以下接口，可以查询请求头、查询参数、Cookie、远程地址、主机和请求 URI。
-
-```go
-type WebSocketRequestContext interface {
-    ContextCarrier
-    Path() string
-    Header(name string) string
-    Headers() map[string][]string
-    Query(name string) string
-    Queries() map[string][]string
-    Cookie(name string) (string, bool)
-    Cookies() map[string]string
-    RemoteAddr() string
-    Host() string
-    RequestURI() string
-}
-
-type WebSocketHandshakeContext interface { WebSocketRequestContext }
-
-type WebSocketMessageContext interface {
-    WebSocketContext
-    WebSocketRequestContext
-}
-```
-
-`WebSocketHandshakeContext` 在 `PreHandshake` 中使用。处理消息时，将 `ExecutionContext` 类型断言为 `WebSocketMessageContext`，即可读取原始连接请求信息。`Headers()`、`Queries()` 和 `Cookies()` 返回副本，因此修改返回的映射不会改变所保留的请求信息。
-
-## ExecutionContext 方法
-
-### Context
-
-```go
-Context() context.Context
-```
-
-返回 Go 标准库的 `context.Context`。
-
-**返回值**
-
-- `context.Context` - 请求范围的上下文
-
-**示例**
-
-```go
-func (i *TimeoutInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    select {
-    case <-ctx.Context().Done():
-        return ctx.Context().Err()
-    default:
-        return nil
-    }
-}
-```
-
-### EventBus
-
-```go
-EventBus() core.EventBus
-```
-
-返回请求范围的事件总线。用于发布领域事件。
-
-**返回值**
-
-- `core.EventBus` - 事件总线实例
-
-发布事件的控制器接收 `context.Context` 参数并调用 `publish.Event(ctx, event)`。运行时会将事件总线关联到标准上下文。请参阅[事件发布示例](/zh-Hans/reference/api/spine-app#event-publishing)。
-
-### Method
-
-```go
-Method() string
-```
-
-返回请求方法。
-
-**返回值**
-
-- HTTP：`"GET"`、`"POST"`、`"PUT"`、`"DELETE"` 等
-- 事件消费者：`"EVENT"`
-- WebSocket：`"WS"`
-
-**示例**
-
-```go
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    if ctx.Method() == "OPTIONS" {
-        // 处理 CORS 预检请求
-    }
-    return nil
-}
-```
-
-### Path
-
-```go
-Path() string
-```
-
-返回请求路径。
-
-**返回值**
-
-- HTTP：请求路径（例如 `"/users/123"`）
-- 事件消费者：事件名称（例如 `"order.created"`）
-- WebSocket：WebSocket 路径（例如 `"/ws/chat"`）
-
-**示例**
-
-```go
-log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
-// HTTP:      [REQ] GET /users/123
-// Consumer:  [REQ] EVENT order.created
-// WebSocket: [REQ] WS /ws/chat
-```
-
-### Header
-
-```go
-Header(name string) string
-```
-
-返回指定名称的 HTTP 请求头值。
-
-**参数**
-
-- `name` - 请求头名称（不区分大小写）
-
-**返回值**
-
-- `string` - 请求头值。不存在时返回空字符串
-- 事件消费者：空字符串
-- WebSocket：从 HTTP 升级请求中保留的请求头值
-
-**示例**
-
-```go
-origin := ctx.Header("Origin")
-auth := ctx.Header("Authorization")
-```
-
-### Params
-
-```go
-Params() map[string]string
-```
-
-以映射形式返回所有路径参数。
-
-**返回值**
-
-- `map[string]string` - 路径参数映射
-- 事件消费者：`nil`
-- WebSocket：路由器解析出的路径参数。路由前为空映射
-
-**示例**
-
-```go
-// Route: /users/:userId/posts/:postId
-// Request: /users/123/posts/456
-
-params := ctx.Params()  // {"userId": "123", "postId": "456"}
-```
-
-### PathKeys
-
-```go
-PathKeys() []string
-```
-
-按声明顺序返回路径参数的键。
-
-**返回值**
-
-- `[]string` - 键的切片
-- 事件消费者：`nil`
-- WebSocket：路由器解析出的键顺序。路由前为空切片
-
-**示例**
-
-```go
-// Route: /users/:userId/posts/:postId
-
-ctx.PathKeys()  // ["userId", "postId"]
-```
-
-### SetRoute
-
-```go
-SetRoute(params map[string]string, pathKeys []string)
-```
-
-保存路由器找到的参数和键顺序。实现需复制输入，并与用户 Set/Get 存储分离。自行实现 ExecutionContext 时也必须提供此方法。
-
-### Queries
-
-```go
-Queries() map[string][]string
-```
-
-以映射形式返回所有查询参数。
-
-**返回值**
-
-- `map[string][]string` - 查询参数映射
-- 事件消费者：`nil`
-- WebSocket：从 HTTP 升级请求中保留的查询参数
-
-**示例**
-
-```go
-// Request: /users?status=active&tag=go&tag=web
-
-queries := ctx.Queries()
-// {"status": ["active"], "tag": ["go", "web"]}
-```
-
-### Set
-
-```go
-Set(key string, value any)
-```
-
-将值保存到内部存储中。
-
-**参数**
-
-- `key` - 要保存的键
-- `value` - 要保存的值
-
-**示例**
-
-```go
-ctx.Set("auth.user", authenticatedUser)
-ctx.Set("request.startTime", time.Now())
-```
-
-### Get
-
-```go
-Get(key string) (any, bool)
-```
-
-从内部存储中查询值。
-
-**参数**
-
-- `key` - 要查询的键
-
-**返回值**
-
-- `any` - 已保存的值
-- `bool` - 键是否存在
-
-**示例**
-
-```go
-value, exists := ctx.Get("auth.user")
-```
-
-## ControllerContext
-
-用于在控制器中读取拦截器保存值的接口。
-
-### Get
-
-```go
-Get(key string) (any, bool)
-```
-
-委托给 `ExecutionContext.Get()`。不提供 `Set()` 方法。
-
-以下代码扩展了 [CLI 项目](/zh-Hans/learn/tutorial/1-project-structure)中的 `src/user/user_controller.go`。`User`、`AuthUser` 和存储库字段由应用定义。保留生成的 `user.Register(app)` 和根目录的 `main.go`。
-
-此片段需要 `core`、`input`、`httpx`、`httperr` 包。如果必须认证，也应按应用策略拒绝缺失值。
-
-```go
-func (c *UserController) GetUser(ctx core.ControllerContext, userId input.Path[int64]) (httpx.Response[User], error) {
-    // 读取拦截器通过 Set("auth.user", ...) 保存的值
-    if authUser, ok := ctx.Get("auth.user"); ok {
-        auth, valid := authUser.(*AuthUser)
-        if !valid || auth == nil {
-            return httpx.Response[User]{}, httperr.Unauthorized("invalid authentication context")
-        }
-        _ = auth
-        // ...
-    }
-    user, err := c.repo.FindByID(*userId)
-    if err != nil {
-        return httpx.Response[User]{}, err
-    }
-    return httpx.Response[User]{Body: user}, nil
-}
-```
-
-## HttpRequestContext 方法
-
-解析 HTTP 输入时使用的附加方法。
-
-### Param
-
-```go
-Param(name string) string
-```
-
-返回指定路径参数的值。
-
-**示例**
-
-```go
-userId := ctx.Param("id")  // "123"
-```
-
-### Query
-
-```go
-Query(name string) string
-```
-
-返回指定查询参数的第一个值。
-
-**示例**
-
-```go
-page := ctx.Query("page")  // "1"
-```
-
-### Headers
-
-```go
-Headers() map[string][]string
-```
-
-以映射形式返回所有 HTTP 请求头。
-
-**示例**
-
-```go
-headers := ctx.Headers()
-// {"Content-Type": ["application/json"], "Accept": ["text/html", "application/json"]}
-```
-
-### Bind
-
-```go
-Bind(out any) error
-```
-
-将 HTTP 请求体绑定到结构体。
-
-**示例**
-
-HTTP v3 核心请求视图解析请求体。路径和查询不会合并到请求体 DTO，Spine DTO 输入也不会调用 Echo Binder 或 JSONSerializer 扩展。
-
-```go
-var req CreateUserRequest
-if err := ctx.Bind(&req); err != nil {
-    return err
-}
-```
-
-### MultipartForm
-
-```go
-MultipartForm() (*multipart.Form, error)
-```
-
-访问多部分表单数据。
-
-**示例**
-
-```go
-form, err := ctx.MultipartForm()
-if err != nil {
-    return err
-}
-for _, file := range form.File["upload"] {
-    // 处理文件
-}
-```
-
-## ConsumerRequestContext 方法
-
-解析事件输入时使用的方法。
-
-### EventName
-
-```go
-EventName() string
-```
-
-返回收到的事件名称。
-
-**示例**
-
-```go
-name := ctx.EventName()  // "order.created"
-```
-
-### Payload
-
-```go
-Payload() []byte
-```
-
-返回事件的原始载荷。
-
-**示例**
-
-```go
-payload := ctx.Payload()  // []byte (JSON)
-var event OrderCreated
-json.Unmarshal(payload, &event)
-```
-
-## WebSocketContext 方法
-
-解析 WebSocket 输入时使用的方法。
-
-### ConnID
-
-```go
-ConnID() string
-```
-
-返回 WebSocket 连接的唯一标识符。
-
-**示例**
-
-```go
-connID := ctx.ConnID()  // "a1b2c3d4-..."
-```
-
-### MessageType
-
-```go
-MessageType() int
-```
-
-返回 WebSocket 消息类型。
-
-**返回值**
-
-- `1` - TextMessage
-- `2` - BinaryMessage
-
-**示例**
-
-```go
-if ctx.MessageType() == ws.TextMessage {
-    // 处理文本消息
-}
-```
-
-### Payload
-
-```go
-Payload() []byte
-```
-
-返回 WebSocket 消息的原始载荷。
-
-**示例**
-
-```go
-payload := ctx.Payload()  // []byte
-var msg ChatMessage
-json.Unmarshal(payload, &msg)
-```
-
-## 路由与响应契约
-
-路由状态与 HTTP 响应 writer 使用具有明确类型的契约，与用户 Set/Get 存储分离。路由器通过 `SetRoute` 保存路径值，HTTP 管道通过 `HTTPResponseContext` 选择 writer。
-
-| API | 类型 | 说明 |
-|----|------|------|
-| `HTTPResponseContext.ResponseWriter()` | `core.ResponseWriter` | 响应输出接口 |
-| `Params()` | `map[string]string` | 路径参数 |
-| `PathKeys()` | `[]string` | 路径参数键的顺序 |
-
-## 在拦截器中使用
-
-`ExecutionContext` 作为第一个参数传递给拦截器的所有方法。
-
-```go
-type Interceptor interface {
-    PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    PostHandle(ctx ExecutionContext, meta HandlerMeta)
-    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-    AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
-}
-```
-
-### 日志示例
-
-```go
-type LoggingInterceptor struct{}
-
-func (i *LoggingInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    log.Printf("[REQ] %s %s", ctx.Method(), ctx.Path())
-    return nil
-}
-
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s OK", ctx.Method(), ctx.Path())
-}
-
-func (i *LoggingInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    return nil
-}
-
-func (i *LoggingInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[ERR] %s %s : %v", ctx.Method(), ctx.Path(), err)
-    }
-}
-```
-
-### CORS 示例
-
-以下示例展示如何访问响应输出接口。`Config` 和 `isAllowedOrigin` 由应用定义。完整的 CORS 配置请使用[可验证的内置拦截器](/zh-Hans/reference/security-configuration#cors-cookies)。
-
-```go
-type CORSInterceptor struct {
-    config Config
-}
-
-func (i *CORSInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    httpCtx, ok := ctx.(core.HTTPResponseContext)
-    if !ok || httpCtx.ResponseWriter() == nil {
-        return nil
-    }
-    rw := httpCtx.ResponseWriter()
-
-    origin := ctx.Header("Origin")
-    if origin != "" && i.isAllowedOrigin(origin) {
-        rw.SetHeader("Access-Control-Allow-Origin", origin)
-        rw.SetHeader("Vary", "Origin")
-    }
-
-    if ctx.Method() == "OPTIONS" {
-        if err := rw.WriteStatus(204); err != nil {
-            return err
-        }
-        return core.ErrAbortPipeline
-    }
-
-    return nil
-}
-```
-
-## 在输入解析中使用
-
-解析输入的组件接收 `core.ExecutionContext`，并将其类型断言为对应传输方式的接口。例如，读取 HTTP 路径参数需要 `core.HttpRequestContext`，读取事件名称需要 `core.ConsumerRequestContext`，读取 WebSocket 连接 ID 需要 `core.WebSocketContext`。如果上下文未实现相应接口，类型断言将失败。
-
-对于 HTTP 控制器的 `context.Context` 参数，运行时传递标准上下文和请求范围的事件总线；对于 `core.ControllerContext` 参数，传递仅提供 `Get()` 的视图。消费者和 WebSocket 的默认输入解析器不提供 `ControllerContext` 注入功能。运行时的输入解析代码可在以下源码中查看。
-
-- [HTTP 路径参数解析](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/scalar_path_resolver.go)
-- [传递标准上下文](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/std_context_resolver.go)
-- [传递控制器查询上下文](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/resolver/controller_context_resolver.go)
-- [事件输入解析](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/event/consumer/resolver)
-- [WebSocket 输入解析](https://github.com/NARUBROWN/spine/tree/v0.7.1/internal/ws/resolver)
-
-## 不同协议的行为差异
-
-| 方法 | HTTP | 事件消费者 | WebSocket |
-|--------|------|----------|-----------|
-| `Method()` | `"GET"`、`"POST"` 等 | `"EVENT"` | `"WS"` |
-| `Path()` | `/users/123` | `order.created` | `/ws/chat` |
-| `Header()` | 请求头值 | 空字符串 | 连接请求的请求头值 |
-| `Params()` | 路径参数 | `nil` | 路由器解析出的路径参数 |
-| `PathKeys()` | 路径参数键的顺序 | `nil` | 路径参数键的顺序 |
-| `Queries()` | 查询参数 | `nil` | 连接请求的查询参数 |
-| `EventBus()` | EventBus | EventBus | EventBus |
-| `Context()` | 请求上下文 | 事件处理上下文 | 消息处理上下文 |
-
-## 实现
-
-| 实现 | 接口 | 位置 |
-|--------|-----------|------|
-| `echoContext` | `ExecutionContext` + `HttpRequestContext` | `internal/adapter/echo/context_impl.go` |
-| `ConsumerRequestContextImpl` | `ExecutionContext` + `ConsumerRequestContext` | `internal/event/consumer/request_context_impl.go` |
-| `WSExecutionContext` | `WebSocketMessageContext` | `internal/ws/context_impl.go` |
-| `controllerCtxView` | `ControllerContext` | `internal/runtime/controller_ctx.go` |
-
-## 约束和错误
-
-- 全局拦截器的 `PreHandle` 在路由前执行。此时 `HandlerMeta{}` 为空，因此不要直接访问控制器类型或方法。路径参数也应在路由完成后读取。
-- 键不存在时，`Get` 返回 `(nil, false)`。使用前请检查已保存值的类型。`ControllerContext` 不会阻止修改已保存的对象本身。
-- 值不存在时，`Header` 和 `Query` 返回空字符串。WebSocket 的 `Cookie` 同时返回值及其是否存在。
-- `Bind` 和 `MultipartForm` 在解析请求体失败时返回错误。请将错误传递给调用方，并停止处理。
-- 以 `spine.` 开头的保留键由运行时使用。应用共享的值请使用 `auth.user` 等独立名称。
-
-## 参考
-
-- [拦截器](/zh-Hans/reference/api/interceptor)：认证和日志等通用处理
-- [执行上下文概念](/zh-Hans/learn/core-concepts/execution-context) - 详细说明
