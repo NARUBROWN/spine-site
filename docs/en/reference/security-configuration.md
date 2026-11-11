@@ -1,9 +1,5 @@
 # Security configuration
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Spine `v0.7.5` applies HTTP and WebSocket size, time, and connection limits. Independent platforms manage broker transport policies. Check the selected platform version and configuration as well.
 
 ## Configuration validation

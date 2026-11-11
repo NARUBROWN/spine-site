@@ -1,14 +1,10 @@
 # JWT 로그인 예제
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 회원가입과 로그인 API를 만들고, 로그인할 때 발급한 JWT로 내 정보를 조회합니다. 인증 인터셉터는 `/me`에만 적용하므로 회원가입과 로그인은 토큰 없이 요청할 수 있습니다.
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation) 후 0.7.5 API를 지원하는 Preview CLI를 사용합니다. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
+[CLI 설치](/ko/learn/getting-started/installation)에서 정식 Spine CLI를 설치하세요. 이 예제는 CLI `v0.4.4`와 코어 `v0.7.5`로 확인했습니다.
 
 이 예제는 인증 흐름을 익히기 위해 메모리 저장소, 평문 비밀번호 비교, 코드에 고정한 JWT 비밀키를 사용합니다. 서버를 종료하면 가입 정보가 사라집니다. 실제 서비스에 적용하기 전에는 비밀번호 해시와 환경변수로 관리하는 JWT 비밀키를 사용해야 합니다.
 
@@ -16,10 +12,10 @@
 
 기본 앱과 JWT 의존성을 준비합니다. 이후 명령은 `login-example/`에서 실행합니다.
 
-아래 명령은 Preview 의존성을 선택합니다. 생성된 go.mod에서 실제 코어와 플랫폼 버전을 확인하세요.
+아래 명령은 `main` 채널의 정식 의존성을 선택합니다. 생성된 `go.mod`에서 코어와 플랫폼 버전을 확인하세요.
 
 ```sh
-spine new login-example --module example.com/login-example --channel preview --validator playground --no-interactive
+spine new login-example --module example.com/login-example --channel main --validator playground --no-interactive
 cd login-example
 spine doctor
 go get github.com/golang-jwt/jwt/v5@v5.3.1
@@ -264,73 +260,67 @@ func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
 }
 
 func (c *AuthController) RegisterRoutes(r *api.Registry) {
-	r.POST("/signup", c.Signup)
-	r.POST("/login", c.Login)
-	r.GET("/me", c.GetMe, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
-}
+	// 회원가입 — 인증 불필요
+	r.POST("/signup", func(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
+		user, err := c.userStore.Create(req.Email, req.Password, req.Name)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
+		}
 
-// 회원가입 — 인증 불필요
-func (c *AuthController) Signup(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
-
-	user, err := c.userStore.Create(req.Email, req.Password, req.Name)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
-	}
-
-	return httpx.Response[model.User]{Body: *user}, nil
-}
-
-// 로그인 — 인증 불필요
-func (c *AuthController) Login(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
-
-	user, err := c.userStore.FindByEmail(req.Email)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
-	}
-
-	// 비밀번호 확인 (실제로는 bcrypt 등으로 해시 비교)
-	if user.Password != req.Password {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
-	}
-
-	// JWT 토큰 생성
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		return httpx.Response[model.User]{Body: *user}, nil
 	})
 
-	tokenString, err := token.SignedString(interceptor.JWTSecret)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, err
-	}
+	// 로그인 — 인증 불필요
+	r.POST("/login", func(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
+		user, err := c.userStore.FindByEmail(req.Email)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+		}
 
-	return httpx.Response[model.LoginResponse]{
-		Body: model.LoginResponse{
-			Token: tokenString,
-			User:  *user,
-		},
-	}, nil
-}
+		// 비밀번호 확인 (실제로는 bcrypt 등으로 해시 비교)
+		if user.Password != req.Password {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("이메일 또는 비밀번호가 일치하지 않습니다.")
+		}
 
-// 내 정보 조회 — 인증 필요
-func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-	// AuthInterceptor가 저장한 userID 조회
-	userIDValue, ok := ctx.ExecutionContext().Get("userID")
-	if !ok {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
-	}
+		// JWT 토큰 생성
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"user_id": user.ID,
+			"email":   user.Email,
+			"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		})
 
-	userID, valid := userIDValue.(int64)
-	if !valid {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
-	}
-	user, err := c.userStore.FindByID(userID)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
-	}
+		tokenString, err := token.SignedString(interceptor.JWTSecret)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, err
+		}
 
-	return httpx.Response[model.User]{Body: *user}, nil
+		return httpx.Response[model.LoginResponse]{
+			Body: model.LoginResponse{
+				Token: tokenString,
+				User:  *user,
+			},
+		}, nil
+	})
+
+	// 내 정보 조회 — 인증 필요
+	r.GET("/me", func(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
+		// AuthInterceptor가 저장한 userID 조회
+		userIDValue, ok := ctx.ExecutionContext().Get("userID")
+		if !ok {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("인증 정보를 찾을 수 없습니다.")
+		}
+
+		userID, valid := userIDValue.(int64)
+		if !valid {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+		}
+		user, err := c.userStore.FindByID(userID)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.NotFound("사용자를 찾을 수 없습니다.")
+		}
+
+		return httpx.Response[model.User]{Body: *user}, nil
+	}, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
 }
 ```
 

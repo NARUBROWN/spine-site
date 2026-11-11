@@ -1,16 +1,12 @@
 # WebSocket メッセージ送受信
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 現在の接続にメッセージを返す独立例です。配信には接続寿命と送信方針を持つ別のハブを設計します。
 
 ## インストールとコード
 
 ```sh
 go mod init example.com/spine-websocket
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0-preview.2
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0
 ```
 
 Go 1.26 以降で main.go に保存します。HTTP と Gorilla は別に選びます。WebSocket DTO に HTTP Body ラッパーは使いません。ws.Send は標準コンテキスト、メッセージ種別、[]byte の三引数で、現在の接続に送ります。リクエストコンテキストや内部 sender キーを保持しません。

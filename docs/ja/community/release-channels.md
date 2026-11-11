@@ -95,10 +95,10 @@ CLI はコアと異なるバージョンと日程でリリースします。コ�
 
 ## バージョンの固定と復元 {#pin}
 
-CI や本番環境では、実際に公開された CLI タグを固定し、アプリのソース、`go.mod`、`go.sum` も一緒にバージョン管理します。CLI タグが固定するのはツールのコードだけです。Preview の動的レシピは同じ CLI でも `new` や `update` の実行時に `@preview` を再度解決するため、アプリの再現には保存したソースと依存関係を使ってください。次の例は公開済みの正式 CLI `v0.4.3` に固定するもので、最新バージョンの指定ではありません。
+CI や本番環境では、実際に公開された CLI タグを固定し、アプリのソース、`go.mod`、`go.sum` も一緒にバージョン管理します。CLI タグが固定するのはツールのコードだけです。Preview の動的レシピは同じ CLI でも `new` や `update` の実行時に `@preview` を再度解決するため、アプリの再現には保存したソースと依存関係を使ってください。次の例は公開済みの正式 CLI `v0.4.4` に固定するもので、最新バージョンの指定ではありません。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.4
 spine version
 ```
 

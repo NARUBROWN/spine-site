@@ -1,9 +1,5 @@
 # Dependency injection
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Connect repositories, services and controllers by constructor argument types. This standalone app returns hello from GET /greeting without a database.
 
 ## Constructor contract

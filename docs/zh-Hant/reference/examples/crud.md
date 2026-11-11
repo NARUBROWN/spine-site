@@ -1,14 +1,10 @@
 # 建立使用者 CRUD API
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 建立可新增、列出、查詢、修改和刪除使用者的 HTTP API。此範例使用記憶體儲存庫，不使用 ORM，因此不必準備資料庫即可執行。
 
 ## 開始前的準備
 
-完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用支援 0.7.5 API 的 Preview CLI。CLI 安裝通道與應用依賴通道獨立。
+依照[安裝指南](/zh-Hant/learn/getting-started/installation)安裝正式版 Spine CLI。本範例使用 CLI `v0.4.4` 和核心 `v0.7.5`。
 
 伺服器程序結束後，已儲存的使用者資料就會消失。
 
@@ -30,10 +26,10 @@ graph TD
 
 建立基本應用程式，並檢查相依套件和專案設定。後續命令均在 `crud-example/` 中執行。
 
-以下指令選擇 Preview 依賴，請在產生的 go.mod 確認實際核心與平台版本。
+以下指令選擇 `main` 通道的正式版相依套件。請在產生的 `go.mod` 中確認核心與平台版本。
 
 ```sh
-spine new crud-example --module example.com/crud-example --channel preview --validator playground --no-interactive
+spine new crud-example --module example.com/crud-example --channel main --validator playground --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -359,69 +355,57 @@ func (*UserController) Constructor(service *service.UserService) *UserController
 }
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-	r.GET("/users", c.List)
-	r.GET("/users/:id", c.GetByID)
-	r.POST("/users", c.Create)
-	r.PUT("/users/:id", c.Update)
-	r.DELETE("/users/:id", c.Delete)
-}
+	r.GET("/users", func() httpx.Response[dto.UserListResponse] {
+		return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
+	})
 
-// GET /users
-func (c *UserController) List() httpx.Response[dto.UserListResponse] {
-	return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
-}
+	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("使用者 ID 無效")
+		}
 
-// GET /users/:id
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("使用者 ID 無效")
-	}
+		user, err := c.service.GetUserByID(*id)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-	user, err := c.service.GetUserByID(*id)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+	r.POST("/users", func(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		user, err := c.service.CreateUser(req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// POST /users
-func (c *UserController) Create(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.CreateUser(req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.PUT("/users/:id", func(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("使用者 ID 無效")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		user, err := c.service.UpdateUser(*id, req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// PUT /users/:id
-func (c *UserController) Update(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("使用者 ID 無效")
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.UpdateUser(*id, req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.DELETE("/users/:id", func(id input.Path[int64]) error {
+		if *id <= 0 {
+			return httperr.BadRequest("使用者 ID 無效")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		err := c.service.DeleteUser(*id)
+		if err != nil {
+			return toHTTPError(err)
+		}
 
-// DELETE /users/:id
-func (c *UserController) Delete(id input.Path[int64]) error {
-	if *id <= 0 {
-		return httperr.BadRequest("使用者 ID 無效")
-	}
-
-	err := c.service.DeleteUser(*id)
-	if err != nil {
-		return toHTTPError(err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // 將 Repository 錯誤轉換為 HTTP 錯誤
@@ -640,10 +624,18 @@ curl -X POST http://localhost:8080/users \
 
 ```go
 // 透過語意型別接收輸入
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
+r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("使用者 ID 無效")
+	}
 
-// 透過 httperr 表達錯誤意義
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("找不到使用者")
+	user, err := c.service.GetUserByID(*id)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
+
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
+})
 ```
 
 ### 相依性注入

@@ -22,7 +22,7 @@ SPEC.loader.exec_module(TUTORIALS)
 FENCE = re.compile(r"^```go\n(.*?)^```[ \t]*$", re.M | re.S)
 MOD = TUTORIALS.MOD + """
 require (
- github.com/NARUBROWN/spine-gorilla-platform v0.2.0-preview.2
+ github.com/NARUBROWN/spine-gorilla-platform v0.2.0
  github.com/gorilla/websocket v1.5.3
  github.com/golang-jwt/jwt/v5 v5.3.1
 )

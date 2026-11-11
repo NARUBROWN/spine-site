@@ -1,9 +1,5 @@
 # インターセプター
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 全体とルートの PreHandle はどちらも入力バインド前です。認証失敗なら本文解析前に 401 を返します。
 
 ## 実行例
@@ -88,17 +84,23 @@ func main() {
 ## グループとルート
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-この断片ではハンドラーと Auth、Audit の実装と登録が必要です。GET /users は Auth、DELETE /users/:id は Auth の後に Audit を実行します。子グループは親を継承し、ルート設定は追加されます。HTTP 全体は InterceptorFor(boot.InterceptorHTTP, ...)、HTTP と WebSocket 全体は app.Interceptor または InterceptorAll です。同じ認証を重複適用しないでください。
+この例を使うには、Auth と Audit のインターセプターを DI に登録します。GET /users は Auth、DELETE /users/:id は Auth の後に Audit を実行します。子グループは親を継承し、ルート設定は追加されます。HTTP 全体は InterceptorFor(boot.InterceptorHTTP, ...)、HTTP と WebSocket 全体は app.Interceptor または InterceptorAll です。同じ認証を重複適用しないでください。
 
 ## リクエスト確認
 

@@ -1,9 +1,5 @@
 # 依赖注入
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 通过构造函数参数类型连接仓库、服务和控制器。此独立应用无需数据库，GET /greeting 返回 hello。
 
 ## 构造契约

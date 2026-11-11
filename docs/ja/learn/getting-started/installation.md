@@ -1,32 +1,30 @@
 # インストールと最初のアプリ
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
-CLI のインストールチャネルとアプリ依存チャネルは別に選択します。この手順は 0.7.5 API の Preview アプリです。安定版は[チャネル案内](/ja/community/release-channels)を参照してください。
+Spine CLI `v0.4.4` を使い、コア `v0.7.5` で動く HTTP アプリを作成します。CLI とアプリ依存関係のチャネルは[リリースチャネル](/ja/community/release-channels)を参照してください。
 
 ## 要件
 
-Go 1.26 以降を使い、選択モジュールの go 指示文を確認します。GOBIN または既定の GOPATH/bin を PATH に入れます。
+この例のバリデーターには Go 1.26 以降が必要です。`GOBIN` または既定の `GOPATH/bin` を `PATH` に追加してください。
 
 ```sh
 go version
 ```
 
-## Preview CLI のインストール {#preview-cli}
+<span id="preview-cli"></span>
+
+## 正式版 CLI のインストール {#install-cli}
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-preview は移動するブランチです。再現には版とコミットを記録し、固定タグを使います。安定 CLI は @latest でインストールします。spine update はアプリ依存だけを更新し、CLI やソースは変えません。
+`spine version` でインストールされたバージョンを確認します。同じ CLI を使うには、インストールコマンドに `@v0.4.4` を指定してください。`spine update` はアプリの依存関係を更新します。
 
 ## プロジェクト作成
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 go list -m all
 spine doctor

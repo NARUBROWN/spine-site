@@ -1,20 +1,16 @@
 # 选择平台和 DTO 验证
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 Spine `v0.7.5` 将 HTTP、WebSocket、事件和 DTO 验证的公开契约保留在核心中，并将实现作为独立模块选择。应用只需连接所需实现。
 
 ## 使用 CLI 选择
 
-完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用支持 0.7.5 API 的 Preview CLI。CLI 安装通道与应用依赖通道独立。
+按[安装指南](/zh-Hans/learn/getting-started/installation)安装正式版 Spine CLI。本示例使用 CLI `v0.4.4` 和核心 `v0.7.5`。
 
 ```sh
-spine new http-app --module example.com/http-app --channel preview --platform nethttp --no-interactive
-spine new chat-app --module example.com/chat-app --channel preview --platform nethttp --websocket-platform gorilla --no-interactive
-spine new worker --module example.com/worker --channel preview --platform none --event-platform events:nats --no-interactive
-spine new validated-app --module example.com/validated-app --channel preview --validator playground --no-interactive
+spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
 ```
 
 默认 HTTP 平台是 Echo，默认不选择 WebSocket、事件、validator 和前端。`--platform none` 创建事件工作进程，需要事件平台。WebSocket 需要 HTTP 平台。`--event-platform` 可以重复指定。

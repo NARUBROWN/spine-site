@@ -1,32 +1,30 @@
 # 설치와 첫 번째 앱
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
-CLI 설치 채널과 앱 의존성 채널을 별도로 선택합니다. 이 안내는 0.7.5 API를 사용하는 Preview 앱 기준입니다. 정식 릴리스 선택은 [채널 안내](/ko/community/release-channels)를 참고하세요.
+Spine CLI `v0.4.4`로 코어 `v0.7.5`를 사용하는 HTTP 앱을 만듭니다. 설치 채널과 앱 의존성 채널은 [릴리스 채널 안내](/ko/community/release-channels)에서 확인하세요.
 
 ## 요구사항
 
-Go 1.26 이상을 사용하고 선택한 모듈의 go 지시문을 확인합니다. GOBIN 또는 기본 GOPATH/bin이 PATH에 있어야 합니다.
+이 예제의 검증기에는 Go 1.26 이상이 필요합니다. `GOBIN` 또는 기본 `GOPATH/bin`을 `PATH`에 추가하세요.
 
 ```sh
 go version
 ```
 
-## Preview CLI 설치 {#preview-cli}
+<span id="preview-cli"></span>
+
+## 정식 CLI 설치 {#install-cli}
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-preview는 이동하는 브랜치입니다. 재현하려면 출력 버전과 커밋을 기록하고 고정 태그를 사용합니다. 정식 CLI는 @latest로 설치합니다. spine update는 앱 의존성을 갱신하며 CLI나 앱 소스를 바꾸지 않습니다.
+`spine version`으로 설치된 버전을 확인합니다. 같은 CLI 버전을 재현하려면 설치 명령에 `@v0.4.4`를 지정하세요. `spine update`는 앱 의존성을 갱신합니다.
 
 ## 프로젝트 생성
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 go list -m all
 spine doctor

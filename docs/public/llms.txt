@@ -2,14 +2,14 @@
 
 > Assemble once in BuildApplication, declare input sources, use public context views, and verify real behavior.
 
-This guide targets the 0.7.5 API. Check /en/community/versions for published tags and compatible platform versions. CLI installation and app dependency channels are independent. Use Go 1.26 or later for the examples, and honor the selected modules' go directives. Preserve source, go.mod and go.sum.
+This guide targets Spine core v0.7.5 and CLI v0.4.4. Check /en/community/versions for published tags and compatible platform versions. CLI installation and app dependency channels are independent. Use Go 1.26 or later for the examples, and honor the selected modules' go directives. Preserve source, go.mod and go.sum.
 
 ## Create and verify
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -26,7 +26,7 @@ contract check analyzes static contracts. verify adds formatting, vet and Go tes
 
 Implement Constructor(dependencies...) *Self and register constructor.Repository, Service, Controller, Interceptor, or Custom. Marker fields are not copied. Factories support one return value, not (T, error) or variadic parameters. Ordinary []T parameters are supported. Instances are shared within the app; never overwrite singleton fields with request transactions.
 
-Controllers implement RegisterRoutes(*api.Registry). Use r.GET(path, handler, options...) and r.Group(prefix, options...). A group "/" route refers to its base. api.Interceptors((*Auth)(nil)) resolves a registered interceptor through DI. Group policies are inherited; route policies append. Registration of an interceptor role does not itself apply a scope.
+Controllers implement RegisterRoutes(*api.Registry). Pass an inline handler to r.GET(path, func(...) { ... }, options...) and use r.Group(prefix, options...) for related routes. A group "/" route refers to its base. api.Interceptors((*Auth)(nil)) resolves a registered interceptor through DI. Group policies are inherited; route policies append. Registration of an interceptor role does not itself apply a scope.
 
 ## Public context
 
@@ -70,7 +70,7 @@ WebSocket message DTOs are plain structs, not HTTP Body wrappers. Send with ws.S
 
 Keep existing app.Route, route.WithInterceptors, query.Values, header.Values, query.Pagination, legacy path wrappers and multipart.UploadedFiles only for compatibility. New scaffold and example code must use current APIs. Do not mix deprecated HTTP inputs with new Path/Query/Header wrappers in one handler. ctx.Get is deprecated; use ctx.ExecutionContext().Get. Application code must not import spine/internal packages.
 
-Historical /en/learn/migration/v0.7.1 pages describe that version, not current behavior. Use /en/learn/migration/v0.7.5 and the current tutorials.
+If your app uses the retracted Go module version v0.7.1, see /en/learn/migration/v0.7.5#from-v071.
 
 ## Complete DI example
 

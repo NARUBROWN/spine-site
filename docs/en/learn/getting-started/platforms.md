@@ -1,20 +1,16 @@
 # Choosing platforms and DTO validation
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Spine `v0.7.5` keeps public HTTP, WebSocket, event, and DTO validation contracts in core and selects implementations as independent modules. Connect only the implementations your application needs.
 
 ## Choose with the CLI
 
-Complete [CLI installation](/en/learn/getting-started/installation) and use a Preview CLI supporting the 0.7.5 API. CLI installation and app dependency channels are independent.
+Install the stable [Spine CLI](/en/learn/getting-started/installation). This example uses CLI `v0.4.4` and core `v0.7.5`.
 
 ```sh
-spine new http-app --module example.com/http-app --channel preview --platform nethttp --no-interactive
-spine new chat-app --module example.com/chat-app --channel preview --platform nethttp --websocket-platform gorilla --no-interactive
-spine new worker --module example.com/worker --channel preview --platform none --event-platform events:nats --no-interactive
-spine new validated-app --module example.com/validated-app --channel preview --validator playground --no-interactive
+spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
 ```
 
 Echo is the default HTTP platform; WebSocket, events, validator, and frontend are not selected by default. `--platform none` creates an event worker and requires an event platform. WebSocket requires an HTTP platform. `--event-platform` can be repeated.

@@ -1,17 +1,13 @@
 # プロジェクト構造
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 既定の layered-v1 で組み立て、HTTP コントローラー、起動を分けます。新規コードには現在のルート登録 API を使います。
 
 ## プロジェクト作成
 
-0.7.5 API 対応の Preview CLI を使います。CLI とアプリのチャネルは別で、実際の選択版は go.mod で確認します。
+Spine CLI `v0.4.4` でアプリを作ります。生成された `go.mod` でコアとプラットフォームのバージョンを確認してください。
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -67,10 +63,11 @@ import (
 
 type HealthController struct{}
 
-func (*HealthController) Constructor() *HealthController   { return &HealthController{} }
-func (c *HealthController) RegisterRoutes(r *api.Registry) { r.GET("/health", c.Get) }
-func (*HealthController) Get(ctx spinectx.Ctx) httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
 

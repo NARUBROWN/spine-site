@@ -1,16 +1,12 @@
 # WebSocket messages
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 This standalone example echoes to the current connection. Broadcasting needs a separate hub with connection lifetime and sending policies.
 
 ## Install and code
 
 ```sh
 go mod init example.com/spine-websocket
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0-preview.2
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0
 ```
 
 Save as main.go with Go 1.26 or later. Select HTTP and Gorilla separately. WebSocket message DTOs do not use the HTTP Body wrapper. ws.Send takes three arguments: standard context, message type and []byte, and sends only to the current connection. Do not retain request contexts or internal sender keys.

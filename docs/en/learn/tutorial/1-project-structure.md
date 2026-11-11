@@ -1,17 +1,13 @@
 # Project structure
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Use the default layered-v1 layout to separate assembly, HTTP controllers and startup. New code uses the current route registration API.
 
 ## Create the project
 
-Use a Preview CLI supporting the 0.7.5 API. CLI and app channels are separate; inspect go.mod for the actual selected versions.
+Create an app with Spine CLI `v0.4.4`. Check the core and platform versions in the generated `go.mod`.
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -67,10 +63,11 @@ import (
 
 type HealthController struct{}
 
-func (*HealthController) Constructor() *HealthController   { return &HealthController{} }
-func (c *HealthController) RegisterRoutes(r *api.Registry) { r.GET("/health", c.Get) }
-func (*HealthController) Get(ctx spinectx.Ctx) httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
 

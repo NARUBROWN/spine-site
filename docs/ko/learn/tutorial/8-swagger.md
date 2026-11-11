@@ -1,16 +1,12 @@
 # Swagger와 OpenAPI
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 런타임 OpenAPI JSON과 내장 Swagger UI, ReDoc을 제공합니다. 명세와 실제 입력 검증을 함께 확인합니다.
 
 ## 독립 앱
 
 ```sh
 go mod init example.com/spine-openapi
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 BuildApplication에서 playground.New()를 WithValidator로 등록합니다. 필수 태그는 요청에서 자동 검사하고 명세에서도 required로 설명합니다. OpenAPI 문서가 요청을 검증하는 것은 아니며 DTO의 임의 Validate 메서드는 자동 실행되거나 문서화되지 않습니다.

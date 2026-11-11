@@ -46,17 +46,23 @@ app.InterceptorFor(boot.InterceptorHTTP, (*AuthInterceptor)(nil))
 ```
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-将片段用于已实现所需 Constructor、处理器和两个拦截器的应用，并将 Audit 也注册到 DI。避免在全局和路由重复应用同一策略。角色注册用于 DI，应用范围另行指定。组与子组继承选项，路由选项追加其后。全局范围为 InterceptorHTTP、InterceptorWebSocket、InterceptorAll；All 和 app.Interceptor 作用于 HTTP 与 WS 消息。
+使用此示例前，将 Auth 和 Audit 拦截器注册到 DI。避免在全局和路由重复应用同一策略。角色注册用于 DI，应用范围另行指定。组与子组继承选项，路由选项追加其后。全局范围为 InterceptorHTTP、InterceptorWebSocket、InterceptorAll；All 和 app.Interceptor 作用于 HTTP 与 WS 消息。
 
 ## 错误与事务 {#errors}
 

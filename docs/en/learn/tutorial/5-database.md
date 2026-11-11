@@ -1,9 +1,5 @@
 # Database connections
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 This independent project queries MySQL with Bun. Do not combine it with the previous single-file main.go.
 
 ## Preparation
@@ -12,7 +8,7 @@ Use Go 1.26 or later and MySQL. Create the shown files under example.com/my-app;
 
 ```sh
 go mod init example.com/my-app
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 go get github.com/uptrace/bun@v1.2.16 github.com/uptrace/bun/dialect/mysqldialect@v1.2.16 github.com/go-sql-driver/mysql@v1.9.3
 ```
 
@@ -153,14 +149,13 @@ func (*UserController) Constructor(svc *service.UserService) *UserController {
 	return &UserController{service: svc}
 }
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-	r.GET("/users/:id", c.Get)
-}
-func (c *UserController) Get(ctx spinectx.Ctx, path input.Path[UserPath]) (httpx.Response[*entity.User], error) {
-	user, err := c.service.Get(ctx.ExecutionContext().Context(), path.ID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
-	}
-	return httpx.Response[*entity.User]{Body: user}, err
+	r.GET("/users/:id", func(ctx spinectx.Ctx, path input.Path[UserPath]) (httpx.Response[*entity.User], error) {
+		user, err := c.service.Get(ctx.ExecutionContext().Context(), path.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
+		}
+		return httpx.Response[*entity.User]{Body: user}, err
+	})
 }
 ```
 

@@ -1,14 +1,10 @@
 # Kafka で注文サービスと在庫サービスを接続する
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 注文用の HTTP サービスと在庫のコンシューマーサービスをそれぞれ作成し、Kafka で `order.created` イベントを渡します。注文リクエストを送信した後、在庫サービスの処理ログまで確認します。在庫サービスは HTTP リスナーなしで実行します。
 
 ## 事前準備
 
-[CLI インストール](/ja/learn/getting-started/installation)後、0.7.5 API 対応の Preview CLI を使います。CLI とアプリ依存のチャネルは別です。
+[インストール手順](/ja/learn/getting-started/installation)に沿って正式版の Spine CLI を導入します。この例では CLI `v0.4.4` とコア `v0.7.5` を使います。
 
 メッセージの配信を確認するには、`localhost:9092` の Kafka ブローカーと `order.created` トピックが必要です。この例では、隔離されたローカル環境の平文接続を使用します。在庫コンシューマーはイベントをログに記録し、実際の在庫数は変更しません。
 
@@ -16,20 +12,20 @@
 
 作業ディレクトリを作り、生成するファイルを先に確認します。
 
-以下は Preview 依存を選択します。生成された go.mod で実際のコアとプラットフォーム版を確認してください。
+以下のコマンドは `main` チャネルの正式版の依存関係を選択します。生成された `go.mod` でコアとプラットフォームのバージョンを確認してください。
 
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive --dry-run
-spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive --dry-run
+spine new order-app --module example.com/order-app --event-platform kafka --channel main --no-interactive --dry-run
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive --dry-run
 ```
 
 プレビューを確認してから 2 つのアプリを作成します。以降のコマンドは、別途指定がなければ `spine-msa/` で実行します。
 
 ```sh
-spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive
-spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive
+spine new order-app --module example.com/order-app --event-platform kafka --channel main --no-interactive
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive
 ```
 
 ## 2. 在庫コンシューマーのひな形を生成する
@@ -130,23 +126,21 @@ type OrderController struct{}
 
 func (*OrderController) Constructor() *OrderController { return &OrderController{} }
 
-func (c *OrderController) RegisterRoutes(r *api.Registry) {
-	r.POST("/orders/:order_id", c.Create)
-}
-
-func (c *OrderController) Create(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[string], error) {
-	if *id <= 0 {
-		return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
-	}
-	publish.Event(ctx.ExecutionContext().Context(), events.OrderCreated{
-		EventID: fmt.Sprintf("order.created:%d", *id),
-		OrderID: *id,
-		At:      time.Now().UTC(),
+func (*OrderController) RegisterRoutes(r *api.Registry) {
+	r.POST("/orders/:order_id", func(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[string], error) {
+		if *id <= 0 {
+			return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
+		}
+		publish.Event(ctx.ExecutionContext().Context(), events.OrderCreated{
+			EventID: fmt.Sprintf("order.created:%d", *id),
+			OrderID: *id,
+			At:      time.Now().UTC(),
+		})
+		return httpx.Response[string]{
+			Body:    "accepted",
+			Options: httpx.ResponseOptions{Status: 202},
+		}, nil
 	})
-	return httpx.Response[string]{
-		Body:    "accepted",
-		Options: httpx.ResponseOptions{Status: 202},
-	}, nil
 }
 ```
 

@@ -1,14 +1,10 @@
 # JWT 登入範例
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 建立註冊和登入 API，並使用登入時核發的 JWT 查詢自己的資訊。驗證攔截器只套用於 `/me`，因此註冊和登入請求不需要權杖。
 
 ## 開始前的準備
 
-完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用支援 0.7.5 API 的 Preview CLI。CLI 安裝通道與應用依賴通道獨立。
+依照[安裝指南](/zh-Hant/learn/getting-started/installation)安裝正式版 Spine CLI。本範例使用 CLI `v0.4.4` 和核心 `v0.7.5`。
 
 此範例為了說明驗證流程，使用記憶體儲存庫、明文密碼比對，以及寫死在程式碼中的 JWT 密鑰。伺服器結束後，註冊資訊就會消失。套用於實際服務前，必須使用密碼雜湊，並透過環境變數管理 JWT 密鑰。
 
@@ -16,10 +12,10 @@
 
 準備基本應用程式和 JWT 相依套件。後續命令均在 `login-example/` 中執行。
 
-以下指令選擇 Preview 依賴，請在產生的 go.mod 確認實際核心與平台版本。
+以下指令選擇 `main` 通道的正式版相依套件。請在產生的 `go.mod` 中確認核心與平台版本。
 
 ```sh
-spine new login-example --module example.com/login-example --channel preview --validator playground --no-interactive
+spine new login-example --module example.com/login-example --channel main --validator playground --no-interactive
 cd login-example
 spine doctor
 go get github.com/golang-jwt/jwt/v5@v5.3.1
@@ -264,73 +260,67 @@ func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
 }
 
 func (c *AuthController) RegisterRoutes(r *api.Registry) {
-	r.POST("/signup", c.Signup)
-	r.POST("/login", c.Login)
-	r.GET("/me", c.GetMe, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
-}
+	// 註冊帳號 — 無須身分驗證
+	r.POST("/signup", func(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
+		user, err := c.userStore.Create(req.Email, req.Password, req.Name)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
+		}
 
-// 註冊帳號 — 無須身分驗證
-func (c *AuthController) Signup(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
-
-	user, err := c.userStore.Create(req.Email, req.Password, req.Name)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
-	}
-
-	return httpx.Response[model.User]{Body: *user}, nil
-}
-
-// 登入 — 無須身分驗證
-func (c *AuthController) Login(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
-
-	user, err := c.userStore.FindByEmail(req.Email)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
-	}
-
-	// 檢查密碼（實際應用中使用 bcrypt 等比較雜湊）
-	if user.Password != req.Password {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
-	}
-
-	// 產生 JWT 權杖
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		return httpx.Response[model.User]{Body: *user}, nil
 	})
 
-	tokenString, err := token.SignedString(interceptor.JWTSecret)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, err
-	}
+	// 登入 — 無須身分驗證
+	r.POST("/login", func(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
+		user, err := c.userStore.FindByEmail(req.Email)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
+		}
 
-	return httpx.Response[model.LoginResponse]{
-		Body: model.LoginResponse{
-			Token: tokenString,
-			User:  *user,
-		},
-	}, nil
-}
+		// 檢查密碼（實際應用中使用 bcrypt 等比較雜湊）
+		if user.Password != req.Password {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("電子郵件或密碼不正確。")
+		}
 
-// 查詢我的資訊 — 需要身分驗證
-func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-	// 讀取 AuthInterceptor 儲存的 userID
-	userIDValue, ok := ctx.ExecutionContext().Get("userID")
-	if !ok {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("找不到身分驗證資訊。")
-	}
+		// 產生 JWT 權杖
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"user_id": user.ID,
+			"email":   user.Email,
+			"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		})
 
-	userID, valid := userIDValue.(int64)
-	if !valid {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
-	}
-	user, err := c.userStore.FindByID(userID)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.NotFound("找不到使用者。")
-	}
+		tokenString, err := token.SignedString(interceptor.JWTSecret)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, err
+		}
 
-	return httpx.Response[model.User]{Body: *user}, nil
+		return httpx.Response[model.LoginResponse]{
+			Body: model.LoginResponse{
+				Token: tokenString,
+				User:  *user,
+			},
+		}, nil
+	})
+
+	// 查詢我的資訊 — 需要身分驗證
+	r.GET("/me", func(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
+		// 讀取 AuthInterceptor 儲存的 userID
+		userIDValue, ok := ctx.ExecutionContext().Get("userID")
+		if !ok {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("找不到身分驗證資訊。")
+		}
+
+		userID, valid := userIDValue.(int64)
+		if !valid {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+		}
+		user, err := c.userStore.FindByID(userID)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.NotFound("找不到使用者。")
+		}
+
+		return httpx.Response[model.User]{Body: *user}, nil
+	}, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
 }
 ```
 

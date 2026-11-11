@@ -1,9 +1,5 @@
 # Transactions
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Prepare the [database project](/en/learn/tutorial/5-database) first. Several INSERTs in one request share one transaction.
 
 ## Execution order
@@ -87,12 +83,8 @@ package controller
 
 import (
 	"errors"
-	"example.com/my-app/src/entity"
-	"github.com/NARUBROWN/spine/pkg/httpx"
-	"github.com/NARUBROWN/spine/pkg/input"
 	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"github.com/uptrace/bun"
-	"net/http"
 )
 
 type CreateUserRequest struct {
@@ -114,32 +106,6 @@ func requestTransaction(ctx spinectx.Ctx) (bun.Tx, error) {
 	}
 	return tx, nil
 }
-func (c *UserController) Create(ctx spinectx.Ctx, body input.Body[CreateUserRequest]) (httpx.Response[*entity.User], error) {
-	tx, err := requestTransaction(ctx)
-	if err != nil {
-		return httpx.Response[*entity.User]{}, err
-	}
-	user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, body.Name, body.Email)
-	if err != nil {
-		return httpx.Response[*entity.User]{}, err
-	}
-	return httpx.Response[*entity.User]{Body: user, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
-}
-func (c *UserController) CreateBatch(ctx spinectx.Ctx, body input.Body[CreateUsersRequest]) (httpx.Response[[]*entity.User], error) {
-	tx, err := requestTransaction(ctx)
-	if err != nil {
-		return httpx.Response[[]*entity.User]{}, err
-	}
-	users := make([]*entity.User, 0, len(body.Users))
-	for _, request := range body.Users {
-		user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, request.Name, request.Email)
-		if err != nil {
-			return httpx.Response[[]*entity.User]{}, err
-		}
-		users = append(users, user)
-	}
-	return httpx.Response[[]*entity.User]{Body: users, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
-}
 ```
 
 Check the bun.Tx value and type in the controller, then pass it as bun.IDB to the unchanged service and Save method from the previous chapter. Do not overwrite shared objects with request transactions.
@@ -155,6 +121,8 @@ package controller
 import (
 	"database/sql"
 	"errors"
+	"net/http"
+
 	"example.com/my-app/src/entity"
 	"example.com/my-app/src/service"
 	"github.com/NARUBROWN/spine/pkg/api"
@@ -173,16 +141,41 @@ func (*UserController) Constructor(svc *service.UserService) *UserController {
 	return &UserController{service: svc}
 }
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-	r.GET("/users/:id", c.Get)
-	r.POST("/users", c.Create)
-	r.POST("/users/batch", c.CreateBatch)
-}
-func (c *UserController) Get(ctx spinectx.Ctx, path input.Path[UserPath]) (httpx.Response[*entity.User], error) {
-	user, err := c.service.Get(ctx.ExecutionContext().Context(), path.ID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
-	}
-	return httpx.Response[*entity.User]{Body: user}, err
+	r.GET("/users/:id", func(ctx spinectx.Ctx, path input.Path[UserPath]) (httpx.Response[*entity.User], error) {
+		user, err := c.service.Get(ctx.ExecutionContext().Context(), path.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
+		}
+		return httpx.Response[*entity.User]{Body: user}, err
+	})
+
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUserRequest]) (httpx.Response[*entity.User], error) {
+		tx, err := requestTransaction(ctx)
+		if err != nil {
+			return httpx.Response[*entity.User]{}, err
+		}
+		user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, body.Name, body.Email)
+		if err != nil {
+			return httpx.Response[*entity.User]{}, err
+		}
+		return httpx.Response[*entity.User]{Body: user, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
+	})
+
+	r.POST("/users/batch", func(ctx spinectx.Ctx, body input.Body[CreateUsersRequest]) (httpx.Response[[]*entity.User], error) {
+		tx, err := requestTransaction(ctx)
+		if err != nil {
+			return httpx.Response[[]*entity.User]{}, err
+		}
+		users := make([]*entity.User, 0, len(body.Users))
+		for _, request := range body.Users {
+			user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, request.Name, request.Email)
+			if err != nil {
+				return httpx.Response[[]*entity.User]{}, err
+			}
+			users = append(users, user)
+		}
+		return httpx.Response[[]*entity.User]{Body: users, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
+	})
 }
 ```
 

@@ -1,14 +1,10 @@
 # 创建用户 CRUD API
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 创建用于新增、列出、查询、修改和删除用户的 HTTP API。示例使用内存存储库，不依赖 ORM，因此无需准备数据库即可运行。
 
 ## 开始前的准备
 
-完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用支持 0.7.5 API 的 Preview CLI。CLI 安装通道与应用依赖通道独立。
+按[安装指南](/zh-Hans/learn/getting-started/installation)安装正式版 Spine CLI。本示例使用 CLI `v0.4.4` 和核心 `v0.7.5`。
 
 服务器进程结束后，保存的用户数据会消失。
 
@@ -30,10 +26,10 @@ graph TD
 
 创建基础应用，检查依赖和项目配置。后续命令均在 `crud-example/` 中运行。
 
-以下命令选择 Preview 依赖，请在生成的 go.mod 中确认实际核心和平台版本。
+以下命令选择 `main` 通道的正式版依赖。请在生成的 `go.mod` 中确认核心和平台版本。
 
 ```sh
-spine new crud-example --module example.com/crud-example --channel preview --validator playground --no-interactive
+spine new crud-example --module example.com/crud-example --channel main --validator playground --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -359,69 +355,57 @@ func (*UserController) Constructor(service *service.UserService) *UserController
 }
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-	r.GET("/users", c.List)
-	r.GET("/users/:id", c.GetByID)
-	r.POST("/users", c.Create)
-	r.PUT("/users/:id", c.Update)
-	r.DELETE("/users/:id", c.Delete)
-}
+	r.GET("/users", func() httpx.Response[dto.UserListResponse] {
+		return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
+	})
 
-// GET /users
-func (c *UserController) List() httpx.Response[dto.UserListResponse] {
-	return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
-}
+	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
+		}
 
-// GET /users/:id
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
-	}
+		user, err := c.service.GetUserByID(*id)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-	user, err := c.service.GetUserByID(*id)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+	r.POST("/users", func(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		user, err := c.service.CreateUser(req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// POST /users
-func (c *UserController) Create(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.CreateUser(req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.PUT("/users/:id", func(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		user, err := c.service.UpdateUser(*id, req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// PUT /users/:id
-func (c *UserController) Update(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.UpdateUser(*id, req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.DELETE("/users/:id", func(id input.Path[int64]) error {
+		if *id <= 0 {
+			return httperr.BadRequest("用户 ID 无效")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		err := c.service.DeleteUser(*id)
+		if err != nil {
+			return toHTTPError(err)
+		}
 
-// DELETE /users/:id
-func (c *UserController) Delete(id input.Path[int64]) error {
-	if *id <= 0 {
-		return httperr.BadRequest("用户 ID 无效")
-	}
-
-	err := c.service.DeleteUser(*id)
-	if err != nil {
-		return toHTTPError(err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // 将 Repository 错误转换为 HTTP 错误
@@ -640,10 +624,18 @@ curl -X POST http://localhost:8080/users \
 
 ```go
 // 通过语义类型接收输入
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
+r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
+	}
 
-// 通过 httperr 表达错误含义
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("未找到用户")
+	user, err := c.service.GetUserByID(*id)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
+
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
+})
 ```
 
 ### 依赖注入

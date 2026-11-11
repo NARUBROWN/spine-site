@@ -1,9 +1,5 @@
 # 쿼리 입력
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 Spine `v0.7.5`에서 쿼리는 출처별 구조체로 받습니다. `input.Query[T]`에서 `T`는 구조체이며, 핸들러는 필드에 직접 접근합니다. `query` 태그가 외부 이름을 정하고, 태그가 없는 필드는 lowerCamel 이름을 사용합니다.
 
 ## 실행 예제
@@ -11,7 +7,7 @@ Spine `v0.7.5`에서 쿼리는 출처별 구조체로 받습니다. `input.Query
 독립된 Go 모듈에 Spine `v0.7.5`과 호환되는 Echo 플랫폼을 설치한 뒤 다음 코드를 `main.go`로 저장하고 `go run .`으로 실행하세요. 이 예제는 페이지가 누락된 경우에만 1을 사용합니다.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ```go

@@ -1,9 +1,5 @@
 # 오류 처리와 입력 검증
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 자동 태그 검증과 직접 작성한 규칙을 구분합니다. 이 독립 앱은 데이터를 저장하지 않습니다.
 
 ## 검증기 조립
@@ -11,7 +7,7 @@
 [컨트롤러 의존성](/ko/learn/tutorial/2-controller)
 
 ```sh
-go get github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 engine은 playground.New()의 반환값을 담는 변수입니다. BuildApplication에서 한 번 생성해 spine.WithValidator(engine)에 전달합니다. playground는 런타임 검증과 OpenAPI SchemaDescriber를 구현합니다. 공개 검증기 계약을 구현한 다른 엔진도 사용할 수 있습니다.

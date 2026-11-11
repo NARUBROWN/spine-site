@@ -1,16 +1,12 @@
 # 介绍
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 Spine 是通过 Go 代码组装角色构造器、控制器路由和拦截器的后端框架。
 
 ## 运行示例
 
 ```sh
 go mod init example.com/spine-intro
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 使用 Go 1.26 以上版本保存为 main.go 并执行 go run .，另一个终端运行 curl `http://localhost:8080/greeting` 返回 hello。

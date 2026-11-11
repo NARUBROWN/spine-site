@@ -1,14 +1,10 @@
 # 使用 Kafka 連接訂單服務與庫存服務
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 分別建立訂單 HTTP 服務和庫存消費服務，透過 Kafka 傳遞 `order.created` 事件。傳送訂單請求後，確認庫存服務的處理日誌。庫存服務不啟動 HTTP 監聽器。
 
 ## 開始前的準備
 
-完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用支援 0.7.5 API 的 Preview CLI。CLI 安裝通道與應用依賴通道獨立。
+依照[安裝指南](/zh-Hant/learn/getting-started/installation)安裝正式版 Spine CLI。本範例使用 CLI `v0.4.4` 和核心 `v0.7.5`。
 
 若要確認訊息傳遞，需要在 `localhost:9092` 執行的 Kafka broker，以及 `order.created` 主題。此範例使用隔離本機環境中的明文連線。庫存消費者會將事件寫入日誌，不會實際變更庫存數量。
 
@@ -16,20 +12,20 @@
 
 建立工作目錄，先確認將產生的檔案。
 
-以下指令選擇 Preview 依賴，請在產生的 go.mod 確認實際核心與平台版本。
+以下指令選擇 `main` 通道的正式版相依套件。請在產生的 `go.mod` 中確認核心與平台版本。
 
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive --dry-run
-spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive --dry-run
+spine new order-app --module example.com/order-app --event-platform kafka --channel main --no-interactive --dry-run
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive --dry-run
 ```
 
 確認預覽後，建立兩個應用程式。除非另有說明，後續命令均在 `spine-msa/` 中執行。
 
 ```sh
-spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive
-spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive
+spine new order-app --module example.com/order-app --event-platform kafka --channel main --no-interactive
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive
 ```
 
 ## 2. 產生庫存消費者骨架
@@ -130,23 +126,21 @@ type OrderController struct{}
 
 func (*OrderController) Constructor() *OrderController { return &OrderController{} }
 
-func (c *OrderController) RegisterRoutes(r *api.Registry) {
-	r.POST("/orders/:order_id", c.Create)
-}
-
-func (c *OrderController) Create(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[string], error) {
-	if *id <= 0 {
-		return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
-	}
-	publish.Event(ctx.ExecutionContext().Context(), events.OrderCreated{
-		EventID: fmt.Sprintf("order.created:%d", *id),
-		OrderID: *id,
-		At:      time.Now().UTC(),
+func (*OrderController) RegisterRoutes(r *api.Registry) {
+	r.POST("/orders/:order_id", func(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[string], error) {
+		if *id <= 0 {
+			return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
+		}
+		publish.Event(ctx.ExecutionContext().Context(), events.OrderCreated{
+			EventID: fmt.Sprintf("order.created:%d", *id),
+			OrderID: *id,
+			At:      time.Now().UTC(),
+		})
+		return httpx.Response[string]{
+			Body:    "accepted",
+			Options: httpx.ResponseOptions{Status: 202},
+		}, nil
 	})
-	return httpx.Response[string]{
-		Body:    "accepted",
-		Options: httpx.ResponseOptions{Status: 202},
-	}, nil
 }
 ```
 

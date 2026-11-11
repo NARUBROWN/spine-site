@@ -1,14 +1,10 @@
 # JWT ログインの例
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 ユーザー登録とログインの API を作り、ログイン時に発行した JWT で自分の情報を取得します。認証インターセプターは `/me` にのみ適用するため、ユーザー登録とログインはトークンなしでリクエストできます。
 
 ## 事前準備
 
-[CLI インストール](/ja/learn/getting-started/installation)後、0.7.5 API 対応の Preview CLI を使います。CLI とアプリ依存のチャネルは別です。
+[インストール手順](/ja/learn/getting-started/installation)に沿って正式版の Spine CLI を導入します。この例では CLI `v0.4.4` とコア `v0.7.5` を使います。
 
 この例では、認証フローを学ぶために、メモリ上のストア、平文のパスワード比較、コードに固定した JWT の秘密鍵を使用します。サーバーを終了すると登録情報は失われます。実際のサービスに適用する前に、パスワードハッシュと、環境変数で管理する JWT の秘密鍵を使用する必要があります。
 
@@ -16,10 +12,10 @@
 
 基本アプリと JWT の依存関係を準備します。以降のコマンドは `login-example/` で実行します。
 
-以下は Preview 依存を選択します。生成された go.mod で実際のコアとプラットフォーム版を確認してください。
+以下のコマンドは `main` チャネルの正式版の依存関係を選択します。生成された `go.mod` でコアとプラットフォームのバージョンを確認してください。
 
 ```sh
-spine new login-example --module example.com/login-example --channel preview --validator playground --no-interactive
+spine new login-example --module example.com/login-example --channel main --validator playground --no-interactive
 cd login-example
 spine doctor
 go get github.com/golang-jwt/jwt/v5@v5.3.1
@@ -264,73 +260,67 @@ func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
 }
 
 func (c *AuthController) RegisterRoutes(r *api.Registry) {
-	r.POST("/signup", c.Signup)
-	r.POST("/login", c.Login)
-	r.GET("/me", c.GetMe, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
-}
+	// ユーザー登録 — 認証不要
+	r.POST("/signup", func(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
+		user, err := c.userStore.Create(req.Email, req.Password, req.Name)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
+		}
 
-// ユーザー登録 — 認証不要
-func (c *AuthController) Signup(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
-
-	user, err := c.userStore.Create(req.Email, req.Password, req.Name)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
-	}
-
-	return httpx.Response[model.User]{Body: *user}, nil
-}
-
-// ログイン — 認証不要
-func (c *AuthController) Login(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
-
-	user, err := c.userStore.FindByEmail(req.Email)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールアドレスまたはパスワードが正しくありません。")
-	}
-
-	// パスワードを確認 (実際には bcrypt などでハッシュを比較)
-	if user.Password != req.Password {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールアドレスまたはパスワードが正しくありません。")
-	}
-
-	// JWT トークンを生成
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		return httpx.Response[model.User]{Body: *user}, nil
 	})
 
-	tokenString, err := token.SignedString(interceptor.JWTSecret)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, err
-	}
+	// ログイン — 認証不要
+	r.POST("/login", func(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
+		user, err := c.userStore.FindByEmail(req.Email)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールアドレスまたはパスワードが正しくありません。")
+		}
 
-	return httpx.Response[model.LoginResponse]{
-		Body: model.LoginResponse{
-			Token: tokenString,
-			User:  *user,
-		},
-	}, nil
-}
+		// パスワードを確認 (実際には bcrypt などでハッシュを比較)
+		if user.Password != req.Password {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("メールアドレスまたはパスワードが正しくありません。")
+		}
 
-// 自分の情報を取得 — 認証が必要
-func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-	// AuthInterceptor が保存した userID を取得
-	userIDValue, ok := ctx.ExecutionContext().Get("userID")
-	if !ok {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("認証情報が見つかりません。")
-	}
+		// JWT トークンを生成
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"user_id": user.ID,
+			"email":   user.Email,
+			"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		})
 
-	userID, valid := userIDValue.(int64)
-	if !valid {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
-	}
-	user, err := c.userStore.FindByID(userID)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.NotFound("ユーザーが見つかりません。")
-	}
+		tokenString, err := token.SignedString(interceptor.JWTSecret)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, err
+		}
 
-	return httpx.Response[model.User]{Body: *user}, nil
+		return httpx.Response[model.LoginResponse]{
+			Body: model.LoginResponse{
+				Token: tokenString,
+				User:  *user,
+			},
+		}, nil
+	})
+
+	// 自分の情報を取得 — 認証が必要
+	r.GET("/me", func(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
+		// AuthInterceptor が保存した userID を取得
+		userIDValue, ok := ctx.ExecutionContext().Get("userID")
+		if !ok {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("認証情報が見つかりません。")
+		}
+
+		userID, valid := userIDValue.(int64)
+		if !valid {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+		}
+		user, err := c.userStore.FindByID(userID)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.NotFound("ユーザーが見つかりません。")
+		}
+
+		return httpx.Response[model.User]{Body: *user}, nil
+	}, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
 }
 ```
 

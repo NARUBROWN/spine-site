@@ -1,20 +1,16 @@
 # プラットフォームと DTO 検証の選択
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 Spine `v0.7.5` は HTTP、WebSocket、イベント、DTO 検証の公開契約をコアに置き、実装を独立モジュールとして選択します。必要な実装だけをアプリに接続できます。
 
 ## CLI で選択する
 
-[CLI インストール](/ja/learn/getting-started/installation)後、0.7.5 API 対応の Preview CLI を使います。CLI とアプリ依存のチャネルは別です。
+[インストール手順](/ja/learn/getting-started/installation)に沿って正式版の Spine CLI を導入します。この例では CLI `v0.4.4` とコア `v0.7.5` を使います。
 
 ```sh
-spine new http-app --module example.com/http-app --channel preview --platform nethttp --no-interactive
-spine new chat-app --module example.com/chat-app --channel preview --platform nethttp --websocket-platform gorilla --no-interactive
-spine new worker --module example.com/worker --channel preview --platform none --event-platform events:nats --no-interactive
-spine new validated-app --module example.com/validated-app --channel preview --validator playground --no-interactive
+spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
 ```
 
 既定の HTTP プラットフォームは Echo です。WebSocket、イベント、validator、フロントエンドは既定では選択されません。`--platform none` はイベントワーカーを生成し、イベントプラットフォームが必要です。WebSocket には HTTP プラットフォームが必要です。`--event-platform` は複数回指定できます。

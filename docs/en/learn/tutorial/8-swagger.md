@@ -1,16 +1,12 @@
 # Swagger and OpenAPI
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Serve runtime OpenAPI JSON, embedded Swagger UI and ReDoc. Check both the schema and actual input validation.
 
 ## Standalone app
 
 ```sh
 go mod init example.com/spine-openapi
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 Register playground.New() with WithValidator in BuildApplication. Required tags are checked automatically on requests and described as required in the schema. OpenAPI itself does not validate requests; arbitrary DTO Validate methods are neither called nor documented automatically.

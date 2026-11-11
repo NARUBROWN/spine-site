@@ -1,9 +1,5 @@
 # Controllers
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Declare routes in RegisterRoutes and receive each HTTP input through its source wrapper. This standalone app returns values without storing them.
 
 ## Preparation
@@ -12,7 +8,7 @@ Use Go 1.26 or later and an empty directory. Assemble the app in BuildApplicatio
 
 ```sh
 go mod init example.com/spine-tutorial
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ## Input sources and names

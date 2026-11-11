@@ -1,14 +1,10 @@
 # 사용자 CRUD API 만들기
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 사용자를 생성하고 목록 조회, 개별 조회, 수정, 삭제하는 HTTP API를 만듭니다. ORM 없이 메모리 저장소를 사용하므로 데이터베이스를 준비하지 않고 실행할 수 있습니다.
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation) 후 0.7.5 API를 지원하는 Preview CLI를 사용합니다. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
+[CLI 설치](/ko/learn/getting-started/installation)에서 정식 Spine CLI를 설치하세요. 이 예제는 CLI `v0.4.4`와 코어 `v0.7.5`로 확인했습니다.
 
 저장한 사용자는 서버 프로세스를 종료하면 사라집니다.
 
@@ -30,10 +26,10 @@ graph TD
 
 기본 앱을 생성하고 의존성과 프로젝트 설정을 확인합니다. 이후 명령은 `crud-example/`에서 실행합니다.
 
-아래 명령은 Preview 의존성을 선택합니다. 생성된 go.mod에서 실제 코어와 플랫폼 버전을 확인하세요.
+아래 명령은 `main` 채널의 정식 의존성을 선택합니다. 생성된 `go.mod`에서 코어와 플랫폼 버전을 확인하세요.
 
 ```sh
-spine new crud-example --module example.com/crud-example --channel preview --validator playground --no-interactive
+spine new crud-example --module example.com/crud-example --channel main --validator playground --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -359,69 +355,57 @@ func (*UserController) Constructor(service *service.UserService) *UserController
 }
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-	r.GET("/users", c.List)
-	r.GET("/users/:id", c.GetByID)
-	r.POST("/users", c.Create)
-	r.PUT("/users/:id", c.Update)
-	r.DELETE("/users/:id", c.Delete)
-}
+	r.GET("/users", func() httpx.Response[dto.UserListResponse] {
+		return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
+	})
 
-// GET /users
-func (c *UserController) List() httpx.Response[dto.UserListResponse] {
-	return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
-}
+	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+		}
 
-// GET /users/:id
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
-	}
+		user, err := c.service.GetUserByID(*id)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-	user, err := c.service.GetUserByID(*id)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+	r.POST("/users", func(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		user, err := c.service.CreateUser(req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// POST /users
-func (c *UserController) Create(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.CreateUser(req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.PUT("/users/:id", func(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		user, err := c.service.UpdateUser(*id, req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// PUT /users/:id
-func (c *UserController) Update(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.UpdateUser(*id, req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.DELETE("/users/:id", func(id input.Path[int64]) error {
+		if *id <= 0 {
+			return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		err := c.service.DeleteUser(*id)
+		if err != nil {
+			return toHTTPError(err)
+		}
 
-// DELETE /users/:id
-func (c *UserController) Delete(id input.Path[int64]) error {
-	if *id <= 0 {
-		return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
-	}
-
-	err := c.service.DeleteUser(*id)
-	if err != nil {
-		return toHTTPError(err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // Repository 에러를 HTTP 에러로 변환
@@ -640,10 +624,18 @@ curl -X POST http://localhost:8080/users \
 
 ```go
 // 의미 타입으로 입력 받음
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
+r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+	}
 
-// httperr로 의미만 표현
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을 수 없습니다")
+	user, err := c.service.GetUserByID(*id)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
+
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
+})
 ```
 
 ### 의존성 주입

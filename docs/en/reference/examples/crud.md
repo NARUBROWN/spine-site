@@ -1,14 +1,10 @@
 # Build a User CRUD API
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Build an HTTP API to create, list, retrieve, update, and delete users. The example uses an in-memory repository without an ORM, so you can run it without setting up a database.
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) and use a Preview CLI supporting the 0.7.5 API. CLI installation and app dependency channels are independent.
+Install the stable [Spine CLI](/en/learn/getting-started/installation). This example uses CLI `v0.4.4` and core `v0.7.5`.
 
 Stored users disappear when the server process stops.
 
@@ -30,10 +26,10 @@ graph TD
 
 Create a basic app and check its dependencies and project configuration. Run subsequent commands from `crud-example/`.
 
-The commands below select Preview dependencies. Check the actual core and platform versions in the generated go.mod.
+The commands below select stable dependencies from the `main` channel. Check the core and platform versions in the generated `go.mod`.
 
 ```sh
-spine new crud-example --module example.com/crud-example --channel preview --validator playground --no-interactive
+spine new crud-example --module example.com/crud-example --channel main --validator playground --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -359,69 +355,57 @@ func (*UserController) Constructor(service *service.UserService) *UserController
 }
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-	r.GET("/users", c.List)
-	r.GET("/users/:id", c.GetByID)
-	r.POST("/users", c.Create)
-	r.PUT("/users/:id", c.Update)
-	r.DELETE("/users/:id", c.Delete)
-}
+	r.GET("/users", func() httpx.Response[dto.UserListResponse] {
+		return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
+	})
 
-// GET /users
-func (c *UserController) List() httpx.Response[dto.UserListResponse] {
-	return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
-}
+	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
+		}
 
-// GET /users/:id
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
-	}
+		user, err := c.service.GetUserByID(*id)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-	user, err := c.service.GetUserByID(*id)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+	r.POST("/users", func(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		user, err := c.service.CreateUser(req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// POST /users
-func (c *UserController) Create(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.CreateUser(req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.PUT("/users/:id", func(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		user, err := c.service.UpdateUser(*id, req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// PUT /users/:id
-func (c *UserController) Update(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.UpdateUser(*id, req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.DELETE("/users/:id", func(id input.Path[int64]) error {
+		if *id <= 0 {
+			return httperr.BadRequest("Invalid user ID")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		err := c.service.DeleteUser(*id)
+		if err != nil {
+			return toHTTPError(err)
+		}
 
-// DELETE /users/:id
-func (c *UserController) Delete(id input.Path[int64]) error {
-	if *id <= 0 {
-		return httperr.BadRequest("Invalid user ID")
-	}
-
-	err := c.service.DeleteUser(*id)
-	if err != nil {
-		return toHTTPError(err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // Convert repository errors to HTTP errors
@@ -640,10 +624,18 @@ The controller accepts semantic types such as `input.Path[int64]` as arguments i
 
 ```go
 // Receive input through semantic types
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
+r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("Invalid user ID")
+	}
 
-// Express the error through httperr
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("User not found")
+	user, err := c.service.GetUserByID(*id)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
+
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
+})
 ```
 
 ### Dependency Injection

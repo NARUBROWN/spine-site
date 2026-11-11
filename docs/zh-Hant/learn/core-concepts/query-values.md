@@ -1,9 +1,5 @@
 # 查詢輸入
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 在 Spine `v0.7.5` 中，使用依來源劃分的結構體接收查詢參數。`input.Query[T]` 的 `T` 是結構體，處理器可直接讀取欄位。`query` 標籤指定外部名稱，沒有標籤的欄位使用 lowerCamel 名稱。
 
 ## 執行範例
@@ -11,7 +7,7 @@
 在獨立 Go 模組中安裝 Spine `v0.7.5` 和相容的 Echo 平台，將以下程式碼儲存為 `main.go` 並執行 `go run .`。此範例只在缺少頁碼時使用 1。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ```go

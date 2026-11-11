@@ -1,9 +1,5 @@
 # Query inputs
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 In Spine `v0.7.5`, receive query parameters in a source-specific struct. In `input.Query[T]`, `T` is a struct and the handler reads its fields directly. A `query` tag sets the external name; an untagged field uses a lowerCamel name.
 
 ## Runnable example
@@ -11,7 +7,7 @@ In Spine `v0.7.5`, receive query parameters in a source-specific struct. In `inp
 Install Spine `v0.7.5` and a compatible Echo platform in a separate Go module. Save the following as `main.go` and run `go run .`. This example uses page 1 only when the value is absent.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ```go

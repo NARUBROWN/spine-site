@@ -46,17 +46,23 @@ app.InterceptorFor(boot.InterceptorHTTP, (*AuthInterceptor)(nil))
 ```
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-必要な Constructor、ハンドラー、二つのインターセプターを実装したアプリに適用し、Audit も DI に登録します。同じポリシーをグローバルとルートに重複適用しないでください。役割登録は DI の提供で、適用範囲は別です。子グループは設定を継承し、ルートのオプションは追加されます。グローバル範囲は InterceptorHTTP、InterceptorWebSocket、InterceptorAll で、All と app.Interceptor は HTTP と WS メッセージに適用します。
+この例を使うには、Auth と Audit のインターセプターを DI に登録します。同じポリシーをグローバルとルートに重複適用しないでください。役割登録は DI の提供で、適用範囲は別です。子グループは設定を継承し、ルートのオプションは追加されます。グローバル範囲は InterceptorHTTP、InterceptorWebSocket、InterceptorAll で、All と app.Interceptor は HTTP と WS メッセージに適用します。
 
 ## エラーとトランザクション {#errors}
 

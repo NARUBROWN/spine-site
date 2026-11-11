@@ -1,14 +1,10 @@
 # ユーザー CRUD API を作る
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 ユーザーの作成、一覧取得、個別取得、更新、削除を行う HTTP API を作ります。ORM を使わずメモリ上のストアを使用するため、データベースを用意せずに実行できます。
 
 ## 事前準備
 
-[CLI インストール](/ja/learn/getting-started/installation)後、0.7.5 API 対応の Preview CLI を使います。CLI とアプリ依存のチャネルは別です。
+[インストール手順](/ja/learn/getting-started/installation)に沿って正式版の Spine CLI を導入します。この例では CLI `v0.4.4` とコア `v0.7.5` を使います。
 
 保存したユーザーは、サーバープロセスを終了すると失われます。
 
@@ -30,10 +26,10 @@ graph TD
 
 基本アプリを作成し、依存関係とプロジェクト設定を確認します。以降のコマンドは `crud-example/` で実行します。
 
-以下は Preview 依存を選択します。生成された go.mod で実際のコアとプラットフォーム版を確認してください。
+以下のコマンドは `main` チャネルの正式版の依存関係を選択します。生成された `go.mod` でコアとプラットフォームのバージョンを確認してください。
 
 ```sh
-spine new crud-example --module example.com/crud-example --channel preview --validator playground --no-interactive
+spine new crud-example --module example.com/crud-example --channel main --validator playground --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -359,69 +355,57 @@ func (*UserController) Constructor(service *service.UserService) *UserController
 }
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-	r.GET("/users", c.List)
-	r.GET("/users/:id", c.GetByID)
-	r.POST("/users", c.Create)
-	r.PUT("/users/:id", c.Update)
-	r.DELETE("/users/:id", c.Delete)
-}
+	r.GET("/users", func() httpx.Response[dto.UserListResponse] {
+		return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
+	})
 
-// GET /users
-func (c *UserController) List() httpx.Response[dto.UserListResponse] {
-	return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
-}
+	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユーザーIDです")
+		}
 
-// GET /users/:id
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユーザーIDです")
-	}
+		user, err := c.service.GetUserByID(*id)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-	user, err := c.service.GetUserByID(*id)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+	r.POST("/users", func(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		user, err := c.service.CreateUser(req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// POST /users
-func (c *UserController) Create(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.CreateUser(req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.PUT("/users/:id", func(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+		if *id <= 0 {
+			return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユーザーIDです")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		user, err := c.service.UpdateUser(*id, req)
+		if err != nil {
+			return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+		}
 
-// PUT /users/:id
-func (c *UserController) Update(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
-	if *id <= 0 {
-		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユーザーIDです")
-	}
+		return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	})
 
-	user, err := c.service.UpdateUser(*id, req)
-	if err != nil {
-		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-	}
+	r.DELETE("/users/:id", func(id input.Path[int64]) error {
+		if *id <= 0 {
+			return httperr.BadRequest("無効なユーザーIDです")
+		}
 
-	return httpx.Response[dto.UserResponse]{Body: *user}, nil
-}
+		err := c.service.DeleteUser(*id)
+		if err != nil {
+			return toHTTPError(err)
+		}
 
-// DELETE /users/:id
-func (c *UserController) Delete(id input.Path[int64]) error {
-	if *id <= 0 {
-		return httperr.BadRequest("無効なユーザーIDです")
-	}
-
-	err := c.service.DeleteUser(*id)
-	if err != nil {
-		return toHTTPError(err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // Repository のエラーを HTTP エラーに変換
@@ -640,10 +624,18 @@ curl -X POST http://localhost:8080/users \
 
 ```go
 // 意味を持つ型で入力を受け取る
-func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error)
+r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("無効なユーザーIDです")
+	}
 
-// httperr でエラーの意味だけを表現
-return httpx.Response[dto.UserResponse]{}, httperr.NotFound("ユーザーが見つかりません")
+	user, err := c.service.GetUserByID(*id)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
+
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
+})
 ```
 
 ### 依存性注入

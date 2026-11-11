@@ -6,11 +6,23 @@
 
 Preview、RC、稳定版的选择与发布流程，请参阅[发布渠道与安装](/zh-Hans/community/release-channels)。
 
+## Spine v0.7.5 / CLI v0.4.4
+
+Spine `v0.7.5` 使用 `input.Path`、`input.Query`、`input.Header` 和 `input.Body` 声明 HTTP 输入。HTTP、事件和 WebSocket 的处理器与拦截器共用 `spine.Ctx`。
+
+CLI `v0.4.4` 检查输入契约，并在生成的代码和 OpenAPI 中体现该契约。正式依赖通道为新 HTTP 应用选择核心 `v0.7.5` 和 Echo 平台 `v0.2.1`。
+
+如果应用使用已撤回的 Go 模块版本 `v0.7.0`、`v0.7.1` 或 `v0.7.2-preview.1`，请升级到 `v0.7.5`。
+
+- [Spine v0.7.5 发布](https://github.com/NARUBROWN/spine/releases/tag/v0.7.5)
+- [CLI v0.4.4 发布](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.4)
+- [0.7.5 迁移指南](/zh-Hans/learn/migration/v0.7.5)
+
 ## Spine v0.7.1
 
 Spine `v0.7.1` 提供控制器路由、按角色注册构造函数、按来源划分的 HTTP 输入、运行时 OpenAPI 和 HTTP v3。旧输入 API 保持兼容但已弃用，同一处理器不能混用新旧输入。
 
-请参阅 [v0.7.1 迁移指南](/zh-Hans/learn/migration/v0.7.1)和[运行时 OpenAPI](/zh-Hans/reference/api/openapi)。CLI 版本和应用依赖分别选择。通过 `spine version` 检查 CLI，在 `go.mod` 中确认依赖。以下条目记录各版本的历史情况。
+请参阅 [0.7.5 迁移指南](/zh-Hans/learn/migration/v0.7.5#from-v071)和[运行时 OpenAPI](/zh-Hans/reference/api/openapi)。CLI 版本和应用依赖分别选择。通过 `spine version` 检查 CLI，在 `go.mod` 中确认依赖。以下条目记录各版本的历史情况。
 
 ## Preview CLI @preview {#cli-preview-branch}
 

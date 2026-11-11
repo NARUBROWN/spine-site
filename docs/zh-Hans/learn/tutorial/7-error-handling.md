@@ -1,9 +1,5 @@
 # 错误处理与输入验证
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 区分自动标签验证和自定义规则。此独立应用不保存数据。
 
 ## 组装验证器
@@ -11,7 +7,7 @@
 [控制器依赖](/zh-Hans/learn/tutorial/2-controller)
 
 ```sh
-go get github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 engine 是保存 playground.New() 返回值的变量。在 BuildApplication 中创建一次并传给 spine.WithValidator(engine)。playground 实现运行时验证和 OpenAPI SchemaDescriber，也可使用实现公开验证契约的其他引擎。

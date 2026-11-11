@@ -1,9 +1,5 @@
 # 控制器
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 在 RegisterRoutes 中声明路由，通过对应来源的包装类型接收 HTTP 输入。本独立应用仅返回数据，不保存数据。
 
 ## 准备
@@ -12,7 +8,7 @@
 
 ```sh
 go mod init example.com/spine-tutorial
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ## 输入来源与名称

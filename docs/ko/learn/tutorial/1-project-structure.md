@@ -1,17 +1,13 @@
 # 프로젝트 구조
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 기본 layered-v1 레이아웃에서 조립, HTTP 컨트롤러와 실행을 분리합니다. Deprecated 라우트 등록 코드를 새로 작성하지 않습니다.
 
 ## 프로젝트 생성
 
-0.7.5 API를 지원하는 Preview CLI를 사용합니다. CLI와 앱 채널은 별개이며 실제 선택 버전은 go.mod에서 확인합니다.
+Spine CLI `v0.4.4`로 앱을 만듭니다. 생성된 `go.mod`에서 코어와 플랫폼 버전을 확인하세요.
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -67,10 +63,11 @@ import (
 
 type HealthController struct{}
 
-func (*HealthController) Constructor() *HealthController   { return &HealthController{} }
-func (c *HealthController) RegisterRoutes(r *api.Registry) { r.GET("/health", c.Get) }
-func (*HealthController) Get(ctx spinectx.Ctx) httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
 

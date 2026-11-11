@@ -1,9 +1,5 @@
 # エラー処理と入力検証
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 タグの自動検証と独自規則を区別します。この独立アプリはデータを保存しません。
 
 ## 検証器の組み立て
@@ -11,7 +7,7 @@
 [コントローラーの依存](/ja/learn/tutorial/2-controller)
 
 ```sh
-go get github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 engine は playground.New() の戻り値を持つ変数です。BuildApplication で一度作成し、spine.WithValidator(engine) に渡します。playground は実行時検証と OpenAPI SchemaDescriber を実装します。公開検証器契約を実装した別のエンジンも利用できます。

@@ -30,7 +30,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="spine-doc-cli-",dir="/var/tmp") as temporary:
         work=Path(temporary)
         # This is the onboarding command, with installation deferred to the explicit check below.
-        run(work,[executable,"new","my-app","--module","example.com/my-app","--channel","preview","--validator","playground","--no-interactive","--skip-install"])
+        run(work,[executable,"new","my-app","--module","example.com/my-app","--channel","main","--validator","playground","--no-interactive","--skip-install"])
         app=work/"my-app"
         run(app,["go","mod","tidy"])
         run(app,["go","mod","download","all"])
@@ -44,7 +44,7 @@ def main():
             if deprecated.search(path.read_text()):raise AssertionError(f"deprecated API generated: {path.relative_to(app)}")
         # MSA docs replace generated app and consumer files and retain platform config.
         for name,extra in [("order-app",[]),("stock-app",["--platform","none"])]:
-            run(work,[executable,"new",name,"--module","example.com/"+name,*extra,"--event-platform","kafka","--channel","preview","--no-interactive","--skip-install"])
+            run(work,[executable,"new",name,"--module","example.com/"+name,*extra,"--event-platform","kafka","--channel","main","--no-interactive","--skip-install"])
         run(work,[executable,"generate","consumer","order","--root","stock-app","--topic","order.created","--field","event_id:string","--field","order_id:int64"])
         for source in FENCE.findall((DOCS/"reference/examples/msa.md").read_text()):
             match=re.match(r"// ((?:order-app|stock-app)/[^\n ]+\.go)\npackage ",source)

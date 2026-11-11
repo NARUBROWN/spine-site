@@ -1,16 +1,12 @@
 # WebSocket 消息收发
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 此独立示例向当前连接回送消息。广播需要另行设计连接生命周期和发送策略的 hub。
 
 ## 安装与代码
 
 ```sh
 go mod init example.com/spine-websocket
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0-preview.2
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0
 ```
 
 使用 Go 1.26 以上版本保存为 main.go，分别选择 HTTP 和 Gorilla。WebSocket 消息 DTO 不使用 HTTP Body 包装。ws.Send 接收标准上下文、消息类型、[]byte 三个参数，仅发送给当前连接。不要保存请求上下文或内部 sender 键。

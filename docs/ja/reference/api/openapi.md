@@ -1,9 +1,5 @@
 # ランタイム OpenAPI
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 Spine `v0.7.5` は登録された HTTP ルート、ハンドラーの型、validator の記述契約から OpenAPI 3.1.2 JSON を生成します。内蔵の Swagger UI と ReDoc も選択して提供できます。
 
 ## 有効化と起動オプション {#options}
@@ -116,7 +112,7 @@ validator がない場合、入力パラメーター、リクエストモデル�
 `boot.Options.HTTP.OpenAPI.UI` で画面を選択します。`Enabled: true` を設定して UI を登録し、JSON のみなら `UI` を省略します。以下は正式版 Echo を固定する例です。再現のため `go.mod` と `go.sum` を保存してください。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 以下は、使用する UI を登録する独立したアプリの `main.go` です。既存アプリでは、現在の composition に import と `OpenAPI.UI` の設定を追加してください。

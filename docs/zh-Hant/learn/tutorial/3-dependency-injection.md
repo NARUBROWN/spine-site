@@ -1,9 +1,5 @@
 # 依賴注入
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 透過建構函式參數型別連接儲存庫、服務與控制器。此獨立應用無需資料庫，GET /greeting 回傳 hello。
 
 ## 建構契約

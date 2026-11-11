@@ -1,9 +1,5 @@
 # 컨트롤러
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 RegisterRoutes에서 경로를 선언하고 입력 출처별 래퍼로 요청을 받습니다. 아래 독립 앱은 값을 반환하며 저장하지 않습니다.
 
 ## 준비
@@ -12,7 +8,7 @@ Go 1.26 이상과 빈 디렉터리가 필요합니다. 앱 조립은 BuildApplic
 
 ```sh
 go mod init example.com/spine-tutorial
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ## 입력 출처와 이름

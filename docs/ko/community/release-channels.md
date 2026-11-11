@@ -95,10 +95,10 @@ CLI는 코어와 별도의 버전과 일정으로 릴리스합니다. 코어 버
 
 ## 버전 고정과 되돌리기 {#pin}
 
-CI와 운영 환경에서는 실제로 발행된 CLI 태그를 고정하고 앱 소스와 `go.mod`, `go.sum`도 함께 버전 관리합니다. CLI 태그는 도구의 코드만 고정합니다. Preview의 동적 레시피는 같은 CLI에서도 `new`나 `update`를 실행할 때 `@preview`를 다시 조회하므로, 앱을 재현할 때는 저장된 소스와 의존성을 사용하세요. 다음은 공개된 정식 CLI `v0.4.3`에 고정하는 예시이며 최신 버전 지정이 아닙니다.
+CI와 운영 환경에서는 실제로 발행된 CLI 태그를 고정하고 앱 소스와 `go.mod`, `go.sum`도 함께 버전 관리합니다. CLI 태그는 도구의 코드만 고정합니다. Preview의 동적 레시피는 같은 CLI에서도 `new`나 `update`를 실행할 때 `@preview`를 다시 조회하므로, 앱을 재현할 때는 저장된 소스와 의존성을 사용하세요. 다음은 공개된 정식 CLI `v0.4.4`에 고정하는 예시이며 최신 버전 지정이 아닙니다.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.4
 spine version
 ```
 

@@ -1,9 +1,5 @@
 # 錯誤處理與輸入驗證
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 區分自動標籤驗證與自訂規則。此獨立應用不儲存資料。
 
 ## 組裝驗證器
@@ -11,7 +7,7 @@
 [控制器依賴](/zh-Hant/learn/tutorial/2-controller)
 
 ```sh
-go get github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 engine 是儲存 playground.New() 回傳值的變數。在 BuildApplication 建立一次並傳給 spine.WithValidator(engine)。playground 實作執行時驗證與 OpenAPI SchemaDescriber，也可使用實作公開驗證契約的其他引擎。

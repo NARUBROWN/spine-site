@@ -6,11 +6,23 @@ See the [version catalog](/en/community/versions) for the latest tags and next t
 
 See [Release channels and installation](/en/community/release-channels) to choose Preview, RC, or stable and understand the publication process.
 
+## Spine v0.7.5 / CLI v0.4.4
+
+Spine `v0.7.5` declares HTTP inputs with `input.Path`, `input.Query`, `input.Header`, and `input.Body`. HTTP, event, and WebSocket handlers and interceptors use a shared `spine.Ctx`.
+
+CLI `v0.4.4` checks the input contract and uses it in generated code and OpenAPI. The stable dependency channel selects core `v0.7.5` and Echo platform `v0.2.1` for new HTTP apps.
+
+Upgrade to `v0.7.5` if your app uses the retracted Go module versions `v0.7.0`, `v0.7.1`, or `v0.7.2-preview.1`.
+
+- [Spine v0.7.5 release](https://github.com/NARUBROWN/spine/releases/tag/v0.7.5)
+- [CLI v0.4.4 release](https://github.com/NARUBROWN/spine-cli/releases/tag/v0.4.4)
+- [0.7.5 migration guide](/en/learn/migration/v0.7.5)
+
 ## Spine v0.7.1
 
 Spine `v0.7.1` provides controller routes, constructor roles, source-specific HTTP inputs, runtime OpenAPI, and HTTP v3. Legacy input APIs remain compatible but are deprecated and cannot be mixed with new inputs in one handler.
 
-See the [v0.7.1 migration guide](/en/learn/migration/v0.7.1) and [runtime OpenAPI](/en/reference/api/openapi). Select the CLI version separately from app dependencies. Check the installed CLI with `spine version` and resolved dependencies in `go.mod`. The entries below record the named historical versions.
+See the [0.7.5 migration guide](/en/learn/migration/v0.7.5#from-v071) and [runtime OpenAPI](/en/reference/api/openapi). Select the CLI version separately from app dependencies. Check the installed CLI with `spine version` and resolved dependencies in `go.mod`. The entries below record the named historical versions.
 
 ## Preview CLI @preview {#cli-preview-branch}
 

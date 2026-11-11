@@ -1,9 +1,5 @@
 # 인터셉터
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 전역과 라우트 PreHandle은 모두 입력 바인딩 전에 실행합니다. 인증에 실패하면 본문 파싱보다 401이 먼저입니다.
 
 ## 실행 예제
@@ -88,17 +84,23 @@ func main() {
 ## 그룹과 라우트
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-이 조각은 핸들러와 Auth, Audit을 구현하고 등록한 컨트롤러용입니다. GET /users는 Auth, DELETE /users/:id는 Auth 다음 Audit을 실행합니다. 하위 그룹은 상위 인터셉터를 상속하고 라우트 옵션은 추가됩니다. HTTP 전역은 InterceptorFor(boot.InterceptorHTTP, ...), HTTP와 WebSocket 전체는 app.Interceptor 또는 InterceptorAll입니다. 같은 인증을 중복 적용하지 않습니다.
+이 예제를 적용하려면 Auth와 Audit 인터셉터를 DI에 등록합니다. GET /users는 Auth, DELETE /users/:id는 Auth 다음 Audit을 실행합니다. 하위 그룹은 상위 인터셉터를 상속하고 라우트 옵션은 추가됩니다. HTTP 전역은 InterceptorFor(boot.InterceptorHTTP, ...), HTTP와 WebSocket 전체는 app.Interceptor 또는 InterceptorAll입니다. 같은 인증을 중복 적용하지 않습니다.
 
 ## 요청 확인
 

@@ -1,16 +1,12 @@
 # 紹介
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 Spine は役割別コンストラクター、コントローラーのルート、インターセプターを Go で組み立てるバックエンドフレームワークです。
 
 ## 実行例
 
 ```sh
 go mod init example.com/spine-intro
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 Go 1.26 以降で main.go に保存して go run . を実行します。別の端末で curl `http://localhost:8080/greeting` を実行すると hello です。

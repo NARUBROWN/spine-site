@@ -23,9 +23,9 @@ MOD = """module example.com/my-app
 go 1.26.0
 
 require (
- github.com/NARUBROWN/spine v0.7.5-preview.1
- github.com/NARUBROWN/spine-echo-platform v0.2.1-preview.1
- github.com/NARUBROWN/spine-validator-playground v0.2.0-preview.6
+ github.com/NARUBROWN/spine v0.7.5
+ github.com/NARUBROWN/spine-echo-platform v0.2.1
+ github.com/NARUBROWN/spine-validator-playground v0.2.0
  github.com/uptrace/bun v1.2.16
  github.com/uptrace/bun/dialect/mysqldialect v1.2.16
  github.com/go-sql-driver/mysql v1.9.3

@@ -1,16 +1,12 @@
 # WebSocket 메시지 송수신
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 현재 연결로 메시지를 돌려주는 독립 예제입니다. 다른 연결에 방송하려면 별도의 연결 수명과 송신 정책을 가진 허브를 설계합니다.
 
 ## 설치와 코드
 
 ```sh
 go mod init example.com/spine-websocket
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0-preview.2
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0
 ```
 
 Go 1.26 이상에서 main.go로 저장합니다. HTTP와 Gorilla를 따로 선택합니다. WebSocket 메시지 DTO는 HTTP Body 래퍼 없이 받습니다. ws.Send는 표준 컨텍스트, 메시지 종류, []byte 세 인자를 받으며 현재 연결에만 보냅니다. 요청 컨텍스트나 내부 sender 키를 보관하지 않습니다.

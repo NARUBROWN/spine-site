@@ -1,32 +1,30 @@
 # Installation and first app
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
-Choose the CLI installation channel separately from the app dependency channel. This guide uses a Preview app with the 0.7.5 API. See [release channels](/en/community/release-channels) for stable releases.
+Create an HTTP app with Spine CLI `v0.4.4` and core `v0.7.5`. See [release channels](/en/community/release-channels) for CLI installation and app dependency channels.
 
 ## Requirements
 
-Use Go 1.26 or later and check the chosen modules’ go directives. Include GOBIN or the default GOPATH/bin in PATH.
+The validator in this example requires Go 1.26 or later. Add `GOBIN` or the default `GOPATH/bin` to `PATH`.
 
 ```sh
 go version
 ```
 
-## Install Preview CLI {#preview-cli}
+<span id="preview-cli"></span>
+
+## Install the stable CLI {#install-cli}
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-preview is a moving branch. Record its version and commit and use a fixed tag for reproducibility. Install the stable CLI with @latest. spine update changes app dependencies, not the CLI or app source.
+Run `spine version` to check the installed version. To reproduce this CLI version, use `@v0.4.4` in the install command. `spine update` updates app dependencies.
 
 ## Create a project
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 go list -m all
 spine doctor

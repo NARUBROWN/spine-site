@@ -1,9 +1,5 @@
 # 运行时 OpenAPI
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 Spine `v0.7.5` 根据已注册的 HTTP 路由、处理器类型与 validator 描述契约生成 OpenAPI 3.1.2 JSON，也可选择提供内置 Swagger UI 和 ReDoc。
 
 ## 启用与启动选项 {#options}
@@ -116,7 +112,7 @@ func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.Open
 通过 `boot.Options.HTTP.OpenAPI.UI` 选择界面。设置 `Enabled: true` 并注册 UI，仅提供 JSON 时省略 `UI`。以下示例固定正式版 Echo，请保存 `go.mod` 和 `go.sum` 以便复现。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 以下是注册所选 UI 的独立应用 `main.go`。在现有应用中，将 import 和 `OpenAPI.UI` 配置添加到当前 composition。

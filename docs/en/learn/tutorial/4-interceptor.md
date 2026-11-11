@@ -1,9 +1,5 @@
 # Interceptors
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Global and route PreHandle hooks both run before input binding. Authentication failure returns 401 before body parsing.
 
 ## Runnable example
@@ -88,17 +84,23 @@ func main() {
 ## Groups and routes
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-This fragment assumes implemented handlers and registered Auth and Audit types. GET /users runs Auth; DELETE /users/:id runs Auth then Audit. Child groups inherit interceptors and route options append to them. Use InterceptorFor(boot.InterceptorHTTP, ...) for HTTP globally, or app.Interceptor / InterceptorAll for HTTP and WebSocket. Avoid applying the same authentication twice.
+Register both the Auth and Audit interceptors in DI to use this example. GET /users runs Auth; DELETE /users/:id runs Auth then Audit. Child groups inherit interceptors and route options append to them. Use InterceptorFor(boot.InterceptorHTTP, ...) for HTTP globally, or app.Interceptor / InterceptorAll for HTTP and WebSocket. Avoid applying the same authentication twice.
 
 ## Try the requests
 

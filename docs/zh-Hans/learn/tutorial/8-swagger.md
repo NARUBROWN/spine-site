@@ -1,16 +1,12 @@
 # Swagger 与 OpenAPI
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 提供运行时 OpenAPI JSON、内置 Swagger UI 和 ReDoc，同时检查规范和实际输入验证。
 
 ## 独立应用
 
 ```sh
 go mod init example.com/spine-openapi
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 在 BuildApplication 中通过 WithValidator 注册 playground.New()。必填标签会在请求中自动检查，并在规范中表示为 required。OpenAPI 本身不验证请求，任意 DTO Validate 方法也不会自动执行或生成文档。

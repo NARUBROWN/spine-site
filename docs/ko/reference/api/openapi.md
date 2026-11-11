@@ -1,9 +1,5 @@
 # 런타임 OpenAPI
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 Spine `v0.7.5`는 등록된 HTTP 라우트, 핸들러 타입과 validator 설명 계약으로 OpenAPI 3.1.2 JSON을 생성합니다. Swagger UI와 ReDoc을 내장해 선택적으로 제공할 수 있습니다.
 
 ## 활성화와 부팅 옵션 {#options}
@@ -116,7 +112,7 @@ validator가 없으면 입력 파라미터, 요청과 응답 모델, 오류 상�
 `boot.Options.HTTP.OpenAPI.UI`에서 화면을 선택합니다. `Enabled: true`로 설정하고 UI를 등록하세요. JSON만 제공하려면 `UI`를 생략합니다. 다음은 정식 Echo 버전을 고정한 예제입니다. `go.mod`와 `go.sum`을 보관하세요.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 다음은 사용할 UI를 등록하는 독립 앱의 `main.go` 예제입니다. 기존 앱에는 import와 `OpenAPI.UI` 설정을 현재 composition에 반영하세요.

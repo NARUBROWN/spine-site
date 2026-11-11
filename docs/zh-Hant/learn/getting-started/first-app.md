@@ -1,32 +1,30 @@
 # 安裝與第一個應用
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
-分別選擇 CLI 安裝通道與應用依賴通道。本指南使用 0.7.5 API 的 Preview 應用。穩定版選擇參見[發布通道](/zh-Hant/community/release-channels)。
+使用 Spine CLI `v0.4.4` 建立以核心 `v0.7.5` 執行的 HTTP 應用程式。CLI 安裝通道與應用程式相依套件通道請見[發布通道](/zh-Hant/community/release-channels)。
 
 ## 需求
 
-使用 Go 1.26 以上版本並檢查所選模組的 go 指令。將 GOBIN 或預設 GOPATH/bin 加入 PATH。
+此範例的驗證器需要 Go 1.26 或更新版本。請將 `GOBIN` 或預設的 `GOPATH/bin` 加入 `PATH`。
 
 ```sh
 go version
 ```
 
-## 安裝 Preview CLI {#preview-cli}
+<span id="preview-cli"></span>
+
+## 安裝正式版 CLI {#install-cli}
 
 ```sh
-go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
+go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
 spine version
 ```
 
-preview 是移動分支，重現時記錄版本與提交並使用固定標籤。穩定 CLI 使用 @latest 安裝。spine update 更新應用依賴，不更新 CLI 或應用原始碼。
+用 `spine version` 確認已安裝的版本。如需重現此 CLI 版本，請在安裝指令中指定 `@v0.4.4`。`spine update` 用於更新應用程式的相依套件。
 
 ## 建立專案
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 go list -m all
 spine doctor

@@ -46,17 +46,23 @@ app.InterceptorFor(boot.InterceptorHTTP, (*AuthInterceptor)(nil))
 ```
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-Apply this fragment in an app with the required constructors, handlers, and both interceptors; register Audit in DI too. Avoid applying the same policy globally and locally. Role registration provides DI; scope is separate. Groups and subgroups inherit options and route options append to them. Global scopes are InterceptorHTTP, InterceptorWebSocket, and InterceptorAll; All and app.Interceptor apply to HTTP and WS messages.
+Register both the Auth and Audit interceptors in DI to use this example. Avoid applying the same policy globally and locally. Role registration provides DI; scope is separate. Groups and subgroups inherit options and route options append to them. Global scopes are InterceptorHTTP, InterceptorWebSocket, and InterceptorAll; All and app.Interceptor apply to HTTP and WS messages.
 
 <span id="error-responses"></span>
 

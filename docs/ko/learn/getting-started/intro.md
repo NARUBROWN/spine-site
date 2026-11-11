@@ -1,16 +1,12 @@
 # 소개
 
-::: info 0.7.5 API
-0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
-:::
-
 Spine은 Go 코드로 역할별 생성자, 컨트롤러 라우트와 인터셉터를 조립하는 백엔드 프레임워크입니다.
 
 ## 실행 예제
 
 ```sh
 go mod init example.com/spine-intro
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 Go 1.26 이상에서 main.go로 저장하고 go run .을 실행합니다. 다른 터미널의 curl `http://localhost:8080/greeting`은 hello를 반환합니다.

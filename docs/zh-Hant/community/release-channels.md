@@ -95,10 +95,10 @@ CLI 使用獨立的版本和發佈時程。核心版本變更時，不要求 CLI
 
 ## 固定與復原版本 {#pin}
 
-在 CI 與正式環境中，請固定實際已發佈的 CLI 標籤，並對應用程式原始碼、`go.mod` 和 `go.sum` 一起進行版本管理。CLI 標籤僅固定工具程式碼。動態 Preview 配方即使由同一 CLI 執行 `new` 或 `update`，仍會重新解析 `@preview`；重現應用程式時請使用保存的原始碼和相依套件。以下範例固定至已發佈的正式 CLI `v0.4.3`，並不代表最新版本。
+在 CI 與正式環境中，請固定實際已發佈的 CLI 標籤，並對應用程式原始碼、`go.mod` 和 `go.sum` 一起進行版本管理。CLI 標籤僅固定工具程式碼。動態 Preview 配方即使由同一 CLI 執行 `new` 或 `update`，仍會重新解析 `@preview`；重現應用程式時請使用保存的原始碼和相依套件。以下範例固定至已發佈的正式 CLI `v0.4.4`，並不代表最新版本。
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.4
 spine version
 ```
 

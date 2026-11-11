@@ -1,17 +1,13 @@
 # 项目结构
 
-::: info 0.7.5 API
-本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
-:::
-
 使用默认 layered-v1 布局分离组装、HTTP 控制器和启动代码。新代码使用当前路由注册 API。
 
 ## 创建项目
 
-使用支持 0.7.5 API 的 Preview CLI。CLI 与应用通道独立，实际选择版本以 go.mod 为准。
+使用 Spine CLI `v0.4.4` 创建应用。请在生成的 `go.mod` 中确认核心和平台版本。
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -67,10 +63,11 @@ import (
 
 type HealthController struct{}
 
-func (*HealthController) Constructor() *HealthController   { return &HealthController{} }
-func (c *HealthController) RegisterRoutes(r *api.Registry) { r.GET("/health", c.Get) }
-func (*HealthController) Get(ctx spinectx.Ctx) httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
 

@@ -1,16 +1,12 @@
 # Introduction
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Spine is a Go backend framework assembled from role-based constructors, controller routes and interceptors.
 
 ## Runnable example
 
 ```sh
 go mod init example.com/spine-intro
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 With Go 1.26 or later, save as main.go and run go run .. In another terminal, curl `http://localhost:8080/greeting` returns hello.

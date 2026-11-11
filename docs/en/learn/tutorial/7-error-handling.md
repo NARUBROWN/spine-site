@@ -1,9 +1,5 @@
 # Errors and input validation
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Distinguish automatic tag validation from custom rules. This standalone app does not store data.
 
 ## Assemble the validator
@@ -11,7 +7,7 @@ Distinguish automatic tag validation from custom rules. This standalone app does
 [Controller dependencies](/en/learn/tutorial/2-controller)
 
 ```sh
-go get github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 engine is the variable holding playground.New(). Create it once in BuildApplication and pass it to spine.WithValidator(engine). playground implements runtime validation and OpenAPI SchemaDescriber. Other engines implementing the public validator contract can also be used.

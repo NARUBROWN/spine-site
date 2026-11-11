@@ -1,9 +1,5 @@
 # HTTP errors
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Handlers and interceptors use the public httperr contract for status and public messages. Return internal details as ordinary errors.
 
 ## Public helpers

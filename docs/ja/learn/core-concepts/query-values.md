@@ -1,9 +1,5 @@
 # クエリ入力
 
-::: info 0.7.5 API
-0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
-:::
-
 Spine `v0.7.5` ではクエリを入力元別の構造体で受け取ります。`input.Query[T]` の `T` は構造体で、ハンドラーからフィールドに直接アクセスします。`query` タグで外部名を指定し、タグがない場合は lowerCamel 名を使います。
 
 ## 実行例
@@ -11,7 +7,7 @@ Spine `v0.7.5` ではクエリを入力元別の構造体で受け取ります�
 別の Go モジュールに Spine `v0.7.5` と互換性のある Echo プラットフォームをインストールし、次のコードを `main.go` に保存して `go run .` で実行します。この例では値がない場合に限りページ 1 を使います。
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1
 ```
 
 ```go

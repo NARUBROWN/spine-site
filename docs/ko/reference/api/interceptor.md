@@ -46,17 +46,23 @@ app.InterceptorFor(boot.InterceptorHTTP, (*AuthInterceptor)(nil))
 ```
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-위 조각은 해당 Constructor, 핸들러와 두 인터셉터를 구현한 앱에 적용합니다. Audit도 DI에 등록합니다. 같은 정책을 전역과 라우트에 중복 적용하지 마세요. 역할 등록은 DI 제공이며 적용 범위는 별도입니다. 그룹과 하위 그룹은 설정을 상속하고 라우트 옵션은 추가됩니다. 전역은 InterceptorHTTP, InterceptorWebSocket 또는 InterceptorAll로 지정하며 All과 app.Interceptor는 HTTP와 WS 메시지에 적용합니다.
+이 예제를 적용하려면 Auth와 Audit 인터셉터를 DI에 등록합니다. 같은 정책을 전역과 라우트에 중복 적용하지 마세요. 역할 등록은 DI 제공이며 적용 범위는 별도입니다. 그룹과 하위 그룹은 설정을 상속하고 라우트 옵션은 추가됩니다. 전역은 InterceptorHTTP, InterceptorWebSocket 또는 InterceptorAll로 지정하며 All과 app.Interceptor는 HTTP와 WS 메시지에 적용합니다.
 
 ## 오류와 트랜잭션 {#errors}
 

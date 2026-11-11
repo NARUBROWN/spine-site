@@ -45,10 +45,19 @@ Objects implement Constructor(dependencies...) *Self and use role markers. Marke
 func (*UserController) Constructor(service *UserService) *UserController {
 	return &UserController{service: service}
 }
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+
+type CreateUser struct {
+	Name string `json:"name"`
+}
+
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	users := r.Group("/users", api.Tags("Users"))
-	users.GET("/:id", c.Get)
-	users.POST("/", c.Create)
+	users.GET("/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
+	})
+	users.POST("/", func(body input.Body[CreateUser]) httpx.Response[CreateUser] {
+		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
+	})
 }
 ```
 

@@ -95,10 +95,10 @@ See [Current Release](/en/community/changelog) for tags and published versions. 
 
 ## Pin or restore a version {#pin}
 
-For CI and production, pin an actually published CLI tag and version application source, `go.mod`, and `go.sum` together. A CLI tag pins the tool’s code only. The dynamic Preview recipe still resolves `@preview` when the same CLI runs `new` or `update`, so reproduce an app from its saved source and dependencies. This example pins the published stable CLI `v0.4.3`; it does not select the latest version.
+For CI and production, pin an actually published CLI tag and version application source, `go.mod`, and `go.sum` together. A CLI tag pins the tool’s code only. The dynamic Preview recipe still resolves `@preview` when the same CLI runs `new` or `update`, so reproduce an app from its saved source and dependencies. This example pins the published stable CLI `v0.4.4`; it does not select the latest version.
 
 ```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
+go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.4
 spine version
 ```
 

@@ -1,9 +1,5 @@
 # Runtime OpenAPI
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Spine `v0.7.5` generates OpenAPI 3.1.2 JSON from registered HTTP routes, handler types, and the validator description contract. The embedded Swagger UI and ReDoc can be served optionally.
 
 ## Enable generation and configure boot options {#options}
@@ -116,7 +112,7 @@ The T in `httpx.Response[T]` describes the response body type. Status codes and 
 Select UIs with `boot.Options.HTTP.OpenAPI.UI`. Set `Enabled: true` and register the UIs; omit `UI` for JSON only. This example pins the stable Echo version. Retain `go.mod` and `go.sum` for reproducibility.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+go get github.com/NARUBROWN/spine@v0.7.5 github.com/NARUBROWN/spine-echo-platform@v0.2.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0
 ```
 
 The following `main.go` is a standalone app that registers the selected UIs. In an existing app, add the imports and `OpenAPI.UI` settings to your current composition.

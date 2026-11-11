@@ -1,14 +1,10 @@
 # JWT Login Example
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Build signup and login APIs, then retrieve your profile using the JWT issued at login. The authentication interceptor applies only to `/me`, so signup and login requests do not require a token.
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) and use a Preview CLI supporting the 0.7.5 API. CLI installation and app dependency channels are independent.
+Install the stable [Spine CLI](/en/learn/getting-started/installation). This example uses CLI `v0.4.4` and core `v0.7.5`.
 
 This example uses an in-memory store, plaintext password comparison, and a JWT secret hardcoded in the source to teach the authentication flow. Registered users disappear when the server stops. Before using this in a real service, use password hashing and a JWT secret managed through environment variables.
 
@@ -16,10 +12,10 @@ This example uses an in-memory store, plaintext password comparison, and a JWT s
 
 Prepare a basic app and the JWT dependency. Run subsequent commands from `login-example/`.
 
-The commands below select Preview dependencies. Check the actual core and platform versions in the generated go.mod.
+The commands below select stable dependencies from the `main` channel. Check the core and platform versions in the generated `go.mod`.
 
 ```sh
-spine new login-example --module example.com/login-example --channel preview --validator playground --no-interactive
+spine new login-example --module example.com/login-example --channel main --validator playground --no-interactive
 cd login-example
 spine doctor
 go get github.com/golang-jwt/jwt/v5@v5.3.1
@@ -264,73 +260,67 @@ func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
 }
 
 func (c *AuthController) RegisterRoutes(r *api.Registry) {
-	r.POST("/signup", c.Signup)
-	r.POST("/login", c.Login)
-	r.GET("/me", c.GetMe, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
-}
+	// Registration, no authentication required
+	r.POST("/signup", func(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
+		user, err := c.userStore.Create(req.Email, req.Password, req.Name)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
+		}
 
-// Registration, no authentication required
-func (c *AuthController) Signup(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
-
-	user, err := c.userStore.Create(req.Email, req.Password, req.Name)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
-	}
-
-	return httpx.Response[model.User]{Body: *user}, nil
-}
-
-// Login, no authentication required
-func (c *AuthController) Login(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
-
-	user, err := c.userStore.FindByEmail(req.Email)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
-	}
-
-	// Check the password; in production, compare hashes with bcrypt or similar
-	if user.Password != req.Password {
-		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
-	}
-
-	// Create a JWT token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		return httpx.Response[model.User]{Body: *user}, nil
 	})
 
-	tokenString, err := token.SignedString(interceptor.JWTSecret)
-	if err != nil {
-		return httpx.Response[model.LoginResponse]{}, err
-	}
+	// Login, no authentication required
+	r.POST("/login", func(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
+		user, err := c.userStore.FindByEmail(req.Email)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
+		}
 
-	return httpx.Response[model.LoginResponse]{
-		Body: model.LoginResponse{
-			Token: tokenString,
-			User:  *user,
-		},
-	}, nil
-}
+		// Check the password; in production, compare hashes with bcrypt or similar
+		if user.Password != req.Password {
+			return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
+		}
 
-// Read the current user's profile, authentication required
-func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-	// Read the userID stored by AuthInterceptor
-	userIDValue, ok := ctx.ExecutionContext().Get("userID")
-	if !ok {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("Authentication information was not found.")
-	}
+		// Create a JWT token
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"user_id": user.ID,
+			"email":   user.Email,
+			"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		})
 
-	userID, valid := userIDValue.(int64)
-	if !valid {
-		return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
-	}
-	user, err := c.userStore.FindByID(userID)
-	if err != nil {
-		return httpx.Response[model.User]{}, httperr.NotFound("User was not found.")
-	}
+		tokenString, err := token.SignedString(interceptor.JWTSecret)
+		if err != nil {
+			return httpx.Response[model.LoginResponse]{}, err
+		}
 
-	return httpx.Response[model.User]{Body: *user}, nil
+		return httpx.Response[model.LoginResponse]{
+			Body: model.LoginResponse{
+				Token: tokenString,
+				User:  *user,
+			},
+		}, nil
+	})
+
+	// Read the current user's profile, authentication required
+	r.GET("/me", func(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
+		// Read the userID stored by AuthInterceptor
+		userIDValue, ok := ctx.ExecutionContext().Get("userID")
+		if !ok {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("Authentication information was not found.")
+		}
+
+		userID, valid := userIDValue.(int64)
+		if !valid {
+			return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+		}
+		user, err := c.userStore.FindByID(userID)
+		if err != nil {
+			return httpx.Response[model.User]{}, httperr.NotFound("User was not found.")
+		}
+
+		return httpx.Response[model.User]{Body: *user}, nil
+	}, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
 }
 ```
 

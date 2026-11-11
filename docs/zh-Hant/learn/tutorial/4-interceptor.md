@@ -1,9 +1,5 @@
 # 攔截器
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 全域與路由 PreHandle 都在輸入綁定前執行。驗證失敗會在解析本文前回傳 401。
 
 ## 執行範例
@@ -88,17 +84,23 @@ func main() {
 ## 群組與路由
 
 ```go
-func (c *UserController) RegisterRoutes(r *api.Registry) {
+func (*UserController) RegisterRoutes(r *api.Registry) {
 	auth := (*AuthInterceptor)(nil)
 	audit := (*AuditInterceptor)(nil)
 	users := r.Group("/users", api.Interceptors(auth))
-	users.GET("/", c.List)
-	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
-	r.GET("/profile", c.Profile, api.Interceptors(auth))
+	users.GET("/", func() httpx.Response[[]int64] {
+		return httpx.Response[[]int64]{Body: []int64{1}}
+	})
+	users.DELETE("/:id", func() httpx.Response[struct{}] {
+		return httpx.Response[struct{}]{Options: httpx.ResponseOptions{Status: 204}}
+	}, api.Interceptors(audit))
+	r.GET("/profile", func() httpx.Response[string] {
+		return httpx.Response[string]{Body: "profile"}
+	}, api.Interceptors(auth))
 }
 ```
 
-此片段須先實作處理器並註冊 Auth、Audit。GET /users 執行 Auth，DELETE /users/:id 依序執行 Auth、Audit。子群組繼承攔截器，路由選項繼續追加。HTTP 全域使用 InterceptorFor(boot.InterceptorHTTP, ...)，HTTP 與 WebSocket 全部使用 app.Interceptor 或 InterceptorAll。避免重複套用同一驗證。
+使用此範例前，將 Auth 和 Audit 攔截器註冊到 DI。GET /users 執行 Auth，DELETE /users/:id 依序執行 Auth、Audit。子群組繼承攔截器，路由選項繼續追加。HTTP 全域使用 InterceptorFor(boot.InterceptorHTTP, ...)，HTTP 與 WebSocket 全部使用 app.Interceptor 或 InterceptorAll。避免重複套用同一驗證。
 
 ## 驗證請求
 

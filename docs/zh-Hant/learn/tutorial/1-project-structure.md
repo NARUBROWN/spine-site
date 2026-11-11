@@ -1,17 +1,13 @@
 # 專案結構
 
-::: info 0.7.5 API
-本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
-:::
-
 使用預設 layered-v1 配置分開組裝、HTTP 控制器與啟動程式碼。新程式碼使用目前的路由註冊 API。
 
 ## 建立專案
 
-使用支援 0.7.5 API 的 Preview CLI。CLI 與應用通道獨立，實際選擇版本以 go.mod 為準。
+使用 Spine CLI `v0.4.4` 建立應用程式。請在產生的 `go.mod` 中確認核心與平台版本。
 
 ```sh
-spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+spine new my-app --module example.com/my-app --channel main --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
@@ -67,10 +63,11 @@ import (
 
 type HealthController struct{}
 
-func (*HealthController) Constructor() *HealthController   { return &HealthController{} }
-func (c *HealthController) RegisterRoutes(r *api.Registry) { r.GET("/health", c.Get) }
-func (*HealthController) Get(ctx spinectx.Ctx) httpx.Response[map[string]string] {
-	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
 }
 ```
 

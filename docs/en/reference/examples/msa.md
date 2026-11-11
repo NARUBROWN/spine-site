@@ -1,14 +1,10 @@
 # Connect Order and Stock Services with Kafka
 
-::: info 0.7.5 API
-This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
-:::
-
 Create an order HTTP service and a stock consumer service, and pass `order.created` events through Kafka. Send an order request, then check the processing log in the stock service. The stock service runs without an HTTP listener.
 
 ## Prerequisites
 
-Complete [CLI installation](/en/learn/getting-started/installation) and use a Preview CLI supporting the 0.7.5 API. CLI installation and app dependency channels are independent.
+Install the stable [Spine CLI](/en/learn/getting-started/installation). This example uses CLI `v0.4.4` and core `v0.7.5`.
 
 To test message delivery, you need a Kafka broker at `localhost:9092` and an `order.created` topic. This example uses a plaintext connection in an isolated local environment. The stock consumer logs events; it does not change actual stock quantities.
 
@@ -16,20 +12,20 @@ To test message delivery, you need a Kafka broker at `localhost:9092` and an `or
 
 Create a working directory and preview the files to be generated.
 
-The commands below select Preview dependencies. Check the actual core and platform versions in the generated go.mod.
+The commands below select stable dependencies from the `main` channel. Check the core and platform versions in the generated `go.mod`.
 
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive --dry-run
-spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive --dry-run
+spine new order-app --module example.com/order-app --event-platform kafka --channel main --no-interactive --dry-run
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive --dry-run
 ```
 
 Review the preview, then create both apps. Run subsequent commands from `spine-msa/` unless instructed otherwise.
 
 ```sh
-spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive
-spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive
+spine new order-app --module example.com/order-app --event-platform kafka --channel main --no-interactive
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive
 ```
 
 ## 2. Generate the Stock Consumer Scaffold
@@ -130,23 +126,21 @@ type OrderController struct{}
 
 func (*OrderController) Constructor() *OrderController { return &OrderController{} }
 
-func (c *OrderController) RegisterRoutes(r *api.Registry) {
-	r.POST("/orders/:order_id", c.Create)
-}
-
-func (c *OrderController) Create(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[string], error) {
-	if *id <= 0 {
-		return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
-	}
-	publish.Event(ctx.ExecutionContext().Context(), events.OrderCreated{
-		EventID: fmt.Sprintf("order.created:%d", *id),
-		OrderID: *id,
-		At:      time.Now().UTC(),
+func (*OrderController) RegisterRoutes(r *api.Registry) {
+	r.POST("/orders/:order_id", func(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[string], error) {
+		if *id <= 0 {
+			return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
+		}
+		publish.Event(ctx.ExecutionContext().Context(), events.OrderCreated{
+			EventID: fmt.Sprintf("order.created:%d", *id),
+			OrderID: *id,
+			At:      time.Now().UTC(),
+		})
+		return httpx.Response[string]{
+			Body:    "accepted",
+			Options: httpx.ResponseOptions{Status: 202},
+		}, nil
 	})
-	return httpx.Response[string]{
-		Body:    "accepted",
-		Options: httpx.ResponseOptions{Status: 202},
-	}, nil
 }
 ```
 
