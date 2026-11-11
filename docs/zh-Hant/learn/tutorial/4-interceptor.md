@@ -1,14 +1,16 @@
 # 攔截器
 
-攔截器處理身分驗證和日誌等共通邏輯。此獨立應用程式為群組中的所有路由和單一路由套用驗證。權杖僅供示範。
+::: info 0.7.5 API
+本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
+:::
 
-## 套用至群組和路由
+全域與路由 PreHandle 都在輸入綁定前執行。驗證失敗會在解析本文前回傳 401。
 
-將以下程式碼儲存為獨立 Go 模組中的 `main.go` 並執行。
+## 執行範例
 
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
-```
+[控制器依賴](/zh-Hant/learn/tutorial/2-controller)
+
+取代 main.go。固定權杖僅供學習。constructor.Interceptor 註冊 DI，api.Interceptors 指定作用範圍。(*Auth)(nil) 表示從 DI 解析已註冊型別。
 
 ```go
 package main
@@ -23,101 +25,105 @@ import (
 	"github.com/NARUBROWN/spine/pkg/httperr"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
 type Auth struct{}
 
-func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-	if ctx.Header("Authorization") != "Bearer demo-token" {
+func (*Auth) Constructor() *Auth { return &Auth{} }
+func (*Auth) PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error {
+	request, ok := ctx.HTTPRequestContext()
+	if !ok {
+		return httperr.InternalServerError("HTTP request context unavailable")
+	}
+	if request.Header("Authorization") != "Bearer demo-token" {
 		return httperr.Unauthorized("unauthorized")
 	}
+	ctx.ExecutionContext().Set("userID", "demo-user")
 	return nil
 }
-func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
-func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
-func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
+func (*Auth) PostHandle(spinectx.Ctx, core.HandlerMeta)                  {}
+func (*Auth) BeforeResponse(spinectx.Ctx, core.HandlerMeta, error) error { return nil }
+func (*Auth) AfterCompletion(spinectx.Ctx, core.HandlerMeta, error)      {}
 
 type Controller struct{}
+type CreateUser struct {
+	Name string `json:"name"`
+}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	users := r.Group("/users", api.Interceptors(&Auth{}))
-	users.GET("/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
+	users := r.Group("/users", api.Interceptors((*Auth)(nil)))
+	users.GET("/:id", func(ctx spinectx.Ctx, id input.Path[int64]) httpx.Response[map[string]int64] {
 		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
 	})
-	r.GET("/profile", func() httpx.Response[string] {
+	users.POST("/", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[string] {
+		return httpx.Response[string]{Body: body.Name}
+	})
+	r.GET("/profile", func(ctx spinectx.Ctx) httpx.Response[string] {
 		return httpx.Response[string]{Body: "profile"}
-	}, api.Interceptors(&Auth{}))
+	}, api.Interceptors((*Auth)(nil)))
+}
+func BuildApplication() (spine.App, boot.Options, error) {
+
+	app := spine.New(echoplatform.Option())
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Interceptor(&Auth{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 func main() {
-	app := spine.New(echoplatform.Option())
-	app.Constructor(constructor.Controller(&Controller{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-`/users/:id` 從群組繼承驗證，`/profile` 在路由上直接指定驗證。巢狀群組也會繼承上層群組的設定。
-
-未驗證的請求回傳 401，攜帶權杖的請求回傳 200。正式環境中請實作安全的權杖驗證。
-
-```bash
-curl -i http://localhost:8080/users/1
-curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
-curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/profile
-```
-
-## 攔截器生命週期
-
-Spine v0.7.1 的 HTTP 請求會依序執行全域攔截器、路由比對與輸入繫結、路由攔截器、控制器。攔截器必須實作全部四個生命週期方法。
-
-```mermaid
-graph TD
-    Request["請求"] --> GlobalPre["全域 PreHandle"]
-    GlobalPre --> Bind["路由比對、輸入繫結"]
-    Bind --> RoutePre["路由 PreHandle"]
-    RoutePre --> Controller["控制器方法"]
-    Controller -- 成功 --> Prepare["回應序列化與驗證"]
-    Prepare --> Post["PostHandle<br/>反向執行"]
-    Post --> Before["BeforeResponse<br/>反向執行、提交或回滾"]
-    GlobalPre -- 錯誤 --> Before
-    Bind -- 錯誤 --> Before
-    RoutePre -- 錯誤 --> Before
-    Controller -- 錯誤 --> Before
-    Prepare -- 錯誤 --> Before
-    Before --> Response["寫入回應"]
-    Response --> After["AfterCompletion<br/>反向執行、記錄日誌與清理資源"]
-```
-
-輸入繫結失敗時，路由的 `PreHandle` 也不會執行。需要在檢查主體格式之前先驗證身分的政策，請在全域攔截器中處理。
-
-
-## 介面
+## 群組與路由
 
 ```go
-type Interceptor interface {
-    PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    PostHandle(ctx ExecutionContext, meta HandlerMeta)
-    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-    AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	auth := (*AuthInterceptor)(nil)
+	audit := (*AuditInterceptor)(nil)
+	users := r.Group("/users", api.Interceptors(auth))
+	users.GET("/", c.List)
+	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
+	r.GET("/profile", c.Profile, api.Interceptors(auth))
 }
 ```
 
-| 方法 | 執行時機 | 回傳值 | 用途 |
-|--------|----------|------|------|
-| `PreHandle` | 全域在路由比對之前，路由則在輸入繫結之後 | `error` | 身分驗證、資料驗證、啟動交易 |
-| `PostHandle` | 控制器與回應準備成功之後 | 無 | 記錄處理完成、後續作業 |
-| `BeforeResponse` | 實際寫入回應之前 | `error` | 提交或回滾交易 |
-| `AfterCompletion` | 嘗試寫入回應之後 | 無 | 記錄日誌、清理資源 |
+此片段須先實作處理器並註冊 Auth、Audit。GET /users 執行 Auth，DELETE /users/:id 依序執行 Auth、Audit。子群組繼承攔截器，路由選項繼續追加。HTTP 全域使用 InterceptorFor(boot.InterceptorHTTP, ...)，HTTP 與 WebSocket 全部使用 app.Interceptor 或 InterceptorAll。避免重複套用同一驗證。
 
-`BeforeResponse` 透過 `executionErr` 接收先前的執行錯誤，以及回應序列化、Cookie 與狀態碼驗證錯誤。只有 `PreHandle` 成功的攔截器會執行此方法，因此適合用來結束在該階段啟動的交易。提交或回滾失敗時，請傳回錯誤。
+## 驗證請求
 
-即使發生錯誤，`AfterCompletion` 仍會在全域攔截器，以及路由比對所確認的路由攔截器上呼叫。其中可能包含尚未執行 `PreHandle` 的攔截器，因此必須先確認是否有需要清理的資源。此時回應可能已經寫入，請勿用於修改回應。
+```sh
+go run .
+#
+curl -i http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
+curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/profile
+curl -i -H 'Content-Type: application/json' -d '{' http://localhost:8080/users
+curl -i -H 'Authorization: Bearer demo-token' -H 'Content-Type: application/json' -d '{' http://localhost:8080/users
+```
 
+依序為 401、200、200、401、400。本文格式錯誤時，驗證失敗仍優先回傳 401。
 
+## 生命週期
 
-## 進一步了解
+PreHandle 按註冊順序執行；成功後的 PostHandle、寫入前的 BeforeResponse、嘗試寫入後的 AfterCompletion 按反序執行。BeforeResponse 僅對 PreHandle 成功的物件執行，並接收綁定、處理器、序列化與回應驗證錯誤。AfterCompletion 也可能用於未執行 PreHandle 的物件，須檢查資源是否存在。
 
-全域註冊、建構函式注入和生命週期詳情請參閱[攔截器 API](/zh-Hant/reference/api/interceptor)。
+BeforeResponse 錯誤優先於處理器錯誤決定回應。多個掛鉤失敗時使用最後一個失敗的錯誤，完成掛鉤也會收到先前錯誤。
+
+## 公開上下文
+
+四個掛鉤均接收 spine.Ctx。值使用 ExecutionContext().Set/Get，標準上下文使用 ExecutionContext().Context()；存取 HTTP 前檢查 HTTPRequestContext() 的布林值。處理器仍相容直接注入 context.Context。
+
+## 下一步
+
+[交易](/zh-Hant/learn/tutorial/6-transaction) / [錯誤處理](/zh-Hant/learn/tutorial/7-error-handling)

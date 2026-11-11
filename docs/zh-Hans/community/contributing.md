@@ -63,6 +63,8 @@ python3 scripts/check-doc-translations.py
 构建文档后，还应检查翻译后的内部路径和章节链接。
 
 ```bash
+go run scripts/check-go-examples.go docs
+python3 scripts/check-v075-examples.py
 npm run docs:build
 python3 scripts/check-doc-translations.py --check-rendered
 ```

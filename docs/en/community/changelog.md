@@ -1,5 +1,7 @@
 # Release notes
 
+For current API usage, see the [0.7.5 migration guide](/en/learn/migration/v0.7.5). Publication details and past release records below refer to their individual tags.
+
 See the [version catalog](/en/community/versions) for the latest tags and next target versions.
 
 See [Release channels and installation](/en/community/release-channels) to choose Preview, RC, or stable and understand the publication process.

@@ -1,16 +1,20 @@
 # Choosing platforms and DTO validation
 
-Spine `v0.7.1` keeps public HTTP, WebSocket, event, and DTO validation contracts in core and selects implementations as independent modules. Connect only the implementations your application needs.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
+
+Spine `v0.7.5` keeps public HTTP, WebSocket, event, and DTO validation contracts in core and selects implementations as independent modules. Connect only the implementations your application needs.
 
 ## Choose with the CLI
 
-Install stable CLI `v0.4.3` or later, then run each command below in a separate directory. `--channel main` selects published stable tags. The CLI installation channel and application dependency channel are independent.
+Complete [CLI installation](/en/learn/getting-started/installation) and use a Preview CLI supporting the 0.7.5 API. CLI installation and app dependency channels are independent.
 
 ```sh
-spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
-spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
-spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
-spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
+spine new http-app --module example.com/http-app --channel preview --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel preview --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel preview --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel preview --validator playground --no-interactive
 ```
 
 Echo is the default HTTP platform; WebSocket, events, validator, and frontend are not selected by default. `--platform none` creates an event worker and requires an event platform. WebSocket requires an HTTP platform. `--event-platform` can be repeated.
@@ -29,8 +33,8 @@ An app generated with `--validator playground` validates bound DTOs before the h
 
 ```go
 type CreateUserRequest struct {
-    Email string `json:"email" validate:"required,email"`
-    Age   int    `json:"age" validate:"gte=18"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
 }
 ```
 
@@ -44,4 +48,4 @@ Rule violations result in HTTP 400, WebSocket close 1008, or the consumer failur
 spine update --dry-run
 ```
 
-See [release channels and installation](/en/community/release-channels), [input migration](/en/learn/migration/v0.7.1-preview), and [HTTP v3 and boot options](/en/learn/migration/preview-features).
+See [release channels and installation](/en/community/release-channels), [input migration](/en/learn/migration/v0.7.5), and [HTTP v3 and boot options](/en/learn/migration/v0.7.5).

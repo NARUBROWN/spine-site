@@ -1,14 +1,14 @@
 # JWT Login Example
 
-::: info
-This example uses `v0.7.1` controllers and route interceptors. See [route migration](/en/learn/migration/preview-controller-routes) for older registration.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
 :::
 
 Build signup and login APIs, then retrieve your profile using the JWT issued at login. The authentication interceptor applies only to `/me`, so signup and login requests do not require a token.
 
 ## Prerequisites
 
-After [installing the CLI](/en/learn/getting-started/installation), create the project with CLI `v0.4.3` or later. Add the JWT code manually and install `github.com/golang-jwt/jwt/v5`.
+Complete [CLI installation](/en/learn/getting-started/installation) and use a Preview CLI supporting the 0.7.5 API. CLI installation and app dependency channels are independent.
 
 This example uses an in-memory store, plaintext password comparison, and a JWT secret hardcoded in the source to teach the authentication flow. Registered users disappear when the server stops. Before using this in a real service, use password hashing and a JWT secret managed through environment variables.
 
@@ -16,10 +16,10 @@ This example uses an in-memory store, plaintext password comparison, and a JWT s
 
 Prepare a basic app and the JWT dependency. Run subsequent commands from `login-example/`.
 
-The commands below use the stable dependency channel. Check the selected versions in `go.mod`.
+The commands below select Preview dependencies. Check the actual core and platform versions in the generated go.mod.
 
 ```sh
-spine new login-example --layout legacy --module example.com/login-example --channel main --no-interactive
+spine new login-example --module example.com/login-example --channel preview --validator playground --no-interactive
 cd login-example
 spine doctor
 go get github.com/golang-jwt/jwt/v5@v5.3.1
@@ -54,26 +54,26 @@ Create `src/model/user.go`. The `json:"-"` tag on `Password` excludes the passwo
 package model
 
 type User struct {
-    ID       int64  `json:"id"`
-    Email    string `json:"email"`
-    Password string `json:"-"` // Exclude from the JSON response
-    Name     string `json:"name"`
+	ID       int64  `json:"id"`
+	Email    string `json:"email"`
+	Password string `json:"-"` // Exclude from the JSON response
+	Name     string `json:"name"`
 }
 
 type LoginRequest struct {
-    Email    string `json:"email"`
-    Password string `json:"password"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type LoginResponse struct {
-    Token string `json:"token"`
-    User  User   `json:"user"`
+	Token string `json:"token"`
+	User  User   `json:"user"`
 }
 
 type SignupRequest struct {
-    Email    string `json:"email"`
-    Password string `json:"password"`
-    Name     string `json:"name"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+	Name     string `json:"name" validate:"required"`
 }
 ```
 
@@ -86,68 +86,68 @@ Create `src/store/user_store.go`. It stores users in memory and retrieves them b
 package store
 
 import (
-    "errors"
-    "example.com/login-example/src/model"
-    "sync"
+	"errors"
+	"example.com/login-example/src/model"
+	"sync"
 )
 
 type UserStore struct {
-    mu     sync.RWMutex
-    users  map[int64]*model.User
-    nextID int64
+	mu     sync.RWMutex
+	users  map[int64]*model.User
+	nextID int64
 }
 
 func NewUserStore() *UserStore {
-    return &UserStore{
-        users:  make(map[int64]*model.User),
-        nextID: 1,
-    }
+	return &UserStore{
+		users:  make(map[int64]*model.User),
+		nextID: 1,
+	}
 }
 
 func (s *UserStore) Create(email, password, name string) (*model.User, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-    // Check for duplicate emails
-    for _, u := range s.users {
-        if u.Email == email {
-            return nil, errors.New("email already exists")
-        }
-    }
+	// Check for duplicate emails
+	for _, u := range s.users {
+		if u.Email == email {
+			return nil, errors.New("email already exists")
+		}
+	}
 
-    user := &model.User{
-        ID:       s.nextID,
-        Email:    email,
-        Password: password,
-        Name:     name,
-    }
-    s.users[s.nextID] = user
-    s.nextID++
+	user := &model.User{
+		ID:       s.nextID,
+		Email:    email,
+		Password: password,
+		Name:     name,
+	}
+	s.users[s.nextID] = user
+	s.nextID++
 
-    return user, nil
+	return user, nil
 }
 
 func (s *UserStore) FindByEmail(email string) (*model.User, error) {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-    for _, u := range s.users {
-        if u.Email == email {
-            return u, nil
-        }
-    }
-    return nil, errors.New("user not found")
+	for _, u := range s.users {
+		if u.Email == email {
+			return u, nil
+		}
+	}
+	return nil, errors.New("user not found")
 }
 
 func (s *UserStore) FindByID(id int64) (*model.User, error) {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-    user, ok := s.users[id]
-    if !ok {
-        return nil, errors.New("user not found")
-    }
-    return user, nil
+	user, ok := s.users[id]
+	if !ok {
+		return nil, errors.New("user not found")
+	}
+	return user, nil
 }
 ```
 
@@ -160,69 +160,76 @@ Create `src/interceptor/auth_interceptor.go`. It reads a JWT from the `Authoriza
 package interceptor
 
 import (
-    "strings"
+	"strings"
 
-    "github.com/NARUBROWN/spine/core"
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/golang-jwt/jwt/v5"
+	"github.com/NARUBROWN/spine/core"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var JWTSecret = []byte("your-secret-key") // Use an environment variable in production
 
 type AuthInterceptor struct{}
 
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    // Extract the token from the Authorization header
-    authHeader := ctx.Header("Authorization")
-    if authHeader == "" {
-        return httperr.Unauthorized("A token is required.")
-    }
+func (*AuthInterceptor) Constructor() *AuthInterceptor { return &AuthInterceptor{} }
 
-    // Parse the "Bearer {token}" format
-    parts := strings.Split(authHeader, " ")
-    if len(parts) != 2 || parts[0] != "Bearer" {
-        return httperr.Unauthorized("Invalid token format.")
-    }
+func (i *AuthInterceptor) PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error {
+	// Extract the token from the Authorization header
+	request, ok := ctx.HTTPRequestContext()
+	if !ok {
+		return httperr.Unauthorized("HTTP request required")
+	}
+	authHeader := request.Header("Authorization")
+	if authHeader == "" {
+		return httperr.Unauthorized("A token is required.")
+	}
 
-    tokenString := parts[1]
+	// Parse the "Bearer {token}" format
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return httperr.Unauthorized("Invalid token format.")
+	}
 
-    // Validate the JWT token
-    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-            return nil, httperr.Unauthorized("Invalid signing method.")
-        }
-        return JWTSecret, nil
-    }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
+	tokenString := parts[1]
 
-    if err != nil || !token.Valid {
-        return httperr.Unauthorized("The token is invalid.")
-    }
+	// Validate the JWT token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, httperr.Unauthorized("Invalid signing method.")
+		}
+		return JWTSecret, nil
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 
-    // Extract the user ID from the token
-    claims, ok := token.Claims.(jwt.MapClaims)
-    if !ok {
-        return httperr.Unauthorized("Unable to read token claims.")
-    }
+	if err != nil || !token.Valid {
+		return httperr.Unauthorized("The token is invalid.")
+	}
 
-    rawID, ok := claims["user_id"].(float64)
-    if !ok || rawID <= 0 || rawID != float64(int64(rawID)) {
-        return httperr.Unauthorized("Invalid user ID claim.")
-    }
-    userID := int64(rawID)
+	// Extract the user ID from the token
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return httperr.Unauthorized("Unable to read token claims.")
+	}
 
-    // Store the user ID in ExecutionContext
-    ctx.Set("userID", userID)
+	rawID, ok := claims["user_id"].(float64)
+	if !ok || rawID <= 0 || rawID != float64(int64(rawID)) {
+		return httperr.Unauthorized("Invalid user ID claim.")
+	}
+	userID := int64(rawID)
 
-    return nil
+	// Store the user ID in ExecutionContext
+	ctx.ExecutionContext().Set("userID", userID)
+
+	return nil
 }
 
-func (i *AuthInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
+func (i *AuthInterceptor) PostHandle(ctx spinectx.Ctx, meta core.HandlerMeta) {}
 
-func (i *AuthInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    return nil
+func (i *AuthInterceptor) BeforeResponse(ctx spinectx.Ctx, meta core.HandlerMeta, executionErr error) error {
+	return nil
 }
 
-func (i *AuthInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {}
+func (i *AuthInterceptor) AfterCompletion(ctx spinectx.Ctx, meta core.HandlerMeta, err error) {}
 ```
 
 ## 5. Add the Authentication Controller
@@ -234,101 +241,96 @@ Create `src/controller/auth_controller.go`. Signup saves a user, and login check
 package controller
 
 import (
-    "time"
+	"time"
 
-    "example.com/login-example/src/interceptor"
-    "example.com/login-example/src/model"
-    "example.com/login-example/src/store"
+	"example.com/login-example/src/interceptor"
+	"example.com/login-example/src/model"
+	"example.com/login-example/src/store"
 
-    "github.com/NARUBROWN/spine/pkg/api"
-    spinectx "github.com/NARUBROWN/spine/pkg/spine"
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/golang-jwt/jwt/v5"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type AuthController struct {
-    userStore *store.UserStore
+	userStore *store.UserStore
 }
 
 func (*AuthController) Constructor(userStore *store.UserStore) *AuthController {
-    return &AuthController{userStore: userStore}
+	return &AuthController{userStore: userStore}
 }
 
 func (c *AuthController) RegisterRoutes(r *api.Registry) {
-    r.POST("/signup", c.Signup)
-    r.POST("/login", c.Login)
-    r.GET("/me", c.GetMe, api.Interceptors(&interceptor.AuthInterceptor{}))
+	r.POST("/signup", c.Signup)
+	r.POST("/login", c.Login)
+	r.GET("/me", c.GetMe, api.Interceptors((*interceptor.AuthInterceptor)(nil)))
 }
 
 // Registration, no authentication required
-func (c *AuthController) Signup(req *model.SignupRequest) (httpx.Response[model.User], error) {
-    if req.Email == "" || req.Password == "" || req.Name == "" {
-        return httpx.Response[model.User]{}, httperr.BadRequest("All fields are required.")
-    }
+func (c *AuthController) Signup(req input.Body[model.SignupRequest]) (httpx.Response[model.User], error) {
 
-    user, err := c.userStore.Create(req.Email, req.Password, req.Name)
-    if err != nil {
-        return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
-    }
+	user, err := c.userStore.Create(req.Email, req.Password, req.Name)
+	if err != nil {
+		return httpx.Response[model.User]{}, httperr.BadRequest(err.Error())
+	}
 
-    return httpx.Response[model.User]{Body: *user}, nil
+	return httpx.Response[model.User]{Body: *user}, nil
 }
 
 // Login, no authentication required
-func (c *AuthController) Login(req *model.LoginRequest) (httpx.Response[model.LoginResponse], error) {
-    if req.Email == "" || req.Password == "" {
-        return httpx.Response[model.LoginResponse]{}, httperr.BadRequest("Email and password are required.")
-    }
+func (c *AuthController) Login(req input.Body[model.LoginRequest]) (httpx.Response[model.LoginResponse], error) {
 
-    user, err := c.userStore.FindByEmail(req.Email)
-    if err != nil {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
-    }
+	user, err := c.userStore.FindByEmail(req.Email)
+	if err != nil {
+		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
+	}
 
-    // Check the password; in production, compare hashes with bcrypt or similar
-    if user.Password != req.Password {
-        return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
-    }
+	// Check the password; in production, compare hashes with bcrypt or similar
+	if user.Password != req.Password {
+		return httpx.Response[model.LoginResponse]{}, httperr.Unauthorized("Email or password is incorrect.")
+	}
 
-    // Create a JWT token
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-        "user_id": user.ID,
-        "email":   user.Email,
-        "exp":     time.Now().Add(24 * time.Hour).Unix(),
-    })
+	// Create a JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+	})
 
-    tokenString, err := token.SignedString(interceptor.JWTSecret)
-    if err != nil {
-        return httpx.Response[model.LoginResponse]{}, err
-    }
+	tokenString, err := token.SignedString(interceptor.JWTSecret)
+	if err != nil {
+		return httpx.Response[model.LoginResponse]{}, err
+	}
 
-    return httpx.Response[model.LoginResponse]{
-        Body: model.LoginResponse{
-            Token: tokenString,
-            User:  *user,
-        },
-    }, nil
+	return httpx.Response[model.LoginResponse]{
+		Body: model.LoginResponse{
+			Token: tokenString,
+			User:  *user,
+		},
+	}, nil
 }
 
 // Read the current user's profile, authentication required
 func (c *AuthController) GetMe(ctx spinectx.Ctx) (httpx.Response[model.User], error) {
-    // Read the userID stored by AuthInterceptor
-    userIDValue, ok := ctx.Get("userID")
-    if !ok {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("Authentication information was not found.")
-    }
+	// Read the userID stored by AuthInterceptor
+	userIDValue, ok := ctx.ExecutionContext().Get("userID")
+	if !ok {
+		return httpx.Response[model.User]{}, httperr.Unauthorized("Authentication information was not found.")
+	}
 
-    userID, valid := userIDValue.(int64)
-    if !valid {
-        return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
-    }
-    user, err := c.userStore.FindByID(userID)
-    if err != nil {
-        return httpx.Response[model.User]{}, httperr.NotFound("User was not found.")
-    }
+	userID, valid := userIDValue.(int64)
+	if !valid {
+		return httpx.Response[model.User]{}, httperr.Unauthorized("invalid authentication context")
+	}
+	user, err := c.userStore.FindByID(userID)
+	if err != nil {
+		return httpx.Response[model.User]{}, httperr.NotFound("User was not found.")
+	}
 
-    return httpx.Response[model.User]{Body: *user}, nil
+	return httpx.Response[model.User]{Body: *user}, nil
 }
 ```
 
@@ -341,38 +343,44 @@ Replace the entire contents of `internal/application/application.go` with the fo
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "time"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"time"
 
-    "example.com/login-example/src/controller"
-    "example.com/login-example/src/store"
+	"example.com/login-example/src/controller"
+	"example.com/login-example/src/interceptor"
+	"example.com/login-example/src/store"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/interceptor/cors"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/interceptor/cors"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(store.NewUserStore, constructor.Controller(&controller.AuthController{}))
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Custom(store.NewUserStore), constructor.Interceptor(&interceptor.AuthInterceptor{}), constructor.Controller(&controller.AuthController{}))
 
-    corsInterceptor, err := cors.NewValidated(cors.Config{
-        AllowOrigins: []string{"*"},
-        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders: []string{"Content-Type", "Authorization"},
-    })
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+	corsInterceptor, err := cors.NewValidated(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type", "Authorization"},
+	})
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
-    return app, boot.Options{
-        Address: ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout: 10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    }, nil
+	return app, boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+		HTTP:                   &boot.HTTPOptions{},
+	}, nil
 }
 ```
 
@@ -493,7 +501,7 @@ GET /me (protected)
    ├─→ Auth.PreHandle (route) ← Verify token
    │       │
    │       ├─ No token → 401 Unauthorized
-   │       └─ Valid token → ctx.Set("userID", ...)
+   │       └─ Valid token → ctx.ExecutionContext().Set("userID", ...)
    │
    ├─→ AuthController.GetMe
    └─→ Response 200 + user details

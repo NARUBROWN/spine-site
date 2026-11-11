@@ -1,130 +1,73 @@
-# 安装
+# 安装与首个应用
 
-从 Spine `v0.6.0` 开始，官方入口是 CLI 的 `new`。安装最新发布的 CLI，创建项目并检查开发服务器的响应。
+::: info 0.7.5 API
+本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
+:::
 
-Preview、RC、稳定版的选择与发布流程，请参阅[发布渠道与安装](/zh-Hans/community/release-channels)。
+分别选择 CLI 安装通道和应用依赖通道。本指南使用 0.7.5 API 的 Preview 应用。稳定版选择参见[发布通道](/zh-Hans/community/release-channels)。
 
-## 环境要求
+## 要求
 
-- 需要 Go 1.25.5 或更高版本。CLI 推荐使用 Go 1.27.3。
-- Go 可执行文件的安装路径必须包含在 `PATH` 中。如果未设置 `GOBIN`，默认路径为 `$(go env GOPATH)/bin`。
+使用 Go 1.26 以上版本并检查所选模块的 go 指令。将 GOBIN 或默认 GOPATH/bin 加入 PATH。
 
-```bash
+```sh
 go version
-```
-
-确认输出的 Go 版本为 1.25.5 或更高版本。
-
-## 安装 CLI
-
-运行以下命令安装 CLI 并查看版本。
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
-```
-
-以下示例以正式 CLI `v0.4.3` 为基准。要固定安装此版本，请运行以下命令。
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
-spine version
-```
-
-更新 CLI 本身时，重新运行上面的 `go install` 命令。`spine update` 更新所选配方的项目依赖，不会更新 CLI 可执行文件或改写应用源码。
-
-使用 `spine version` 确认已安装的 CLI 版本。
-
-如果找不到 `spine` 命令，且未单独设置 `GOBIN`，请在 Bash 或 Zsh 中运行以下命令，将安装路径添加到当前会话中。要持久保存此设置，请将相同配置写入 Shell 启动文件。如果已设置 `GOBIN`，则应添加该目录。
-
-```bash
-export PATH="$(go env GOPATH)/bin:$PATH"
-spine version
 ```
 
 ## 安装 Preview CLI {#preview-cli}
 
-可通过 `@preview` 安装 Preview CLI。该分支会持续更新，应用依赖渠道通过 `spine new --channel` 单独选择。正式应用使用 `main`。
-
-```bash
+```sh
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-## 创建新项目
+preview 是移动分支，复现时记录版本和提交并使用固定标签。稳定 CLI 使用 @latest 安装。spine update 更新应用依赖，不更新 CLI 或应用源码。
 
-在准备存放项目的父目录中运行。如果已存在同名的 `my-app` 目录，请使用其他名称。
+## 创建项目
 
-```bash
-spine new my-app --module example.com/my-app --channel main --no-interactive
+```sh
+spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
 cd my-app
+go list -m all
+spine doctor
+spine inspect
 ```
 
-`new` 根据已安装 CLI 的验证配方选择兼容的 Spine、Echo 平台和 Echo 版本，并完成依赖安装、静态契约检查和构建。请在生成的 `go.mod` 中查看所选版本。使用 `--skip-install` 时，请单独运行 `go mod tidy` 和 `go mod download all`。安装过程不会初始化应用、运行测试或启动监听器。
+CLI 配方选择兼容版本，请在 go.mod 确认核心 0.7.5 API 及平台组合。默认布局为 layered-v1。--validator playground 在 BuildApplication 组装验证器，默认 validator none 不启用标签验证。生成过程不启动应用资源或监听器。
 
-生成的 `spine.toml` 如下。
-
-```toml
-module = "example.com/my-app"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "layered-v1"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
+```text
+my-app/
+├── main.go
+├── go.mod
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/controller/health_controller.go
 ```
-
-`internal/application/application.go` 中的 `BuildApplication()` 注册组件和 `GET /health`。生成的 `main.go` 调用此函数，通过 `app.Validate(options)` 验证配置后，再通过 `app.Run(options)` 运行服务器。
 
 ## 验证与运行
 
-```bash
-spine doctor
-spine inspect
+```sh
 spine contract check
 spine verify
-```
-
-确认每条命令均执行完毕且没有错误。
-
-| 命令 | 检查内容 |
-| --- | --- |
-| `spine doctor` | Go 工具和项目配置 |
-| `spine inspect` | 代码中注册的路由、依赖等应用配置 |
-| `spine contract check` | 从注册代码中提取的执行契约是否有效 |
-| `spine verify` | 执行契约以及 `gofmt`、`go vet` 和 Go 测试的结果 |
-
-生成的 `application_test.go` 会检查 `BuildApplication()` 和 `app.Validate(options)`，不会启动服务器。此阶段验证的是代码和应用配置，实际 HTTP 响应将在下一步确认。
-
-检查通过后，使用 `spine dev` 运行服务器，并在另一个终端中确认实际 HTTP 响应。
-
-```bash
 spine dev
-```
-
-```bash
+# In another terminal
 curl http://localhost:8080/health
 ```
 
-如果返回 `{"status":"ok"}`，则表示开发服务器已处理请求。在运行服务器的终端中按 `Ctrl+C` 结束运行。连接外部数据库或消息代理，或部署应用后，还需要在相应环境中确认运行情况。
+确认 {"status":"ok"}，使用 Ctrl+C 退出。生成的 main 依次调用 BuildApplication、app.Validate、app.Run。Validate 不执行构造函数或连接数据库，还须验证实际请求。
 
-## 恢复模块缓存错误
+## 恢复依赖元数据
 
-静态契约检查会离线读取模块图。如果使用 `--skip-install` 生成文件或手动更改依赖后出现 `MODULE_GRAPH_UNAVAILABLE`，请先准备完整的模块元数据，再重新检查。
+--skip-install 或手动修改后若出现 MODULE_GRAPH_UNAVAILABLE，下载模块元数据。
 
-```bash
+```sh
 go mod tidy
 go mod download all
 spine contract check
-spine verify
 ```
 
-[选择平台与 DTO 验证](/zh-Hans/learn/getting-started/platforms)
+## 下一步
 
-## 后续步骤
-
-通过[第一个应用](/zh-Hans/learn/getting-started/first-app)了解生成文件的作用，或按照[项目结构](/zh-Hans/learn/tutorial/1-project-structure)添加功能。
+[项目结构](/zh-Hans/learn/tutorial/1-project-structure) / [控制器](/zh-Hans/learn/tutorial/2-controller) / [平台选择](/zh-Hans/learn/getting-started/platforms)

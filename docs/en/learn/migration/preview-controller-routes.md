@@ -1,5 +1,10 @@
 # Controller and route migration for v0.7.1
 
+::: info
+This page records 0.7.1 behavior and migration history. For current inputs, context and validation, use the [0.7.5 migration guide](/en/learn/migration/v0.7.5).
+:::
+
+
 This guide targets Spine `v0.7.1`. Core requires Go 1.25.5 or later; the playground validator requires Go 1.26 or later.
 
 ## Register routes in a controller {#routes}

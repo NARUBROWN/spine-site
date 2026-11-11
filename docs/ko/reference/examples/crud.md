@@ -1,14 +1,14 @@
 # 사용자 CRUD API 만들기
 
-::: info
-이 예제는 `v0.7.1`의 컨트롤러 콜백과 경로 입력을 사용합니다. 기존 코드의 호환 규칙은 [라우트 전환](/ko/learn/migration/preview-controller-routes)과 [입력 전환](/ko/learn/migration/v0.7.1-preview), 명세 설정은 [OpenAPI](/ko/reference/api/openapi)를 참고하세요.
+::: info 0.7.5 API
+0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
 :::
 
 사용자를 생성하고 목록 조회, 개별 조회, 수정, 삭제하는 HTTP API를 만듭니다. ORM 없이 메모리 저장소를 사용하므로 데이터베이스를 준비하지 않고 실행할 수 있습니다.
 
 ## 시작 전 준비
 
-[CLI 설치](/ko/learn/getting-started/installation)를 먼저 완료하세요. CLI `v0.4.3` 이상으로 앱을 생성하고 CRUD 코드를 직접 추가합니다. CLI의 `resource`는 GET 골격을, `slice --storage memory`는 생성과 조회 골격을 제공합니다.
+[CLI 설치](/ko/learn/getting-started/installation) 후 0.7.5 API를 지원하는 Preview CLI를 사용합니다. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
 
 저장한 사용자는 서버 프로세스를 종료하면 사라집니다.
 
@@ -30,10 +30,10 @@ graph TD
 
 기본 앱을 생성하고 의존성과 프로젝트 설정을 확인합니다. 이후 명령은 `crud-example/`에서 실행합니다.
 
-아래 명령은 정식 의존성 채널을 사용합니다. 선택된 버전을 `go.mod`에서 확인하세요.
+아래 명령은 Preview 의존성을 선택합니다. 생성된 go.mod에서 실제 코어와 플랫폼 버전을 확인하세요.
 
 ```sh
-spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive
+spine new crud-example --module example.com/crud-example --channel preview --validator playground --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -70,11 +70,11 @@ package model
 import "time"
 
 type User struct {
-    ID        int64     `json:"id"`
-    Name      string    `json:"name"`
-    Email     string    `json:"email"`
-    CreatedAt time.Time `json:"created_at"`
-    UpdatedAt time.Time `json:"updated_at"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 ```
 
@@ -87,103 +87,103 @@ type User struct {
 package repository
 
 import (
-    "errors"
-    "sync"
-    "time"
+	"errors"
+	"sync"
+	"time"
 
-    "example.com/crud-example/src/model"
+	"example.com/crud-example/src/model"
 )
 
 var (
-    ErrUserNotFound      = errors.New("user not found")
-    ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrEmailAlreadyExists = errors.New("email already exists")
 )
 
 type UserRepository struct {
-    mu      sync.RWMutex
-    users   map[int64]*model.User
-    counter int64
+	mu      sync.RWMutex
+	users   map[int64]*model.User
+	counter int64
 }
 
-func NewUserRepository() *UserRepository {
-    return &UserRepository{
-        users:   make(map[int64]*model.User),
-        counter: 0,
-    }
+func (*UserRepository) Constructor() *UserRepository {
+	return &UserRepository{
+		users:   make(map[int64]*model.User),
+		counter: 0,
+	}
 }
 
 func (r *UserRepository) FindAll() []*model.User {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    result := make([]*model.User, 0, len(r.users))
-    for _, user := range r.users {
-        result = append(result, user)
-    }
-    return result
+	result := make([]*model.User, 0, len(r.users))
+	for _, user := range r.users {
+		result = append(result, user)
+	}
+	return result
 }
 
 func (r *UserRepository) FindByID(id int64) (*model.User, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    user, ok := r.users[id]
-    if !ok {
-        return nil, ErrUserNotFound
-    }
-    return user, nil
+	user, ok := r.users[id]
+	if !ok {
+		return nil, ErrUserNotFound
+	}
+	return user, nil
 }
 
 func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    for _, user := range r.users {
-        if user.Email == email {
-            return user, nil
-        }
-    }
-    return nil, ErrUserNotFound
+	for _, user := range r.users {
+		if user.Email == email {
+			return user, nil
+		}
+	}
+	return nil, ErrUserNotFound
 }
 
 func (r *UserRepository) ExistsByEmail(email string) bool {
-    _, err := r.FindByEmail(email)
-    return err == nil
+	_, err := r.FindByEmail(email)
+	return err == nil
 }
 
 func (r *UserRepository) Save(user *model.User) *model.User {
-    r.mu.Lock()
-    defer r.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-    now := time.Now()
+	now := time.Now()
 
-    if user.ID == 0 {
-        r.counter++
-        user.ID = r.counter
-        user.CreatedAt = now
-    }
-    user.UpdatedAt = now
+	if user.ID == 0 {
+		r.counter++
+		user.ID = r.counter
+		user.CreatedAt = now
+	}
+	user.UpdatedAt = now
 
-    r.users[user.ID] = user
-    return user
+	r.users[user.ID] = user
+	return user
 }
 
 func (r *UserRepository) Delete(id int64) error {
-    r.mu.Lock()
-    defer r.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-    if _, ok := r.users[id]; !ok {
-        return ErrUserNotFound
-    }
+	if _, ok := r.users[id]; !ok {
+		return ErrUserNotFound
+	}
 
-    delete(r.users, id)
-    return nil
+	delete(r.users, id)
+	return nil
 }
 
 func (r *UserRepository) Count() int {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    return len(r.users)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.users)
 }
 ```
 
@@ -196,59 +196,59 @@ func (r *UserRepository) Count() int {
 package dto
 
 import (
-    "time"
+	"time"
 
-    "example.com/crud-example/src/model"
+	"example.com/crud-example/src/model"
 )
 
 // 요청 DTO
 
 type CreateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 type UpdateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 // 응답 DTO
 
 type UserResponse struct {
-    ID        int64     `json:"id"`
-    Name      string    `json:"name"`
-    Email     string    `json:"email"`
-    CreatedAt time.Time `json:"created_at"`
-    UpdatedAt time.Time `json:"updated_at"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type UserListResponse struct {
-    Users []UserResponse `json:"users"`
-    Total int            `json:"total"`
+	Users []UserResponse `json:"users"`
+	Total int            `json:"total"`
 }
 
 // 변환 함수
 
 func ToUserResponse(user *model.User) UserResponse {
-    return UserResponse{
-        ID:        user.ID,
-        Name:      user.Name,
-        Email:     user.Email,
-        CreatedAt: user.CreatedAt,
-        UpdatedAt: user.UpdatedAt,
-    }
+	return UserResponse{
+		ID:        user.ID,
+		Name:      user.Name,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}
 }
 
 func ToUserListResponse(users []*model.User) UserListResponse {
-    responses := make([]UserResponse, len(users))
-    for i, user := range users {
-        responses[i] = ToUserResponse(user)
-    }
-    return UserListResponse{
-        Users: responses,
-        Total: len(responses),
-    }
+	responses := make([]UserResponse, len(users))
+	for i, user := range users {
+		responses[i] = ToUserResponse(user)
+	}
+	return UserListResponse{
+		Users: responses,
+		Total: len(responses),
+	}
 }
 ```
 
@@ -261,71 +261,71 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 package service
 
 import (
-    "example.com/crud-example/src/dto"
-    "example.com/crud-example/src/model"
-    "example.com/crud-example/src/repository"
+	"example.com/crud-example/src/dto"
+	"example.com/crud-example/src/model"
+	"example.com/crud-example/src/repository"
 )
 
 type UserService struct {
-    repo *repository.UserRepository
+	repo *repository.UserRepository
 }
 
-func NewUserService(repo *repository.UserRepository) *UserService {
-    return &UserService{repo: repo}
+func (*UserService) Constructor(repo *repository.UserRepository) *UserService {
+	return &UserService{repo: repo}
 }
 
 func (s *UserService) GetAllUsers() dto.UserListResponse {
-    users := s.repo.FindAll()
-    return dto.ToUserListResponse(users)
+	users := s.repo.FindAll()
+	return dto.ToUserListResponse(users)
 }
 
 func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
-    user, err := s.repo.FindByID(id)
-    if err != nil {
-        return nil, err
-    }
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
 
-    response := dto.ToUserResponse(user)
-    return &response, nil
+	response := dto.ToUserResponse(user)
+	return &response, nil
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
-    // 이메일 중복 체크
-    if s.repo.ExistsByEmail(req.Email) {
-        return nil, repository.ErrEmailAlreadyExists
-    }
+	// 이메일 중복 체크
+	if s.repo.ExistsByEmail(req.Email) {
+		return nil, repository.ErrEmailAlreadyExists
+	}
 
-    user := &model.User{
-        Name:  req.Name,
-        Email: req.Email,
-    }
+	user := &model.User{
+		Name:  req.Name,
+		Email: req.Email,
+	}
 
-    saved := s.repo.Save(user)
-    response := dto.ToUserResponse(saved)
-    return &response, nil
+	saved := s.repo.Save(user)
+	response := dto.ToUserResponse(saved)
+	return &response, nil
 }
 
 func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.UserResponse, error) {
-    user, err := s.repo.FindByID(id)
-    if err != nil {
-        return nil, err
-    }
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
 
-    // 이메일 변경 시 중복 체크
-    if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
-        return nil, repository.ErrEmailAlreadyExists
-    }
+	// 이메일 변경 시 중복 체크
+	if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
+		return nil, repository.ErrEmailAlreadyExists
+	}
 
-    user.Name = req.Name
-    user.Email = req.Email
+	user.Name = req.Name
+	user.Email = req.Email
 
-    saved := s.repo.Save(user)
-    response := dto.ToUserResponse(saved)
-    return &response, nil
+	saved := s.repo.Save(user)
+	response := dto.ToUserResponse(saved)
+	return &response, nil
 }
 
 func (s *UserService) DeleteUser(id int64) error {
-    return s.repo.Delete(id)
+	return s.repo.Delete(id)
 }
 ```
 
@@ -338,114 +338,102 @@ func (s *UserService) DeleteUser(id int64) error {
 package controller
 
 import (
-    "errors"
+	"errors"
 
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
 
-    "example.com/crud-example/src/dto"
-    "example.com/crud-example/src/repository"
-    "example.com/crud-example/src/service"
+	"example.com/crud-example/src/dto"
+	"example.com/crud-example/src/repository"
+	"example.com/crud-example/src/service"
 )
 
 type UserController struct {
-    service *service.UserService
+	service *service.UserService
 }
 
 func (*UserController) Constructor(service *service.UserService) *UserController {
-    return &UserController{service: service}
+	return &UserController{service: service}
 }
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-    r.GET("/users", c.List)
-    r.GET("/users/:id", c.GetByID)
-    r.POST("/users", c.Create)
-    r.PUT("/users/:id", c.Update)
-    r.DELETE("/users/:id", c.Delete)
+	r.GET("/users", c.List)
+	r.GET("/users/:id", c.GetByID)
+	r.POST("/users", c.Create)
+	r.PUT("/users/:id", c.Update)
+	r.DELETE("/users/:id", c.Delete)
 }
 
 // GET /users
 func (c *UserController) List() httpx.Response[dto.UserListResponse] {
-    return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
+	return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
 }
 
 // GET /users/:id
 func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
-    if *id <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
-    }
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+	}
 
-    user, err := c.service.GetUserByID(*id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-    }
+	user, err := c.service.GetUserByID(*id)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
 
-    return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // POST /users
-func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.UserResponse], error) {
-    if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
-    }
-    if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
-    }
+func (c *UserController) Create(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
 
-    user, err := c.service.CreateUser(req)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-    }
+	user, err := c.service.CreateUser(req)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
 
-    return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // PUT /users/:id
-func (c *UserController) Update(id input.Path[int64], req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
-    if *id <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
-    }
-    if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이름은 필수입니다")
-    }
-    if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("이메일은 필수입니다")
-    }
+func (c *UserController) Update(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+	}
 
-    user, err := c.service.UpdateUser(*id, req)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-    }
+	user, err := c.service.UpdateUser(*id, req)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
 
-    return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // DELETE /users/:id
 func (c *UserController) Delete(id input.Path[int64]) error {
-    if *id <= 0 {
-        return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
-    }
+	if *id <= 0 {
+		return httperr.BadRequest("유효하지 않은 사용자 ID입니다")
+	}
 
-    err := c.service.DeleteUser(*id)
-    if err != nil {
-        return toHTTPError(err)
-    }
+	err := c.service.DeleteUser(*id)
+	if err != nil {
+		return toHTTPError(err)
+	}
 
-    return nil
+	return nil
 }
 
 // Repository 에러를 HTTP 에러로 변환
 func toHTTPError(err error) error {
-    switch {
-    case errors.Is(err, repository.ErrUserNotFound):
-        return httperr.NotFound("사용자를 찾을 수 없습니다")
-    case errors.Is(err, repository.ErrEmailAlreadyExists):
-        return httperr.BadRequest("이미 사용 중인 이메일입니다")
-    default:
-        return err
-    }
+	switch {
+	case errors.Is(err, repository.ErrUserNotFound):
+		return httperr.NotFound("사용자를 찾을 수 없습니다")
+	case errors.Is(err, repository.ErrEmailAlreadyExists):
+		return httperr.BadRequest("이미 사용 중인 이메일입니다")
+	default:
+		return err
+	}
 }
 ```
 
@@ -458,43 +446,48 @@ func toHTTPError(err error) error {
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "time"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"time"
 
-    "example.com/crud-example/src/controller"
-    "example.com/crud-example/src/repository"
-    "example.com/crud-example/src/service"
+	"example.com/crud-example/src/controller"
+	"example.com/crud-example/src/repository"
+	"example.com/crud-example/src/service"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/interceptor/cors"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/interceptor/cors"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(
-        repository.NewUserRepository,
-        service.NewUserService,
-        constructor.Controller(&controller.UserController{}),
-    )
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(
+		constructor.Repository(&repository.UserRepository{}),
+		constructor.Service(&service.UserService{}),
+		constructor.Controller(&controller.UserController{}),
+	)
 
-    corsInterceptor, err := cors.NewValidated(cors.Config{
-        AllowOrigins: []string{"*"},
-        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders: []string{"Content-Type"},
-    })
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+	corsInterceptor, err := cors.NewValidated(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type"},
+	})
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
-    return app, boot.Options{
-        Address: ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout: 10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    }, nil
+	return app, boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+		HTTP:                   &boot.HTTPOptions{},
+	}, nil
 }
 ```
 
@@ -660,9 +653,9 @@ return httpx.Response[dto.UserResponse]{}, httperr.NotFound("사용자를 찾을
 ```go
 // 생성자 등록만으로 의존성 자동 해결
 app.Constructor(
-    repository.NewUserRepository,  // 의존성 없음
-    service.NewUserService,        // Repository 의존
-    constructor.Controller(&controller.UserController{}),  // Service 의존
+	constructor.Repository(&repository.UserRepository{}), // 의존성 없음
+	constructor.Service(&service.UserService{}),          // Repository 의존
+	constructor.Controller(&controller.UserController{}), // Service 의존
 )
 ```
 

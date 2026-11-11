@@ -1,17 +1,19 @@
 # Introduction
 
-Spine is a Go backend framework configured with constructors, routes, and interceptors. In `v0.7.1`, a controller registers its HTTP routes and handler signatures describe input sources and response types.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
 
-## Configure and run an application
+Spine is a Go backend framework assembled from role-based constructors, controller routes and interceptors.
 
-This standalone app configures a controller with an injected service and repository. Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module, save it as `main.go`, and run `go run .`.
+## Runnable example
 
-In a new directory, create a Go module and install the stable dependencies.
-
-```bash
+```sh
 go mod init example.com/spine-intro
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
 ```
+
+With Go 1.26 or later, save as main.go and run go run .. In another terminal, curl `http://localhost:8080/greeting` returns hello.
 
 ```go
 package main
@@ -23,6 +25,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -39,47 +42,34 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func() httpx.Response[string] {
+	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
+
 	app := spine.New(echoplatform.Option())
-	app.Constructor(
-		constructor.Controller(&Controller{}),
-		constructor.Service(&Service{}),
-		constructor.Repository(&Repository{}),
-	)
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Service(&Service{}), constructor.Repository(&Repository{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-A request from another terminal returns `hello`. A CLI-generated project keeps application configuration in `BuildApplication()` and validates and runs it from `main.go`.
+## Common development model
 
-```bash
-curl http://localhost:8080/greeting
-```
-
-## Core concepts
-
-### Constructors and dependencies
-
-Declare required types in `Constructor` methods and register them using `constructor.Repository`, `constructor.Service`, and `constructor.Controller`. The container resolves dependencies by type, not registration order. Existing constructor functions also remain supported.
-
-### Routes and inputs
-
-Register paths and callbacks with `api.Registry` in `RegisterRoutes`. `input.Path[T]`, `input.Query[T]`, and `input.Body[T]` identify input sources; headers use a separate tagged struct. Existing `app.Route` remains for compatibility but is deprecated.
-
-### Interceptors and responses
-
-Interceptors run common work such as authentication, logging, and transactions around a handler. Return successful responses with `httpx.Response[T]` and failures as `error`. For authentication that must run before body binding, check the execution point of global interceptors.
-
-### Platforms
-
-Choose an Echo or net/http implementation for HTTP. WebSocket, event brokers, and validators are also connected through independent platforms.
+Choose platforms and a validator and register roles in BuildApplication. Constructor resolves DI by type; RegisterRoutes declares HTTP routes. input.Path, Query, Header and Body declare input sources. Handlers and four interceptor hooks use public spine.Ctx. The registered validator checks tags automatically; httpx expresses success responses and error expresses failures.
 
 ## Get started
 
-After [installation](/en/learn/getting-started/installation), create a CLI project and check its response in [Your first app](/en/learn/getting-started/first-app). Continue with [controllers](/en/learn/tutorial/2-controller), [dependency injection](/en/learn/tutorial/3-dependency-injection), and [interceptors](/en/learn/tutorial/4-interceptor).
+[Installation](/en/learn/getting-started/installation) / [First app](/en/learn/getting-started/first-app) / [Controllers](/en/learn/tutorial/2-controller)

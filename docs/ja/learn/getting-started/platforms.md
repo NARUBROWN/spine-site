@@ -1,16 +1,20 @@
 # プラットフォームと DTO 検証の選択
 
-Spine `v0.7.1` は HTTP、WebSocket、イベント、DTO 検証の公開契約をコアに置き、実装を独立モジュールとして選択します。必要な実装だけをアプリに接続できます。
+::: info 0.7.5 API
+0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
+:::
+
+Spine `v0.7.5` は HTTP、WebSocket、イベント、DTO 検証の公開契約をコアに置き、実装を独立モジュールとして選択します。必要な実装だけをアプリに接続できます。
 
 ## CLI で選択する
 
-正式 CLI `v0.4.3` 以降をインストールし、以下のコマンドをそれぞれ別のディレクトリで実行します。`--channel main` は公開済み正式タグを選びます。CLI のインストールチャンネルとアプリ依存関係のチャンネルは別です。
+[CLI インストール](/ja/learn/getting-started/installation)後、0.7.5 API 対応の Preview CLI を使います。CLI とアプリ依存のチャネルは別です。
 
 ```sh
-spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
-spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
-spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
-spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
+spine new http-app --module example.com/http-app --channel preview --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel preview --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel preview --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel preview --validator playground --no-interactive
 ```
 
 既定の HTTP プラットフォームは Echo です。WebSocket、イベント、validator、フロントエンドは既定では選択されません。`--platform none` はイベントワーカーを生成し、イベントプラットフォームが必要です。WebSocket には HTTP プラットフォームが必要です。`--event-platform` は複数回指定できます。
@@ -29,8 +33,8 @@ HTTP は `contract/http` と Echo または net/http、WebSocket は `contract/w
 
 ```go
 type CreateUserRequest struct {
-    Email string `json:"email" validate:"required,email"`
-    Age   int    `json:"age" validate:"gte=18"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
 }
 ```
 
@@ -44,4 +48,4 @@ type CreateUserRequest struct {
 spine update --dry-run
 ```
 
-[リリースチャンネルとインストール](/ja/community/release-channels)、[入力の移行](/ja/learn/migration/v0.7.1-preview)、[HTTP v3 と起動オプション](/ja/learn/migration/preview-features)を参照してください。
+[リリースチャンネルとインストール](/ja/community/release-channels)、[入力の移行](/ja/learn/migration/v0.7.5)、[HTTP v3 と起動オプション](/ja/learn/migration/v0.7.5)を参照してください。

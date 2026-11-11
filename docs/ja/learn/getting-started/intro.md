@@ -1,17 +1,19 @@
-# はじめに
+# 紹介
 
-Spine は生成子、ルート、インターセプターを Go コードで構成するバックエンドフレームワークです。`v0.7.1` ではコントローラーが HTTP ルートを登録し、ハンドラーのシグネチャで入力元とレスポンス型を表します。
+::: info 0.7.5 API
+0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
+:::
 
-## アプリの構成と実行
+Spine は役割別コンストラクター、コントローラーのルート、インターセプターを Go で組み立てるバックエンドフレームワークです。
 
-次の独立アプリは、サービスとリポジトリを注入したコントローラーを構成します。別の Go モジュールに Spine `v0.7.1` と互換 Echo プラットフォームをインストールし、`main.go` に保存して `go run .` を実行します。
+## 実行例
 
-新しいディレクトリで Go モジュールを作成し、正式版の依存関係をインストールします。
-
-```bash
+```sh
 go mod init example.com/spine-intro
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
 ```
+
+Go 1.26 以降で main.go に保存して go run . を実行します。別の端末で curl `http://localhost:8080/greeting` を実行すると hello です。
 
 ```go
 package main
@@ -23,6 +25,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -39,47 +42,34 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func() httpx.Response[string] {
+	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
+
 	app := spine.New(echoplatform.Option())
-	app.Constructor(
-		constructor.Controller(&Controller{}),
-		constructor.Service(&Service{}),
-		constructor.Repository(&Repository{}),
-	)
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	app.Constructor(constructor.Controller(&Controller{}), constructor.Service(&Service{}), constructor.Repository(&Repository{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-別のターミナルからリクエストすると `hello` が返ります。CLI で生成したプロジェクトは `BuildApplication()` に構成をまとめ、`main.go` で検証して実行します。
+## 共通の開発モデル
 
-```bash
-curl http://localhost:8080/greeting
-```
+BuildApplication でプラットフォームと検証器を選び役割を登録します。Constructor は型で DI を解決し、RegisterRoutes は HTTP ルートを宣言します。input.Path、Query、Header、Body で入力元を明示し、ハンドラーと四つのフックは公開 spine.Ctx を使います。登録検証器がタグを自動検査し、成功は httpx、失敗は error で表します。
 
-## 主要な概念
+## はじめる
 
-### コンストラクターと依存関係
-
-`Constructor` メソッドに必要な型を宣言し、`constructor.Repository`、`constructor.Service`、`constructor.Controller` で登録します。コンテナーは登録順ではなく型に従って依存関係を解決します。既存の生成関数も利用できます。
-
-### ルートと入力
-
-`RegisterRoutes` 内で `api.Registry` にパスとコールバックを登録します。`input.Path[T]`、`input.Query[T]`、`input.Body[T]` は入力元を示し、ヘッダーは別のタグ付き構造体で受け取ります。既存の `app.Route` は互換性のため維持されますが非推奨です。
-
-### インターセプターとレスポンス
-
-インターセプターは認証、ログ、トランザクションなどの共通処理をハンドラーの前後に実行します。成功レスポンスは `httpx.Response[T]`、失敗は `error` で返せます。本文のバインド前に認証する場合はグローバルインターセプターの実行時点を確認してください。
-
-### プラットフォーム
-
-HTTP には Echo または net/http の実装を選べます。WebSocket、イベントブローカー、validator も独立したプラットフォームで接続します。
-
-## 始める
-
-[インストール](/ja/learn/getting-started/installation)後、[最初のアプリ](/ja/learn/getting-started/first-app)で CLI プロジェクトを作り、レスポンスを確認してください。[コントローラー](/ja/learn/tutorial/2-controller)、[依存性注入](/ja/learn/tutorial/3-dependency-injection)、[インターセプター](/ja/learn/tutorial/4-interceptor)で各概念を学べます。
+[インストール](/ja/learn/getting-started/installation) / [最初のアプリ](/ja/learn/getting-started/first-app) / [コントローラー](/ja/learn/tutorial/2-controller)

@@ -1,237 +1,65 @@
-# core.Interceptor
+# Interceptor API
 
-用于在控制器执行前后添加认证、日志、CORS 和事务处理的接口。在 Spine v0.7.1 中，分别实现前置处理、成功后处理、响应前处理和最终清理。
+::: info 0.7.5
+本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
+:::
 
-## 接口
-
-```go
-import "github.com/NARUBROWN/spine/core"
-
-type Interceptor interface {
-    PreHandle(ctx ExecutionContext, meta HandlerMeta) error
-    PostHandle(ctx ExecutionContext, meta HandlerMeta)
-    BeforeResponse(ctx ExecutionContext, meta HandlerMeta, executionErr error) error
-    AfterCompletion(ctx ExecutionContext, meta HandlerMeta, err error)
-}
-```
-
-| 方法 | 调用时机 | 返回值 |
-| --- | --- | --- |
-| `PreHandle` | 控制器执行前。按注册顺序 | 返回 `nil` 时继续，返回错误时中断 |
-| `PostHandle` | 控制器、响应准备和执行后钩子成功后。按注册的相反顺序 | 无 |
-| `BeforeResponse` | 实际写入响应前。按相反顺序执行 `PreHandle` 成功的拦截器 | 错误会纳入最终执行错误 |
-| `AfterCompletion` | 响应处理后。无论成功或失败，都按注册的相反顺序执行 | 无 |
-
-## 生命周期和实现示例
-
-以下示例中的 `auth`、`transactionFrom` 和事务实现由应用提供。必须实现全部四个方法的签名，才能注册为 `core.Interceptor`。
-
-### PreHandle
-
-在调用控制器前，按注册顺序执行。返回 `nil` 时进入下一阶段，返回一般错误时失败。返回 `core.ErrAbortPipeline` 时，不调用控制器并正常中止。
-
-全局拦截器在路由前执行，因此收到空的 `HandlerMeta{}`。路由拦截器在路由和输入值解析后执行，并收到相应处理器的信息。
-
-```go
-func (i *AuthInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("需要身份验证")
-    }
-    user, err := i.auth.Validate(token)
-    if err != nil {
-        return httperr.Unauthorized("无效令牌")
-    }
-    ctx.Set("auth.user", user)
-    return nil
-}
-```
-
-### PostHandle
-
-将控制器返回值准备为响应，且执行后钩子也成功后，按相反顺序执行。由于不能返回错误，适用于成功日志或观测处理。
-
-```go
-func (i *LoggingInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {
-    log.Printf("[RES] %s %s prepared", ctx.Method(), ctx.Path())
-}
-```
-
-### BeforeResponse
-
-在将响应写入实际传输层之前，按相反顺序执行。`executionErr` 包含前置处理、路由、输入值解析、控制器、响应准备和执行后钩子截至此时发生的错误。此前执行的 `BeforeResponse` 返回的错误也会合并并传递给下一个拦截器。
-
-请在此阶段提交或回滚请求范围的事务。v0.7.1 会先进行响应序列化、Cookie 和状态码验证，因此响应准备失败时可以回滚。
-
-```go
-func (i *TxInterceptor) BeforeResponse(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-    executionErr error,
-) error {
-    tx, ok := transactionFrom(ctx)
-    if !ok {
-        return nil
-    }
-    if executionErr != nil {
-        return tx.Rollback()
-    }
-    return tx.Commit()
-}
-```
-
-### AfterCompletion
-
-无论成功或失败，都在响应处理后按相反顺序调用。接收最终的 `err`，用于记录日志、收集指标和清理资源。此阶段也可以检查响应发送结果。是否提交事务应在前一阶段就已决定。
-
-```go
-func (i *LoggingInterceptor) AfterCompletion(
-    ctx core.ExecutionContext,
-    meta core.HandlerMeta,
-    err error,
-) {
-    if err != nil {
-        log.Printf("[ERR] %s %s: %v", ctx.Method(), ctx.Path(), err)
-    }
-}
-```
-
-## 注册和范围
-
-`app.Interceptor` 等同于 `app.InterceptorFor(boot.InterceptorAll, ...)`。同时应用于 HTTP 请求和 WebSocket 消息，不应用于事件消费者。如果依赖特定传输方式，例如处理 HTTP 响应的 CORS，请指定范围。
-
-| 范围 | 适用对象 |
-| --- | --- |
-| `boot.InterceptorHTTP` | HTTP 请求 |
-| `boot.InterceptorWebSocket` | WebSocket 消息和可选的连接前处理 |
-| `boot.InterceptorAll` | 两种范围 |
-
-新控制器在 `RegisterRoutes` 中使用 `api.Interceptors` 指定路由拦截器。以下 `r` 是 `*api.Registry`，`handler` 由应用定义。使用 DI 时还必须注册拦截器构造函数。请参阅[完整运行示例](/zh-Hans/learn/tutorial/4-interceptor)。
-
-```go
-app.InterceptorFor(boot.InterceptorAll, auth)
-app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
-app.InterceptorFor(boot.InterceptorWebSocket, wsRateLimiter)
-
-r.GET("/admin/users/:id", handler,
-    api.Interceptors((*AuthInterceptor)(nil)),
-)
-```
-
-注册 `(*AuthInterceptor)(nil)` 这样的有类型 nil 指针时，会从容器中查找并使用该类型的实例。同一类型的 nil 指针使用容器中的共享实例。
-
-将同一个指针作为全局拦截器注册到多个范围时，会合并范围并仅执行一次。同一类型的不同指针会分别执行。值类型也会按各个注册项分别执行。
-
-### 使用 DI 注册路由拦截器
-
-此独立应用通过 `constructor.Interceptor` 注册构造契约，并向 `api.Interceptors` 传入带类型的 nil 指针。请在安装 Spine `v0.7.1` 和兼容 Echo 平台的独立 Go 模块中运行。令牌仅用于演示。
-
-```go
-package main
-
-import (
-	"github.com/NARUBROWN/spine"
-	echoplatform "github.com/NARUBROWN/spine-echo-platform"
-	"github.com/NARUBROWN/spine/core"
-	"github.com/NARUBROWN/spine/pkg/api"
-	"github.com/NARUBROWN/spine/pkg/boot"
-	"github.com/NARUBROWN/spine/pkg/constructor"
-	"github.com/NARUBROWN/spine/pkg/httperr"
-	"github.com/NARUBROWN/spine/pkg/httpx"
-	"github.com/NARUBROWN/spine/pkg/input"
-	"log"
-)
-
-type Auth struct{}
-
-func (*Auth) Constructor() *Auth { return &Auth{} }
-
-func (*Auth) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-	if ctx.Header("Authorization") != "Bearer demo-token" {
-		return httperr.Unauthorized("unauthorized")
-	}
-	return nil
-}
-func (*Auth) PostHandle(core.ExecutionContext, core.HandlerMeta)                  {}
-func (*Auth) BeforeResponse(core.ExecutionContext, core.HandlerMeta, error) error { return nil }
-func (*Auth) AfterCompletion(core.ExecutionContext, core.HandlerMeta, error)      {}
-
-type Controller struct{}
-
-func (*Controller) Constructor() *Controller { return &Controller{} }
-func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/users/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
-		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
-	}, api.Interceptors((*Auth)(nil)))
-}
-func main() {
-	app := spine.New(echoplatform.Option())
-	app.Constructor(constructor.Controller(&Controller{}), constructor.Interceptor(&Auth{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-未认证请求返回 401，发送演示令牌返回 200 和用户 ID。
-
-```bash
-curl -i http://localhost:8080/users/1
-curl -i -H 'Authorization: Bearer demo-token' http://localhost:8080/users/1
-```
-
-## WebSocket 连接前处理
-
-需要连接认证的拦截器除实现 `core.Interceptor` 外，还需实现以下可选接口。
-
-```go
-type WebSocketHandshakeInterceptor interface {
-    PreHandshake(ctx WebSocketHandshakeContext, meta HandlerMeta) error
-}
-```
-
-先预留连接名额，再于 HTTP 升级前执行 `PreHandshake`。因此，等待认证的连接请求也计入 `MaxConnections`。`PreHandle` 持续针对每条 WebSocket 消息执行，而不是每个连接执行一次。请求头、查询参数和 Cookie 等通过 [`WebSocketHandshakeContext`](/zh-Hans/reference/api/execution-context#websocket-request-context) 读取。
-
-```go
-func (i *AuthInterceptor) PreHandshake(
-    ctx core.WebSocketHandshakeContext,
-    meta core.HandlerMeta,
-) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("missing credentials")
-    }
-    return i.verify(token)
-}
-```
-
-## 执行顺序
-
-正常的 HTTP 流程如下。
+## 执行顺序 {#order}
 
 ```text
-Global.PreHandle → Router → ArgumentResolver → Route.PreHandle
-→ 控制器 → 响应准备 → 执行后钩子
-→ Route.PostHandle → Global.PostHandle
-→ Route.BeforeResponse → Global.BeforeResponse
-→ 实际写入响应
-→ Route.AfterCompletion → Global.AfterCompletion
+Global PreHandle
+→ Route selection
+→ Route PreHandle
+→ Input binding and validator
+→ Handler
+→ Response preparation and success hooks
+→ PostHandle (reverse)
+→ BeforeResponse (reverse)
+→ Error rendering and response flush
+→ AfterCompletion (reverse)
+→ Store and multipart cleanup
 ```
 
-每个逆序阶段先执行路由拦截器，再执行全局拦截器。路由完成后的调用会收到解析出的 `HandlerMeta`。
+全局和路由 PreHandle 均在正文绑定前执行，可在解析前拒绝认证失败的请求。PostHandle 用于成功后处理。BeforeResponse 仅对 PreHandle 成功的拦截器逆序执行，并接收序列化、Cookie 和状态码校验错误。在此提交或回滚并返回失败。未执行到 PreHandle 的拦截器也可能收到 AfterCompletion，应先检查资源是否存在。
 
-## 约束和错误
+## 契约 {#contract}
 
-- `BeforeResponse` 仅调用 `PreHandle` 返回 `nil` 的拦截器。返回错误或 `core.ErrAbortPipeline` 的拦截器不在此范围内。
-- `AfterCompletion` 对全局拦截器和通过路由确定的路由拦截器执行。即使相应拦截器的 `PreHandle` 没有执行，也可能调用此方法，因此请在清理前检查资源是否存在。
-- 路由拦截器的认证在输入值解析之后执行。如果需要在输入值解析前认证，请使用全局拦截器。
-- 通过 `core.ErrAbortPipeline` 中止时，拦截器必须准备所需响应。控制器和后续成功处理阶段不会执行。
-- 数据库提交后，实际响应发送仍可能失败。`BeforeResponse` 无法将数据库与网络传输合并为原子操作。
+```go
+import (
+	"github.com/NARUBROWN/spine/core"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+)
 
-有关具体的提前终止和错误传播，请参阅 [v0.7.1 流水线实现](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/pipeline/pipeline.go)；有关连接前处理顺序，请参阅 [WebSocket 运行时实现](https://github.com/NARUBROWN/spine/blob/v0.7.1/internal/ws/runtime.go)。
+type Interceptor interface {
+	PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error
+	PostHandle(ctx spinectx.Ctx, meta core.HandlerMeta)
+	BeforeResponse(ctx spinectx.Ctx, meta core.HandlerMeta, executionErr error) error
+	AfterCompletion(ctx spinectx.Ctx, meta core.HandlerMeta, err error)
+}
+```
 
-## 参考
+## 应用范围 {#scope}
 
-- [执行流水线](/zh-Hans/learn/core-concepts/pipeline)
-- [事务管理](/zh-Hans/learn/tutorial/6-transaction)
-- [当前版本](/zh-Hans/community/changelog)
+```go
+app.Constructor(constructor.Interceptor(&AuthInterceptor{}))
+app.InterceptorFor(boot.InterceptorHTTP, (*AuthInterceptor)(nil))
+```
+
+```go
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	auth := (*AuthInterceptor)(nil)
+	audit := (*AuditInterceptor)(nil)
+	users := r.Group("/users", api.Interceptors(auth))
+	users.GET("/", c.List)
+	users.DELETE("/:id", c.Delete, api.Interceptors(audit))
+	r.GET("/profile", c.Profile, api.Interceptors(auth))
+}
+```
+
+将片段用于已实现所需 Constructor、处理器和两个拦截器的应用，并将 Audit 也注册到 DI。避免在全局和路由重复应用同一策略。角色注册用于 DI，应用范围另行指定。组与子组继承选项，路由选项追加其后。全局范围为 InterceptorHTTP、InterceptorWebSocket、InterceptorAll；All 和 app.Interceptor 作用于 HTTP 与 WS 消息。
+
+## 错误与事务 {#errors}
+
+处理器与拦截器同时失败时，HTTP 响应优先使用拦截器错误。最后一个失败的 BeforeResponse 决定响应，先前错误仍保留给完成钩子。HTTPError 仅允许 400～599；普通错误或无效状态返回隐藏内部详情的 500。DB 提交、事件发布与套接字发送不属于同一个原子事务。
+
+[完整示例](/zh-Hans/learn/tutorial/4-interceptor) | [事务](/zh-Hans/learn/tutorial/6-transaction)

@@ -1,15 +1,23 @@
 {
   "schema_version": "spine.site-releases/v1",
-  "checked_at": "2026-11-10T11:16:40Z",
+  "checked_at": "2026-11-11T09:22:34Z",
   "repositories": [
     {
       "name": "spine",
-      "target_version": "v0.7.2",
+      "target_version": "v0.7.5",
       "policy_url": "https://github.com/NARUBROWN/spine/blob/preview/.github/release-policy.json",
       "tags_url": "https://github.com/NARUBROWN/spine/tags",
       "milestones_url": "https://github.com/NARUBROWN/spine/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine/actions",
       "tags": [
+        {
+          "version": "v0.7.5-preview.1",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.5-preview.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.7.2-rc.1",
           "channel": "rc",

@@ -1,130 +1,73 @@
-# 설치
+# 설치와 첫 번째 앱
 
-Spine `v0.6.0`부터 공식 시작 경로는 CLI의 `new`입니다. 최신 공개 CLI를 설치한 뒤 프로젝트를 만들고 개발 서버의 응답을 확인합니다.
+::: info 0.7.5 API
+0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
+:::
 
-Preview, RC, 정식 채널의 선택과 발행 절차는 [릴리스 채널과 설치](/ko/community/release-channels)에서 확인하세요.
+CLI 설치 채널과 앱 의존성 채널을 별도로 선택합니다. 이 안내는 0.7.5 API를 사용하는 Preview 앱 기준입니다. 정식 릴리스 선택은 [채널 안내](/ko/community/release-channels)를 참고하세요.
 
 ## 요구사항
 
-- Go 1.25.5 이상이 필요합니다. CLI의 권장 버전은 Go 1.27.3입니다.
-- Go 실행 파일 설치 경로가 `PATH`에 포함되어 있어야 합니다. `GOBIN`을 설정하지 않았다면 기본 경로는 `$(go env GOPATH)/bin`입니다.
+Go 1.26 이상을 사용하고 선택한 모듈의 go 지시문을 확인합니다. GOBIN 또는 기본 GOPATH/bin이 PATH에 있어야 합니다.
 
-```bash
+```sh
 go version
-```
-
-출력된 Go 버전이 1.25.5 이상인지 확인하세요.
-
-## CLI 설치
-
-다음 명령으로 CLI를 설치하고 버전을 확인합니다.
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
-```
-
-아래 예제는 정식 CLI `v0.4.3`을 기준으로 합니다. 정확히 이 버전을 설치하려면 다음 명령을 사용하세요.
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
-spine version
-```
-
-CLI 자체를 갱신하려면 위 `go install` 명령을 다시 실행합니다. `spine update`는 선택된 레시피의 프로젝트 의존성을 갱신하며 CLI 실행 파일이나 앱 소스는 바꾸지 않습니다.
-
-`spine version`으로 설치된 CLI 버전을 확인합니다.
-
-`spine` 명령을 찾지 못하고 `GOBIN`을 따로 설정하지 않았다면, Bash나 Zsh에서 다음 명령으로 현재 세션의 경로를 추가하세요. 계속 사용하려면 같은 설정을 셸 시작 파일에 저장합니다. `GOBIN`을 설정했다면 그 디렉터리를 대신 추가하세요.
-
-```bash
-export PATH="$(go env GOPATH)/bin:$PATH"
-spine version
 ```
 
 ## Preview CLI 설치 {#preview-cli}
 
-Preview CLI는 `@preview`로 설치할 수 있습니다. 이는 이동하는 브랜치이며, 앱의 의존성 채널은 `spine new --channel`로 별도 선택합니다. 정식 앱에는 `main`을 사용하세요.
-
-```bash
+```sh
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-## 새 프로젝트 생성
+preview는 이동하는 브랜치입니다. 재현하려면 출력 버전과 커밋을 기록하고 고정 태그를 사용합니다. 정식 CLI는 @latest로 설치합니다. spine update는 앱 의존성을 갱신하며 CLI나 앱 소스를 바꾸지 않습니다.
 
-프로젝트를 둘 상위 디렉터리에서 실행합니다. 같은 이름의 `my-app` 디렉터리가 이미 있다면 다른 이름을 사용하세요.
+## 프로젝트 생성
 
-```bash
-spine new my-app --module example.com/my-app --channel main --no-interactive
+```sh
+spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
 cd my-app
+go list -m all
+spine doctor
+spine inspect
 ```
 
-`new`는 설치한 CLI의 검증 레시피에 따라 Spine, Echo 플랫폼과 Echo의 호환 버전을 선택하고 의존성 설치, 정적 계약 검사와 빌드를 완료합니다. 선택된 버전은 생성된 `go.mod`에서 확인합니다. `--skip-install`로 파일만 생성했다면 `go mod tidy`와 `go mod download all`을 별도로 실행하세요. 설치 과정에서는 앱 초기화, 테스트나 리스너를 실행하지 않습니다.
+CLI 레시피가 호환 버전을 선택합니다. go.mod에서 코어 0.7.5 API와 플랫폼 조합을 확인하세요. 기본 레이아웃은 layered-v1입니다. --validator playground는 BuildApplication에 검증기를 조립합니다. 기본 validator none은 태그 검증을 켜지 않습니다. 생성은 외부 앱 자원이나 리스너를 시작하지 않습니다.
 
-생성된 `spine.toml`은 다음과 같습니다.
-
-```toml
-module = "example.com/my-app"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "layered-v1"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
+```text
+my-app/
+├── main.go
+├── go.mod
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/controller/health_controller.go
 ```
-
-`internal/application/application.go`의 `BuildApplication()`이 구성 요소와 `GET /health`를 등록합니다. 생성된 `main.go`는 이 함수를 호출하고, `app.Validate(options)`로 구성을 검증한 뒤 `app.Run(options)`으로 서버를 실행합니다.
 
 ## 검증과 실행
 
-```bash
-spine doctor
-spine inspect
+```sh
 spine contract check
 spine verify
-```
-
-각 명령이 오류 없이 끝나는지 확인하세요.
-
-| 명령 | 확인하는 내용 |
-| --- | --- |
-| `spine doctor` | Go 도구와 프로젝트 설정 |
-| `spine inspect` | 코드에 등록된 라우트, 의존성 등 앱 구성 |
-| `spine contract check` | 등록 코드에서 추출한 실행 계약의 유효성 |
-| `spine verify` | 실행 계약과 `gofmt`, `go vet`, Go 테스트 결과 |
-
-생성된 `application_test.go`는 서버를 시작하지 않고 `BuildApplication()`과 `app.Validate(options)`를 검사합니다. 이 단계에서는 코드와 앱 구성이 검증되며, 실제 HTTP 응답은 다음 단계에서 확인합니다.
-
-검사를 통과하면 `spine dev`로 실행하고, 다른 터미널에서 실제 HTTP 응답을 확인합니다.
-
-```bash
 spine dev
-```
-
-```bash
+# In another terminal
 curl http://localhost:8080/health
 ```
 
-`{"status":"ok"}`가 반환되면 개발 서버가 요청을 처리한 것입니다. 서버를 실행한 터미널에서 `Ctrl+C`를 눌러 종료합니다. 외부 데이터베이스나 메시지 브로커를 연결하거나 배포한 뒤에는 해당 환경에서도 동작을 확인해야 합니다.
+{"status":"ok"}를 확인하고 Ctrl+C로 종료합니다. 생성된 main은 BuildApplication, app.Validate, app.Run 순서입니다. Validate는 생성자나 DB 접속을 실행하지 않으므로 실제 요청도 확인합니다.
 
-## 의존성 캐시 오류 복구
+## 의존성 메타데이터 복구
 
-정적 계약 검사는 모듈 그래프를 오프라인으로 읽습니다. `--skip-install`로 파일만 생성했거나 의존성을 수동으로 바꾼 뒤 `MODULE_GRAPH_UNAVAILABLE`이 발생하면, 전체 모듈 메타데이터를 준비하고 다시 검사합니다.
+--skip-install이나 수동 변경 뒤 MODULE_GRAPH_UNAVAILABLE이면 모듈 정보를 내려받습니다.
 
-```bash
+```sh
 go mod tidy
 go mod download all
 spine contract check
-spine verify
 ```
-
-[플랫폼과 DTO 검증 선택](/ko/learn/getting-started/platforms)
 
 ## 다음 단계
 
-[첫 번째 앱](/ko/learn/getting-started/first-app)에서 생성된 파일의 역할을 살펴보거나, [프로젝트 구조](/ko/learn/tutorial/1-project-structure)에서 기능을 추가하세요.
+[프로젝트 구조](/ko/learn/tutorial/1-project-structure) / [컨트롤러](/ko/learn/tutorial/2-controller) / [플랫폼 선택](/ko/learn/getting-started/platforms)

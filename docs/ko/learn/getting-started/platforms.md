@@ -1,16 +1,20 @@
 # 플랫폼과 DTO 검증 선택
 
-Spine `v0.7.1`은 HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 코어에 두고 구현을 독립 모듈로 선택합니다. 필요한 구현만 앱에 연결할 수 있습니다.
+::: info 0.7.5 API
+0.7.5 API 기준의 문서입니다. 설치 가능한 태그와 호환 플랫폼은 [버전 현황](/ko/community/versions)에서 확인하세요.
+:::
+
+Spine `v0.7.5`는 HTTP, WebSocket, 이벤트와 DTO 검증의 공개 계약을 코어에 두고 구현을 독립 모듈로 선택합니다. 필요한 구현만 앱에 연결할 수 있습니다.
 
 ## CLI로 선택하기
 
-정식 CLI `v0.4.3` 이상을 설치한 뒤 다음 명령을 각각 별도 디렉터리에서 실행합니다. `--channel main`은 공개된 정식 태그를 선택합니다. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
+[CLI 설치](/ko/learn/getting-started/installation) 후 0.7.5 API를 지원하는 Preview CLI를 사용합니다. CLI 설치 채널과 앱 의존성 채널은 별개입니다.
 
 ```sh
-spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
-spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
-spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
-spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
+spine new http-app --module example.com/http-app --channel preview --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel preview --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel preview --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel preview --validator playground --no-interactive
 ```
 
 기본 HTTP 플랫폼은 Echo이며, WebSocket, 이벤트, validator와 프론트엔드는 기본적으로 선택하지 않습니다. `--platform none`은 이벤트 워커를 만들며 이벤트 플랫폼이 필요합니다. WebSocket은 HTTP 플랫폼이 필요합니다. `--event-platform`은 여러 번 지정할 수 있습니다.
@@ -29,8 +33,8 @@ HTTP는 `contract/http`와 Echo 또는 net/http, WebSocket은 `contract/websocke
 
 ```go
 type CreateUserRequest struct {
-    Email string `json:"email" validate:"required,email"`
-    Age   int    `json:"age" validate:"gte=18"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
 }
 ```
 
@@ -44,4 +48,4 @@ type CreateUserRequest struct {
 spine update --dry-run
 ```
 
-[릴리스 채널과 설치](/ko/community/release-channels), [입력 전환](/ko/learn/migration/v0.7.1-preview), [HTTP v3와 부팅 옵션](/ko/learn/migration/preview-features)을 참고하세요.
+[릴리스 채널과 설치](/ko/community/release-channels), [입력 전환](/ko/learn/migration/v0.7.5), [HTTP v3와 부팅 옵션](/ko/learn/migration/v0.7.5)을 참고하세요.

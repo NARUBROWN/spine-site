@@ -1,5 +1,7 @@
 # 版本說明
 
+目前 API 用法參見 [0.7.5 移轉指南](/zh-Hant/learn/migration/v0.7.5)。下方發布資訊與歷史記錄以各自標籤為準。
+
 最新標籤與下一目標版本請查看[版本概覽](/zh-Hant/community/versions)。
 
 Preview、RC、穩定版的選擇與發佈流程，請參閱[發佈通道與安裝](/zh-Hant/community/release-channels)。

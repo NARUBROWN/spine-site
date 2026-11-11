@@ -1,14 +1,14 @@
 # 使用 Kafka 连接订单服务和库存服务
 
-::: info
-此示例使用 `v0.7.1` 控制器和路径输入。兼容规则请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)、[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)和 [OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info 0.7.5 API
+本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
 :::
 
 分别创建订单 HTTP 服务和库存消费服务，通过 Kafka 传递 `order.created` 事件。发送订单请求后，确认库存服务的处理日志。库存服务不启动 HTTP 监听器。
 
 ## 开始前的准备
 
-完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用 CLI `v0.4.3` 或更高版本生成 Kafka 平台和消费者框架。
+完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用支持 0.7.5 API 的 Preview CLI。CLI 安装通道与应用依赖通道独立。
 
 要确认消息传递，需要在 `localhost:9092` 运行 Kafka broker，并创建 `order.created` 主题。本示例使用隔离本地环境中的明文连接。库存消费者会记录事件日志，但不会修改实际库存数量。
 
@@ -16,20 +16,20 @@
 
 创建工作目录，先预览将要生成的文件。
 
-以下命令使用正式依赖渠道。请在 `go.mod` 中确认所选版本。
+以下命令选择 Preview 依赖，请在生成的 go.mod 中确认实际核心和平台版本。
 
 ```sh
 mkdir spine-msa
 cd spine-msa
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive --dry-run
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive --dry-run
+spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive --dry-run
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive --dry-run
 ```
 
 确认预览后，创建两个应用。除非另有说明，后续命令均在 `spine-msa/` 中运行。
 
 ```sh
-spine new order-app --layout legacy --module example.com/order-app --event-platform kafka --channel main --no-interactive
-spine new stock-app --layout legacy --module example.com/stock-app --platform none --event-platform kafka --channel main --no-interactive
+spine new order-app --module example.com/order-app --event-platform kafka --channel preview --no-interactive
+spine new stock-app --module example.com/stock-app --platform none --event-platform kafka --channel preview --no-interactive
 ```
 
 ## 2. 生成库存消费者骨架
@@ -94,12 +94,12 @@ package events
 import "time"
 
 type OrderCreated struct {
-    EventID string `json:"event_id"`
-    OrderID int64 `json:"order_id"`
-    At time.Time `json:"at"`
+	EventID string    `json:"event_id"`
+	OrderID int64     `json:"order_id"`
+	At      time.Time `json:"at"`
 }
 
-func (e OrderCreated) Name() string { return "order.created" }
+func (e OrderCreated) Name() string          { return "order.created" }
 func (e OrderCreated) OccurredAt() time.Time { return e.At }
 ```
 
@@ -114,16 +114,16 @@ func (e OrderCreated) OccurredAt() time.Time { return e.At }
 package controller
 
 import (
-    "context"
-    "fmt"
-    "time"
+	"fmt"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"time"
 
-    "example.com/order-app/src/events"
-    "github.com/NARUBROWN/spine/pkg/event/publish"
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/input"
+	"example.com/order-app/src/events"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/event/publish"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
 )
 
 type OrderController struct{}
@@ -131,22 +131,22 @@ type OrderController struct{}
 func (*OrderController) Constructor() *OrderController { return &OrderController{} }
 
 func (c *OrderController) RegisterRoutes(r *api.Registry) {
-    r.POST("/orders/:order_id", c.Create)
+	r.POST("/orders/:order_id", c.Create)
 }
 
-func (c *OrderController) Create(ctx context.Context, id input.Path[int64]) (httpx.Response[string], error) {
-    if *id <= 0 {
-        return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
-    }
-    publish.Event(ctx, events.OrderCreated{
-        EventID: fmt.Sprintf("order.created:%d", *id),
-        OrderID: *id,
-        At: time.Now().UTC(),
-    })
-    return httpx.Response[string]{
-        Body: "accepted",
-        Options: httpx.ResponseOptions{Status: 202},
-    }, nil
+func (c *OrderController) Create(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[string], error) {
+	if *id <= 0 {
+		return httpx.Response[string]{}, httperr.BadRequest("order ID must be positive")
+	}
+	publish.Event(ctx.ExecutionContext().Context(), events.OrderCreated{
+		EventID: fmt.Sprintf("order.created:%d", *id),
+		OrderID: *id,
+		At:      time.Now().UTC(),
+	})
+	return httpx.Response[string]{
+		Body:    "accepted",
+		Options: httpx.ResponseOptions{Status: 202},
+	}, nil
 }
 ```
 
@@ -155,36 +155,36 @@ func (c *OrderController) Create(ctx context.Context, id input.Path[int64]) (htt
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "time"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"time"
 
-    "example.com/order-app/src/controller"
-    "github.com/NARUBROWN/spine"
-    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
+	"example.com/order-app/src/controller"
+	"github.com/NARUBROWN/spine"
+	kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    config, err := loadKafkaConfig("SPINE_KAFKA_")
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    config.Consume = false
-    config.Publish = true
-    factory, err := kafkaplatform.NewFactory(config)
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
-    app.Constructor(constructor.Controller(&controller.OrderController{}))
+	config, err := loadKafkaConfig("SPINE_KAFKA_")
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	config.Consume = false
+	config.Publish = true
+	factory, err := kafkaplatform.NewFactory(config)
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithEventAdapter("kafka", factory))
+	app.Constructor(constructor.Controller(&controller.OrderController{}))
 
-    return app, boot.Options{
-        Address: ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout: 10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    }, nil
+	return app, boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+		HTTP:                   &boot.HTTPOptions{},
+	}, nil
 }
 ```
 
@@ -208,33 +208,33 @@ type OrderEvent = events.OrderCreated
 package order
 
 import (
-    "context"
-    "fmt"
-    "log"
-    "sync"
+	"fmt"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
+	"sync"
 )
 
 type OrderConsumer struct {
-    mu sync.Mutex
-    processed map[string]struct{}
+	mu        sync.Mutex
+	processed map[string]struct{}
 }
 
 func NewOrderConsumer() *OrderConsumer {
-    return &OrderConsumer{processed: make(map[string]struct{})}
+	return &OrderConsumer{processed: make(map[string]struct{})}
 }
 
-func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event OrderEvent) error {
-    if event.EventID == "" || event.OrderID <= 0 {
-        return fmt.Errorf("invalid order event")
-    }
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    if _, exists := c.processed[event.EventID]; exists {
-        return nil
-    }
-    log.Printf("topic=%s order_id=%d", eventName, event.OrderID)
-    c.processed[event.EventID] = struct{}{}
-    return nil
+func (c *OrderConsumer) Handle(ctx spinectx.Ctx, eventName string, event OrderEvent) error {
+	if event.EventID == "" || event.OrderID <= 0 {
+		return fmt.Errorf("invalid order event")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.processed[event.EventID]; exists {
+		return nil
+	}
+	log.Printf("topic=%s order_id=%d", eventName, event.OrderID)
+	c.processed[event.EventID] = struct{}{}
+	return nil
 }
 ```
 
@@ -243,33 +243,33 @@ func (c *OrderConsumer) Handle(ctx context.Context, eventName string, event Orde
 package application
 
 import (
-    "time"
+	"time"
 
-    "example.com/stock-app/src/consumer/order"
-    "github.com/NARUBROWN/spine"
-    kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
-    "github.com/NARUBROWN/spine/pkg/boot"
+	"example.com/stock-app/src/consumer/order"
+	"github.com/NARUBROWN/spine"
+	kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"
+	"github.com/NARUBROWN/spine/pkg/boot"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    config, err := loadKafkaConfig("SPINE_KAFKA_")
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    config.Consume = true
-    config.Publish = false
-    factory, err := kafkaplatform.NewFactory(config)
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    app := spine.New(spine.WithEventAdapter("kafka", factory))
-    if err := order.Register(app); err != nil {
-        return nil, boot.Options{}, err
-    }
-    return app, boot.Options{
-        EnableGracefulShutdown: true,
-        ShutdownTimeout: 10 * time.Second,
-    }, nil
+	config, err := loadKafkaConfig("SPINE_KAFKA_")
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	config.Consume = true
+	config.Publish = false
+	factory, err := kafkaplatform.NewFactory(config)
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(spine.WithEventAdapter("kafka", factory))
+	if err := order.Register(app); err != nil {
+		return nil, boot.Options{}, err
+	}
+	return app, boot.Options{
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+	}, nil
 }
 ```
 

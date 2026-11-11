@@ -1,286 +1,253 @@
 # 事务管理
 
-::: info
-本教程的 `legacy` 布局使用兼容的 `app.Route`。新控制器请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)，输入兼容规则请参阅[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，规范选项请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info 0.7.5 API
+本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
 :::
 
-将一次 HTTP 请求中执行的多个 INSERT 合并到同一个事务。编写拦截器，在请求成功时提交，中途失败时连同之前的 INSERT 一并回滚。
-
-本页的 `src/user` 示例使用[项目结构](/zh-Hans/learn/tutorial/1-project-structure)中通过 `--layout legacy` 创建的应用。默认 `layered-v1` 布局按角色划分目录。
-
-在[数据库](/zh-Hans/learn/tutorial/5-database)教程的 `example.com/my-app` 项目上继续操作。请先准备 `src/database`、`src/entity`、`src/user` 和迁移。以下事务代码需要手动添加，CLI 不提供 Bun 事务或 outbox 生成器。
+先准备[数据库项目](/zh-Hans/learn/tutorial/5-database)。一个请求中的多个 INSERT 共用同一事务。
 
 ## 执行顺序
 
-在 Spine v0.7.1 中，在 `PreHandle` 中启动事务，并在 `BeforeResponse` 中提交或回滚。响应序列化、状态码和 Cookie 验证、事件发布等响应准备过程中发生的错误，也会触发回滚。`AfterCompletion` 用于在完成后记录日志或清理资源。
-
 ```text
-PreHandle: 启动事务
-→ 控制器 → 响应准备 → PostHandle
-→ BeforeResponse: 有错误则回滚，否则提交
-→ 发送 HTTP 响应
-→ AfterCompletion: 记录日志并清理资源
+PreHandle: BeginTx, 요청별 저장소에 tx 저장
+→ 입력 바인딩과 태그 검증
+→ 컨트롤러 → 서비스 → 저장소
+→ 응답 직렬화와 검증, 성공 후처리
+→ BeforeResponse: 오류가 있으면 Rollback, 없으면 Commit
+→ HTTP 응답 전송
+→ AfterCompletion: 로그와 정리
 ```
 
-## 实现拦截器
+绑定在事务开始后进行，因此绑定错误也会触发回滚。序列化、状态码和 Cookie 验证在提交前完成。
+
+## 拦截器
 
 ```go
 // src/interceptor/tx_interceptor.go
 package interceptor
 
 import (
-    "errors"
-    "log"
-
-    "github.com/NARUBROWN/spine/core"
-    "github.com/uptrace/bun"
+	"errors"
+	"github.com/NARUBROWN/spine/core"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/uptrace/bun"
+	"log"
 )
 
 type TxInterceptor struct{ db *bun.DB }
 
-func NewTxInterceptor(db *bun.DB) *TxInterceptor {
-    return &TxInterceptor{db: db}
+func (*TxInterceptor) Constructor(db *bun.DB) *TxInterceptor {
+	return &TxInterceptor{db: db}
 }
-
-func (i *TxInterceptor) PreHandle(ctx core.ExecutionContext, meta core.HandlerMeta) error {
-    if ctx.Context() == nil {
-        return errors.New("execution context has no request context")
-    }
-    tx, err := i.db.BeginTx(ctx.Context(), nil)
-    if err != nil {
-        return err
-    }
-    ctx.Set("tx", tx)
-    return nil
+func (i *TxInterceptor) PreHandle(ctx spinectx.Ctx, meta core.HandlerMeta) error {
+	request, ok := ctx.HTTPRequestContext()
+	if !ok {
+		return errors.New("HTTP request context unavailable")
+	}
+	switch request.Method() {
+	case "GET", "HEAD", "OPTIONS":
+		return nil
+	}
+	tx, err := i.db.BeginTx(ctx.ExecutionContext().Context(), nil)
+	if err != nil {
+		return err
+	}
+	ctx.ExecutionContext().Set("tx", tx)
+	return nil
 }
-
-func (i *TxInterceptor) PostHandle(ctx core.ExecutionContext, meta core.HandlerMeta) {}
-
-func (i *TxInterceptor) BeforeResponse(ctx core.ExecutionContext, meta core.HandlerMeta, executionErr error) error {
-    value, ok := ctx.Get("tx")
-    if !ok {
-        return nil
-    }
-    tx, ok := value.(bun.Tx)
-    if !ok {
-        return errors.New("transaction has unexpected type")
-    }
-    if executionErr != nil {
-        return tx.Rollback()
-    }
-    return tx.Commit()
+func (*TxInterceptor) PostHandle(spinectx.Ctx, core.HandlerMeta) {}
+func (*TxInterceptor) BeforeResponse(ctx spinectx.Ctx, meta core.HandlerMeta, executionErr error) error {
+	value, ok := ctx.ExecutionContext().Get("tx")
+	if !ok {
+		return nil
+	}
+	tx, ok := value.(bun.Tx)
+	if !ok {
+		return errors.New("transaction has unexpected type")
+	}
+	if executionErr != nil {
+		return tx.Rollback()
+	}
+	return tx.Commit()
 }
-
-func (i *TxInterceptor) AfterCompletion(ctx core.ExecutionContext, meta core.HandlerMeta, err error) {
-    if err != nil {
-        log.Printf("[TX] %s %s: %v", ctx.Method(), ctx.Path(), err)
-    }
+func (*TxInterceptor) AfterCompletion(ctx spinectx.Ctx, meta core.HandlerMeta, err error) {
+	if err != nil {
+		log.Printf("[TX] %s: %v", meta.HandlerName(), err)
+	}
 }
 ```
 
-必须返回 `Commit()` 和 `Rollback()` 的错误，才能将其计入最终执行错误。请保留包含 `log` 和 `errors` 的 import，以及全部四个拦截器方法。
+排除只读 GET/HEAD/OPTIONS。无事务的请求允许通过结束处理。Commit/Rollback 错误也须返回。钩子使用 spine.Ctx，值使用 ExecutionContext().Set/Get，数据库调用使用 ExecutionContext().Context()。
 
-## 注册到生成的应用
-
-在 `internal/application/application.go` 的 import 块中添加 `example.com/my-app/src/interceptor`。保留数据库教程中注册的 `database.NewDB`，以及 health 和 user 注册，并在现有的 `app.Constructor` 调用中添加 `interceptor.NewTxInterceptor`。以下代码是 `BuildApplication()` 中的注册部分。
+## 显式传递
 
 ```go
-app.Constructor(
-    NewHealthController,
-    database.NewDB,
-    interceptor.NewTxInterceptor,
-)
-app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
-```
-
-`(*interceptor.TxInterceptor)(nil)` 指定拦截器类型。Spine 通过 DI 创建该类型的实例，`NewTxInterceptor` 必须只返回一个值。
-
-若只应用于 HTTP 请求，请按上例使用 `boot.InterceptorHTTP`。`app.Interceptor(...)` 也会应用于 WebSocket 消息。若只应用于特定路由，请省略全局注册，并在相应的 `app.Route` 中指定 `route.WithInterceptors((*interceptor.TxInterceptor)(nil))` 选项。
-
-## 将请求事务传递给仓储
-
-添加 `src/user/user_create.go`，使用请求中的事务保存用户。这里使用生成的 `UserController` 的 `service` 字段和 `UserService` 的 `repository` 字段。
-
-请求 DTO 通过指针接收。`spine.Ctx` 来自 `github.com/NARUBROWN/spine/pkg/spine`。以下代码使用别名 `spinectx`，以免与应用根包重名。
-
-```go
-// src/user/user_create.go
-package user
+// src/controller/user_create.go
+package controller
 
 import (
-    "context"
-    "errors"
-    "net/http"
-
-    "example.com/my-app/src/entity"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    spinectx "github.com/NARUBROWN/spine/pkg/spine"
-    "github.com/uptrace/bun"
+	"errors"
+	"example.com/my-app/src/entity"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"github.com/uptrace/bun"
+	"net/http"
 )
 
 type CreateUserRequest struct {
-    Name string `json:"name"`
-    Email string `json:"email"`
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
+type CreateUsersRequest struct {
+	Users []CreateUserRequest `json:"users" validate:"required,min=1,dive"`
 }
 
-func (c *UserController) Create(ctx context.Context, values spinectx.Ctx, req *CreateUserRequest) (httpx.Response[*entity.User], error) {
-    value, ok := values.Get("tx")
-    if !ok {
-        return httpx.Response[*entity.User]{}, errors.New("transaction is missing")
-    }
-    tx, ok := value.(bun.Tx)
-    if !ok {
-        return httpx.Response[*entity.User]{}, errors.New("transaction has unexpected type")
-    }
-    user, err := c.service.Create(ctx, tx, req)
-    if err != nil {
-        return httpx.Response[*entity.User]{}, err
-    }
-    return httpx.Response[*entity.User]{
-        Body: user,
-        Options: httpx.ResponseOptions{Status: http.StatusCreated},
-    }, nil
+func requestTransaction(ctx spinectx.Ctx) (bun.Tx, error) {
+	value, ok := ctx.ExecutionContext().Get("tx")
+	if !ok {
+		return bun.Tx{}, errors.New("transaction is missing")
+	}
+	tx, ok := value.(bun.Tx)
+	if !ok {
+		return bun.Tx{}, errors.New("transaction has unexpected type")
+	}
+	return tx, nil
 }
-
-func (s *UserService) Create(ctx context.Context, db bun.IDB, req *CreateUserRequest) (*entity.User, error) {
-    user := &entity.User{Name: req.Name, Email: req.Email}
-    if err := s.repository.Save(ctx, db, user); err != nil {
-        return nil, err
-    }
-    if err := db.NewSelect().Model(user).WherePK().Scan(ctx); err != nil {
-        return nil, err
-    }
-    return user, nil
+func (c *UserController) Create(ctx spinectx.Ctx, body input.Body[CreateUserRequest]) (httpx.Response[*entity.User], error) {
+	tx, err := requestTransaction(ctx)
+	if err != nil {
+		return httpx.Response[*entity.User]{}, err
+	}
+	user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, body.Name, body.Email)
+	if err != nil {
+		return httpx.Response[*entity.User]{}, err
+	}
+	return httpx.Response[*entity.User]{Body: user, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
+}
+func (c *UserController) CreateBatch(ctx spinectx.Ctx, body input.Body[CreateUsersRequest]) (httpx.Response[[]*entity.User], error) {
+	tx, err := requestTransaction(ctx)
+	if err != nil {
+		return httpx.Response[[]*entity.User]{}, err
+	}
+	users := make([]*entity.User, 0, len(body.Users))
+	for _, request := range body.Users {
+		user, err := c.service.Create(ctx.ExecutionContext().Context(), tx, request.Name, request.Email)
+		if err != nil {
+			return httpx.Response[[]*entity.User]{}, err
+		}
+		users = append(users, user)
+	}
+	return httpx.Response[[]*entity.User]{Body: users, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
 }
 ```
 
-服务以 `bun.IDB` 接收请求中的事务，并传递给仓储。`*bun.DB` 和 `bun.Tx` 实现相同的接口，但请求中的事务不会自动重新注入仓储构造函数。
+控制器检查 bun.Tx 是否存在及其类型，再以 bun.IDB 传给前章的服务和 Save 方法。不要用请求事务覆盖共享对象。
 
-用以下实现替换 `src/user/user_repository.go` 中现有的 `Save` 方法。不要额外声明同名方法。
+## 替换现有文件
 
-```go
-// src/user/user_repository.go
-func (r *UserRepository) Save(ctx context.Context, db bun.IDB, user *entity.User) error {
-    _, err := db.NewInsert().Model(user).Exec(ctx)
-    return err
-}
-```
-
-在 `src/user/user_route.go` 的 `Register` 中手动添加 POST 路由。保留现有的 GET 注册。
+替换以下两个文件。Constructor 注册 DI，InterceptorFor 应用 HTTP 范围。验证器仍在 BuildApplication 中，标签验证失败在处理器前返回 400。不会自动调用任意 DTO Validate 方法。
 
 ```go
-app.Route("POST", "/user", (*UserController).Create)
-```
-
-## 合并多次写入并检查回滚
-
-这次在一次请求中保存多个用户。创建 `src/user/user_batch.go`，并将以下 POST 路由添加到 `src/user/user_route.go` 的 `Register` 中。如果第二个 INSERT 因邮箱重复而失败，第一个 INSERT 也应回滚。
-
-```go
-// src/user/user_batch.go
-package user
+// src/controller/user_controller.go
+package controller
 
 import (
-    "context"
-    "errors"
-    "net/http"
-
-    "example.com/my-app/src/entity"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    spinectx "github.com/NARUBROWN/spine/pkg/spine"
-    "github.com/uptrace/bun"
+	"database/sql"
+	"errors"
+	"example.com/my-app/src/entity"
+	"example.com/my-app/src/service"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
-type CreateUsersRequest struct {
-    Users []CreateUserRequest `json:"users"`
+type UserPath struct {
+	ID int64 `path:"id"`
 }
+type UserController struct{ service *service.UserService }
 
-func (c *UserController) CreateBatch(ctx context.Context, values spinectx.Ctx, req *CreateUsersRequest) (httpx.Response[[]*entity.User], error) {
-    value, ok := values.Get("tx")
-    if !ok {
-        return httpx.Response[[]*entity.User]{}, errors.New("transaction is missing")
-    }
-    tx, ok := value.(bun.Tx)
-    if !ok {
-        return httpx.Response[[]*entity.User]{}, errors.New("transaction has unexpected type")
-    }
-    users := make([]*entity.User, 0, len(req.Users))
-    for index := range req.Users {
-        user, err := c.service.Create(ctx, tx, &req.Users[index])
-        if err != nil {
-            return httpx.Response[[]*entity.User]{}, err
-        }
-        users = append(users, user)
-    }
-    return httpx.Response[[]*entity.User]{
-        Body: users,
-        Options: httpx.ResponseOptions{Status: http.StatusCreated},
-    }, nil
+func (*UserController) Constructor(svc *service.UserService) *UserController {
+	return &UserController{service: svc}
+}
+func (c *UserController) RegisterRoutes(r *api.Registry) {
+	r.GET("/users/:id", c.Get)
+	r.POST("/users", c.Create)
+	r.POST("/users/batch", c.CreateBatch)
+}
+func (c *UserController) Get(ctx spinectx.Ctx, path input.Path[UserPath]) (httpx.Response[*entity.User], error) {
+	user, err := c.service.Get(ctx.ExecutionContext().Context(), path.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return httpx.Response[*entity.User]{}, httperr.NotFound("user not found")
+	}
+	return httpx.Response[*entity.User]{Body: user}, err
 }
 ```
 
 ```go
-app.Route("POST", "/user/batch", (*UserController).CreateBatch)
-```
+// internal/application/application.go
+package application
 
-## 排除读取请求
+import (
+	"example.com/my-app/src/controller"
+	"example.com/my-app/src/database"
+	"example.com/my-app/src/interceptor"
+	"example.com/my-app/src/repository"
+	"example.com/my-app/src/service"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+)
 
-如果不希望在读取请求中启动事务，请在 `PreHandle` 的开头添加以下条件。`BeforeResponse` 也必须处理不存在事务的情况，上面的实现已经包含该处理。不要将使用事务的控制器列入排除范围。
-
-```go
-if ctx.Method() == "GET" || ctx.Method() == "HEAD" || ctx.Method() == "OPTIONS" {
-    return nil
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(
+		constructor.Custom(database.NewDB),
+		constructor.Interceptor(&interceptor.TxInterceptor{}),
+		constructor.Repository(&repository.UserRepository{}),
+		constructor.Service(&service.UserService{}),
+		constructor.Controller(&controller.UserController{}),
+	)
+	app.InterceptorFor(boot.InterceptorHTTP, (*interceptor.TxInterceptor)(nil))
+	return app, boot.Options{
+		Address:                ":8080",
+		HTTP:                   &boot.HTTPOptions{OpenAPI: boot.OpenAPIOptions{Enabled: true}},
+		EnableGracefulShutdown: true,
+	}, nil
 }
 ```
 
-## 验证与运行
+## 验证提交与回滚
 
-```bash
-gofmt -w src/interceptor/tx_interceptor.go src/user/user_create.go src/user/user_batch.go src/user/user_repository.go src/user/user_route.go internal/application/application.go
-go mod tidy
-go mod download all
-spine doctor
-spine inspect
-spine contract check
-spine verify
-spine dev
+```sh
+gofmt -w src internal
+go build ./...
+go run .
+#
+curl -i -H 'Content-Type: application/json' -d '{"name":"Bob","email":"bob@example.com"}' http://localhost:8080/users
+curl -i -H 'Content-Type: application/json' -d '{"users":[{"name":"Rollback","email":"rollback@example.com"},{"name":"Duplicate","email":"alice@example.com"}]}' http://localhost:8080/users/batch
+curl -i -H 'Content-Type: application/json' -d '{"name":"","email":"bad"}' http://localhost:8080/users
 ```
-
-契约检查和本地检查无法确认实际数据库中的提交与回滚。运行应用需要完成数据库教程中的 `DATABASE_URL` 设置和迁移。下一步将检查成功请求的数据保存和失败请求的回滚。如果提交或回滚本身失败，相应的错误处理需要另行检查。
-
-## 在实际数据库中检查
-
-按照数据库教程执行迁移并启动应用后，在另一终端中发送以下请求。示例中的 GET 假设使用新建的测试数据库，且第一个用户的 ID 为 1。如果使用现有数据库，请根据 POST 响应中的 ID 修改 GET 路径。
-
-第一个 POST 会保存用户并返回 HTTP 201，随后使用响应中的 ID 发起 GET 请求，会返回同一用户。`/user/batch` 请求会因第二个邮箱重复而失败，返回 HTTP 500。由于数据库错误以普通错误返回，响应不会暴露内部 SQL 错误。
-
-```bash
-curl -i -X POST http://localhost:8080/user \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice","email":"alice@example.com"}'
-curl -i http://localhost:8080/user/1
-
-curl -i -X POST http://localhost:8080/user/batch \
-  -H 'Content-Type: application/json' \
-  -d '{"users":[{"name":"Rollback","email":"rollback@example.com"},{"name":"Duplicate","email":"alice@example.com"}]}'
-
-curl -i -X POST http://localhost:8080/user \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Bob","email":"bob@example.com"}'
-```
-
-在数据库客户端中，确认以下 SELECT 的结果分别为 1 和 0。如果第二个结果为 0，说明失败前执行的第一个 INSERT 也已回滚。最后的 Bob 请求使用不重复的邮箱，因此应再次保存成功并返回 HTTP 201。
 
 ```sql
-SELECT COUNT(*) FROM users WHERE email = 'alice@example.com';
+SELECT COUNT(*) FROM users WHERE email = 'bob@example.com';
 SELECT COUNT(*) FROM users WHERE email = 'rollback@example.com';
 ```
 
-## 原子性边界
+在含前章 Alice 的新表中，依次得到 201、重复 batch 的 500、验证失败的 400。SELECT 结果应为 1 和 0，batch 的第一个 INSERT 也会回滚。重复运行前检查已有邮箱。
 
-数据库提交、向消息代理发布事件、通过套接字发送响应，无法合并为一个原子事务。可能在发布事件后数据库提交失败，也可能在提交后响应发送失败。
+## 错误与原子性
 
-如果需要同时保证数据库变更和事件记录，请在同一个数据库事务中保存 outbox 记录，再通过独立的投递任务发布事件。重发时也应使用相同的事件 ID，消费者需要根据此 ID 判断重复事件。
+BeforeResponse 错误优先决定响应，回滚失败可将原来的 404 变为 500。AfterCompletion 也接收先前错误，但它在写入尝试后运行，不能作为提交点。数据库变更、消息发布和响应发送不属于同一原子事务。如需绑定数据库与事件记录，应在同一事务写入 outbox，再单独投递。
 
-- [Interceptor API](/zh-Hans/reference/api/interceptor)
-- [数据库连接](/zh-Hans/learn/tutorial/5-database)
+## 下一步
+
+[输入验证](/zh-Hans/learn/tutorial/7-error-handling) / [拦截器](/zh-Hans/learn/tutorial/4-interceptor)

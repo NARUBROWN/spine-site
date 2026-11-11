@@ -1,0 +1,528 @@
+{
+  "checked_at": "2026-11-11T09:38:45.814864+00:00",
+  "branch": "temp/v0.7.5-docs",
+  "site_base": "32b1892",
+  "local_sources": {
+    "spine": "4cf9f04d6c27683768838578983915a625399f2c",
+    "spine-cli": "a5281c50e5223ecafed5e94c21b85f4182d19ee2",
+    "spine-echo-platform": "9bb73ee94c4958ee93cbe63db7fe034fa7661f24",
+    "spine-gorilla-platform": "af6e689a0a5e8c7ae5ce11dfbd82f9e5593c9a8a",
+    "spine-validator-playground": "6175b9a84fd3cf0cdfb8d8bbb81046007171bdd5"
+  },
+  "markdown_pages": 216,
+  "updated_markdown_pages": 185,
+  "locales": [
+    "ko",
+    "en",
+    "ja",
+    "zh-Hans",
+    "zh-Hant"
+  ],
+  "translation_source_pages": 43,
+  "translation_pages": 172,
+  "go_syntax_examples": 405,
+  "contextual_fragments_included": 10,
+  "rendered_internal_links": 11880,
+  "site_build": "pass",
+  "python_unit_tests": 9,
+  "local_examples": {
+    "dependencies": "local-source",
+    "replacements": {
+      "github.com/NARUBROWN/spine": "/home/livit-dgx-gigabyte/VscodeProjects/spine",
+      "github.com/NARUBROWN/spine-echo-platform": "/home/livit-dgx-gigabyte/VscodeProjects/spine-echo-platform",
+      "github.com/NARUBROWN/spine-validator-playground": "/home/livit-dgx-gigabyte/VscodeProjects/spine-validator-playground",
+      "github.com/NARUBROWN/spine-gorilla-platform": "/home/livit-dgx-gigabyte/VscodeProjects/spine-gorilla-platform"
+    },
+    "checks": [
+      {
+        "name": "2-controller",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.007s\n",
+        "stderr": ""
+      },
+      {
+        "name": "3-dependency-injection",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.007s\n",
+        "stderr": ""
+      },
+      {
+        "name": "4-interceptor",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.006s\n",
+        "stderr": ""
+      },
+      {
+        "name": "7-error-handling",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.007s\n",
+        "stderr": ""
+      },
+      {
+        "name": "learn/getting-started/intro.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.005s\n",
+        "stderr": ""
+      },
+      {
+        "name": "learn/core-concepts/query-values.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.005s\n",
+        "stderr": ""
+      },
+      {
+        "name": "learn/tutorial/8-swagger.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.009s\n",
+        "stderr": ""
+      },
+      {
+        "name": "reference/api/openapi.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.010s\n",
+        "stderr": ""
+      },
+      {
+        "name": "websocket",
+        "mode": "runtime-websocket",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.008s\n",
+        "stderr": ""
+      },
+      {
+        "name": "crud",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/crud-example\t0.007s\n?   \texample.com/crud-example/internal/application\t[no test files]\n?   \texample.com/crud-example/src/controller\t[no test files]\n?   \texample.com/crud-example/src/dto\t[no test files]\n?   \texample.com/crud-example/src/model\t[no test files]\n?   \texample.com/crud-example/src/repository\t[no test files]\n?   \texample.com/crud-example/src/service\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "login",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/login-example\t0.007s\n?   \texample.com/login-example/internal/application\t[no test files]\n?   \texample.com/login-example/src/controller\t[no test files]\n?   \texample.com/login-example/src/interceptor\t[no test files]\n?   \texample.com/login-example/src/model\t[no test files]\n?   \texample.com/login-example/src/store\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "onboarding",
+        "mode": "compile-only",
+        "exit_code": 0,
+        "stdout": "?   \texample.com/my-app\t[no test files]\n?   \texample.com/my-app/internal/application\t[no test files]\n?   \texample.com/my-app/src/controller\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "database",
+        "mode": "compile-only-no-db",
+        "exit_code": 0,
+        "stdout": "?   \texample.com/my-app\t[no test files]\n?   \texample.com/my-app/internal/application\t[no test files]\n?   \texample.com/my-app/src/controller\t[no test files]\n?   \texample.com/my-app/src/database\t[no test files]\n?   \texample.com/my-app/src/entity\t[no test files]\n?   \texample.com/my-app/src/repository\t[no test files]\n?   \texample.com/my-app/src/service\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "transactions",
+        "mode": "compile-only-no-db",
+        "exit_code": 0,
+        "stdout": "?   \texample.com/my-app\t[no test files]\n?   \texample.com/my-app/internal/application\t[no test files]\n?   \texample.com/my-app/src/controller\t[no test files]\n?   \texample.com/my-app/src/database\t[no test files]\n?   \texample.com/my-app/src/entity\t[no test files]\n?   \texample.com/my-app/src/interceptor\t[no test files]\n?   \texample.com/my-app/src/repository\t[no test files]\n?   \texample.com/my-app/src/service\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "public-contracts",
+        "mode": "reflection-contracts",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.004s\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "published_examples": {
+    "dependencies": "published-modules",
+    "replacements": {},
+    "checks": [
+      {
+        "name": "2-controller",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.006s\n",
+        "stderr": ""
+      },
+      {
+        "name": "3-dependency-injection",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.006s\n",
+        "stderr": ""
+      },
+      {
+        "name": "4-interceptor",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.007s\n",
+        "stderr": ""
+      },
+      {
+        "name": "7-error-handling",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.008s\n",
+        "stderr": ""
+      },
+      {
+        "name": "learn/getting-started/intro.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.006s\n",
+        "stderr": ""
+      },
+      {
+        "name": "learn/core-concepts/query-values.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.006s\n",
+        "stderr": ""
+      },
+      {
+        "name": "learn/tutorial/8-swagger.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.010s\n",
+        "stderr": ""
+      },
+      {
+        "name": "reference/api/openapi.md",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.009s\n",
+        "stderr": ""
+      },
+      {
+        "name": "websocket",
+        "mode": "runtime-websocket",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.007s\n",
+        "stderr": ""
+      },
+      {
+        "name": "crud",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/crud-example\t0.009s\n?   \texample.com/crud-example/internal/application\t[no test files]\n?   \texample.com/crud-example/src/controller\t[no test files]\n?   \texample.com/crud-example/src/dto\t[no test files]\n?   \texample.com/crud-example/src/model\t[no test files]\n?   \texample.com/crud-example/src/repository\t[no test files]\n?   \texample.com/crud-example/src/service\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "login",
+        "mode": "runtime-http",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/login-example\t0.008s\n?   \texample.com/login-example/internal/application\t[no test files]\n?   \texample.com/login-example/src/controller\t[no test files]\n?   \texample.com/login-example/src/interceptor\t[no test files]\n?   \texample.com/login-example/src/model\t[no test files]\n?   \texample.com/login-example/src/store\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "onboarding",
+        "mode": "compile-only",
+        "exit_code": 0,
+        "stdout": "?   \texample.com/my-app\t[no test files]\n?   \texample.com/my-app/internal/application\t[no test files]\n?   \texample.com/my-app/src/controller\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "database",
+        "mode": "compile-only-no-db",
+        "exit_code": 0,
+        "stdout": "?   \texample.com/my-app\t[no test files]\n?   \texample.com/my-app/internal/application\t[no test files]\n?   \texample.com/my-app/src/controller\t[no test files]\n?   \texample.com/my-app/src/database\t[no test files]\n?   \texample.com/my-app/src/entity\t[no test files]\n?   \texample.com/my-app/src/repository\t[no test files]\n?   \texample.com/my-app/src/service\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "transactions",
+        "mode": "compile-only-no-db",
+        "exit_code": 0,
+        "stdout": "?   \texample.com/my-app\t[no test files]\n?   \texample.com/my-app/internal/application\t[no test files]\n?   \texample.com/my-app/src/controller\t[no test files]\n?   \texample.com/my-app/src/database\t[no test files]\n?   \texample.com/my-app/src/entity\t[no test files]\n?   \texample.com/my-app/src/interceptor\t[no test files]\n?   \texample.com/my-app/src/repository\t[no test files]\n?   \texample.com/my-app/src/service\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "name": "public-contracts",
+        "mode": "reflection-contracts",
+        "exit_code": 0,
+        "stdout": "ok  \texample.com/my-app\t0.004s\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "cli_docs": {
+    "cli": "/var/tmp/spine-site-full-dx/spine",
+    "checks": [
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "new",
+          "my-app",
+          "--module",
+          "example.com/my-app",
+          "--channel",
+          "preview",
+          "--validator",
+          "playground",
+          "--no-interactive",
+          "--skip-install"
+        ],
+        "exit_code": 0,
+        "stdout": "Created Spine application in my-app (echo, preview channel, recipe platform-contracts-preview)\n\nNext steps:\n  cd my-app\n  go mod tidy\n  spine dev\n\nDependency installation and build verification were skipped.\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "mod",
+          "tidy"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "generate",
+          "resource",
+          "user",
+          "--dry-run"
+        ],
+        "exit_code": 0,
+        "stdout": "Would generate resource User (layered-v1)\n--- /dev/null\n+++ database/domain/user.go\n@@ -1,0 +1,4 @@\n+package domain\n+\n+type User struct {\n+}\n--- internal/application/application.go\n+++ internal/application/application.go\n@@ -1,31 +1,36 @@\n-package application\n-\n-import (\n-\tcontroller \"example.com/my-app/src/controller\"\n-\t\"github.com/NARUBROWN/spine\"\n-\techoplatform \"github.com/NARUBROWN/spine-echo-platform\"\n-\tplayground \"github.com/NARUBROWN/spine-validator-playground\"\n-\t\"github.com/NARUBROWN/spine/pkg/boot\"\n-\t\"github.com/NARUBROWN/spine/pkg/constructor\"\n-\t\"os\"\n-)\n-\n-// BuildApplication은 플랫폼 설정을 검사하고 생성자와 수신 계약을 하나의 App에 연결합니다.\n-func BuildApplication() (spine.App, boot.Options, error) {\n-\tvalidator, err := playground.New()\n-\tif err != nil {\n-\t\treturn nil, boot.Options{}, err\n-\t}\n-\tapp := spine.New(\n-\t\techoplatform.Option(),\n-\t\tspine.WithValidator(validator),\n-\t)\n-\tapp.Constructor(\n-\t\tconstructor.Controller(&controller.HealthController{}),\n-\t)\n-\taddress := \":8080\"\n-\tif port := os.Getenv(\"SPINE_PORT\"); port != \"\" {\n-\t\taddress = \":\" + port\n-\t}\n-\treturn app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil\n-}\n+package application\n+\n+import (\n+\tcontroller \"example.com/my-app/src/controller\"\n+\trepository \"example.com/my-app/src/repository\"\n+\tservice \"example.com/my-app/src/service\"\n+\t\"github.com/NARUBROWN/spine\"\n+\techoplatform \"github.com/NARUBROWN/spine-echo-platform\"\n+\tplayground \"github.com/NARUBROWN/spine-validator-playground\"\n+\t\"github.com/NARUBROWN/spine/pkg/boot\"\n+\t\"github.com/NARUBROWN/spine/pkg/constructor\"\n+\t\"os\"\n+)\n+\n+// BuildApplication은 플랫폼 설정을 검사하고 생성자와 수신 계약을 하나의 App에 연결합니다.\n+func BuildApplication() (spine.App, boot.Options, error) {\n+\tvalidator, err := playground.New()\n+\tif err != nil {\n+\t\treturn nil, boot.Options{}, err\n+\t}\n+\tapp := spine.New(\n+\t\techoplatform.Option(),\n+\t\tspine.WithValidator(validator),\n+\t)\n+\tapp.Constructor(\n+\t\tconstructor.Controller(&controller.HealthController{}),\n+\t\tconstructor.Repository(&repository.UserRepository{}),\n+\t\tconstructor.Service(&service.UserService{}),\n+\t\tconstructor.Controller(&controller.UserController{}),\n+\t)\n+\taddress := \":8080\"\n+\tif port := os.Getenv(\"SPINE_PORT\"); port != \"\" {\n+\t\taddress = \":\" + port\n+\t}\n+\treturn app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil\n+}\n--- /dev/null\n+++ src/controller/user_controller.go\n@@ -1,0 +1,16 @@\n+package controller\n+\n+import (\n+\tservice \"example.com/my-app/src/service\"\n+\tapi \"github.com/NARUBROWN/spine/pkg/api\"\n+)\n+\n+type UserController struct {\n+\tuserService *service.UserService\n+}\n+\n+func (*UserController) Constructor(userService *service.UserService) *UserController {\n+\treturn &UserController{userService: userService}\n+}\n+\n+func (c *UserController) RegisterRoutes(r *api.Registry) {}\n--- /dev/null\n+++ src/repository/user_repository.go\n@@ -1,0 +1,8 @@\n+package repository\n+\n+type UserRepository struct {\n+}\n+\n+func (*UserRepository) Constructor() *UserRepository {\n+\treturn &UserRepository{}\n+}\n--- /dev/null\n+++ src/service/user_service.go\n@@ -1,0 +1,13 @@\n+package service\n+\n+import (\n+\trepository \"example.com/my-app/src/repository\"\n+)\n+\n+type UserService struct {\n+\tuserRepository *repository.UserRepository\n+}\n+\n+func (*UserService) Constructor(userRepository *repository.UserRepository) *UserService {\n+\treturn &UserService{userRepository: userRepository}\n+}\n\nBase hash: 5d76f1c999ce3683353abe043a85df76b7ff2850d642a6ddcf037b08eae77584\nApply the same command without --dry-run and with --if-match 5d76f1c999ce3683353abe043a85df76b7ff2850d642a6ddcf037b08eae77584\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "generate",
+          "resource",
+          "user"
+        ],
+        "exit_code": 0,
+        "stdout": "Generated resource User (layered-v1)\n  Created database/domain/user.go\n  Updated internal/application/application.go\n  Created src/controller/user_controller.go\n  Created src/repository/user_repository.go\n  Created src/service/user_service.go\n  Type reference: database/domain:User\n  Type reference: src/controller:UserController\n  Type reference: src/repository:UserRepository\n  Type reference: src/service:UserService\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "--help"
+        ],
+        "exit_code": 0,
+        "stdout": "Spine CLI - scaffold explicit, execution-centric Spine applications.\n\nUsage:\n  spine new <project> [--module <module-path>] [--layout layered-v1|legacy] [--channel preview|rc|main] [--platform provider|none] [--event-platform [name:]provider ...] [--websocket-platform none|provider] [--validator none|provider] [--frontend none|provider] [--frontend-root <path>] [--interactive|--no-interactive] [--skip-install] [--dry-run] [--json] [--if-match <hash>]\n  spine update [--dry-run] [--if-match <hash>] [--json]\n  spine g domain <[group/]name> [--field name:type]\n  spine g dto <[group/]name> [--field name:type]\n  spine g repository <[group/]name>\n  spine g service <[group/]name> [--depends package/path:Type]\n  spine g controller <[group/]name> [--depends package/path:Type]\n  spine g route <name> --method GET --path /users --handler package/path:Type.Method\n  spine g resource <[group/]name> [--no-register]\n  spine generate consumer <name> --topic <topic> --field name:string\n  spine generate websocket <name> --path </path> --field message:string\n  spine schema [--json]\n  spine context [--json]\n  spine licenses\n  spine cloud auth login|status|logout\n  spine deploy [--app <app-id>] [--api <https-origin>] [--request-id <uuid>]\n\nLayout:\n  New projects use layered-v1 role roots with optional nested groups.\n  Existing projects without layout retain legacy rules, including slice generation.\n\nGlobal options:\n  --root <directory>  Run from an explicit project directory.\n\nAliases:\n  spine g resource <name>\n\nExamples:\n  spine new todo-api --module github.com/acme/todo-api\n  cd todo-api\n  spine update --dry-run\n  spine g resource users\n  spine g consumer orders --topic order.created --field order_id:int64\n  spine g websocket chat --path /ws/chat --field message:string\n  spine dev --events jsonl\n  spine inspect\n  spine explain http GET /health\n  spine verify\n  spine contract check --json\n  spine contract snapshot\n  spine contract diff\n  spine contract probe\n  spine doctor\n  spine capabilities --json\n  spine schema --json\n  spine context --json\n  spine check\n  go run .\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "contract",
+          "check"
+        ],
+        "exit_code": 0,
+        "stdout": "Static Spine contract check passed: 0 errors, 0 warnings.\nEvidence boundary: project source only; runtime HTTP/DI/interceptor state and external infrastructure were not observed.\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit_code": 0,
+        "stdout": "?   \texample.com/my-app\t[no test files]\n?   \texample.com/my-app/database/domain\t[no test files]\nok  \texample.com/my-app/internal/application\t0.007s\n?   \texample.com/my-app/src/controller\t[no test files]\n?   \texample.com/my-app/src/repository\t[no test files]\n?   \texample.com/my-app/src/service\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "new",
+          "order-app",
+          "--module",
+          "example.com/order-app",
+          "--event-platform",
+          "kafka",
+          "--channel",
+          "preview",
+          "--no-interactive",
+          "--skip-install"
+        ],
+        "exit_code": 0,
+        "stdout": "Created Spine application in order-app (echo, preview channel, recipe platform-contracts-preview)\n\nNext steps:\n  cd order-app\n  go mod tidy\n  spine dev\n\nDependency installation and build verification were skipped.\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "new",
+          "stock-app",
+          "--module",
+          "example.com/stock-app",
+          "--platform",
+          "none",
+          "--event-platform",
+          "kafka",
+          "--channel",
+          "preview",
+          "--no-interactive",
+          "--skip-install"
+        ],
+        "exit_code": 0,
+        "stdout": "Created Spine application in stock-app (none, preview channel, recipe platform-contracts-preview)\n\nNext steps:\n  cd stock-app\n  go mod tidy\n  spine dev\n\nDependency installation and build verification were skipped.\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "generate",
+          "consumer",
+          "order",
+          "--root",
+          "stock-app",
+          "--topic",
+          "order.created",
+          "--field",
+          "event_id:string",
+          "--field",
+          "order_id:int64"
+        ],
+        "exit_code": 0,
+        "stdout": "Generated consumer Order (layered-v1)\n  Updated internal/application/application.go\n  Created src/consumer/order/module.go\n  Created src/consumer/order/order_handler.go\n  Created src/consumer/order/order_message.go\n  Type reference: src/consumer/order:OrderConsumer\n  Type reference: src/consumer/order:OrderEvent\n  Registration (constructor): src/consumer/order:NewOrderConsumer -> src/consumer/order/module.go\n  Registration (module): src/consumer/order:Register -> internal/application/application.go\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "mod",
+          "edit",
+          "-require=example.com/order-app@v0.0.0",
+          "-replace=example.com/order-app=../order-app"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "mod",
+          "tidy"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit_code": 0,
+        "stdout": "?   \texample.com/order-app\t[no test files]\nok  \texample.com/order-app/internal/application\t0.007s\n?   \texample.com/order-app/src/controller\t[no test files]\n?   \texample.com/order-app/src/events\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "contract",
+          "check"
+        ],
+        "exit_code": 0,
+        "stdout": "Static Spine contract check passed: 0 errors, 0 warnings.\nEvidence boundary: project source only; runtime HTTP/DI/interceptor state and external infrastructure were not observed.\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "verify"
+        ],
+        "exit_code": 0,
+        "stdout": "?   \texample.com/order-app\t[no test files]\nok  \texample.com/order-app/internal/application\t0.007s\n?   \texample.com/order-app/src/controller\t[no test files]\n?   \texample.com/order-app/src/events\t[no test files]\nLocal Spine contract verification passed (source contract, gofmt, go vet, go test).\nExternal databases, brokers, listeners, and deployed runtime behavior were not checked.\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "mod",
+          "tidy"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "mod",
+          "download",
+          "all"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit_code": 0,
+        "stdout": "?   \texample.com/stock-app\t[no test files]\nok  \texample.com/stock-app/internal/application\t0.007s\n?   \texample.com/stock-app/src/consumer/order\t[no test files]\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "contract",
+          "check"
+        ],
+        "exit_code": 0,
+        "stdout": "Static Spine contract check passed: 0 errors, 0 warnings.\nEvidence boundary: project source only; runtime HTTP/DI/interceptor state and external infrastructure were not observed.\n",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "/var/tmp/spine-site-full-dx/spine",
+          "verify"
+        ],
+        "exit_code": 0,
+        "stdout": "?   \texample.com/stock-app\t[no test files]\nok  \texample.com/stock-app/internal/application\t0.008s\n?   \texample.com/stock-app/src/consumer/order\t[no test files]\nLocal Spine contract verification passed (source contract, gofmt, go vet, go test).\nExternal databases, brokers, listeners, and deployed runtime behavior were not checked.\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "not_exercised": [
+    "real MySQL connections, SQL commit and rollback",
+    "real Kafka delivery and consumer settlement"
+  ],
+  "publication": "temporary documentation review branch; site deployment is a separate step"
+}

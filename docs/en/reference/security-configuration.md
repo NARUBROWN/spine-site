@@ -1,17 +1,21 @@
 # Security configuration
 
-Spine `v0.7.1` applies HTTP and WebSocket size, time, and connection limits. Independent platforms manage broker transport policies. Check the selected platform version and configuration as well.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
+
+Spine `v0.7.5` applies HTTP and WebSocket size, time, and connection limits. Independent platforms manage broker transport policies. Check the selected platform version and configuration as well.
 
 ## Configuration validation
 
-`App.Validate` checks boot options without opening network connections. `App.Run` performs the same checks before startup. These preliminary checks do not establish whether constructor and dependency configuration or broker connections will succeed.
+App.Validate checks boot options and statically checkable DI configuration without a listener. Run also checks before starting. Verify actual constructor execution and DB or broker connectivity separately during preparation and real requests.
 
 ```go
 if err := app.Validate(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 if err := app.Run(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 ```
 
@@ -48,18 +52,18 @@ Import `kafkaplatform "github.com/NARUBROWN/spine-kafka-platform"`. Select roles
 
 ```go
 factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
-    Brokers: []string{"kafka.example.com:9093"},
-    Consume: true,
-    Publish: true,
-    GroupID: "orders",
-    TopicPrefix: "prod.",
+	Brokers:     []string{"kafka.example.com:9093"},
+	Consume:     true,
+	Publish:     true,
+	GroupID:     "orders",
+	TopicPrefix: "prod.",
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
-    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
-    spine.WithEventSettlementTimeout(5 * time.Second),
+	spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+	spine.WithEventSettlementTimeout(5*time.Second),
 ))
 ```
 
@@ -75,20 +79,20 @@ Import `rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"`. Config
 
 ```go
 factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
-    URL: "amqps://user:pass@rabbit.example.com/vhost",
-    Exchange: "events",
-    Consume: true,
-    Publish: true,
-    PrefetchCount: 16,
-    FailurePolicy: rabbitmqplatform.FailureReject,
-    DeadLetter: &rabbitmqplatform.DeadLetter{
-        Exchange: "events.dlx",
-        RoutingKey: "events.failed",
-    },
-    OperationTimeout: 5 * time.Second,
+	URL:           "amqps://user:pass@rabbit.example.com/vhost",
+	Exchange:      "events",
+	Consume:       true,
+	Publish:       true,
+	PrefetchCount: 16,
+	FailurePolicy: rabbitmqplatform.FailureReject,
+	DeadLetter: &rabbitmqplatform.DeadLetter{
+		Exchange:   "events.dlx",
+		RoutingKey: "events.failed",
+	},
+	OperationTimeout: 5 * time.Second,
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
@@ -132,16 +136,22 @@ Connection requests waiting for authentication count toward the connection limit
 
 If connection authentication is required, also implement `core.WebSocketHandshakeInterceptor` on the interceptor. `PreHandshake` runs after a connection slot is reserved and before the HTTP upgrade. It is separate from the per-message `PreHandle`.
 
+Add this fragment to an AuthInterceptor that already implements the four hooks and verify. spinectx imports public pkg/spine; core supplies metadata and httperr supplies public errors.
+
 ```go
 func (i *AuthInterceptor) PreHandshake(
-    ctx core.WebSocketHandshakeContext,
-    meta core.HandlerMeta,
+	ctx spinectx.Ctx,
+	meta core.HandlerMeta,
 ) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("missing credentials")
-    }
-    return i.verify(token)
+	request, ok := ctx.WebSocket()
+	if !ok {
+		return httperr.Unauthorized("HTTP request required")
+	}
+	token := request.Header("Authorization")
+	if token == "" {
+		return httperr.Unauthorized("missing credentials")
+	}
+	return i.verify(token)
 }
 ```
 
@@ -157,21 +167,20 @@ A CORS preflight has `OPTIONS`, `Origin`, and `Access-Control-Request-Method`. A
 
 ```go
 corsInterceptor, err := cors.NewValidated(cors.Config{
-    AllowOrigins:     []string{"https://app.example.com"},
-    AllowCredentials: true,
+	AllowOrigins:     []string{"https://app.example.com"},
+	AllowCredentials: true,
 })
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
 
 If a cookie's name, value, path, domain, `SameSite`, or `Priority` is invalid, JSON, string, binary, and redirect responses fail before writing headers or the body. Use `httpx.EncodeCookieValue` and `httpx.DecodeCookieValue` when Unicode or delimiters must be restored to their original values.
 
-
 ### Verify CORS preflight
 
-Save this standalone app as `main.go` in a separate Go module with Spine `v0.7.1` and a compatible Echo platform, then run it. `Authorization` is explicitly listed as an allowed header.
+Save this standalone app as `main.go` in a separate Go module with Spine `v0.7.5` and a compatible Echo platform, then run it. `Authorization` is explicitly listed as an allowed header.
 
 ```go
 package main

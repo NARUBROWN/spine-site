@@ -1,13 +1,17 @@
 # Query inputs
 
-In Spine `v0.7.1`, receive query parameters in a source-specific struct. In `input.Query[T]`, `T` is a struct and the handler reads its fields directly. A `query` tag sets the external name; an untagged field uses a lowerCamel name.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
+
+In Spine `v0.7.5`, receive query parameters in a source-specific struct. In `input.Query[T]`, `T` is a struct and the handler reads its fields directly. A `query` tag sets the external name; an untagged field uses a lowerCamel name.
 
 ## Runnable example
 
-Install Spine `v0.7.1` and a compatible Echo platform in a separate Go module. Save the following as `main.go` and run `go run .`. This example uses page 1 only when the value is absent.
+Install Spine `v0.7.5` and a compatible Echo platform in a separate Go module. Save the following as `main.go` and run `go run .`. This example uses page 1 only when the value is absent.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
 ```
 
 ```go
@@ -23,6 +27,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type SearchQuery struct {
@@ -39,7 +44,7 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/search", func(q input.Query[SearchQuery]) httpx.Response[SearchResult] {
+	r.GET("/search", func(ctx spinectx.Ctx, q input.Query[SearchQuery]) httpx.Response[SearchResult] {
 		page := 1
 		if q.Page != nil {
 			page = *q.Page
@@ -47,10 +52,20 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 		return httpx.Response[SearchResult]{Body: SearchResult{Name: q.Name, Page: page, Tags: q.Tags}}
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option())
 	app.Constructor(constructor.Controller(&Controller{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -77,4 +92,4 @@ Slices accept repeated keys. An HTTP platform that supplies the raw query also s
 
 `query.Values` and `query.Pagination` remain available but are deprecated. The old `Int` returns its default for both missing and invalid input; a new DTO rejects invalid input. Do not mix legacy inputs and new Path, Query, or Header inputs in one handler.
 
-See [input migration](/en/learn/migration/v0.7.1-preview) for compatibility rules and the [query.Values reference](/en/reference/api/query-values) when maintaining old code. The [controller example](/en/learn/tutorial/2-controller) also covers header and path inputs.
+See [input migration](/en/learn/migration/v0.7.5) for compatibility rules and the [query.Values reference](/en/reference/api/query-values) when maintaining old code. The [controller example](/en/learn/tutorial/2-controller) also covers header and path inputs.

@@ -1,5 +1,7 @@
 # リリースノート
 
+現在の API は [0.7.5 移行案内](/ja/learn/migration/v0.7.5)を参照してください。以下の公開情報と過去の記録は各タグの内容です。
+
 最新タグと次の目標バージョンは[バージョン一覧](/ja/community/versions)で確認してください。
 
 Preview、RC、安定版の選択と公開手順は[リリースチャンネルとインストール](/ja/community/release-channels)を参照してください。

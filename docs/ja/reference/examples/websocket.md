@@ -1,147 +1,103 @@
-# WebSocket チャットを作る
+# WebSocket メッセージ送受信
 
-`/ws/chat` で受け取ったメッセージを登録済みのクライアントにブロードキャストするチャットサーバーを作ります。CLI で WebSocket のコンポーネントを生成し、ハンドラーを実装してから、ブラウザーでメッセージの送受信を確認します。
+::: info 0.7.5 API
+0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
+:::
 
-## 事前準備
+現在の接続にメッセージを返す独立例です。配信には接続寿命と送信方針を持つ別のハブを設計します。
 
-先に[インストールと最初のアプリ](/ja/learn/getting-started/first-app)を完了してください。この例は、単一のサーバープロセスで動作するローカル学習用のコードです。認証や複数のサーバー間でのブロードキャストは含みません。
-
-## 1. プロジェクトとメッセージハンドラーを生成する
-
-プロジェクトと WebSocket ハンドラーを生成します。以降のコマンドは `chat-app/` で実行します。
-
-CLI `v0.4.3` 以降が必要です。`--channel main` は正式依存関係を選択します。
+## インストールとコード
 
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla --channel main --no-interactive
-cd chat-app
-spine doctor
-spine generate websocket chat --path /ws/chat --field message:string
+go mod init example.com/spine-websocket
+go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0-preview.2
 ```
 
-`src/websocket/chat/` に `chat_message.go`、`chat_handler.go`、`module.go` が生成されます。`BuildApplication` には、`chatwebsocket.Register(app)` の呼び出しとエラー確認のコードが自動で追加されます。同じパスやコンストラクタを再登録しないでください。
-
-## 2. ブロードキャストハンドラーを実装する
-
-生成されたハンドラーは未実装エラーを返します。`src/websocket/chat/chat_handler.go` 全体を以下のコードに置き換えます。全体を置き換えると、既存の `errors` のインポートと未実装エラーの宣言も削除されます。`chat_message.go` の `ChatMessage` と `module.go` はそのまま使用します。
-
-ハンドラーは、メッセージを送信した接続の送信器を登録してから、空でないメッセージを登録済みのすべての接続に渡します。送信に失敗した接続は一覧から削除します。
+Go 1.26 以降で main.go に保存します。HTTP と Gorilla は別に選びます。WebSocket DTO に HTTP Body ラッパーは使いません。ws.Send は標準コンテキスト、メッセージ種別、[]byte の三引数で、現在の接続に送ります。リクエストコンテキストや内部 sender キーを保持しません。
 
 ```go
-package chat
+package main
 
 import (
-	"context"
 	"encoding/json"
-	"strings"
-	"sync"
-	"time"
-
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	gorillaplatform "github.com/NARUBROWN/spine-gorilla-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"github.com/NARUBROWN/spine/pkg/ws"
+	"log"
+	"strings"
+	"time"
 )
 
-type ChatSocket struct {
-	mu      sync.RWMutex
-	clients map[string]ws.Sender
+type ChatMessage struct {
+	Message string `json:"message"`
 }
-
-func NewChatSocket() *ChatSocket {
-	return &ChatSocket{
-		clients: make(map[string]ws.Sender),
-	}
-}
-
 type ChatEvent struct {
 	Type    string `json:"type"`
 	From    string `json:"from"`
 	Message string `json:"message"`
 	At      string `json:"at"`
 }
+type HealthController struct{}
 
-func (c *ChatSocket) Handle(
-	ctx context.Context,
-	connID ws.ConnectionID,
-	msg ChatMessage,
-) error {
-	sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-	if ok && sender != nil {
-		c.mu.Lock()
-		c.clients[connID.Value] = sender
-		c.mu.Unlock()
-	}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
+}
 
-	message := strings.TrimSpace(msg.Message)
-	if message == "" {
+type ChatSocket struct{}
+
+func (*ChatSocket) Constructor() *ChatSocket { return &ChatSocket{} }
+func (*ChatSocket) Handle(ctx spinectx.Ctx, id ws.ConnectionID, message ChatMessage) error {
+	text := strings.TrimSpace(message.Message)
+	if text == "" {
 		return nil
 	}
-
-	payload, err := json.Marshal(ChatEvent{
-		Type:    "message",
-		From:    connID.Value,
-		Message: message,
-		At:      time.Now().UTC().Format(time.RFC3339),
-	})
+	payload, err := json.Marshal(ChatEvent{Type: "message", From: id.Value, Message: text, At: time.Now().UTC().Format(time.RFC3339)})
 	if err != nil {
 		return err
 	}
-
-	c.mu.RLock()
-	clients := make(map[string]ws.Sender, len(c.clients))
-	for id, client := range c.clients {
-		clients[id] = client
+	return ws.Send(ctx.ExecutionContext().Context(), ws.TextMessage, payload)
+}
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New(echoplatform.Option(), gorillaplatform.Option())
+	app.Constructor(constructor.Controller(&HealthController{}), constructor.Custom(&ChatSocket{}))
+	if err := app.WebSocket().Register("/ws/chat", (*ChatSocket).Handle); err != nil {
+		return nil, boot.Options{}, err
 	}
-	c.mu.RUnlock()
-
-	for id, client := range clients {
-		if err := client.Send(ws.TextMessage, payload); err != nil {
-			c.mu.Lock()
-			delete(c.clients, id)
-			c.mu.Unlock()
-		}
+	return app, boot.Options{Address: ":8080", EnableGracefulShutdown: true, HTTP: &boot.HTTPOptions{
+		WebSocket: boot.WebSocketOptions{MaxConnections: 1024, MaxMessageBytes: 1 << 20,
+			HandshakeTimeout: 10 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 10 * time.Second, PingInterval: 30 * time.Second},
+	}}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
 	}
-	return nil
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## 3. WebSocket の実行オプションを設定する
-
-`internal/application/application.go` の `BuildApplication` が返すオプションだけを以下のコードに変更し、`time` のインポートを追加します。既存の health 登録と `chatwebsocket.Register(app)` の呼び出しは維持します。生成されたルートの `main.go` は、`BuildApplication`、`Validate`、`Run` を順に実行します。
-
-```go
-return app, boot.Options{
-    Address: address,
-    EnableGracefulShutdown: true,
-    ShutdownTimeout: 10 * time.Second,
-    HTTP: &boot.HTTPOptions{
-        WebSocket: boot.WebSocketOptions{
-            MaxConnections: 1024,
-            MaxMessageBytes: 1 << 20,
-            HandshakeTimeout: 10 * time.Second,
-            ReadTimeout: 60 * time.Second,
-            WriteTimeout: 10 * time.Second,
-            PingInterval: 30 * time.Second,
-        },
-    },
-}, nil
-```
-
-## 4. 検証してサーバーを起動する
-
-プロジェクトルートでコードを検査し、AsyncAPI ドキュメントをエクスポートしてからサーバーを起動します。
-
 ```sh
-gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
-spine contract check
-spine verify
-spine contract export --format asyncapi --output asyncapi.json
-spine dev
+go run .
 ```
 
-`contract check` は静的な契約を検査します。`verify` は静的な契約に加え、gofmt、go vet、Go テストを検査します。`contract export` は、登録された WebSocket 契約を `asyncapi.json` に記録します。実際の接続とメッセージ交換は、次の手順で確認します。
+## ブラウザー確認
 
-## 5. ブラウザーでメッセージの送受信を確認する
-
-サーバーの起動後、ブラウザーで `http://localhost:8080/health` を開きます。同じタブの開発者ツールのコンソールで、次のコードを実行します。
+`http://localhost:8080/health` で開いたタブの開発者コンソールで実行します。message: "hello" のイベントが表示されます。ほかのタブには送りません。
 
 ```js
 const socket = new WebSocket('ws://localhost:8080/ws/chat')
@@ -149,20 +105,10 @@ socket.onmessage = (event) => console.log(JSON.parse(event.data))
 socket.onopen = () => socket.send(JSON.stringify({ message: 'hello' }))
 ```
 
-コンソールに `type`、`from`、`message`、`at` フィールドを持つオブジェクトが出力されることを確認します。`message` の値は `hello` です。別のタブでも同じコードを実行すると、登録済みの接続と新しい接続でメッセージを受信できます。
+## 認証と制限
 
-ブロードキャストを受信するには、各接続から先にメッセージを送信して送信器を登録する必要があります。送信器の一覧はプロセスメモリにのみ保存され、終了した接続は、その後の送信に失敗した時点で削除されます。接続状態を永続的に保存したり、複数のサーバー間で共有したりするには、別途実装が必要です。
+ハンドシェイク認証は WebSocketHandshakeInterceptor.PreHandshake で行います。メッセージの PreHandle だけでは upgrade を保護できません。AllowedOrigins がない場合、Origin 付きは同一生成元が必要で、Origin なしは許可します。運用では正確な Origin、信頼プロキシ、接続制限を設定します。
 
-## 本番環境に適用する前に確認する点
+## 参照
 
-### ハンドシェイク認証
-
-認証を追加するには、`core.Interceptor` の 4 つのメソッドと `core.WebSocketHandshakeInterceptor.PreHandshake` を実装し、`app.InterceptorFor(boot.InterceptorWebSocket, auth)` で登録します。`PreHandshake` で認証情報を検証してエラーを返すと、WebSocket 接続に切り替える前にリクエストを拒否できます。メッセージ処理段階の `PreHandle` だけでは、ハンドシェイクを保護できません。
-
-### Origin と接続数の制限
-
-`AllowedOrigins` を省略すると、Origin のあるリクエストはスキームとホストが一致している必要があります。Origin のないクライアントは許可されます。本番環境では正確な公開 Origin を設定し、必要に応じて信頼するプロキシの CIDR のみを指定します。接続数の上限を超えると、HTTP 503 と `Retry-After`、`WEBSOCKET_CAPACITY_EXCEEDED` が返されます。
-
-## 次のステップ
-
-[インターセプター API](/ja/reference/api/interceptor)で認証の実装に必要なメソッドを確認し、[セキュリティ設定](/ja/reference/security-configuration)で Origin と接続制限を確認してください。
+[インターセプター](/ja/reference/api/interceptor) / [セキュリティ設定](/ja/reference/security-configuration)

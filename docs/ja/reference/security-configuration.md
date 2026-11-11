@@ -1,17 +1,21 @@
 # セキュリティ設定
 
-Spine `v0.7.1` は HTTP と WebSocket のサイズ、時間、接続数を制限します。ブローカーの転送方針は独立したプラットフォームが管理します。使用するバージョンと設定も確認してください。
+::: info 0.7.5 API
+0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
+:::
+
+Spine `v0.7.5` は HTTP と WebSocket のサイズ、時間、接続数を制限します。ブローカーの転送方針は独立したプラットフォームが管理します。使用するバージョンと設定も確認してください。
 
 ## 設定の検証
 
-`App.Validate`は、ネットワーク接続を開かずに起動オプションを検証します。`App.Run`も、起動前に同じ検証を行います。コンストラクタと依存関係の構成、ブローカー接続の成否は、この事前検証に含まれません。
+App.Validate はリスナーなしで起動オプションと実行不要の DI 設定を検査し、Run も起動前に検査します。実際の生成子実行や DB、ブローカー接続は準備と実リクエストで別途確認します。
 
 ```go
 if err := app.Validate(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 if err := app.Run(options); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 ```
 
@@ -48,18 +52,18 @@ boot設定の失敗は `*boot.ConfigError.Issues` で確認します。外部プ
 
 ```go
 factory, err := kafkaplatform.NewFactory(kafkaplatform.Config{
-    Brokers: []string{"kafka.example.com:9093"},
-    Consume: true,
-    Publish: true,
-    GroupID: "orders",
-    TopicPrefix: "prod.",
+	Brokers:     []string{"kafka.example.com:9093"},
+	Consume:     true,
+	Publish:     true,
+	GroupID:     "orders",
+	TopicPrefix: "prod.",
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory,
-    spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
-    spine.WithEventSettlementTimeout(5 * time.Second),
+	spine.WithEventConsumerRetry(boot.ConsumerRetryOptions{MaxAttempts: 5}),
+	spine.WithEventSettlementTimeout(5*time.Second),
 ))
 ```
 
@@ -75,20 +79,20 @@ Kafkaプラットフォームは標準でTLS 1.2以上を適用します。CA、
 
 ```go
 factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{
-    URL: "amqps://user:pass@rabbit.example.com/vhost",
-    Exchange: "events",
-    Consume: true,
-    Publish: true,
-    PrefetchCount: 16,
-    FailurePolicy: rabbitmqplatform.FailureReject,
-    DeadLetter: &rabbitmqplatform.DeadLetter{
-        Exchange: "events.dlx",
-        RoutingKey: "events.failed",
-    },
-    OperationTimeout: 5 * time.Second,
+	URL:           "amqps://user:pass@rabbit.example.com/vhost",
+	Exchange:      "events",
+	Consume:       true,
+	Publish:       true,
+	PrefetchCount: 16,
+	FailurePolicy: rabbitmqplatform.FailureReject,
+	DeadLetter: &rabbitmqplatform.DeadLetter{
+		Exchange:   "events.dlx",
+		RoutingKey: "events.failed",
+	},
+	OperationTimeout: 5 * time.Second,
 })
 if err != nil {
-    return nil, boot.Options{}, err
+	return nil, boot.Options{}, err
 }
 app := spine.New(echoplatform.Option(), spine.WithEventAdapter("events", factory))
 ```
@@ -132,16 +136,22 @@ HTTP: &boot.HTTPOptions{
 
 接続認証が必要な場合は、インターセプターに`core.WebSocketHandshakeInterceptor`も実装してください。`PreHandshake`は、接続枠を予約した後、HTTPアップグレード前に実行します。メッセージごとの`PreHandle`とは別の処理です。
 
+この断片は四つのフックと verify を実装済みの AuthInterceptor に追加します。spinectx は公開 pkg/spine、core はメタデータ、httperr は公開エラーの import です。
+
 ```go
 func (i *AuthInterceptor) PreHandshake(
-    ctx core.WebSocketHandshakeContext,
-    meta core.HandlerMeta,
+	ctx spinectx.Ctx,
+	meta core.HandlerMeta,
 ) error {
-    token := ctx.Header("Authorization")
-    if token == "" {
-        return httperr.Unauthorized("missing credentials")
-    }
-    return i.verify(token)
+	request, ok := ctx.WebSocket()
+	if !ok {
+		return httperr.Unauthorized("HTTP request required")
+	}
+	token := request.Header("Authorization")
+	if token == "" {
+		return httperr.Unauthorized("missing credentials")
+	}
+	return i.verify(token)
 }
 ```
 
@@ -157,21 +167,20 @@ CORS プリフライトは `OPTIONS`、`Origin`、`Access-Control-Request-Method
 
 ```go
 corsInterceptor, err := cors.NewValidated(cors.Config{
-    AllowOrigins:     []string{"https://app.example.com"},
-    AllowCredentials: true,
+	AllowOrigins:     []string{"https://app.example.com"},
+	AllowCredentials: true,
 })
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 ```
 
 Cookieの名前、値、パス、ドメイン、`SameSite`、`Priority`が無効な場合、JSON、文字列、バイナリ、リダイレクトの各レスポンスは、ヘッダーや本文を書き込む前に失敗します。Unicodeや区切り文字を元の値に復元する必要がある場合は、`httpx.EncodeCookieValue`と`httpx.DecodeCookieValue`を使用してください。
 
-
 ### CORS プリフライトの確認
 
-次の独立アプリを Spine `v0.7.1` と互換 Echo プラットフォームがある別の Go モジュールの `main.go` に保存して実行します。`Authorization` は許可ヘッダーに明示します。
+次の独立アプリを Spine `v0.7.5` と互換 Echo プラットフォームがある別の Go モジュールの `main.go` に保存して実行します。`Authorization` は許可ヘッダーに明示します。
 
 ```go
 package main

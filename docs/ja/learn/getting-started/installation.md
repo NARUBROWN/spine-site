@@ -1,130 +1,73 @@
-# インストール
+# インストールと最初のアプリ
 
-Spine `v0.6.0` 以降、公式の開始方法は CLI の `new` です。最新の公開 CLI をインストールし、プロジェクトを作成して開発サーバーの応答を確認します。
+::: info 0.7.5 API
+0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
+:::
 
-Preview、RC、安定版の選択と公開手順は[リリースチャンネルとインストール](/ja/community/release-channels)を参照してください。
+CLI のインストールチャネルとアプリ依存チャネルは別に選択します。この手順は 0.7.5 API の Preview アプリです。安定版は[チャネル案内](/ja/community/release-channels)を参照してください。
 
 ## 要件
 
-- Go 1.25.5以上が必要です。CLIの推奨バージョンはGo 1.27.3です。
-- Goの実行ファイルのインストール先が`PATH`に含まれている必要があります。`GOBIN`を設定していない場合、既定のパスは`$(go env GOPATH)/bin`です。
+Go 1.26 以降を使い、選択モジュールの go 指示文を確認します。GOBIN または既定の GOPATH/bin を PATH に入れます。
 
-```bash
+```sh
 go version
-```
-
-表示されたGoのバージョンが1.25.5以上であることを確認してください。
-
-## CLIのインストール
-
-次のコマンドでCLIをインストールし、バージョンを確認します。
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
-spine version
-```
-
-以下の例は正式 CLI `v0.4.3` を対象とします。このバージョンを固定してインストールするには次を実行します。
-
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
-spine version
-```
-
-CLI自体を更新する場合は、上の `go install` コマンドを再実行します。`spine update` は選択したレシピのプロジェクト依存関係を更新し、CLI実行ファイルやアプリのソースは変更しません。
-
-`spine version` でインストール済み CLI のバージョンを確認してください。
-
-`spine`コマンドが見つからず、`GOBIN`も設定していない場合は、BashまたはZshで次のコマンドを実行し、現在のセッションのパスに追加してください。継続して使う場合は、同じ設定をシェルの起動ファイルに保存します。`GOBIN`を設定している場合は、そのディレクトリを代わりに追加してください。
-
-```bash
-export PATH="$(go env GOPATH)/bin:$PATH"
-spine version
 ```
 
 ## Preview CLI のインストール {#preview-cli}
 
-Preview CLI は `@preview` でインストールできます。これは更新されるブランチです。アプリの依存関係チャンネルは `spine new --channel` で別に選び、正式版には `main` を使用します。
-
-```bash
+```sh
 go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-## 新しいプロジェクトの生成
+preview は移動するブランチです。再現には版とコミットを記録し、固定タグを使います。安定 CLI は @latest でインストールします。spine update はアプリ依存だけを更新し、CLI やソースは変えません。
 
-プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。
+## プロジェクト作成
 
-```bash
-spine new my-app --module example.com/my-app --channel main --no-interactive
+```sh
+spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
 cd my-app
+go list -m all
+spine doctor
+spine inspect
 ```
 
-`new` はインストール済み CLI の検証済みレシピで互換性のある Spine、Echo プラットフォーム、Echo のバージョンを選択し、依存関係のインストール、静的契約の検査、ビルドを完了します。選択されたバージョンは生成された `go.mod` で確認してください。`--skip-install` を使った場合は、別途 `go mod tidy` と `go mod download all` を実行します。インストール時にアプリの初期化、テスト、リスナーの起動は行いません。
+CLI レシピが互換版を選びます。go.mod でコア 0.7.5 API とプラットフォームの組み合わせを確認してください。既定は layered-v1 です。--validator playground は BuildApplication に検証器を組み立て、既定の none はタグ検証を有効にしません。生成ではアプリ資源やリスナーを起動しません。
 
-生成される`spine.toml`は次のとおりです。
-
-```toml
-module = "example.com/my-app"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "layered-v1"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
+```text
+my-app/
+├── main.go
+├── go.mod
+├── spine.toml
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/controller/health_controller.go
 ```
-
-`internal/application/application.go`の`BuildApplication()`が構成要素と`GET /health`を登録します。生成された`main.go`はこの関数を呼び出し、`app.Validate(options)`で構成を検証してから、`app.Run(options)`でサーバーを実行します。
 
 ## 検証と実行
 
-```bash
-spine doctor
-spine inspect
+```sh
 spine contract check
 spine verify
-```
-
-各コマンドがエラーなく終了することを確認してください。
-
-| コマンド | 確認する内容 |
-| --- | --- |
-| `spine doctor` | Goのツールとプロジェクト設定 |
-| `spine inspect` | コードに登録されたルートや依存関係などのアプリ構成 |
-| `spine contract check` | 登録コードから抽出した実行契約の有効性 |
-| `spine verify` | 実行契約と`gofmt`、`go vet`、Goのテスト結果 |
-
-生成された`application_test.go`は、サーバーを起動せずに`BuildApplication()`と`app.Validate(options)`を検査します。この段階ではコードとアプリの構成を検証します。実際のHTTPレスポンスは次の段階で確認します。
-
-検査に合格したら`spine dev`で実行し、別のターミナルで実際のHTTPレスポンスを確認します。
-
-```bash
 spine dev
-```
-
-```bash
+# In another terminal
 curl http://localhost:8080/health
 ```
 
-`{"status":"ok"}`が返れば、開発サーバーがリクエストを処理できたことを確認できます。サーバーを実行したターミナルで`Ctrl+C`を押して終了します。外部のデータベースやメッセージブローカーを接続した後、またはデプロイした後は、その環境でも動作を確認する必要があります。
+{"status":"ok"} を確認し Ctrl+C で終了します。生成 main は BuildApplication、app.Validate、app.Run の順です。Validate は生成子や DB 接続を実行しないため、実リクエストも確認します。
 
-## モジュールキャッシュエラーからの復旧
+## 依存メタデータの回復
 
-静的契約の検査ではモジュールグラフをオフラインで読み取ります。`--skip-install` でファイルだけを生成した後や、依存関係を手動で変更した後に `MODULE_GRAPH_UNAVAILABLE` が表示された場合は、モジュールのメタデータを揃えて再検査します。
+--skip-install や手動変更後に MODULE_GRAPH_UNAVAILABLE が出たら、モジュール情報を取得します。
 
-```bash
+```sh
 go mod tidy
 go mod download all
 spine contract check
-spine verify
 ```
-
-[プラットフォームとDTO検証の選択](/ja/learn/getting-started/platforms)
 
 ## 次のステップ
 
-[最初のアプリ](/ja/learn/getting-started/first-app)で生成されたファイルの役割を確認するか、[プロジェクト構造](/ja/learn/tutorial/1-project-structure)で機能を追加してください。
+[プロジェクト構造](/ja/learn/tutorial/1-project-structure) / [コントローラー](/ja/learn/tutorial/2-controller) / [プラットフォーム選択](/ja/learn/getting-started/platforms)

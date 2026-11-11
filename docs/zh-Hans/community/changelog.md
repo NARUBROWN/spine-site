@@ -1,5 +1,7 @@
 # 发布说明
 
+当前 API 用法参见 [0.7.5 迁移指南](/zh-Hans/learn/migration/v0.7.5)。下方发布信息与历史记录以各自标签为准。
+
 最新标签和下一目标版本请查看[版本概览](/zh-Hans/community/versions)。
 
 Preview、RC、稳定版的选择与发布流程，请参阅[发布渠道与安装](/zh-Hans/community/release-channels)。

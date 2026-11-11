@@ -1,147 +1,103 @@
-# Build a WebSocket Chat Server
+# WebSocket messages
 
-Build a chat server that broadcasts messages received at `/ws/chat` to registered clients. Generate WebSocket components with the CLI, implement the handler, then check message sending and receiving in a browser.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
 
-## Prerequisites
+This standalone example echoes to the current connection. Broadcasting needs a separate hub with connection lifetime and sending policies.
 
-Complete [Installation and Your First App](/en/learn/getting-started/first-app) first. This example is local learning code that runs in one server process. It does not include authentication or broadcasting across multiple servers.
-
-## 1. Generate the Project and Message Handler
-
-Generate the project and WebSocket handler. Run subsequent commands from `chat-app/`.
-
-CLI `v0.4.3` or later is required. `--channel main` selects stable dependencies.
+## Install and code
 
 ```sh
-spine new chat-app --layout legacy --module example.com/chat-app --websocket-platform gorilla --channel main --no-interactive
-cd chat-app
-spine doctor
-spine generate websocket chat --path /ws/chat --field message:string
+go mod init example.com/spine-websocket
+go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-gorilla-platform@v0.2.0-preview.2
 ```
 
-The command generates `chat_message.go`, `chat_handler.go`, and `module.go` in `src/websocket/chat/`. It also adds a `chatwebsocket.Register(app)` call and error handling to `BuildApplication`. Do not register the same path or constructor again.
-
-## 2. Implement the Broadcast Handler
-
-The generated handler returns a not-implemented error. Replace the entire contents of `src/websocket/chat/chat_handler.go` with the code below. Replacing the entire file also removes the existing `errors` import and not-implemented error declaration. Keep `ChatMessage` in `chat_message.go` and `module.go` as generated.
-
-The handler registers the sender for the connection that sent the message, then forwards non-empty messages to all registered connections. It removes connections from the list when sending fails.
+Save as main.go with Go 1.26 or later. Select HTTP and Gorilla separately. WebSocket message DTOs do not use the HTTP Body wrapper. ws.Send takes three arguments: standard context, message type and []byte, and sends only to the current connection. Do not retain request contexts or internal sender keys.
 
 ```go
-package chat
+package main
 
 import (
-	"context"
 	"encoding/json"
-	"strings"
-	"sync"
-	"time"
-
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	gorillaplatform "github.com/NARUBROWN/spine-gorilla-platform"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"github.com/NARUBROWN/spine/pkg/ws"
+	"log"
+	"strings"
+	"time"
 )
 
-type ChatSocket struct {
-	mu      sync.RWMutex
-	clients map[string]ws.Sender
+type ChatMessage struct {
+	Message string `json:"message"`
 }
-
-func NewChatSocket() *ChatSocket {
-	return &ChatSocket{
-		clients: make(map[string]ws.Sender),
-	}
-}
-
 type ChatEvent struct {
 	Type    string `json:"type"`
 	From    string `json:"from"`
 	Message string `json:"message"`
 	At      string `json:"at"`
 }
+type HealthController struct{}
 
-func (c *ChatSocket) Handle(
-	ctx context.Context,
-	connID ws.ConnectionID,
-	msg ChatMessage,
-) error {
-	sender, ok := ctx.Value(ws.SenderKey).(ws.Sender)
-	if ok && sender != nil {
-		c.mu.Lock()
-		c.clients[connID.Value] = sender
-		c.mu.Unlock()
-	}
+func (*HealthController) Constructor() *HealthController { return &HealthController{} }
+func (*HealthController) RegisterRoutes(r *api.Registry) {
+	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
+	})
+}
 
-	message := strings.TrimSpace(msg.Message)
-	if message == "" {
+type ChatSocket struct{}
+
+func (*ChatSocket) Constructor() *ChatSocket { return &ChatSocket{} }
+func (*ChatSocket) Handle(ctx spinectx.Ctx, id ws.ConnectionID, message ChatMessage) error {
+	text := strings.TrimSpace(message.Message)
+	if text == "" {
 		return nil
 	}
-
-	payload, err := json.Marshal(ChatEvent{
-		Type:    "message",
-		From:    connID.Value,
-		Message: message,
-		At:      time.Now().UTC().Format(time.RFC3339),
-	})
+	payload, err := json.Marshal(ChatEvent{Type: "message", From: id.Value, Message: text, At: time.Now().UTC().Format(time.RFC3339)})
 	if err != nil {
 		return err
 	}
-
-	c.mu.RLock()
-	clients := make(map[string]ws.Sender, len(c.clients))
-	for id, client := range c.clients {
-		clients[id] = client
+	return ws.Send(ctx.ExecutionContext().Context(), ws.TextMessage, payload)
+}
+func BuildApplication() (spine.App, boot.Options, error) {
+	app := spine.New(echoplatform.Option(), gorillaplatform.Option())
+	app.Constructor(constructor.Controller(&HealthController{}), constructor.Custom(&ChatSocket{}))
+	if err := app.WebSocket().Register("/ws/chat", (*ChatSocket).Handle); err != nil {
+		return nil, boot.Options{}, err
 	}
-	c.mu.RUnlock()
-
-	for id, client := range clients {
-		if err := client.Send(ws.TextMessage, payload); err != nil {
-			c.mu.Lock()
-			delete(c.clients, id)
-			c.mu.Unlock()
-		}
+	return app, boot.Options{Address: ":8080", EnableGracefulShutdown: true, HTTP: &boot.HTTPOptions{
+		WebSocket: boot.WebSocketOptions{MaxConnections: 1024, MaxMessageBytes: 1 << 20,
+			HandshakeTimeout: 10 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 10 * time.Second, PingInterval: 30 * time.Second},
+	}}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
 	}
-	return nil
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-## 3. Configure WebSocket Runtime Options
-
-In `BuildApplication` in `internal/application/application.go`, replace only the returned options with the code below and add a `time` import. Keep the existing health registration and `chatwebsocket.Register(app)` call. The generated root `main.go` calls `BuildApplication`, `Validate`, and `Run` in that order.
-
-```go
-return app, boot.Options{
-    Address: address,
-    EnableGracefulShutdown: true,
-    ShutdownTimeout: 10 * time.Second,
-    HTTP: &boot.HTTPOptions{
-        WebSocket: boot.WebSocketOptions{
-            MaxConnections: 1024,
-            MaxMessageBytes: 1 << 20,
-            HandshakeTimeout: 10 * time.Second,
-            ReadTimeout: 60 * time.Second,
-            WriteTimeout: 10 * time.Second,
-            PingInterval: 30 * time.Second,
-        },
-    },
-}, nil
-```
-
-## 4. Validate and Start the Server
-
-From the project root, check the code, export the AsyncAPI document, and start the server.
-
 ```sh
-gofmt -w src/websocket/chat/chat_handler.go internal/application/application.go
-spine contract check
-spine verify
-spine contract export --format asyncapi --output asyncapi.json
-spine dev
+go run .
 ```
 
-`contract check` checks static contracts. `verify` checks static contracts, gofmt, go vet, and Go tests. `contract export` writes the registered WebSocket contracts to `asyncapi.json`. Check actual connections and message exchange in the next step.
+## Browser check
 
-## 5. Test Sending and Receiving Messages in a Browser
-
-With the server running, open `http://localhost:8080/health` in a browser. Run the following code in the developer tools console of the same tab.
+Run in the developer console of a tab opened at `http://localhost:8080/health`. The console receives an event with message: "hello". Other tabs do not receive it.
 
 ```js
 const socket = new WebSocket('ws://localhost:8080/ws/chat')
@@ -149,20 +105,10 @@ socket.onmessage = (event) => console.log(JSON.parse(event.data))
 socket.onopen = () => socket.send(JSON.stringify({ message: 'hello' }))
 ```
 
-Check that the console displays an object with the fields `type`, `from`, `message`, and `at`. The `message` value is `hello`. Running the same code in another tab lets both the previously registered connection and the new connection receive messages.
+## Authentication and limits
 
-To receive broadcasts, each connection must first send a message to register its sender. The sender list is stored only in process memory, and closed connections are removed when a later send fails. Persisting connection state or sharing it across multiple servers requires a separate implementation.
+Authenticate handshakes in WebSocketHandshakeInterceptor.PreHandshake; message PreHandle alone does not protect upgrades. Without AllowedOrigins, requests with Origin require same origin; clients without Origin are allowed. Configure exact origins, trusted proxies and connection limits for production.
 
-## Before Using This in Production
+## References
 
-### Handshake Authentication
-
-To add authentication, implement the four methods of `core.Interceptor` and `core.WebSocketHandshakeInterceptor.PreHandshake`, then register the interceptor with `app.InterceptorFor(boot.InterceptorWebSocket, auth)`. By verifying credentials in `PreHandshake` and returning an error, you can reject requests before they upgrade to a WebSocket connection. `PreHandle` during message processing alone cannot protect the handshake.
-
-### Origin and Connection Limits
-
-If you omit `AllowedOrigins`, requests that include an Origin must have the same scheme and host. Clients without an Origin are allowed. In production, set the exact public Origin and, if needed, specify only the CIDRs of trusted proxies. When the connection limit is exceeded, the response returns HTTP 503 with `Retry-After` and `WEBSOCKET_CAPACITY_EXCEEDED`.
-
-## Next Steps
-
-See the [Interceptor API](/en/reference/api/interceptor) for the methods needed to implement authentication, and review Origin and connection limits in [Security Configuration](/en/reference/security-configuration).
+[Interceptors](/en/reference/api/interceptor) / [Security](/en/reference/security-configuration)

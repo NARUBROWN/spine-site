@@ -1,129 +1,73 @@
-# Your First App
+# Installation and first app
 
-Create a new project with the Spine CLI and check that `GET /health` returns `{"status":"ok"}`. Read the generated files to see how the app is configured, validated, and run.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
 
-Go 1.25.5 or later is required, and the CLI recommends Go 1.27.3. The time needed to download dependencies for the first time depends on your environment.
+Choose the CLI installation channel separately from the app dependency channel. This guide uses a Preview app with the 0.7.5 API. See [release channels](/en/community/release-channels) for stable releases.
 
-## 1. Install the CLI and Check the Command
+## Requirements
 
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@latest
+Use Go 1.26 or later and check the chosen modules’ go directives. Include GOBIN or the default GOPATH/bin in PATH.
+
+```sh
+go version
+```
+
+## Install Preview CLI {#preview-cli}
+
+```sh
+go install github.com/NARUBROWN/spine-cli/cmd/spine@preview
 spine version
 ```
 
-The examples below target the stable CLI `v0.4.3`. To install this exact version, use:
+preview is a moving branch. Record its version and commit and use a fixed tag for reproducibility. Install the stable CLI with @latest. spine update changes app dependencies, not the CLI or app source.
 
-```bash
-go install github.com/NARUBROWN/spine-cli/cmd/spine@v0.4.3
-spine version
+## Create a project
+
+```sh
+spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
+cd my-app
+go list -m all
+spine doctor
+spine inspect
 ```
 
-`--channel main` selects stable tags. You can also select Main during interactive creation.
-
-Use `spine version` to check the installed CLI version. If the command is not found, check PATH setup in the [installation guide](/en/learn/getting-started/installation).
-
-## 2. Create a Project
-
-Run these commands in the parent directory where you want to place the project. If a `hello-spine` directory already exists, use a different name.
-
-```bash
-spine new hello-spine --module example.com/hello-spine --channel main --no-interactive
-cd hello-spine
-```
-
-
-
-`new` uses the installed CLI’s verified recipe to select compatible Spine, Echo platform, and Echo versions, installs dependencies, checks the static contract, and builds the app. Check the generated `go.mod` for selected versions. If you use `--skip-install`, run `go mod tidy` and `go mod download all` separately. Installation does not initialize the app, run tests, or open a listener.
-
-## 3. Inspect the Generated Structure
+The CLI recipe selects compatible versions. Verify the core 0.7.5 API and platform cohort in go.mod. The default layout is layered-v1. --validator playground assembles validation in BuildApplication; the default validator none does not enable tag validation. Generation does not start app resources or listeners.
 
 ```text
-hello-spine/
-├── .gitignore
-├── README.md
-├── go.mod
-├── go.sum
+my-app/
 ├── main.go
+├── go.mod
 ├── spine.toml
 ├── internal/application/
 │   ├── application.go
 │   └── application_test.go
-└── src/
-    └── controller/health_controller.go
+└── src/controller/health_controller.go
 ```
 
-The project contains `main.go`, which starts execution, and the `internal/application` directory, which holds the app configuration code. `spine.toml` tells the CLI the module path, execution entry point, location of the app configuration code, and port.
+## Verify and run
 
-```toml
-module = "example.com/hello-spine"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "layered-v1"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
-```
-
-`BuildApplication()` in `internal/application/application.go` returns the app and its runtime options. The generated code registers the `HealthController` constructor and `GET /health`, and explicitly sets the HTTP runtime options, `boot.HTTPOptions`.
-
-When adding a feature, put route, constructor, and interceptor registrations in this function or in a `Register(app) error` function it calls. [Project Structure](/en/learn/tutorial/1-project-structure) covers this in detail.
-
-`main.go` is already generated, so you do not need to modify it. The following code shows the order of app configuration, validation, and execution.
-
-```go
-func main() {
-    app, options, err := application.BuildApplication()
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Validate(options); err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
-}
-```
-
-## 4. Validate the App Configuration and Code
-
-Run these commands in the root directory of the generated project.
-
-```bash
-spine doctor
-spine inspect
+```sh
 spine contract check
 spine verify
-```
-
-`doctor` diagnoses tools and project settings. `inspect` shows the app configuration registered in code, including routes and dependencies. The CLI calls this information extracted from registration code the execution contract.
-
-`contract check` checks the execution contract. `verify` also runs `gofmt`, `go vet`, and Go tests in addition to the contract check. The generated `application_test.go` also checks `BuildApplication()` and `app.Validate(options)` without starting the server. Once all commands complete without errors, you are ready to run the server.
-
-## 5. Run the App and Check the Response
-
-```bash
 spine dev
-```
-
-With the server running, open another terminal and send a request.
-
-```bash
+# In another terminal
 curl http://localhost:8080/health
 ```
 
-```json
-{"status":"ok"}
+Expect {"status":"ok"} and stop with Ctrl+C. Generated main calls BuildApplication, app.Validate, then app.Run. Validate does not run constructors or connect to a DB, so test actual requests too.
+
+## Recover dependency metadata
+
+After --skip-install or manual changes, download module metadata if MODULE_GRAPH_UNAVAILABLE occurs.
+
+```sh
+go mod tidy
+go mod download all
+spine contract check
 ```
 
-If the server returns the JSON response above, `GET /health` is working. Press `Ctrl+C` in the terminal running the server to stop the development server.
+## Next steps
 
-## Next Steps
-
-- Follow [Project Structure](/en/learn/tutorial/1-project-structure) to add a feature to the generated project.
-- Read [Controllers](/en/learn/tutorial/2-controller) to learn about routes and handlers.
-- Follow [Database](/en/learn/tutorial/5-database) to connect Bun ORM to a repository.
+[Project structure](/en/learn/tutorial/1-project-structure) / [Controllers](/en/learn/tutorial/2-controller) / [Platforms](/en/learn/getting-started/platforms)

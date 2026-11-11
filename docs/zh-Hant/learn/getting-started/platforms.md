@@ -1,16 +1,20 @@
 # 選擇平台與 DTO 驗證
 
-Spine `v0.7.1` 將 HTTP、WebSocket、事件和 DTO 驗證的公開契約保留在核心中，並將實作作為獨立模組選擇。應用程式只需連接所需實作。
+::: info 0.7.5 API
+本文以 0.7.5 API 為準。已發布標籤與相容平台請查看[版本列表](/zh-Hant/community/versions)。
+:::
+
+Spine `v0.7.5` 將 HTTP、WebSocket、事件和 DTO 驗證的公開契約保留在核心中，並將實作作為獨立模組選擇。應用程式只需連接所需實作。
 
 ## 使用 CLI 選擇
 
-安裝正式 CLI `v0.4.3` 或更新版本後，在不同目錄中分別執行以下指令。`--channel main` 選擇已公開的正式標籤。CLI 安裝通道和應用程式相依套件通道彼此獨立。
+完成 [CLI 安裝](/zh-Hant/learn/getting-started/installation)後，使用支援 0.7.5 API 的 Preview CLI。CLI 安裝通道與應用依賴通道獨立。
 
 ```sh
-spine new http-app --module example.com/http-app --channel main --platform nethttp --no-interactive
-spine new chat-app --module example.com/chat-app --channel main --platform nethttp --websocket-platform gorilla --no-interactive
-spine new worker --module example.com/worker --channel main --platform none --event-platform events:nats --no-interactive
-spine new validated-app --module example.com/validated-app --channel main --validator playground --no-interactive
+spine new http-app --module example.com/http-app --channel preview --platform nethttp --no-interactive
+spine new chat-app --module example.com/chat-app --channel preview --platform nethttp --websocket-platform gorilla --no-interactive
+spine new worker --module example.com/worker --channel preview --platform none --event-platform events:nats --no-interactive
+spine new validated-app --module example.com/validated-app --channel preview --validator playground --no-interactive
 ```
 
 預設 HTTP 平台是 Echo，預設不選擇 WebSocket、事件、validator 和前端。`--platform none` 建立事件工作程序，需要事件平台。WebSocket 需要 HTTP 平台。`--event-platform` 可以重複指定。
@@ -29,8 +33,8 @@ HTTP 使用 `contract/http` 與 Echo 或 net/http，WebSocket 使用 `contract/w
 
 ```go
 type CreateUserRequest struct {
-    Email string `json:"email" validate:"required,email"`
-    Age   int    `json:"age" validate:"gte=18"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
 }
 ```
 
@@ -44,4 +48,4 @@ type CreateUserRequest struct {
 spine update --dry-run
 ```
 
-請參閱[發佈通道與安裝](/zh-Hant/community/release-channels)、[輸入移轉](/zh-Hant/learn/migration/v0.7.1-preview)和 [HTTP v3 與啟動選項](/zh-Hant/learn/migration/preview-features)。
+請參閱[發佈通道與安裝](/zh-Hant/community/release-channels)、[輸入移轉](/zh-Hant/learn/migration/v0.7.5)和 [HTTP v3 與啟動選項](/zh-Hant/learn/migration/v0.7.5)。

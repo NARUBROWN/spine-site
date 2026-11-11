@@ -1,69 +1,53 @@
 # Controllers
 
-::: info
-`app.Route` remains available for compatibility but is deprecated. For new applications, see [controller and route migration](/en/learn/migration/preview-controller-routes). See [input migration](/en/learn/migration/v0.7.1-preview) for changes to older inputs and [OpenAPI](/en/reference/api/openapi) for specification options.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
 :::
 
-Add a `GET /user/:id` controller to the CLI-generated `my-app` project and return the integer from the request path in a JSON response. Then explore how to accept queries, headers, and request bodies, and how to choose response types.
+Declare routes in RegisterRoutes and receive each HTTP input through its source wrapper. This standalone app returns values without storing them.
 
-The `src/user` examples use `my-app` created with `--layout legacy` in [Project Structure](/en/learn/tutorial/1-project-structure). The default `layered-v1` layout uses directories organized by role.
+## Preparation
 
-Complete the installation and project creation steps in [Your first app](/en/learn/tutorial/1-project-structure), then work from the project root. If you have already run `spine generate resource user`, skip generation and check the files.
+Use Go 1.26 or later and an empty directory. Assemble the app in BuildApplication, located in internal/application/application.go in CLI projects.
 
-## Generate a controller with the CLI
-
-```bash
-spine generate resource user --dry-run
+```sh
+go mod init example.com/spine-tutorial
+go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1
 ```
 
-Review the files to be generated and the registration code changes in the preview, then generate them with the following command.
+## Input sources and names
 
-```bash
-spine generate resource user
-```
+| Source | Handler argument | Name override |
+| --- | --- | --- |
+| Path | `input.Path[UserPath]` or `input.Path[int64]` | `path:"id"` |
+| Query | `input.Query[SearchQuery]` | `query:"name"` |
+| Header | `input.Header[RequestHeaders]` | `header:"X-Request-ID"` |
+| Body | `input.Body[CreateUser]` | `json` / `xml` / `form` |
 
-### Generated files
+Path, Query and Header default to lowerCamel names: ID becomes id and UserID becomes userId. Use tags to override external names. Body follows its decoder naming rules. There is no input.Param; bare *DTO HTTP inputs fail with HTTP_INPUT_WRAPPER_REQUIRED. Read fields as path.ID and body.Name, and scalar values as *id.
 
-```text
-src/user/
-├── user_controller.go
-├── user_service.go
-├── user_repository.go
-└── user_route.go
-```
+## DTOs and optional validation methods {#dto-validation}
 
-The generated `src/user/user_controller.go` accepts the `id` from the path and returns a response such as `{"id":1}`. It belongs to the same `user` package as `UserService`, so you do not need to import a separate service package.
+Register WithValidator(engine) in BuildApplication to check validate tags automatically before handlers. Tag validation needs no Validate method or duplicate handler check. Additional rules, such as reserved names, can be ordinary Go methods. This fragment needs the errors import.
 
 ```go
-package user
-
-import "github.com/NARUBROWN/spine/pkg/httpx"
-
-type UserPath struct { ID int64 `path:"id"` }
-
-type UserController struct { service *UserService }
-
-func NewUserController(service *UserService) *UserController {
-    return &UserController{service: service}
+type CreateUserRequest struct {
+	Name string `json:"name" validate:"required,max=100"`
 }
 
-func (c *UserController) Get(params *UserPath) httpx.Response[map[string]any] {
-    return httpx.Response[map[string]any]{Body: map[string]any{"id": params.ID}}
+func (r *CreateUserRequest) Validate() error {
+	if r.Name == "admin" {
+		return errors.New("This name is unavailable")
+	}
+	return nil
 }
 ```
 
-::: info
-`resource` generates a basic structure with a read route and dependency registration. You must implement the database, domain models, data transfer objects (DTOs), and create or update operations yourself.
-:::
+This method is not called automatically. Invoke (*body).Validate() or (*CreateUserRequest)(body).Validate() in a handler that needs it, rather than body.Validate() on the wrapper. OpenAPI does not infer method logic. See the [complete validation example](/en/learn/tutorial/7-error-handling#validation-modes).
 
+## Runnable app
 
-## Run v0.7.1 inputs and routes
-
-This is a standalone application. Save it as `main.go` in a separate Go module with Spine `v0.7.1` and a compatible HTTP platform, then run `go run .`. Group routes take path, handler, then optional options. Body, path, query, and headers use separate inputs.
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
-```
+Save as main.go. Import the public pkg/spine.Ctx as spinectx. This basic example has no custom Validate method.
 
 ```go
 package main
@@ -78,9 +62,13 @@ import (
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type UserController struct{}
+type UserPath struct {
+	ID int64 `path:"id"`
+}
 type SearchQuery struct {
 	Name string `query:"name"`
 }
@@ -98,592 +86,62 @@ type User struct {
 func (*UserController) Constructor() *UserController { return &UserController{} }
 func (c *UserController) RegisterRoutes(r *api.Registry) {
 	users := r.Group("/users", api.Tags("Users"))
-	users.GET("/search", func(q input.Query[SearchQuery], h *RequestHeaders) httpx.Response[map[string]string] {
+	users.GET("/search", func(ctx spinectx.Ctx, q input.Query[SearchQuery], h input.Header[RequestHeaders]) httpx.Response[map[string]string] {
 		return httpx.Response[map[string]string]{Body: map[string]string{"name": q.Name, "request_id": h.RequestID}}
 	})
-	users.GET("/id/:id", func(id input.Path[int64]) httpx.Response[User] {
-		return httpx.Response[User]{Body: User{ID: *id}}
+	users.GET("/id/:id", func(ctx spinectx.Ctx, path input.Path[UserPath]) httpx.Response[User] {
+		return httpx.Response[User]{Body: User{ID: path.ID}}
 	}, api.Summary("Get user"))
-	users.POST("/create", func(body input.Body[CreateUser]) httpx.Response[User] {
+	users.POST("/", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[User] {
 		return httpx.Response[User]{Body: User{Name: body.Name}, Options: httpx.ResponseOptions{Status: 201}}
 	})
 }
 
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
+
 	app := spine.New(echoplatform.Option())
 	app.Constructor(constructor.Controller(&UserController{}))
-	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-Send requests from another terminal. The first returns the name and request ID, the second returns the ID, POST returns 201, and a nonnumeric path value returns 400.
+A group path of "/" refers to its base: users.POST("/", ...) registers POST /users. Use RegisterRoutes for new code; app.Route is deprecated.
 
-```bash
+## Try the requests
+
+```sh
+go run .
+#
 curl -H 'X-Request-ID: r1' 'http://localhost:8080/users/search?name=alice'
 curl http://localhost:8080/users/id/12
-curl -i -H 'Content-Type: application/json' -d '{"name":"bob"}' http://localhost:8080/users/create
+curl -i -H 'Content-Type: application/json' -d '{"name":"bob"}' http://localhost:8080/users
 curl -i http://localhost:8080/users/id/not-a-number
 ```
 
+Expect the name and request ID, ID 12, a 201 response, then 400 for an invalid integer.
 
-## Check the generated route registration
+## Input and return rules
 
-The CLI registers constructors and routes in `src/user/user_route.go`. It adds a `user.Register(app)` call and error handling to `BuildApplication()`. The following code shows the registration that has already been generated; do not add it again.
+Scalar Path arguments match path variables in order and count. Path DTOs bind by name and may select a subset; do not mix both styles. Separate DTOs by source and avoid duplicate keys. Declare at most one Body; it supports JSON, XML, form and multipart. Receive files in form-tagged *multipart.FileHeader or []*multipart.FileHeader fields.
 
-```go
-// src/user/user_route.go
-package user
+Return one httpx.Response[T], Binary or Redirect, optionally with error. Multiple response values are rejected during preparation.
 
-import "github.com/NARUBROWN/spine"
+## Error responses {#error-response}
 
-func Register(app spine.App) error {
-    app.Constructor(NewUserRepository, NewUserService, NewUserController)
-    app.Route("GET", "/user/:id", (*UserController).Get)
-    return nil
-}
-```
-
-```go
-// internal/application/application.go: BuildApplication
-if err := user.Register(app); err != nil {
-    return nil, boot.Options{}, err
-}
-```
-
-Keep the `BuildApplication → Validate → Run` flow in `main.go`. When you implement new handlers, add their routes inside the package's `Register` function.
-
-## Verify and run the generated code
-
-Check the contract and local code from the project root, then start the server.
-
-```bash
-spine doctor
-spine contract check
-spine verify
-spine dev
-```
-
-Call the generated route from another terminal.
-
-```bash
-curl http://localhost:8080/user/1
-```
-
-`GET /user/1` should return HTTP 200 and `{"id":1}`. This response confirms path binding and route execution; it does not represent a user retrieved from a database. Check the results of `spine contract check` and `spine verify` separately from the actual HTTP response.
-
-## Prerequisites for the extension examples
-
-The examples below independently extend inputs and responses. They do not replace the entire generated app. Pasting multiple methods with the same name at once causes duplicate declaration errors. Choose one handler you need, implement it, and register its route.
-
-You must implement `UserResponse`, request DTOs, `HeaderInfo`, and service methods such as `Get`, `List`, `Create`, and `Login` for each example. Place the types in the same package as the controller, and import the required Go standard library and Spine packages. For error handling omitted from the service calls below, follow the [error response](#error-response) examples.
-
-## Handler signatures
-
-Spine passes request values according to the handler's parameter types. This is called input binding. The return type determines how the response is created.
-
-### Supported parameter types
-
-| Type | Description | Example |
-|------|------|------|
-| `context.Context` | Request context | `ctx context.Context` |
-| `input.Query[T]` | Query parameters | `q input.Query[SearchQuery]` |
-| `*struct` (`header`) | HTTP headers | `headers *RequestHeaders` |
-| `*struct` (DTO) | JSON request body | `req *CreateUserRequest` |
-| `*struct` (form DTO) | Text fields in a form | `form *CreatePostForm` |
-| `multipart.UploadedFiles` | Multipart uploaded files | `files multipart.UploadedFiles` |
-| `input.Path[T]` | Path parameters | `userId input.Path[int64]` |
-| `spine.Ctx` | Controller context | `spineCtx spine.Ctx` |
-
-### Supported return types
-
-| Type | Description |
-|------|------|
-| `httpx.Response[T]` | JSON or string response, including status code, headers, and cookies |
-| `httpx.Redirect` | Redirect response |
-| `error` | Error response |
-| `httpx.Binary` | Byte response |
-
-You can also use pointers to response types and `(supported response type, error)` combinations. Use `httpx.Binary` to specify a `Content-Type` and a byte body.
-
-
-## Accept inputs
-
-### Query parameters
-
-In the runnable example above, `input.Query[SearchQuery]` binds query values to struct fields using `query` tags. Fields without a tag use lowerCamel names.
-
-### Pagination
-
-Declare `page` and `size` fields in a query DTO and apply defaults and bounds explicitly in the application.
-
-### HTTP headers
-
-Receive headers through a separate struct pointer with `header` tags. `RequestHeaders` above reads `X-Request-ID`.
-
-### Path parameters
-
-In v0.7.1, declare one scalar `input.Path[T]` argument per path variable in route order. The counts must match; do not mix scalar inputs with a path DTO or legacy path wrappers in one handler.
-
-```go
-r.GET("/:id/:name/:address", func(id input.Path[int64], name input.Path[string], address input.Path[string]) httpx.Response[map[string]any] {
-    return httpx.Response[map[string]any]{Body: map[string]any{"id": *id, "name": *name, "address": *address}}
-})
-```
-
-
-### JSON request bodies
-
-Declare a DTO for a JSON request body as a struct pointer, and add `json` tags to its fields. The example below binds `name` and `email` from a request with `Content-Type: application/json` to `CreateUserRequest`, then responds with HTTP 201.
-
-A DTO with even one `form` tag is classified as a form DTO. The request's `Content-Type` also affects body parsing, so match the JSON or form tags to the request format.
-
-```go
-// POST /user
-// Body: {"name": "Alice", "email": "alice@example.com"}
-
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *CreateUserRequest,  // ← Declare as a pointer
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Create(ctx, req.Name, req.Email)
-    return httpx.Response[UserResponse]{
-        Body: user,
-        Options: httpx.ResponseOptions{
-            Status: 201,
-        },
-    }
-}
-```
-
-```go
-// src/user/user_request.go
-type CreateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-```
-
-
-### Controller context: `spine.Ctx`
-
-In a controller, use `spine.Ctx.Get` to read values an interceptor stored with `ctx.Set`. Controllers have read access only. The example below assumes a string was stored under the `userRole` key. In your app, make sure the writer and reader use matching types.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/spine"
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId input.Path[int64],
-    spineCtx spine.Ctx,
-) httpx.Response[UserResponse] {
-    // Read the value set by the interceptor
-    if v, ok := spineCtx.Get("userRole"); ok {
-        if role, ok := v.(string); ok {
-            _ = role // Use the role in the application.
-        }
-    }
-
-    user, _ := c.service.Get(ctx, int(*userId))
-    return httpx.Response[UserResponse]{Body: user}
-}
-```
-
-
-## Return responses
-
-
-### 1. Return JSON and string responses with httpx.Response[T]
-
-Put the response body in `Body` of `httpx.Response[T]`, and set the status code, headers, and cookies in `Options`. If you omit the status code, HTTP 200 is used.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/httpx"
-```
-
-#### Basic JSON response
-
-```go
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId input.Path[int64],
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(*userId))
-
-    return httpx.Response[UserResponse]{
-        Body: user,  // 200 OK (default)
-    }
-}
-```
-
-#### String response
-
-```go
-func (c *UserController) Health() httpx.Response[string] {
-    return httpx.Response[string]{
-        Body: "OK",
-    }
-}
-```
-
-#### Specify the status code
-
-```go
-func (c *UserController) CreateUser(
-    ctx context.Context,
-    req *CreateUserRequest,
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Create(ctx, req.Name, req.Email)
-
-    return httpx.Response[UserResponse]{
-        Body: user,
-        Options: httpx.ResponseOptions{
-            Status: 201, // Created
-        },
-    }
-}
-```
-
-#### Add response headers
-
-```go
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId input.Path[int64],
-) httpx.Response[UserResponse] {
-    user, _ := c.service.Get(ctx, int(*userId))
-
-    return httpx.Response[UserResponse]{
-        Body: user,
-        Options: httpx.ResponseOptions{
-            Headers: map[string]string{
-                "X-Custom-Header": "custom-value",
-                "Cache-Control":   "max-age=3600",
-            },
-        },
-    }
-}
-```
-
-#### Set cookies
-
-```go
-func (c *AuthController) Login(
-    ctx context.Context,
-    req *LoginRequest,
-) httpx.Response[LoginResponse] {
-    token, refreshToken, _ := c.service.Login(ctx, req.Email, req.Password)
-
-    return httpx.Response[LoginResponse]{
-        Body: LoginResponse{Success: true},
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.AccessTokenCookie(token, 15*time.Minute),
-                httpx.RefreshTokenCookie(refreshToken, 7*24*time.Hour),
-            },
-        },
-    }
-}
-```
-
-#### httpx.Cookie struct
-
-```go
-type Cookie struct {
-    Name     string
-    Value    string
-    Path     string
-    Domain   string
-    MaxAge   int
-    Expires  *time.Time
-    HttpOnly bool
-    Secure   bool
-    SameSite SameSite  // SameSiteLax, SameSiteStrict, SameSiteNone
-    Priority string    // "Low" | "Medium" | "High"
-}
-```
-
-#### Cookie helper functions
-
-| Function | Description |
-|------|------|
-| `httpx.AccessTokenCookie(token, ttl)` | Create an access token cookie |
-| `httpx.RefreshTokenCookie(token, ttl)` | Create a refresh token cookie |
-| `httpx.DefaultRefreshTokenCookie(token)` | Create a refresh token cookie that expires in 7 days |
-| `httpx.ClearAccessTokenCookie()` | Delete the access token cookie |
-| `httpx.ClearRefreshTokenCookie()` | Delete the refresh token cookie |
-
-
-### 2. Return redirect responses with httpx.Redirect
-
-Use `httpx.Redirect` to redirect the client to another URL.
-
-#### Basic redirect (302 Found)
-
-```go
-type OAuthQuery struct { Code string `query:"code"` }
-
-func (c *AuthController) OAuthCallback(
-    ctx context.Context,
-    q input.Query[OAuthQuery],
-) httpx.Redirect {
-    code := q.Code
-    c.service.ProcessOAuthCode(ctx, code)
-
-    return httpx.Redirect{
-        Location: "/dashboard",  // 302 Found (default)
-    }
-}
-```
-
-#### Specify the status code
-
-```go
-import "net/http"
-
-func (c *UserController) MovedPermanently() httpx.Redirect {
-    return httpx.Redirect{
-        Location: "/new-location",
-        Options: httpx.ResponseOptions{
-            Status: http.StatusMovedPermanently, // 301
-        },
-    }
-}
-```
-
-#### Set cookies with a redirect
-
-```go
-func (c *AuthController) Login(
-    ctx context.Context,
-    req *LoginRequest,
-) httpx.Redirect {
-    token, _ := c.service.Login(ctx, req.Email, req.Password)
-
-    return httpx.Redirect{
-        Location: "/dashboard",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.AccessTokenCookie(token, 15*time.Minute),
-            },
-        },
-    }
-}
-```
-
-#### Log out (delete cookies, then redirect)
-
-```go
-func (c *AuthController) Logout() httpx.Redirect {
-    return httpx.Redirect{
-        Location: "/login",
-        Options: httpx.ResponseOptions{
-            Cookies: []httpx.Cookie{
-                httpx.ClearAccessTokenCookie(),
-                httpx.ClearRefreshTokenCookie(),
-            },
-        },
-    }
-}
-```
-
-
-### 3. Return error responses with error {#error-response}
-
-Returning an error with `httperr` creates a JSON response with the specified HTTP status code and a `message` field. The example below treats a service error as a failed user lookup and returns HTTP 404. In your app, distinguish the causes of errors and map them to appropriate status codes.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/httperr"
-
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userId input.Path[int64],
-) error {
-    _, err := c.service.Get(ctx, int(*userId))
-    if err != nil {
-        return httperr.NotFound("The user could not be found.")
-    }
-    return nil
-}
-```
-
-#### httperr functions
-
-| Function | Status code |
-|------|----------|
-| `httperr.BadRequest(msg)` | 400 |
-| `httperr.Unauthorized(msg)` | 401 |
-| `httperr.NotFound(msg)` | 404 |
-
-The error response body for the example above is:
-
-```json
-{
-  "message": "The user could not be found."
-}
-```
-
-#### Use httpx.Response[T] with error
-
-Use `(httpx.Response[T], error)` to return both a success response and an error. On failure, return an empty response value and the error. On success, return a response with a body and `nil`. If an error is present, the success response body is not used.
-
-```go
-func (c *UserController) GetUser(
-    ctx context.Context,
-    userID input.Path[int64],
-) (httpx.Response[UserResponse], error) {
-    user, err := c.service.Get(ctx, int(*userID))
-    if err != nil {
-        return httpx.Response[UserResponse]{}, httperr.NotFound("user not found")
-    }
-    return httpx.Response[UserResponse]{Body: user}, nil
-}
-```
-
-
-### Choose a response type
-
-| Situation | Recommended return type |
-|------|---------------|
-| JSON response with status code, headers, and cookies | `httpx.Response[T]` |
-| String response | `httpx.Response[string]` |
-| Redirect | `httpx.Redirect` |
-| Specify a byte body and Content-Type | `httpx.Binary` |
-| Return only an error | `error` |
-
-
-## Form DTOs and multipart files
-
-Accept form text fields with a form DTO declared as a struct pointer, and uploaded files with `multipart.UploadedFiles`. Declare both types as parameters of the same handler to process text and files in one request.
-
-You must implement the `PostController` and `FileController` in the examples below and register their constructors and routes. The `/posts` and `/upload` routes must be registered before you can run the `curl` requests below. For upload requests, actual files must exist at the specified paths.
-
-### 1. Accept form text fields
-
-A form DTO accepts text fields from `multipart/form-data` or `application/x-www-form-urlencoded` requests. Use `form` tags on DTO fields to specify the request field names.
-
-#### Define the form DTO
-
-```go
-type CreatePostForm struct {
-    Title   string `form:"title"`
-    Content string `form:"content"`
-}
-```
-
-#### Implement the handler
-
-```go
-func (c *PostController) Create(
-    form *CreatePostForm, // Form DTO
-) httpx.Response[string] {
-    fmt.Println("Title  :", form.Title)
-    fmt.Println("Content:", form.Content)
-
-    return httpx.Response[string]{Body: "OK"}
-}
-```
-
-#### Example request (curl)
-
-```bash
-curl -X POST http://localhost:8080/posts \
-  -F "title=hello" \
-  -F "content=spine"
-```
-
-### 2. Accept uploaded files
-
-Accept uploaded files in a separate `multipart.UploadedFiles` parameter rather than DTO fields. The example below logs each file's field name, file name, and size.
-
-#### Uploaded file type
-
-Use the types from the `github.com/NARUBROWN/spine/pkg/multipart` package.
-
-```go
-import "github.com/NARUBROWN/spine/pkg/multipart"
-```
-
-#### Implement the handler
-
-```go
-func (c *FileController) Upload(
-    files multipart.UploadedFiles, // Multipart files
-) httpx.Response[string] {
-    fmt.Println("Files count:", len(files.Files))
-
-    for _, f := range files.Files {
-        fmt.Println(
-            "field:", f.FieldName,
-            "name:", f.Filename,
-            "size:", f.Size,
-        )
-    }
-
-    return httpx.Response[string]{Body: "OK"}
-}
-```
-
-#### UploadedFile struct
-
-```go
-type UploadedFile struct {
-    FieldName   string
-    Filename    string
-    ContentType string
-    Size        int64
-    Open        func() (io.ReadCloser, error)
-}
-```
-
-#### Example request (curl)
-
-```bash
-curl -X POST http://localhost:8080/upload \
-  -F "file=@test1.png" \
-  -F "file=@test2.jpg"
-```
-
-### 3. Accept forms, files, and queries together
-
-A single handler can accept a form DTO, uploaded files, and pagination together. The example below reads and prints each value; it does not save the files.
-
-#### Implement the handler
-
-```go
-type PageQuery struct {
-    Page int `query:"page"`
-    Size int `query:"size"`
-}
-
-func (c *PostController) Upload(
-    ctx context.Context,
-    form  *CreatePostForm,           // form fields
-    files multipart.UploadedFiles,   // multipart files
-    page  input.Query[PageQuery],          // query
-) httpx.Response[string] {
-    fmt.Println("[FORM] Title  :", form.Title)
-    fmt.Println("[FORM] Content:", form.Content)
-
-    fmt.Println("[QUERY] Page:", page.Page)
-    fmt.Println("[QUERY] Size:", page.Size)
-
-    fmt.Println("[FILES] Count:", len(files.Files))
-
-    return httpx.Response[string]{Body: "OK"}
-}
-```
-
-### How input types are distinguished
-
-Receive JSON and form DTOs as struct pointers. Use `input.Query[T]` and `input.Path[T]` for query and path inputs, and `multipart.UploadedFiles` for files. Receive headers in a separate struct pointer with `header` tags.
-
-## Input error handling considerations
-
-Malformed JSON and invalid path conversions return HTTP 400, unsupported body Content-Type returns 415, and a body over the configured limit returns 413. Binding fails before the controller runs. Verify actual requests and distinguish binding failures from business validation.
+Binding failures return 400 before the handler; ordinary errors return a sanitized 500. Connect a validator in [error handling](/en/learn/tutorial/7-error-handling).
 
 ## Next steps
 
-- [Tutorial: Dependency injection](/en/learn/tutorial/3-dependency-injection) — Register constructors and resolve dependencies
-- [Tutorial: Interceptors](/en/learn/tutorial/4-interceptor) — Process requests before and after handlers
+[DI](/en/learn/tutorial/3-dependency-injection) / [OpenAPI](/en/reference/api/openapi)

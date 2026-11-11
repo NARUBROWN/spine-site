@@ -1,190 +1,125 @@
 # プロジェクト構造
 
-::: info
-この例は `legacy` レイアウトの互換登録方式を使います。`app.Route` は非推奨です。新しいコントローラーは[コントローラーとルートの移行](/ja/learn/migration/preview-controller-routes)を参照してください。
+::: info 0.7.5 API
+0.7.5 API を対象とする文書です。公開タグと対応プラットフォームは[バージョン一覧](/ja/community/versions)で確認してください。
 :::
 
-Spine CLIでプロジェクトを作成し、ユーザーリソースを追加します。生成されたファイルを確認しながら、アプリの構成コードを置く場所と、コントローラー、サービス、リポジトリの役割を学びます。
+既定の layered-v1 で組み立て、HTTP コントローラー、起動を分けます。新規コードには現在のルート登録 API を使います。
 
-先に [CLI のインストール](/ja/learn/getting-started/installation)を完了してください。このチュートリアルでは機能別パッケージを使うため、新しいディレクトリで `--layout legacy` を指定して `my-app` を作成します。[最初のアプリ](/ja/learn/getting-started/first-app)の標準 `layered-v1` とは構造が異なり、既存アプリを自動変換することはありません。
+## プロジェクト作成
 
-## CLIによるプロジェクトの生成
-
-プロジェクトを配置する親ディレクトリで実行します。同じ名前の`my-app`ディレクトリがすでにある場合は、別の名前を使ってください。
+0.7.5 API 対応の Preview CLI を使います。CLI とアプリのチャネルは別で、実際の選択版は go.mod で確認します。
 
 ```sh
-spine version
-spine new my-app --layout legacy --module example.com/my-app --channel main --no-interactive
+spine new my-app --module example.com/my-app --channel preview --validator playground --no-interactive
 cd my-app
 spine doctor
 spine inspect
 ```
 
-`my-app`ディレクトリが生成され、依存関係が用意されます。`doctor`がツールとプロジェクト設定を診断し、`inspect`で既定のパスである`GET /health`の登録を確認できます。
-
-## 生成される基本構造
-
-上記の `new` は `go.sum` を含むプロジェクトファイルを作成し、依存関係のインストールとビルドを完了します。
-
 ```text
 my-app/
-├── .gitignore
-├── README.md
-├── go.mod
-├── go.sum
 ├── main.go
+├── go.mod
 ├── spine.toml
-└── internal/
-    └── application/
-        ├── application.go
-        └── application_test.go
+├── internal/application/
+│   ├── application.go
+│   └── application_test.go
+└── src/controller/health_controller.go
 ```
 
-## CLIの設定
+## 起動と組み立て
 
-`spine.toml` はモジュール、エントリーポイント、アプリ構成の場所、ポート、レイアウト、プラットフォームを設定します。DB や認証などのアプリ設定は別に管理します。
-
-```toml
-module = "example.com/my-app"
-entrypoint = "."
-composition = "./internal/application"
-port = 8080
-layout = "legacy"
-platform = "echo"
-recipe = "platform-contracts-preview"
-dependency_channel = "main"
-websocket_platform = "none"
-validator = "none"
-frontend_enabled = false
-```
-
-| キー | 役割 |
-| --- | --- |
-| `module` | Goのモジュールパス。`go.mod`のモジュールパスと一致する必要があります。 |
-| `entrypoint` | 実行またはビルドする対象 |
-| `composition` | アプリ構成を検査し、生成したコードを自動登録する場所 |
-| `port` | 開発サーバーで使用するポート |
-| `layout` | 生成ファイルの配置 (`legacy` または `layered-v1`) |
-| `platform` | HTTPプラットフォーム (`echo`、`nethttp` または `none`) |
-| `recipe` | 互換依存関係を選ぶレシピ |
-| `websocket_platform` | WebSocket実装 (`none` または `gorilla`) |
-| `validator` | DTO検証器 (`none` または `playground`) |
-| `event_platforms` | 選択したイベントの名前と種類 |
-
-## 実行とアプリ構成の分離
-
-`main.go`はアプリの構成関数を呼び出し、構成を検証してからサーバーを実行します。コンストラクタ、ルート、インターセプターは、`internal/application/application.go`の`BuildApplication`に登録します。
+次の三つは役割分離の最小例です。生成済みの該当ファイルを置き換え、型や登録を重複追加しません。main は組み立て、Validate、Run を呼び、BuildApplication はサーバーを起動しません。
 
 ```go
+// main.go
 package main
 
 import (
-    "log"
-
-    "example.com/my-app/internal/application"
+	"example.com/my-app/internal/application"
+	"log"
 )
 
 func main() {
-    app, options, err := application.BuildApplication()
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Validate(options); err != nil {
-        log.Fatal(err)
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := application.BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-`BuildApplication`はサーバーを起動せずに、アプリと実行オプションを返します。生成されたコードは、既定のHTTPパスである`GET /health`を登録します。
-
 ```go
-package application
+// src/controller/health_controller.go
+package controller
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "os"
-
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type HealthController struct{}
 
-func NewHealthController() *HealthController { return &HealthController{} }
-
-func (c *HealthController) Get() httpx.Response[map[string]string] {
-    return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
-}
-
-func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(NewHealthController)
-    app.Route("GET", "/health", (*HealthController).Get)
-
-    address := ":8080"
-    if port := os.Getenv("SPINE_PORT"); port != "" {
-        address = ":" + port
-    }
-    return app, boot.Options{Address: address, HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
+func (*HealthController) Constructor() *HealthController   { return &HealthController{} }
+func (c *HealthController) RegisterRoutes(r *api.Registry) { r.GET("/health", c.Get) }
+func (*HealthController) Get(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+	return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 }
 ```
-
-## CLIによる機能の追加
-
-プロジェクトのルートでユーザーリソースを生成します。既存のプロジェクトですでに生成している場合は、このコマンドを省略します。
-
-```sh
-spine generate resource user
-```
-
-```text
-src/user/
-├── user_route.go
-├── user_repository.go
-├── user_service.go
-└── user_controller.go
-```
-
-コマンドが終了すると、`src/user`に4つのファイルが生成されます。CLIは既定で、`BuildApplication`に次の登録コードを追加します。生成結果を確認し、同じコードを手動で再度登録しないでください。
 
 ```go
-if err := user.Register(app); err != nil {
-    return nil, boot.Options{}, err
+// internal/application/application.go
+package application
+
+import (
+	"example.com/my-app/src/controller"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+)
+
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&controller.HealthController{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}, EnableGracefulShutdown: true}, nil
 }
 ```
 
-`user_route.go`は、コンストラクタと`GET /user/:id`を登録します。ほかのファイルの役割は次のとおりです。
+## 生成器で機能追加
 
-| ファイル | 役割 |
-| --- | --- |
-| `user_controller.go` | HTTPリクエストを受け取ってサービスに渡し、レスポンスを返します。 |
-| `user_service.go` | ビジネスロジックを処理します。 |
-| `user_repository.go` | データアクセスを担当します。 |
+```sh
+spine generate resource user --dry-run
+spine generate resource user
+spine --help
+```
 
-リソースジェネレーターが生成するのは、IDを返すGETハンドラーの基本コードだけです。データベースモデルやデータを永続保存する機能は、自分で実装する必要があります。
+既定の layered-v1 の resource は検索の骨組みを作ります。完全な CRUD、DB、業務規則は自分で実装します。生成した役割登録を重複させず、RegisterRoutes と Constructor の役割を確認します。レイアウト別の対応生成器は spine --help で確認できます。
 
-型を定義した作成と取得の例が必要な場合は、別の名前で`spine generate slice order --storage memory --field name:string`を使ってください。このコマンドのメモリストレージは開発用で、アプリを終了するとデータが失われます。
-
-## 登録規則と検証
-
-CLIが登録コードを検査できるように、`BuildApplication() (spine.App, boot.Options, error)`の関数本体の最上位に`app := spine.New(echoplatform.Option())`を維持してください。登録コードを条件分岐、ループ、任意の補助関数の中に移さないでください。`Register(app)`が返したエラーも確認し、返す必要があります。
-
-アプリ構成を検査してからサーバーを実行します。
+## 検証と実行
 
 ```sh
 spine contract check
 spine verify
 spine dev
+# In another terminal
+curl http://localhost:8080/health
 ```
 
-`contract check`は、登録コードから抽出した実行契約を検査します。`verify`は契約の検査と、`gofmt`、`go vet`、Goのテストを実行します。両方のコマンドがエラーなく終了すると、`dev`が開発サーバーを起動します。実際のHTTPの動作と、外部のデータベースやメッセージブローカーへの接続は、実行環境で別途確認する必要があります。
+期待応答は {"status":"ok"} です。contract check は静的契約、verify はさらにフォーマット、vet、Go テストを検査します。app.Validate も生成子実行や外部接続成功は保証しません。HTTP と外部資源は実リクエストで確認します。
 
 ## 次のステップ
 
-- [コントローラー](/ja/learn/tutorial/2-controller)
-- [依存性注入](/ja/learn/tutorial/3-dependency-injection)
-- [インターセプター](/ja/learn/tutorial/4-interceptor)
+[コントローラー](/ja/learn/tutorial/2-controller) / [DI](/ja/learn/tutorial/3-dependency-injection) / [インターセプター](/ja/learn/tutorial/4-interceptor)

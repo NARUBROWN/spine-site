@@ -1,6 +1,10 @@
 # Runtime OpenAPI
 
-Spine `v0.7.1` generates OpenAPI 3.1.2 JSON from registered HTTP routes, handler types, and the validator description contract. The embedded Swagger UI and ReDoc can be served optionally.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
+
+Spine `v0.7.5` generates OpenAPI 3.1.2 JSON from registered HTTP routes, handler types, and the validator description contract. The embedded Swagger UI and ReDoc can be served optionally.
 
 ## Enable generation and configure boot options {#options}
 
@@ -8,16 +12,16 @@ Automatic generation and HTTP serving are disabled by default. Enable them expli
 
 ```go
 options := boot.Options{
-    Address: ":8080",
-    HTTP: &boot.HTTPOptions{
-        GlobalPrefix: "/api",
-        OpenAPI: boot.OpenAPIOptions{
-            Enabled: true,
-            Path: "/openapi.json",
-            Title: "User API",
-            Version: "1.0.0",
-        },
-    },
+	Address: ":8080",
+	HTTP: &boot.HTTPOptions{
+		GlobalPrefix: "/api",
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true,
+			Path:    "/openapi.json",
+			Title:   "User API",
+			Version: "1.0.0",
+		},
+	},
 }
 ```
 
@@ -50,19 +54,19 @@ The following function accepts an app that has already been configured, HTTP opt
 
 ```go
 func ExportOpenAPI(app spine.App, options boot.Options, output io.Writer) error {
-    if options.HTTP == nil {
-        return errors.New("HTTP options are required")
-    }
-    description, err := spine.DescribeHTTP(app, options)
-    if err != nil {
-        return err
-    }
-    document, err := openapi.Generate(description, options.HTTP.OpenAPI)
-    if err != nil {
-        return err
-    }
-    _, err = output.Write(document)
-    return err
+	if options.HTTP == nil {
+		return errors.New("HTTP options are required")
+	}
+	description, err := spine.DescribeHTTP(app, options)
+	if err != nil {
+		return err
+	}
+	document, err := openapi.Generate(description, options.HTTP.OpenAPI)
+	if err != nil {
+		return err
+	}
+	_, err = output.Write(document)
+	return err
 }
 ```
 
@@ -74,21 +78,22 @@ Routes of a new `api.Controller` are collected during preparation, so `DescribeH
 
 ```go
 func ExportPreparedOpenAPI(prepared spine.PreparedApplication, options boot.OpenAPIOptions, output io.Writer) error {
-    description, err := spine.DescribePreparedHTTP(prepared)
-    if err != nil {
-        return err
-    }
-    document, err := openapi.Generate(description, options)
-    if err != nil {
-        return err
-    }
-    _, err = output.Write(document)
-    return err
+	description, err := spine.DescribePreparedHTTP(prepared)
+	if err != nil {
+		return err
+	}
+	document, err := openapi.Generate(description, options)
+	if err != nil {
+		return err
+	}
+	_, err = output.Write(document)
+	return err
 }
 ```
 
-
 ## Validator support and description scope {#validation}
+
+Register playground.New() with WithValidator in BuildApplication. Required tags are checked automatically on requests and described as required in the schema. OpenAPI itself does not validate requests; arbitrary DTO Validate methods are neither called nor documented automatically.
 
 | Registration state | Generated information |
 | --- | --- |
@@ -111,7 +116,7 @@ The T in `httpx.Response[T]` describes the response body type. Status codes and 
 Select UIs with `boot.Options.HTTP.OpenAPI.UI`. Set `Enabled: true` and register the UIs; omit `UI` for JSON only. This example pins the stable Echo version. Retain `go.mod` and `go.sum` for reproducibility.
 
 ```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0
+go get github.com/NARUBROWN/spine@v0.7.5-preview.1 github.com/NARUBROWN/spine-echo-platform@v0.2.1-preview.1 github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
 ```
 
 The following `main.go` is a standalone app that registers the selected UIs. In an existing app, add the imports and `OpenAPI.UI` settings to your current composition.
@@ -120,49 +125,61 @@ The following `main.go` is a standalone app that registers the selected UIs. In 
 package main
 
 import (
-    "log"
-
-    "github.com/NARUBROWN/spine"
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
-    "github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	"github.com/NARUBROWN/spine"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
+	"github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
+	"log"
 )
 
+type CreateUser struct {
+	Name  string `json:"name" validate:"required,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
 type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
-
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-    r.GET("/hello", func() httpx.Response[string] {
-        return httpx.Response[string]{Body: "hello"}
-    })
+	r.GET("/hello", func(ctx spinectx.Ctx) httpx.Response[string] {
+		return httpx.Response[string]{Body: "hello"}
+	})
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[CreateUser] {
+		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
+	}, api.Summary("Create user"), api.Tags("Users"))
 }
-
+func BuildApplication() (spine.App, boot.Options, error) {
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{
+		OpenAPI: boot.OpenAPIOptions{
+			Enabled: true, Title: "Example API", Version: "1.0.0",
+			UI: []boot.OpenAPIUI{swaggerui.New(swaggerui.Options{}), redoc.New(redoc.Options{})},
+		},
+	}}
+	return app, options, nil
+}
 func main() {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(constructor.Controller(&Controller{}))
-
-    options := boot.Options{
-        Address: ":8080",
-        HTTP: &boot.HTTPOptions{
-            OpenAPI: boot.OpenAPIOptions{
-                Enabled: true,
-                Title:   "Example API",
-                Version: "1.0.0",
-                UI: []boot.OpenAPIUI{
-                    swaggerui.New(swaggerui.Options{}),
-                    redoc.New(redoc.Options{}),
-                },
-            },
-        },
-    }
-    if err := app.Run(options); err != nil {
-        log.Fatal(err)
-    }
+	app, options, err := BuildApplication()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Validate(options); err != nil {
+		log.Fatal(err)
+	}
+	if err := app.Run(options); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -185,9 +202,9 @@ Both packages' `New` functions return the following `boot.OpenAPIUI` type. Resou
 
 ```go
 type OpenAPIResource struct {
-    Path        string
-    ContentType string
-    Body        string
+	Path        string
+	ContentType string
+	Body        string
 }
 
 type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
@@ -197,4 +214,4 @@ type OpenAPIUI func(documentPath string) ([]OpenAPIResource, error)
 
 Preparation rejects document or asset paths that overlap existing GET, HEAD, or WebSocket routes with `OPENAPI_PATH_CONFLICT`. A nil provider or invalid UI options produce `OPENAPI_UI_INVALID`; an invalid resource path or Content-Type produces `OPENAPI_UI_RESOURCE_INVALID`.
 
-See the [Swagger and OpenAPI tutorial](/en/learn/tutorial/8-swagger) for a complete runnable example, [input migration](/en/learn/migration/v0.7.1-preview) for input models, and [spine.App](/en/reference/api/spine-app) for the app API.
+See the [Swagger and OpenAPI tutorial](/en/learn/tutorial/8-swagger) for a complete runnable example, [input migration](/en/learn/migration/v0.7.5) for input models, and [spine.App](/en/reference/api/spine-app) for the app API.

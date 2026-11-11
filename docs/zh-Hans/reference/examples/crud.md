@@ -1,14 +1,14 @@
 # 创建用户 CRUD API
 
-::: info
-此示例使用 `v0.7.1` 的控制器回调和路径输入。兼容规则请参阅[路由迁移](/zh-Hans/learn/migration/preview-controller-routes)与[输入迁移](/zh-Hans/learn/migration/v0.7.1-preview)，文档设置请参阅 [OpenAPI](/zh-Hans/reference/api/openapi)。
+::: info 0.7.5 API
+本文以 0.7.5 API 为准。已发布标签和兼容平台请查看[版本列表](/zh-Hans/community/versions)。
 :::
 
 创建用于新增、列出、查询、修改和删除用户的 HTTP API。示例使用内存存储库，不依赖 ORM，因此无需准备数据库即可运行。
 
 ## 开始前的准备
 
-请先完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)。使用 CLI `v0.4.3` 或更高版本创建应用，并手动添加 CRUD 代码。`resource` 生成 GET 框架，`slice --storage memory` 生成创建和查询框架。
+完成 [CLI 安装](/zh-Hans/learn/getting-started/installation)后，使用支持 0.7.5 API 的 Preview CLI。CLI 安装通道与应用依赖通道独立。
 
 服务器进程结束后，保存的用户数据会消失。
 
@@ -30,10 +30,10 @@ graph TD
 
 创建基础应用，检查依赖和项目配置。后续命令均在 `crud-example/` 中运行。
 
-以下命令使用正式依赖渠道。请在 `go.mod` 中确认所选版本。
+以下命令选择 Preview 依赖，请在生成的 go.mod 中确认实际核心和平台版本。
 
 ```sh
-spine new crud-example --layout legacy --module example.com/crud-example --channel main --no-interactive
+spine new crud-example --module example.com/crud-example --channel preview --validator playground --no-interactive
 cd crud-example
 spine doctor
 ```
@@ -70,11 +70,11 @@ package model
 import "time"
 
 type User struct {
-    ID        int64     `json:"id"`
-    Name      string    `json:"name"`
-    Email     string    `json:"email"`
-    CreatedAt time.Time `json:"created_at"`
-    UpdatedAt time.Time `json:"updated_at"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 ```
 
@@ -87,103 +87,103 @@ type User struct {
 package repository
 
 import (
-    "errors"
-    "sync"
-    "time"
+	"errors"
+	"sync"
+	"time"
 
-    "example.com/crud-example/src/model"
+	"example.com/crud-example/src/model"
 )
 
 var (
-    ErrUserNotFound      = errors.New("user not found")
-    ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrEmailAlreadyExists = errors.New("email already exists")
 )
 
 type UserRepository struct {
-    mu      sync.RWMutex
-    users   map[int64]*model.User
-    counter int64
+	mu      sync.RWMutex
+	users   map[int64]*model.User
+	counter int64
 }
 
-func NewUserRepository() *UserRepository {
-    return &UserRepository{
-        users:   make(map[int64]*model.User),
-        counter: 0,
-    }
+func (*UserRepository) Constructor() *UserRepository {
+	return &UserRepository{
+		users:   make(map[int64]*model.User),
+		counter: 0,
+	}
 }
 
 func (r *UserRepository) FindAll() []*model.User {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    result := make([]*model.User, 0, len(r.users))
-    for _, user := range r.users {
-        result = append(result, user)
-    }
-    return result
+	result := make([]*model.User, 0, len(r.users))
+	for _, user := range r.users {
+		result = append(result, user)
+	}
+	return result
 }
 
 func (r *UserRepository) FindByID(id int64) (*model.User, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    user, ok := r.users[id]
-    if !ok {
-        return nil, ErrUserNotFound
-    }
-    return user, nil
+	user, ok := r.users[id]
+	if !ok {
+		return nil, ErrUserNotFound
+	}
+	return user, nil
 }
 
 func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    for _, user := range r.users {
-        if user.Email == email {
-            return user, nil
-        }
-    }
-    return nil, ErrUserNotFound
+	for _, user := range r.users {
+		if user.Email == email {
+			return user, nil
+		}
+	}
+	return nil, ErrUserNotFound
 }
 
 func (r *UserRepository) ExistsByEmail(email string) bool {
-    _, err := r.FindByEmail(email)
-    return err == nil
+	_, err := r.FindByEmail(email)
+	return err == nil
 }
 
 func (r *UserRepository) Save(user *model.User) *model.User {
-    r.mu.Lock()
-    defer r.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-    now := time.Now()
+	now := time.Now()
 
-    if user.ID == 0 {
-        r.counter++
-        user.ID = r.counter
-        user.CreatedAt = now
-    }
-    user.UpdatedAt = now
+	if user.ID == 0 {
+		r.counter++
+		user.ID = r.counter
+		user.CreatedAt = now
+	}
+	user.UpdatedAt = now
 
-    r.users[user.ID] = user
-    return user
+	r.users[user.ID] = user
+	return user
 }
 
 func (r *UserRepository) Delete(id int64) error {
-    r.mu.Lock()
-    defer r.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-    if _, ok := r.users[id]; !ok {
-        return ErrUserNotFound
-    }
+	if _, ok := r.users[id]; !ok {
+		return ErrUserNotFound
+	}
 
-    delete(r.users, id)
-    return nil
+	delete(r.users, id)
+	return nil
 }
 
 func (r *UserRepository) Count() int {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    return len(r.users)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.users)
 }
 ```
 
@@ -196,59 +196,59 @@ func (r *UserRepository) Count() int {
 package dto
 
 import (
-    "time"
+	"time"
 
-    "example.com/crud-example/src/model"
+	"example.com/crud-example/src/model"
 )
 
 // 请求 DTO
 
 type CreateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 type UpdateUserRequest struct {
-    Name  string `json:"name"`
-    Email string `json:"email"`
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 // 响应 DTO
 
 type UserResponse struct {
-    ID        int64     `json:"id"`
-    Name      string    `json:"name"`
-    Email     string    `json:"email"`
-    CreatedAt time.Time `json:"created_at"`
-    UpdatedAt time.Time `json:"updated_at"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type UserListResponse struct {
-    Users []UserResponse `json:"users"`
-    Total int            `json:"total"`
+	Users []UserResponse `json:"users"`
+	Total int            `json:"total"`
 }
 
 // 转换函数
 
 func ToUserResponse(user *model.User) UserResponse {
-    return UserResponse{
-        ID:        user.ID,
-        Name:      user.Name,
-        Email:     user.Email,
-        CreatedAt: user.CreatedAt,
-        UpdatedAt: user.UpdatedAt,
-    }
+	return UserResponse{
+		ID:        user.ID,
+		Name:      user.Name,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}
 }
 
 func ToUserListResponse(users []*model.User) UserListResponse {
-    responses := make([]UserResponse, len(users))
-    for i, user := range users {
-        responses[i] = ToUserResponse(user)
-    }
-    return UserListResponse{
-        Users: responses,
-        Total: len(responses),
-    }
+	responses := make([]UserResponse, len(users))
+	for i, user := range users {
+		responses[i] = ToUserResponse(user)
+	}
+	return UserListResponse{
+		Users: responses,
+		Total: len(responses),
+	}
 }
 ```
 
@@ -261,71 +261,71 @@ func ToUserListResponse(users []*model.User) UserListResponse {
 package service
 
 import (
-    "example.com/crud-example/src/dto"
-    "example.com/crud-example/src/model"
-    "example.com/crud-example/src/repository"
+	"example.com/crud-example/src/dto"
+	"example.com/crud-example/src/model"
+	"example.com/crud-example/src/repository"
 )
 
 type UserService struct {
-    repo *repository.UserRepository
+	repo *repository.UserRepository
 }
 
-func NewUserService(repo *repository.UserRepository) *UserService {
-    return &UserService{repo: repo}
+func (*UserService) Constructor(repo *repository.UserRepository) *UserService {
+	return &UserService{repo: repo}
 }
 
 func (s *UserService) GetAllUsers() dto.UserListResponse {
-    users := s.repo.FindAll()
-    return dto.ToUserListResponse(users)
+	users := s.repo.FindAll()
+	return dto.ToUserListResponse(users)
 }
 
 func (s *UserService) GetUserByID(id int64) (*dto.UserResponse, error) {
-    user, err := s.repo.FindByID(id)
-    if err != nil {
-        return nil, err
-    }
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
 
-    response := dto.ToUserResponse(user)
-    return &response, nil
+	response := dto.ToUserResponse(user)
+	return &response, nil
 }
 
 func (s *UserService) CreateUser(req *dto.CreateUserRequest) (*dto.UserResponse, error) {
-    // 检查邮箱是否重复
-    if s.repo.ExistsByEmail(req.Email) {
-        return nil, repository.ErrEmailAlreadyExists
-    }
+	// 检查邮箱是否重复
+	if s.repo.ExistsByEmail(req.Email) {
+		return nil, repository.ErrEmailAlreadyExists
+	}
 
-    user := &model.User{
-        Name:  req.Name,
-        Email: req.Email,
-    }
+	user := &model.User{
+		Name:  req.Name,
+		Email: req.Email,
+	}
 
-    saved := s.repo.Save(user)
-    response := dto.ToUserResponse(saved)
-    return &response, nil
+	saved := s.repo.Save(user)
+	response := dto.ToUserResponse(saved)
+	return &response, nil
 }
 
 func (s *UserService) UpdateUser(id int64, req *dto.UpdateUserRequest) (*dto.UserResponse, error) {
-    user, err := s.repo.FindByID(id)
-    if err != nil {
-        return nil, err
-    }
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
 
-    // 更改邮箱时检查是否重复
-    if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
-        return nil, repository.ErrEmailAlreadyExists
-    }
+	// 更改邮箱时检查是否重复
+	if req.Email != user.Email && s.repo.ExistsByEmail(req.Email) {
+		return nil, repository.ErrEmailAlreadyExists
+	}
 
-    user.Name = req.Name
-    user.Email = req.Email
+	user.Name = req.Name
+	user.Email = req.Email
 
-    saved := s.repo.Save(user)
-    response := dto.ToUserResponse(saved)
-    return &response, nil
+	saved := s.repo.Save(user)
+	response := dto.ToUserResponse(saved)
+	return &response, nil
 }
 
 func (s *UserService) DeleteUser(id int64) error {
-    return s.repo.Delete(id)
+	return s.repo.Delete(id)
 }
 ```
 
@@ -338,114 +338,102 @@ func (s *UserService) DeleteUser(id int64) error {
 package controller
 
 import (
-    "errors"
+	"errors"
 
-    "github.com/NARUBROWN/spine/pkg/httperr"
-    "github.com/NARUBROWN/spine/pkg/httpx"
-    "github.com/NARUBROWN/spine/pkg/api"
-    "github.com/NARUBROWN/spine/pkg/input"
+	"github.com/NARUBROWN/spine/pkg/api"
+	"github.com/NARUBROWN/spine/pkg/httperr"
+	"github.com/NARUBROWN/spine/pkg/httpx"
+	"github.com/NARUBROWN/spine/pkg/input"
 
-    "example.com/crud-example/src/dto"
-    "example.com/crud-example/src/repository"
-    "example.com/crud-example/src/service"
+	"example.com/crud-example/src/dto"
+	"example.com/crud-example/src/repository"
+	"example.com/crud-example/src/service"
 )
 
 type UserController struct {
-    service *service.UserService
+	service *service.UserService
 }
 
 func (*UserController) Constructor(service *service.UserService) *UserController {
-    return &UserController{service: service}
+	return &UserController{service: service}
 }
 
 func (c *UserController) RegisterRoutes(r *api.Registry) {
-    r.GET("/users", c.List)
-    r.GET("/users/:id", c.GetByID)
-    r.POST("/users", c.Create)
-    r.PUT("/users/:id", c.Update)
-    r.DELETE("/users/:id", c.Delete)
+	r.GET("/users", c.List)
+	r.GET("/users/:id", c.GetByID)
+	r.POST("/users", c.Create)
+	r.PUT("/users/:id", c.Update)
+	r.DELETE("/users/:id", c.Delete)
 }
 
 // GET /users
 func (c *UserController) List() httpx.Response[dto.UserListResponse] {
-    return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
+	return httpx.Response[dto.UserListResponse]{Body: c.service.GetAllUsers()}
 }
 
 // GET /users/:id
 func (c *UserController) GetByID(id input.Path[int64]) (httpx.Response[dto.UserResponse], error) {
-    if *id <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
-    }
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
+	}
 
-    user, err := c.service.GetUserByID(*id)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-    }
+	user, err := c.service.GetUserByID(*id)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
 
-    return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // POST /users
-func (c *UserController) Create(req *dto.CreateUserRequest) (httpx.Response[dto.UserResponse], error) {
-    if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("名称为必填项")
-    }
-    if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("邮箱为必填项")
-    }
+func (c *UserController) Create(req input.Body[dto.CreateUserRequest]) (httpx.Response[dto.UserResponse], error) {
 
-    user, err := c.service.CreateUser(req)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-    }
+	user, err := c.service.CreateUser(req)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
 
-    return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // PUT /users/:id
-func (c *UserController) Update(id input.Path[int64], req *dto.UpdateUserRequest) (httpx.Response[dto.UserResponse], error) {
-    if *id <= 0 {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
-    }
-    if req.Name == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("名称为必填项")
-    }
-    if req.Email == "" {
-        return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("邮箱为必填项")
-    }
+func (c *UserController) Update(id input.Path[int64], req input.Body[dto.UpdateUserRequest]) (httpx.Response[dto.UserResponse], error) {
+	if *id <= 0 {
+		return httpx.Response[dto.UserResponse]{}, httperr.BadRequest("用户 ID 无效")
+	}
 
-    user, err := c.service.UpdateUser(*id, req)
-    if err != nil {
-        return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
-    }
+	user, err := c.service.UpdateUser(*id, req)
+	if err != nil {
+		return httpx.Response[dto.UserResponse]{}, toHTTPError(err)
+	}
 
-    return httpx.Response[dto.UserResponse]{Body: *user}, nil
+	return httpx.Response[dto.UserResponse]{Body: *user}, nil
 }
 
 // DELETE /users/:id
 func (c *UserController) Delete(id input.Path[int64]) error {
-    if *id <= 0 {
-        return httperr.BadRequest("用户 ID 无效")
-    }
+	if *id <= 0 {
+		return httperr.BadRequest("用户 ID 无效")
+	}
 
-    err := c.service.DeleteUser(*id)
-    if err != nil {
-        return toHTTPError(err)
-    }
+	err := c.service.DeleteUser(*id)
+	if err != nil {
+		return toHTTPError(err)
+	}
 
-    return nil
+	return nil
 }
 
 // 将 Repository 错误转换为 HTTP 错误
 func toHTTPError(err error) error {
-    switch {
-    case errors.Is(err, repository.ErrUserNotFound):
-        return httperr.NotFound("未找到用户")
-    case errors.Is(err, repository.ErrEmailAlreadyExists):
-        return httperr.BadRequest("邮箱已被使用")
-    default:
-        return err
-    }
+	switch {
+	case errors.Is(err, repository.ErrUserNotFound):
+		return httperr.NotFound("未找到用户")
+	case errors.Is(err, repository.ErrEmailAlreadyExists):
+		return httperr.BadRequest("邮箱已被使用")
+	default:
+		return err
+	}
 }
 ```
 
@@ -458,43 +446,48 @@ func toHTTPError(err error) error {
 package application
 
 import (
-    echoplatform "github.com/NARUBROWN/spine-echo-platform"
-    "time"
+	echoplatform "github.com/NARUBROWN/spine-echo-platform"
+	"time"
 
-    "example.com/crud-example/src/controller"
-    "example.com/crud-example/src/repository"
-    "example.com/crud-example/src/service"
+	"example.com/crud-example/src/controller"
+	"example.com/crud-example/src/repository"
+	"example.com/crud-example/src/service"
 
-    "github.com/NARUBROWN/spine"
-    "github.com/NARUBROWN/spine/interceptor/cors"
-    "github.com/NARUBROWN/spine/pkg/boot"
-    "github.com/NARUBROWN/spine/pkg/constructor"
+	"github.com/NARUBROWN/spine"
+	playground "github.com/NARUBROWN/spine-validator-playground"
+	"github.com/NARUBROWN/spine/interceptor/cors"
+	"github.com/NARUBROWN/spine/pkg/boot"
+	"github.com/NARUBROWN/spine/pkg/constructor"
 )
 
 func BuildApplication() (spine.App, boot.Options, error) {
-    app := spine.New(echoplatform.Option())
-    app.Constructor(
-        repository.NewUserRepository,
-        service.NewUserService,
-        constructor.Controller(&controller.UserController{}),
-    )
+	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(
+		constructor.Repository(&repository.UserRepository{}),
+		constructor.Service(&service.UserService{}),
+		constructor.Controller(&controller.UserController{}),
+	)
 
-    corsInterceptor, err := cors.NewValidated(cors.Config{
-        AllowOrigins: []string{"*"},
-        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders: []string{"Content-Type"},
-    })
-    if err != nil {
-        return nil, boot.Options{}, err
-    }
-    app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+	corsInterceptor, err := cors.NewValidated(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type"},
+	})
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+	app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
 
-    return app, boot.Options{
-        Address: ":8080",
-        EnableGracefulShutdown: true,
-        ShutdownTimeout: 10 * time.Second,
-        HTTP: &boot.HTTPOptions{},
-    }, nil
+	return app, boot.Options{
+		Address:                ":8080",
+		EnableGracefulShutdown: true,
+		ShutdownTimeout:        10 * time.Second,
+		HTTP:                   &boot.HTTPOptions{},
+	}, nil
 }
 ```
 
@@ -660,9 +653,9 @@ return httpx.Response[dto.UserResponse]{}, httperr.NotFound("未找到用户")
 ```go
 // 只需注册构造函数即可自动解析依赖
 app.Constructor(
-    repository.NewUserRepository,  // 无依赖
-    service.NewUserService,        // 依赖 Repository
-    constructor.Controller(&controller.UserController{}),  // 依赖 Service
+	constructor.Repository(&repository.UserRepository{}), // 无依赖
+	constructor.Service(&service.UserService{}),          // 依赖 Repository
+	constructor.Controller(&controller.UserController{}), // 依赖 Service
 )
 ```
 

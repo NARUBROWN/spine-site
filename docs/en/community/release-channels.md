@@ -1,5 +1,7 @@
 # Release channels and installation
 
+For current API usage, see the [0.7.5 migration guide](/en/learn/migration/v0.7.5). Publication details and past release records below refer to their individual tags.
+
 Spine and its CLI progress through Preview, RC, and stable (Production) releases. Choose a CLI channel according to whether you want to try new work, validate a release candidate, or use a stable version.
 
 This page explains how Spine and the CLI are published. Configure your application’s development, staging, and production environments separately.

@@ -1,14 +1,24 @@
-# Error handling and input validation
+# Errors and input validation
 
-Combine automatic DTO validation with a custom rule in Spine v0.7.1, and return HTTP errors for invalid input and missing resources.
+::: info 0.7.5 API
+This documentation targets the 0.7.5 API. Check [available versions](/en/community/versions) for published tags and compatible platforms.
+:::
+
+Distinguish automatic tag validation from custom rules. This standalone app does not store data.
+
+## Assemble the validator
+
+[Controller dependencies](/en/learn/tutorial/2-controller)
+
+```sh
+go get github.com/NARUBROWN/spine-validator-playground@v0.2.0-preview.6
+```
+
+engine is the variable holding playground.New(). Create it once in BuildApplication and pass it to spine.WithValidator(engine). playground implements runtime validation and OpenAPI SchemaDescriber. Other engines implementing the public validator contract can also be used.
 
 ## Runnable example
 
-Go 1.26 or later is required. Install these dependencies in a separate Go module, save the code as `main.go`, and run it. This example does not persist users.
-
-```bash
-go get github.com/NARUBROWN/spine@v0.7.1 github.com/NARUBROWN/spine-echo-platform@v0.2.0 github.com/NARUBROWN/spine-validator-playground@v0.2.0
-```
+Replace main.go. BuildApplication registers the validator and enables OpenAPI.
 
 ```go
 package main
@@ -28,6 +38,7 @@ import (
 	"github.com/NARUBROWN/spine/pkg/httperr"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
+	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type CreateUser struct {
@@ -46,13 +57,13 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.POST("/users", func(body input.Body[CreateUser]) (httpx.Response[CreateUser], error) {
+	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) (httpx.Response[CreateUser], error) {
 		if err := (*CreateUser)(body).Validate(); err != nil {
 			return httpx.Response[CreateUser]{}, httperr.BadRequest(err.Error())
 		}
 		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
 	})
-	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[map[string]any], error) {
+	r.GET("/users/:id", func(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[map[string]any], error) {
 		if *id <= 0 {
 			return httpx.Response[map[string]any]{}, httperr.BadRequest("invalid user ID")
 		}
@@ -62,14 +73,21 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 		return httpx.Response[map[string]any]{Body: map[string]any{"id": *id, "name": "Alice"}}, nil
 	})
 }
-func main() {
+func BuildApplication() (spine.App, boot.Options, error) {
 	engine, err := playground.New()
+	if err != nil {
+		return nil, boot.Options{}, err
+	}
+
+	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
+	app.Constructor(constructor.Controller(&Controller{}))
+	return app, boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{OpenAPI: boot.OpenAPIOptions{Enabled: true}}, EnableGracefulShutdown: true}, nil
+}
+func main() {
+	app, options, err := BuildApplication()
 	if err != nil {
 		log.Fatal(err)
 	}
-	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
-	app.Constructor(constructor.Controller(&Controller{}))
-	options := boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}
 	if err := app.Validate(options); err != nil {
 		log.Fatal(err)
 	}
@@ -79,32 +97,32 @@ func main() {
 }
 ```
 
-## When validation runs
+## Three validation mechanisms {#validation-modes}
 
-With `spine.WithValidator(engine)`, the validator checks `validate` tags after body binding and returns 400 before the handler on failure. Without a registered validator, tags alone do not validate input.
+The registered engine checks validate tags after binding and before the handler. request.Validate() explicitly calls your ordinary method. app.Validate(options) checks configuration and DI before execution where possible. Tags alone do not validate without a registered engine.
 
-A DTO’s `Validate()` method is not called automatically. The handler calls it after tag validation to check a reserved name. Extend this approach for cross-field or application rules. Pass only client-safe messages to `BadRequest`.
+If tags suffice, omit both DTO Validate and its manual call. This example adds them only for the reserved-name rule, which is neither auto-called nor inferred by OpenAPI. Call DTO methods through (*body).Validate() or (*CreateUser)(body).Validate(). See [DTO definitions](/en/learn/tutorial/2-controller#dto-validation).
 
-`app.Validate(options)` checks application configuration before startup. It does not validate request DTOs or execute constructors and external services.
+## Requests and schema
 
-## Check responses
-
-The requests return 200, 400, 404, 400, 400 and 201 in order. The first POST error contains field validation details; the second is the custom rule.
-
-```bash
+```sh
+go run .
+#
 curl -i http://localhost:8080/users/1
 curl -i http://localhost:8080/users/0
 curl -i http://localhost:8080/users/2
 curl -i -H 'Content-Type: application/json' -d '{"name":"","email":"bad"}' http://localhost:8080/users
 curl -i -H 'Content-Type: application/json' -d '{"name":"admin","email":"a@example.com"}' http://localhost:8080/users
 curl -i -H 'Content-Type: application/json' -d '{"name":"Alice","email":"a@example.com"}' http://localhost:8080/users
+curl http://localhost:8080/openapi.json
 ```
 
-## Error mapping
+Expect 200, 400, 404, 400, 400 and 201. The POST failures cover tags and the manual rule. OpenAPI marks name and email required but does not itself execute validation. Required metadata is preserved when described by the validator, even with representation limits such as json:",string". Static CLI export does not run the engine; inspect the prepared app for engine-derived schema.
 
-`httperr.BadRequest`, `Unauthorized` and `NotFound` return 400, 401 and 404. Use `httperr.HTTPError` for other statuses. Ordinary errors become 500; do not expose internal errors through `err.Error()`. Map domain errors with `errors.Is` to safe messages in the controller.
+## Error responses
 
-## Learn more
+Binding and tag failures return 400 before handlers. HTTPError accepts only 400–599; invalid statuses such as 200/302 become ordinary 500 errors. Ordinary errors hide internal details. Put only public messages in httperr. BeforeResponse errors take response priority over handler errors.
 
-- [httperr](/en/learn/core-concepts/httperr)
-- [Interceptor](/en/learn/tutorial/4-interceptor)
+## Next steps
+
+[Interceptors](/en/learn/tutorial/4-interceptor) / [OpenAPI](/en/reference/api/openapi)
