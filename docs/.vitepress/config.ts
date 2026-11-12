@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
 import { localizeMarkdownUi, themeUi } from './localized-ui'
@@ -25,6 +26,16 @@ export default withMermaid(defineConfig({
         socialLinks: [
             { icon: 'github', link: 'https://github.com/NARUBROWN/spine' }
         ]
+    },
+
+    vite: {
+        resolve: {
+            alias: {
+                'vitepress-plugin-mermaid/Mermaid.vue': fileURLToPath(
+                    new URL('./theme/components/MermaidDiagram.vue', import.meta.url)
+                )
+            }
+        }
     },
 
     markdown: {
