@@ -26,6 +26,19 @@ func readRequest(ctx spinectx.Ctx) {
 
 ## 公開契約 {#contract}
 
+```mermaid
+flowchart TD
+    Ctx["spine.Ctx"]
+    Execution["ExecutionContextView<br/>Context(), Get(), Set()<br/>目前執行的共享值"]
+    Request["HTTPRequestView<br/>讀取 HTTP 請求"]
+    Response["HTTPResponseView<br/>寫入 HTTP 回應"]
+    WS["WebSocketView<br/>讀取連線請求和訊息"]
+    Ctx -->|"ExecutionContext()"| Execution
+    Ctx -.->|"HTTPRequestContext()"| Request
+    Ctx -.->|"HTTPResponseContext()"| Response
+    Ctx -.->|"WebSocket()"| WS
+```
+
 ```go
 type Ctx interface {
 	ExecutionContext() ExecutionContextView

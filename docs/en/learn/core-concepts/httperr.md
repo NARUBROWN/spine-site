@@ -2,6 +2,19 @@
 
 Handlers and interceptors use the public httperr contract for status and public messages. Return internal details as ordinary errors.
 
+```mermaid
+flowchart TD
+    Error["Error from handler or interceptor"]
+    HTTP["HTTPError<br/>Valid status 400~599 and public message"]
+    Ordinary["Ordinary error or invalid error status"]
+    Public["Specified HTTP status and public message"]
+    Hidden["HTTP 500<br/>Hide internal details"]
+    Response["HTTP error response"]
+    Error --> HTTP --> Public --> Response
+    Error --> Ordinary --> Hidden --> Response
+```
+
+
 ## Public helpers
 
 ```go

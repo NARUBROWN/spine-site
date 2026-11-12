@@ -6,18 +6,22 @@
 
 ## 実行順序 {#order}
 
-```text
-Global PreHandle
-→ Route selection
-→ Route PreHandle
-→ Input binding and validator
-→ Handler
-→ Response preparation and success hooks
-→ PostHandle (reverse)
-→ BeforeResponse (reverse)
-→ Error rendering and response flush
-→ AfterCompletion (reverse)
-→ Store and multipart cleanup
+```mermaid
+flowchart TD
+    Request["HTTP リクエスト"]
+    Context["実行コンテキストを生成"]
+    GlobalPre["グローバル PreHandle"]
+    Router["ルートを選択"]
+    RoutePre["ルート PreHandle"]
+    Binding["入力バインドと検証"]
+    Handler["ハンドラー呼び出し"]
+    Prepare["成功レスポンスの準備と成功フック"]
+    Post["PostHandle<br/>ルート、グローバルの順にそれぞれ逆順"]
+    Before["BeforeResponse<br/>PreHandle 成功対象のみ逆順"]
+    Flush["エラーレスポンスの処理と送信"]
+    After["AfterCompletion<br/>ルート、グローバルの順にそれぞれ逆順"]
+    Cleanup["実行ストアと multipart を解放"]
+    Request --> Context --> GlobalPre --> Router --> RoutePre --> Binding --> Handler --> Prepare --> Post --> Before --> Flush --> After --> Cleanup
 ```
 
 グローバルとルートの PreHandle はどちらも本体バインディング前に実行され、解析前に認証エラーを返せます。PostHandle は成功後処理です。BeforeResponse は PreHandle に成功したものだけを逆順で実行し、直列化、Cookie、ステータス検証のエラーも受け取ります。ここでコミットまたはロールバックし、失敗を返します。PreHandle に到達しなかったものにも AfterCompletion が呼ばれる場合があるため、リソースの有無を確認します。

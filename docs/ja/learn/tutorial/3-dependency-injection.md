@@ -2,6 +2,17 @@
 
 コンストラクターの引数型でリポジトリー、サービス、コントローラーを接続します。この独立アプリは DB なしで GET /greeting に hello を返します。
 
+依存する引数型に従い、リポジトリー、サービス、コントローラーの順に生成します。矢印は生成したインスタンスの注入先を示します。
+
+```mermaid
+flowchart LR
+    Repository["Repository.Constructor()"]
+    Service["Service.Constructor(repository)"]
+    Controller["Controller.Constructor(service)"]
+    Repository --> Service --> Controller
+```
+
+
 ## 生成契約
 
 各型は Constructor(依存...) *Self メソッドを実装します。constructor パッケージで Repository、Service、Controller、Interceptor の役割を登録します。Controller は RegisterRoutes、Interceptor は四つのフックも実装します。Custom は外部生成関数や一般オブジェクト用です。

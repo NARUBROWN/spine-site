@@ -2,6 +2,19 @@
 
 处理器和拦截器通过公开 httperr 契约指定状态与公开消息，内部详情以普通错误返回。
 
+```mermaid
+flowchart TD
+    Error["处理器或拦截器返回错误"]
+    HTTP["HTTPError<br/>有效状态 400~599 和公开消息"]
+    Ordinary["普通错误或无效错误状态"]
+    Public["指定的 HTTP 状态和公开消息"]
+    Hidden["HTTP 500<br/>隐藏内部详情"]
+    Response["HTTP 错误响应"]
+    Error --> HTTP --> Public --> Response
+    Error --> Ordinary --> Hidden --> Response
+```
+
+
 ## 公开辅助函数
 
 ```go

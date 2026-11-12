@@ -6,18 +6,22 @@ This documentation targets the 0.7.5 API. Check [available versions](/en/communi
 
 ## Execution order {#order}
 
-```text
-Global PreHandle
-→ Route selection
-→ Route PreHandle
-→ Input binding and validator
-→ Handler
-→ Response preparation and success hooks
-→ PostHandle (reverse)
-→ BeforeResponse (reverse)
-→ Error rendering and response flush
-→ AfterCompletion (reverse)
-→ Store and multipart cleanup
+```mermaid
+flowchart TD
+    Request["HTTP request"]
+    Context["Create execution context"]
+    GlobalPre["Global PreHandle"]
+    Router["Select route"]
+    RoutePre["Route PreHandle"]
+    Binding["Input binding and validation"]
+    Handler["Invoke handler"]
+    Prepare["Prepare success response and run success hooks"]
+    Post["PostHandle<br/>Reverse route order, then reverse global order"]
+    Before["BeforeResponse<br/>Reverse order for successful PreHandle calls only"]
+    Flush["Render errors and flush response"]
+    After["AfterCompletion<br/>Reverse route order, then reverse global order"]
+    Cleanup["Clean up execution store and multipart resources"]
+    Request --> Context --> GlobalPre --> Router --> RoutePre --> Binding --> Handler --> Prepare --> Post --> Before --> Flush --> After --> Cleanup
 ```
 
 Both global and route PreHandle run before body binding, allowing authentication to fail before parsing. PostHandle handles successful execution. BeforeResponse runs in reverse only for interceptors whose PreHandle succeeded, including serialization, cookie, and status validation failures. Commit or roll back there and return failures. AfterCompletion can also run for an interceptor whose PreHandle was never reached, so check whether its resources exist.

@@ -2,6 +2,19 @@
 
 핸들러와 인터셉터는 공개 httperr 계약으로 상태와 공개 메시지를 표현합니다. 내부 원문은 일반 오류로 반환합니다.
 
+```mermaid
+flowchart TD
+    Error["핸들러 또는 인터셉터의 오류"]
+    HTTP["HTTPError<br/>유효한 상태 400~599와 공개 메시지"]
+    Ordinary["일반 오류 또는 잘못된 오류 상태"]
+    Public["지정한 HTTP 상태와 공개 메시지"]
+    Hidden["HTTP 500<br/>내부 원문 숨김"]
+    Response["HTTP 오류 응답"]
+    Error --> HTTP --> Public --> Response
+    Error --> Ordinary --> Hidden --> Response
+```
+
+
 ## 공개 헬퍼
 
 ```go

@@ -6,18 +6,22 @@
 
 ## 실행 순서 {#order}
 
-```text
-Global PreHandle
-→ Route selection
-→ Route PreHandle
-→ Input binding and validator
-→ Handler
-→ Response preparation and success hooks
-→ PostHandle (reverse)
-→ BeforeResponse (reverse)
-→ Error rendering and response flush
-→ AfterCompletion (reverse)
-→ Store and multipart cleanup
+```mermaid
+flowchart TD
+    Request["HTTP 요청"]
+    Context["실행 컨텍스트 생성"]
+    GlobalPre["전역 PreHandle"]
+    Router["라우트 선택"]
+    RoutePre["라우트 PreHandle"]
+    Binding["입력 바인딩과 검증"]
+    Handler["핸들러 호출"]
+    Prepare["성공 응답 준비와 후처리 훅"]
+    Post["PostHandle<br/>라우트, 전역 순서로 역순 실행"]
+    Before["BeforeResponse<br/>PreHandle 성공 대상만 역순 실행"]
+    Flush["오류 응답 처리와 응답 전송"]
+    After["AfterCompletion<br/>라우트, 전역 순서로 역순 실행"]
+    Cleanup["실행 저장소와 multipart 정리"]
+    Request --> Context --> GlobalPre --> Router --> RoutePre --> Binding --> Handler --> Prepare --> Post --> Before --> Flush --> After --> Cleanup
 ```
 
 전역과 라우트 PreHandle이 모두 본문 바인딩 전에 실행합니다. 인증 오류는 본문 파싱 전에 반환할 수 있습니다. PostHandle은 성공 후처리이며, BeforeResponse는 PreHandle이 성공한 인터셉터만 역순으로 실행합니다. 응답 준비 중 직렬화, 쿠키와 상태 검증 오류도 BeforeResponse에 전달합니다. 커밋과 롤백은 여기에서 수행하고 오류를 반환합니다. AfterCompletion은 PreHandle에 도달하지 않은 인터셉터에도 호출될 수 있으므로 자원이 있는지 확인합니다.

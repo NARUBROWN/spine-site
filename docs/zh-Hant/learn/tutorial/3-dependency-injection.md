@@ -2,6 +2,17 @@
 
 透過建構函式參數型別連接儲存庫、服務與控制器。此獨立應用無需資料庫，GET /greeting 回傳 hello。
 
+依相依參數型別依序建立儲存庫、服務和控制器。箭頭表示建立的實例被注入的方向。
+
+```mermaid
+flowchart LR
+    Repository["Repository.Constructor()"]
+    Service["Service.Constructor(repository)"]
+    Controller["Controller.Constructor(service)"]
+    Repository --> Service --> Controller
+```
+
+
 ## 建構契約
 
 各型別實作 Constructor(依賴...) *Self。透過 constructor 套件註冊 Repository、Service、Controller、Interceptor 角色。Controller 還實作 RegisterRoutes，Interceptor 還實作四個掛鉤。Custom 用於外部工廠或一般物件。

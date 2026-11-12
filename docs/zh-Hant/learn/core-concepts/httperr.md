@@ -2,6 +2,19 @@
 
 處理器與攔截器透過公開 httperr 契約指定狀態與公開訊息，內部詳情以一般錯誤回傳。
 
+```mermaid
+flowchart TD
+    Error["處理器或攔截器回傳錯誤"]
+    HTTP["HTTPError<br/>有效狀態 400~599 和公開訊息"]
+    Ordinary["一般錯誤或無效錯誤狀態"]
+    Public["指定的 HTTP 狀態和公開訊息"]
+    Hidden["HTTP 500<br/>隱藏內部詳情"]
+    Response["HTTP 錯誤回應"]
+    Error --> HTTP --> Public --> Response
+    Error --> Ordinary --> Hidden --> Response
+```
+
+
 ## 公開輔助函式
 
 ```go

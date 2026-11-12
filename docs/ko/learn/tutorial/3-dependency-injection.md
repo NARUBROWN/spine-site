@@ -2,6 +2,17 @@
 
 생성자 인자 타입으로 저장소, 서비스와 컨트롤러를 연결합니다. 이 독립 앱은 DB 없이 GET /greeting에 hello를 반환합니다.
 
+의존성 타입에 따라 저장소, 서비스, 컨트롤러 순서로 생성합니다. 화살표는 생성된 객체의 주입 방향입니다.
+
+```mermaid
+flowchart LR
+    Repository["Repository.Constructor()"]
+    Service["Service.Constructor(repository)"]
+    Controller["Controller.Constructor(service)"]
+    Repository --> Service --> Controller
+```
+
+
 ## 생성 계약
 
 각 타입은 Constructor(의존성...) *자기타입 메서드를 구현합니다. Repository, Service, Controller, Interceptor 역할을 constructor 패키지로 등록합니다. Controller는 RegisterRoutes도, Interceptor는 네 훅도 구현합니다. Custom은 외부 생성 함수나 일반 객체용입니다.

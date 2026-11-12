@@ -6,18 +6,22 @@
 
 ## 執行順序 {#order}
 
-```text
-Global PreHandle
-→ Route selection
-→ Route PreHandle
-→ Input binding and validator
-→ Handler
-→ Response preparation and success hooks
-→ PostHandle (reverse)
-→ BeforeResponse (reverse)
-→ Error rendering and response flush
-→ AfterCompletion (reverse)
-→ Store and multipart cleanup
+```mermaid
+flowchart TD
+    Request["HTTP 請求"]
+    Context["建立執行上下文"]
+    GlobalPre["全域 PreHandle"]
+    Router["選擇路由"]
+    RoutePre["路由 PreHandle"]
+    Binding["輸入綁定和驗證"]
+    Handler["呼叫處理器"]
+    Prepare["準備成功回應並執行成功掛鉤"]
+    Post["PostHandle<br/>先路由後全域，各自逆序"]
+    Before["BeforeResponse<br/>僅對 PreHandle 成功的物件逆序執行"]
+    Flush["處理錯誤回應並傳送回應"]
+    After["AfterCompletion<br/>先路由後全域，各自逆序"]
+    Cleanup["清理執行儲存和 multipart 資源"]
+    Request --> Context --> GlobalPre --> Router --> RoutePre --> Binding --> Handler --> Prepare --> Post --> Before --> Flush --> After --> Cleanup
 ```
 
 全域與路由 PreHandle 均在本文綁定前執行，可在解析前拒絕認證失敗的請求。PostHandle 用於成功後處理。BeforeResponse 僅對 PreHandle 成功的攔截器逆序執行，並接收序列化、Cookie 與狀態碼驗證錯誤。在此提交或回滾並回傳失敗。未執行到 PreHandle 的攔截器也可能收到 AfterCompletion，應先檢查資源是否存在。

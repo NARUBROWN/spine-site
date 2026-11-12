@@ -127,6 +127,30 @@ curl -i -H 'Authorization: Bearer demo-token' -H 'Content-Type: application/json
 
 ## 生命週期
 
+```mermaid
+flowchart TD
+    Request["HTTP 請求"]
+    GlobalPre["全域 PreHandle"]
+    Router["選擇路由"]
+    RoutePre["路由 PreHandle"]
+    Binding["輸入綁定和驗證"]
+    Handler["呼叫處理器"]
+    Prepare["準備成功回應並執行成功掛鉤"]
+    Post["PostHandle<br/>先路由後全域，各自逆序"]
+    Before["BeforeResponse<br/>成功物件逆序執行，提交或回滾"]
+    Flush["處理錯誤回應並傳送回應"]
+    After["AfterCompletion<br/>先路由後全域，各自逆序"]
+    Request --> GlobalPre --> Router --> RoutePre --> Binding --> Handler
+    Handler -->|"成功"| Prepare
+    Prepare --> Post --> Before --> Flush --> After
+    GlobalPre -->|"錯誤"| Before
+    Router -->|"錯誤"| Before
+    RoutePre -->|"錯誤"| Before
+    Binding -->|"錯誤"| Before
+    Handler -->|"錯誤"| Before
+    Prepare -->|"錯誤"| Before
+```
+
 PreHandle 按註冊順序執行；成功後的 PostHandle、寫入前的 BeforeResponse、嘗試寫入後的 AfterCompletion 按反序執行。BeforeResponse 僅對 PreHandle 成功的物件執行，並接收綁定、處理器、序列化與回應驗證錯誤。AfterCompletion 也可能用於未執行 PreHandle 的物件，須檢查資源是否存在。
 
 BeforeResponse 錯誤優先於處理器錯誤決定回應。多個掛鉤失敗時使用最後一個失敗的錯誤，完成掛鉤也會收到先前錯誤。

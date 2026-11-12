@@ -2,6 +2,17 @@
 
 Connect repositories, services and controllers by constructor argument types. This standalone app returns hello from GET /greeting without a database.
 
+Constructor argument types determine the creation order: repository, service, then controller. Arrows show where each created instance is injected.
+
+```mermaid
+flowchart LR
+    Repository["Repository.Constructor()"]
+    Service["Service.Constructor(repository)"]
+    Controller["Controller.Constructor(service)"]
+    Repository --> Service --> Controller
+```
+
+
 ## Constructor contract
 
 Each type implements Constructor(dependencies...) *Self. Register Repository, Service, Controller and Interceptor roles through the constructor package. Controllers also implement RegisterRoutes; interceptors implement four hooks. Custom accepts external factories or general objects.

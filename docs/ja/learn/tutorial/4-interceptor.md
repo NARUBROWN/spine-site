@@ -127,6 +127,30 @@ curl -i -H 'Authorization: Bearer demo-token' -H 'Content-Type: application/json
 
 ## ライフサイクル
 
+```mermaid
+flowchart TD
+    Request["HTTP リクエスト"]
+    GlobalPre["グローバル PreHandle"]
+    Router["ルートを選択"]
+    RoutePre["ルート PreHandle"]
+    Binding["入力バインドと検証"]
+    Handler["ハンドラー呼び出し"]
+    Prepare["成功レスポンスの準備と成功フック"]
+    Post["PostHandle<br/>ルート、グローバルの順にそれぞれ逆順"]
+    Before["BeforeResponse<br/>成功対象のみ逆順、コミットまたはロールバック"]
+    Flush["エラーレスポンスの処理と送信"]
+    After["AfterCompletion<br/>ルート、グローバルの順にそれぞれ逆順"]
+    Request --> GlobalPre --> Router --> RoutePre --> Binding --> Handler
+    Handler -->|"成功"| Prepare
+    Prepare --> Post --> Before --> Flush --> After
+    GlobalPre -->|"エラー"| Before
+    Router -->|"エラー"| Before
+    RoutePre -->|"エラー"| Before
+    Binding -->|"エラー"| Before
+    Handler -->|"エラー"| Before
+    Prepare -->|"エラー"| Before
+```
+
 PreHandle は登録順、成功後の PostHandle、応答前の BeforeResponse、応答試行後の AfterCompletion は逆順です。BeforeResponse は PreHandle 成功対象だけに実行され、バインド、ハンドラー、直列化、応答検証のエラーを受け取ります。AfterCompletion は PreHandle 未到達でも実行される場合があるため、資源の有無を確認します。
 
 BeforeResponse のエラーは応答でハンドラーのエラーに優先します。複数失敗時は最後の失敗を使い、完了フックには以前のエラーも渡します。

@@ -127,6 +127,30 @@ curl -i -H 'Authorization: Bearer demo-token' -H 'Content-Type: application/json
 
 ## 수명주기
 
+```mermaid
+flowchart TD
+    Request["HTTP 요청"]
+    GlobalPre["전역 PreHandle"]
+    Router["라우트 선택"]
+    RoutePre["라우트 PreHandle"]
+    Binding["입력 바인딩과 검증"]
+    Handler["핸들러 호출"]
+    Prepare["성공 응답 준비와 후처리 훅"]
+    Post["PostHandle<br/>라우트, 전역 순서로 역순 실행"]
+    Before["BeforeResponse<br/>성공 대상만 역순 실행, 커밋 또는 롤백"]
+    Flush["오류 응답 처리와 응답 전송"]
+    After["AfterCompletion<br/>라우트, 전역 순서로 역순 실행"]
+    Request --> GlobalPre --> Router --> RoutePre --> Binding --> Handler
+    Handler -->|"성공"| Prepare
+    Prepare --> Post --> Before --> Flush --> After
+    GlobalPre -->|"오류"| Before
+    Router -->|"오류"| Before
+    RoutePre -->|"오류"| Before
+    Binding -->|"오류"| Before
+    Handler -->|"오류"| Before
+    Prepare -->|"오류"| Before
+```
+
 PreHandle은 등록 순서, 성공 후 PostHandle과 응답 전 BeforeResponse 및 응답 시도 후 AfterCompletion은 역순입니다. BeforeResponse는 PreHandle이 성공한 대상만 실행하며 바인딩, 핸들러, 직렬화와 응답 검증 오류를 받습니다. AfterCompletion은 PreHandle에 도달하지 않은 대상도 실행될 수 있어 자원 존재를 확인해야 합니다.
 
 BeforeResponse 오류는 핸들러 오류보다 응답에 우선합니다. 여러 훅이 실패하면 실행 순서상 마지막 오류를 사용하며 이전 오류도 완료 훅에 전달합니다.

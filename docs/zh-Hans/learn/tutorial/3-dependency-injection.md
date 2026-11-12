@@ -2,6 +2,17 @@
 
 通过构造函数参数类型连接仓库、服务和控制器。此独立应用无需数据库，GET /greeting 返回 hello。
 
+按依赖参数类型依次创建仓库、服务和控制器。箭头表示创建的实例被注入的方向。
+
+```mermaid
+flowchart LR
+    Repository["Repository.Constructor()"]
+    Service["Service.Constructor(repository)"]
+    Controller["Controller.Constructor(service)"]
+    Repository --> Service --> Controller
+```
+
+
 ## 构造契约
 
 各类型实现 Constructor(依赖...) *Self。通过 constructor 包注册 Repository、Service、Controller、Interceptor 角色。Controller 还实现 RegisterRoutes，Interceptor 还实现四个钩子。Custom 用于外部工厂或普通对象。

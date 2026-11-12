@@ -2,6 +2,19 @@
 
 ハンドラーとインターセプターは公開 httperr 契約でステータスと公開メッセージを表します。内部詳細は通常のエラーで返します。
 
+```mermaid
+flowchart TD
+    Error["ハンドラーまたはインターセプターのエラー"]
+    HTTP["HTTPError<br/>有効なステータス 400~599 と公開メッセージ"]
+    Ordinary["通常のエラーまたは無効なエラーステータス"]
+    Public["指定した HTTP ステータスと公開メッセージ"]
+    Hidden["HTTP 500<br/>内部詳細を隠す"]
+    Response["HTTP エラーレスポンス"]
+    Error --> HTTP --> Public --> Response
+    Error --> Ordinary --> Hidden --> Response
+```
+
+
 ## 公開ヘルパー
 
 ```go

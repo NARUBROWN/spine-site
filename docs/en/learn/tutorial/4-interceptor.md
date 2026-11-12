@@ -127,6 +127,30 @@ Expect 401, 200, 200, 401 and 400. Even a malformed body returns 401 when authen
 
 ## Lifecycle
 
+```mermaid
+flowchart TD
+    Request["HTTP request"]
+    GlobalPre["Global PreHandle"]
+    Router["Select route"]
+    RoutePre["Route PreHandle"]
+    Binding["Input binding and validation"]
+    Handler["Invoke handler"]
+    Prepare["Prepare success response and run success hooks"]
+    Post["PostHandle<br/>Reverse route order, then reverse global order"]
+    Before["BeforeResponse<br/>Successful participants in reverse order, commit or rollback"]
+    Flush["Render errors and flush response"]
+    After["AfterCompletion<br/>Reverse route order, then reverse global order"]
+    Request --> GlobalPre --> Router --> RoutePre --> Binding --> Handler
+    Handler -->|"Success"| Prepare
+    Prepare --> Post --> Before --> Flush --> After
+    GlobalPre -->|"Error"| Before
+    Router -->|"Error"| Before
+    RoutePre -->|"Error"| Before
+    Binding -->|"Error"| Before
+    Handler -->|"Error"| Before
+    Prepare -->|"Error"| Before
+```
+
 PreHandle follows registration order; successful PostHandle, pre-write BeforeResponse and post-write-attempt AfterCompletion run in reverse. BeforeResponse runs only after successful PreHandle and receives binding, handler, serialization and response-validation errors. AfterCompletion may run even when PreHandle was never reached, so check resources exist.
 
 A BeforeResponse error takes response priority over a handler error. If multiple hooks fail, the last failing hook wins; completion hooks also receive previous errors.
