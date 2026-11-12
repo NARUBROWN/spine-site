@@ -8,6 +8,8 @@
 
 main.go を置き換えます。固定トークンは学習用です。constructor.Interceptor は DI 登録、api.Interceptors は適用範囲です。(*Auth)(nil) は DI から登録型を解決する目印です。
 
+このサイトの例では、すべてのインターセプターを先に `app.Constructor` に登録します。`Constructor` メソッドを実装した独自のインターセプターは `constructor.Interceptor(&Auth{})` で登録し、適用時は `(*Auth)(nil)` のような typed nil を渡してコンテナーから取得します。適用 API に `&Auth{}` を直接渡すと、現在の実装ではコンストラクターを経由せずにそのオブジェクトが実行されるため使用しません。登録と適用範囲の指定は別の手順です。
+
 ```go
 package main
 
@@ -82,6 +84,13 @@ func main() {
 ```
 
 ## グループとルート
+
+```go
+app.Constructor(
+	constructor.Interceptor(&AuthInterceptor{}),
+	constructor.Interceptor(&AuditInterceptor{}),
+)
+```
 
 ```go
 func (*UserController) RegisterRoutes(r *api.Registry) {

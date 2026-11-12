@@ -8,6 +8,8 @@
 
 main.go를 교체합니다. 고정 토큰은 학습용입니다. constructor.Interceptor는 DI 등록, api.Interceptors는 적용 범위입니다. (*Auth)(nil)은 등록한 타입을 DI에서 해결하는 표식입니다.
 
+이 사이트의 예제에서는 모든 인터셉터를 먼저 `app.Constructor`에 등록합니다. `Constructor` 메서드를 구현한 사용자 인터셉터는 `constructor.Interceptor(&Auth{})`로 등록하고, 적용할 때는 `(*Auth)(nil)`처럼 typed nil을 전달해 컨테이너에서 조회합니다. `&Auth{}`를 적용 API에 직접 전달하면 현재 구현에서는 생성자를 거치지 않은 객체가 실행되므로 사용하지 않습니다. 등록과 적용 범위 지정은 별도 단계입니다.
+
 ```go
 package main
 
@@ -82,6 +84,13 @@ func main() {
 ```
 
 ## 그룹과 라우트
+
+```go
+app.Constructor(
+	constructor.Interceptor(&AuthInterceptor{}),
+	constructor.Interceptor(&AuditInterceptor{}),
+)
+```
 
 ```go
 func (*UserController) RegisterRoutes(r *api.Registry) {

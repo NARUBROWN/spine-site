@@ -155,21 +155,26 @@ Contexts used before connection establishment and message contexts preserve the 
 
 ## CORS and cookies {#cors-cookies}
 
-You cannot combine `AllowOrigins: []string{"*"}` with `AllowCredentials: true`. Use `cors.NewValidated` to validate this at startup. `cors.New` also returns a structured error on the first request before writing response headers.
+You cannot combine `AllowOrigins: []string{"*"}` with `AllowCredentials: true`. Use `cors.ValidateConfig` to validate this at startup. `cors.New` also returns a structured error on the first request before writing response headers.
 
 A CORS preflight has `OPTIONS`, `Origin`, and `Access-Control-Request-Method`. An allowed request returns 204; a denied origin, method, or header returns 403. A disallowed origin on an ordinary request receives no CORS allow header, but CORS does not replace server authentication or access control.
 
 `MaxAge` is a pointer to seconds: nil omits the header and 0 sends an explicit zero. `ExposeHeaders` selects exposed headers on ordinary responses, and `AllowOrigin` can make an additional decision for origins not allowed by the static list. A wildcard origin cannot be combined with credentials.
 
+The built-in CORS interceptor has no `Constructor` method, so register a `constructor.Custom` factory with `app.Constructor`. Validate the configuration before registration and let the factory create the object. Apply it with `(*cors.CORSInterceptor)(nil)` to resolve it from the container.
+
 ```go
-corsInterceptor, err := cors.NewValidated(cors.Config{
+corsConfig := cors.Config{
 	AllowOrigins:     []string{"https://app.example.com"},
 	AllowCredentials: true,
-})
-if err != nil {
+}
+if err := cors.ValidateConfig(corsConfig); err != nil {
 	log.Fatal(err)
 }
-app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+	return cors.New(corsConfig)
+}))
+app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 ```
 
 If a cookie's name, value, path, domain, `SameSite`, or `Priority` is invalid, JSON, string, binary, and redirect responses fail before writing headers or the body. Use `httpx.EncodeCookieValue` and `httpx.DecodeCookieValue` when Unicode or delimiters must be restored to their original values.
@@ -200,19 +205,22 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 }
 func main() {
 	maxAge := 60
-	policy, err := cors.NewValidated(cors.Config{
+	corsConfig := cors.Config{
 		AllowOrigins:     []string{"https://app.example.com"},
 		AllowMethods:     []string{"GET"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
 		MaxAge:           &maxAge,
-	})
-	if err != nil {
+	}
+	if err := cors.ValidateConfig(corsConfig); err != nil {
 		log.Fatal(err)
 	}
 	app := spine.New(echoplatform.Option())
 	app.Constructor(constructor.Controller(&Controller{}))
-	app.InterceptorFor(boot.InterceptorHTTP, policy)
+	app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+		return cors.New(corsConfig)
+	}))
+	app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
 		log.Fatal(err)
 	}

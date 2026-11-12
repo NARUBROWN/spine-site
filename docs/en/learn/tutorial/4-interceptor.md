@@ -8,6 +8,8 @@ Global and route PreHandle hooks both run before input binding. Authentication f
 
 Replace main.go. The fixed token is for learning. constructor.Interceptor registers DI; api.Interceptors chooses scope. (*Auth)(nil) marks a registered type to resolve from DI.
 
+In this site’s examples, register every interceptor with `app.Constructor` before applying it. Register custom interceptors that implement a `Constructor` method with `constructor.Interceptor(&Auth{})`, then pass a typed nil such as `(*Auth)(nil)` to resolve the instance from the container. Do not pass `&Auth{}` directly to an application API: the current implementation executes that object without calling its constructor. Registration and scope selection are separate steps.
+
 ```go
 package main
 
@@ -82,6 +84,13 @@ func main() {
 ```
 
 ## Groups and routes
+
+```go
+app.Constructor(
+	constructor.Interceptor(&AuthInterceptor{}),
+	constructor.Interceptor(&AuditInterceptor{}),
+)
+```
 
 ```go
 func (*UserController) RegisterRoutes(r *api.Registry) {

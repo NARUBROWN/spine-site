@@ -328,6 +328,8 @@ func (c *AuthController) RegisterRoutes(r *api.Registry) {
 
 `internal/application/application.go` 全体を次のコードに置き換えます。ストアとコントローラーのコンストラクタを登録し、`/me` にのみ認証インターセプターを接続します。生成されたルートの `main.go` は、`BuildApplication`、`Validate`、`Run` を順に実行します。
 
+組み込みの CORS インターセプターには `Constructor` メソッドがないため、`constructor.Custom` ファクトリーを `app.Constructor` に登録します。登録前に設定を検証し、ファクトリーでオブジェクトを生成します。適用時は `(*cors.CORSInterceptor)(nil)` でコンテナーから取得します。
+
 ```go
 // internal/application/application.go
 package application
@@ -355,15 +357,18 @@ func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
 	app.Constructor(constructor.Custom(store.NewUserStore), constructor.Interceptor(&interceptor.AuthInterceptor{}), constructor.Controller(&controller.AuthController{}))
 
-	corsInterceptor, err := cors.NewValidated(cors.Config{
+	corsConfig := cors.Config{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type", "Authorization"},
-	})
-	if err != nil {
+	}
+	if err := cors.ValidateConfig(corsConfig); err != nil {
 		return nil, boot.Options{}, err
 	}
-	app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+	app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+		return cors.New(corsConfig)
+	}))
+	app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 
 	return app, boot.Options{
 		Address:                ":8080",

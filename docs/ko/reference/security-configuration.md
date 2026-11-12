@@ -155,21 +155,26 @@ func (i *AuthInterceptor) PreHandshake(
 
 ## CORS와 쿠키 {#cors-cookies}
 
-`AllowOrigins: []string{"*"}`와 `AllowCredentials: true`는 함께 사용할 수 없습니다. 시작 단계에서 검사하려면 `cors.NewValidated`를 사용하십시오. `cors.New`도 첫 요청에서 응답 헤더를 쓰기 전에 구조화된 오류를 반환합니다.
+`AllowOrigins: []string{"*"}`와 `AllowCredentials: true`는 함께 사용할 수 없습니다. 시작 단계에서 검사하려면 `cors.ValidateConfig`를 사용하십시오. `cors.New`도 첫 요청에서 응답 헤더를 쓰기 전에 구조화된 오류를 반환합니다.
 
 CORS 사전 요청은 `OPTIONS`, `Origin`, `Access-Control-Request-Method`가 함께 있을 때 판별합니다. 허용된 요청은 204, 거부된 출처나 메서드 또는 헤더는 403입니다. 일반 요청에서 허용되지 않은 출처는 CORS 허용 헤더를 받지 않지만 서버의 인증이나 접근 제어를 대신하지 않습니다.
 
 `MaxAge`는 초 단위 포인터입니다. nil이면 헤더를 생략하고 0이면 명시적 0을 보냅니다. `ExposeHeaders`는 일반 응답의 노출 헤더를 지정하며 `AllowOrigin`은 정적 목록에서 허용하지 않은 출처를 추가로 판단할 수 있습니다. 자격 증명을 허용할 때는 와일드카드 출처를 사용할 수 없습니다.
 
+내장 CORS 인터셉터는 `Constructor` 메서드가 없으므로 `constructor.Custom` 팩토리를 `app.Constructor`에 등록합니다. 설정은 등록 전에 검증하고, 팩토리가 객체를 생성하도록 합니다. 적용할 때는 `(*cors.CORSInterceptor)(nil)`로 컨테이너에서 조회합니다.
+
 ```go
-corsInterceptor, err := cors.NewValidated(cors.Config{
+corsConfig := cors.Config{
 	AllowOrigins:     []string{"https://app.example.com"},
 	AllowCredentials: true,
-})
-if err != nil {
+}
+if err := cors.ValidateConfig(corsConfig); err != nil {
 	log.Fatal(err)
 }
-app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+	return cors.New(corsConfig)
+}))
+app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 ```
 
 쿠키의 이름, 값, 경로, 도메인, `SameSite`, `Priority`가 유효하지 않으면 JSON, 문자열, 바이너리와 리다이렉트 응답은 헤더나 본문을 쓰기 전에 실패합니다. 유니코드나 구분자를 원래 값으로 복원해야 할 때는 `httpx.EncodeCookieValue`와 `httpx.DecodeCookieValue`를 사용하십시오.
@@ -200,19 +205,22 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 }
 func main() {
 	maxAge := 60
-	policy, err := cors.NewValidated(cors.Config{
+	corsConfig := cors.Config{
 		AllowOrigins:     []string{"https://app.example.com"},
 		AllowMethods:     []string{"GET"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
 		MaxAge:           &maxAge,
-	})
-	if err != nil {
+	}
+	if err := cors.ValidateConfig(corsConfig); err != nil {
 		log.Fatal(err)
 	}
 	app := spine.New(echoplatform.Option())
 	app.Constructor(constructor.Controller(&Controller{}))
-	app.InterceptorFor(boot.InterceptorHTTP, policy)
+	app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+		return cors.New(corsConfig)
+	}))
+	app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
 		log.Fatal(err)
 	}

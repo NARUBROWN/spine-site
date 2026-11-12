@@ -155,21 +155,26 @@ func (i *AuthInterceptor) PreHandshake(
 
 ## CORS 與 Cookie {#cors-cookies}
 
-不可同時使用 `AllowOrigins: []string{"*"}` 與 `AllowCredentials: true`。若要在啟動階段檢查，請使用 `cors.NewValidated`。`cors.New` 也會在第一個請求中，於寫入回應標頭前回傳結構化錯誤。
+不可同時使用 `AllowOrigins: []string{"*"}` 與 `AllowCredentials: true`。若要在啟動階段檢查，請使用 `cors.ValidateConfig`。`cors.New` 也會在第一個請求中，於寫入回應標頭前回傳結構化錯誤。
 
 CORS 預檢由同時存在的 `OPTIONS`、`Origin` 和 `Access-Control-Request-Method` 判定。允許的請求回傳 204，遭拒的來源、方法或標頭回傳 403。一般請求中未獲准的來源不會收到 CORS 允許標頭，但 CORS 不能取代伺服器驗證或存取控制。
 
 `MaxAge` 是秒數指標：nil 省略標頭，0 明確傳送零。`ExposeHeaders` 指定一般回應中公開的標頭，`AllowOrigin` 可以對靜態清單未允許的來源進一步判斷。允許認證資訊時不能使用萬用字元來源。
 
+內建 CORS 攔截器沒有 `Constructor` 方法，因此透過 `app.Constructor` 註冊 `constructor.Custom` 工廠。註冊前驗證設定，由工廠建立物件。套用時使用 `(*cors.CORSInterceptor)(nil)` 從容器取得實例。
+
 ```go
-corsInterceptor, err := cors.NewValidated(cors.Config{
+corsConfig := cors.Config{
 	AllowOrigins:     []string{"https://app.example.com"},
 	AllowCredentials: true,
-})
-if err != nil {
+}
+if err := cors.ValidateConfig(corsConfig); err != nil {
 	log.Fatal(err)
 }
-app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+	return cors.New(corsConfig)
+}))
+app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 ```
 
 若 Cookie 的名稱、值、路徑、網域、`SameSite` 或 `Priority` 無效，JSON、字串、二進位與重新導向回應會在寫入標頭或本文前失敗。若須將 Unicode 或分隔符號還原為原始值，請使用 `httpx.EncodeCookieValue` 與 `httpx.DecodeCookieValue`。
@@ -200,19 +205,22 @@ func (*Controller) RegisterRoutes(r *api.Registry) {
 }
 func main() {
 	maxAge := 60
-	policy, err := cors.NewValidated(cors.Config{
+	corsConfig := cors.Config{
 		AllowOrigins:     []string{"https://app.example.com"},
 		AllowMethods:     []string{"GET"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
 		MaxAge:           &maxAge,
-	})
-	if err != nil {
+	}
+	if err := cors.ValidateConfig(corsConfig); err != nil {
 		log.Fatal(err)
 	}
 	app := spine.New(echoplatform.Option())
 	app.Constructor(constructor.Controller(&Controller{}))
-	app.InterceptorFor(boot.InterceptorHTTP, policy)
+	app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+		return cors.New(corsConfig)
+	}))
+	app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 	if err := app.Run(boot.Options{Address: ":8080", HTTP: &boot.HTTPOptions{}}); err != nil {
 		log.Fatal(err)
 	}

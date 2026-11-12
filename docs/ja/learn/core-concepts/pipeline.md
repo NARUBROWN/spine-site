@@ -40,9 +40,18 @@ type Interceptor interface {
 
 ## 適用範囲 {#scope}
 
+このサイトの例では、すべてのインターセプターを先に `app.Constructor` に登録します。`Constructor` メソッドを実装した独自のインターセプターは `constructor.Interceptor(&Auth{})` で登録し、適用時は `(*Auth)(nil)` のような typed nil を渡してコンテナーから取得します。適用 API に `&Auth{}` を直接渡すと、現在の実装ではコンストラクターを経由せずにそのオブジェクトが実行されるため使用しません。登録と適用範囲の指定は別の手順です。
+
 ```go
 app.Constructor(constructor.Interceptor(&AuthInterceptor{}))
 app.InterceptorFor(boot.InterceptorHTTP, (*AuthInterceptor)(nil))
+```
+
+```go
+app.Constructor(
+	constructor.Interceptor(&AuthInterceptor{}),
+	constructor.Interceptor(&AuditInterceptor{}),
+)
 ```
 
 ```go

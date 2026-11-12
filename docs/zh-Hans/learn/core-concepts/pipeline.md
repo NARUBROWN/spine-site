@@ -40,9 +40,18 @@ type Interceptor interface {
 
 ## 应用范围 {#scope}
 
+本站示例中，所有拦截器都先通过 `app.Constructor` 注册。实现 `Constructor` 方法的自定义拦截器使用 `constructor.Interceptor(&Auth{})` 注册，应用时传入 `(*Auth)(nil)` 这样的 typed nil，从容器获取实例。不要直接向应用 API 传入 `&Auth{}`：当前实现会跳过构造方法并直接执行该对象。注册和指定应用范围是两个独立步骤。
+
 ```go
 app.Constructor(constructor.Interceptor(&AuthInterceptor{}))
 app.InterceptorFor(boot.InterceptorHTTP, (*AuthInterceptor)(nil))
+```
+
+```go
+app.Constructor(
+	constructor.Interceptor(&AuthInterceptor{}),
+	constructor.Interceptor(&AuditInterceptor{}),
+)
 ```
 
 ```go

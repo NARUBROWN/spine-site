@@ -8,6 +8,8 @@
 
 替换 main.go。固定令牌仅用于学习。constructor.Interceptor 注册 DI，api.Interceptors 指定作用范围。(*Auth)(nil) 表示从 DI 解析已注册类型。
 
+本站示例中，所有拦截器都先通过 `app.Constructor` 注册。实现 `Constructor` 方法的自定义拦截器使用 `constructor.Interceptor(&Auth{})` 注册，应用时传入 `(*Auth)(nil)` 这样的 typed nil，从容器获取实例。不要直接向应用 API 传入 `&Auth{}`：当前实现会跳过构造方法并直接执行该对象。注册和指定应用范围是两个独立步骤。
+
 ```go
 package main
 
@@ -82,6 +84,13 @@ func main() {
 ```
 
 ## 组与路由
+
+```go
+app.Constructor(
+	constructor.Interceptor(&AuthInterceptor{}),
+	constructor.Interceptor(&AuditInterceptor{}),
+)
+```
 
 ```go
 func (*UserController) RegisterRoutes(r *api.Registry) {

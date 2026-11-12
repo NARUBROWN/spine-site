@@ -328,6 +328,8 @@ func (c *AuthController) RegisterRoutes(r *api.Registry) {
 
 将 `internal/application/application.go` 的全部内容替换为以下代码。注册存储库和控制器的构造函数，并仅为 `/me` 连接认证拦截器。生成的根目录 `main.go` 会依次执行 `BuildApplication`、`Validate` 和 `Run`。
 
+内置 CORS 拦截器没有 `Constructor` 方法，因此通过 `app.Constructor` 注册 `constructor.Custom` 工厂。注册前验证配置，由工厂创建对象。应用时使用 `(*cors.CORSInterceptor)(nil)` 从容器获取实例。
+
 ```go
 // internal/application/application.go
 package application
@@ -355,15 +357,18 @@ func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
 	app.Constructor(constructor.Custom(store.NewUserStore), constructor.Interceptor(&interceptor.AuthInterceptor{}), constructor.Controller(&controller.AuthController{}))
 
-	corsInterceptor, err := cors.NewValidated(cors.Config{
+	corsConfig := cors.Config{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type", "Authorization"},
-	})
-	if err != nil {
+	}
+	if err := cors.ValidateConfig(corsConfig); err != nil {
 		return nil, boot.Options{}, err
 	}
-	app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+	app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+		return cors.New(corsConfig)
+	}))
+	app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 
 	return app, boot.Options{
 		Address:                ":8080",

@@ -328,6 +328,8 @@ func (c *AuthController) RegisterRoutes(r *api.Registry) {
 
 `internal/application/application.go` 전체를 다음 코드로 교체합니다. 저장소와 컨트롤러 생성자를 등록하고 `/me`에만 인증 인터셉터를 연결합니다. 생성된 루트 `main.go`는 `BuildApplication`, `Validate`, `Run`을 순서대로 실행합니다.
 
+내장 CORS 인터셉터는 `Constructor` 메서드가 없으므로 `constructor.Custom` 팩토리를 `app.Constructor`에 등록합니다. 설정은 등록 전에 검증하고, 팩토리가 객체를 생성하도록 합니다. 적용할 때는 `(*cors.CORSInterceptor)(nil)`로 컨테이너에서 조회합니다.
+
 ```go
 // internal/application/application.go
 package application
@@ -355,15 +357,18 @@ func BuildApplication() (spine.App, boot.Options, error) {
 	app := spine.New(echoplatform.Option(), spine.WithValidator(engine))
 	app.Constructor(constructor.Custom(store.NewUserStore), constructor.Interceptor(&interceptor.AuthInterceptor{}), constructor.Controller(&controller.AuthController{}))
 
-	corsInterceptor, err := cors.NewValidated(cors.Config{
+	corsConfig := cors.Config{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type", "Authorization"},
-	})
-	if err != nil {
+	}
+	if err := cors.ValidateConfig(corsConfig); err != nil {
 		return nil, boot.Options{}, err
 	}
-	app.InterceptorFor(boot.InterceptorHTTP, corsInterceptor)
+	app.Constructor(constructor.Custom(func() *cors.CORSInterceptor {
+		return cors.New(corsConfig)
+	}))
+	app.InterceptorFor(boot.InterceptorHTTP, (*cors.CORSInterceptor)(nil))
 
 	return app, boot.Options{
 		Address:                ":8080",
