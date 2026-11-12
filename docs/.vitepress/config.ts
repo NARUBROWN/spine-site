@@ -10,7 +10,12 @@ export default withMermaid(defineConfig({
     head: [
         ['link', { rel: 'icon', href: '/logo.png' }],
         ['meta', { property: 'og:image', content: 'https://spine.na2ru2.me/og-image.png' }],
-        ['meta', { name: 'twitter:image', content: 'https://spine.na2ru2.me/og-image.png' }]
+        ['meta', { name: 'twitter:image', content: 'https://spine.na2ru2.me/og-image.png' }],
+        ['script', {
+            src: 'https://context7.com/widget.js',
+            async: '',
+            'data-library': '/websites/spine_na2ru2_me_ko'
+        }]
     ],
 
     themeConfig: {
