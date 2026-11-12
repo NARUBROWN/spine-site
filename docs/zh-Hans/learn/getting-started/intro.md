@@ -21,7 +21,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -38,7 +37,7 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
+	r.GET("/greeting", func() httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }
@@ -64,7 +63,7 @@ func main() {
 
 ## 统一开发方式
 
-在 BuildApplication 选择平台、验证器并注册角色。Constructor 按类型解析 DI，RegisterRoutes 声明 HTTP 路由。input.Path、Query、Header、Body 声明输入来源。处理器与四个拦截器钩子使用公开 spine.Ctx。已注册验证器自动检查标签，成功使用 httpx 响应，失败使用 error。
+在 BuildApplication 选择平台、验证器并注册角色。Constructor 按类型解析 DI，RegisterRoutes 声明 HTTP 路由。input.Path、Query、Header、Body 声明输入来源。已注册验证器自动检查标签，成功使用 httpx 响应，失败使用 error。
 
 ## 开始使用
 

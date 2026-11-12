@@ -21,7 +21,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -38,7 +37,7 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
+	r.GET("/greeting", func() httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }
@@ -64,7 +63,7 @@ func main() {
 
 ## 共通の開発モデル
 
-BuildApplication でプラットフォームと検証器を選び役割を登録します。Constructor は型で DI を解決し、RegisterRoutes は HTTP ルートを宣言します。input.Path、Query、Header、Body で入力元を明示し、ハンドラーと四つのフックは公開 spine.Ctx を使います。登録検証器がタグを自動検査し、成功は httpx、失敗は error で表します。
+BuildApplication でプラットフォームと検証器を選び役割を登録します。Constructor は型で DI を解決し、RegisterRoutes は HTTP ルートを宣言します。input.Path、Query、Header、Body で入力元を明示します。登録検証器がタグを自動検査し、成功は httpx、失敗は error で表します。
 
 ## はじめる
 

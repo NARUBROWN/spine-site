@@ -6,7 +6,7 @@
 
 ## 共用入口 {#public-context}
 
-處理器與攔截器接收 `github.com/NARUBROWN/spine/pkg/spine.Ctx`。與根應用套件一起匯入時使用 `spinectx` 別名。向服務與儲存庫傳遞 `ctx.ExecutionContext().Context()` 回傳的標準 Go context。仍相容直接注入 context.Context 的舊處理器。
+HTTP 處理器需要請求上下文時，可以在任意位置宣告 `spine.Ctx` 參數。 攔截器接收 `github.com/NARUBROWN/spine/pkg/spine.Ctx`。與根應用套件一起匯入時使用 `spinectx` 別名。向服務與儲存庫傳遞 `ctx.ExecutionContext().Context()` 回傳的標準 Go context。仍相容直接注入 context.Context 的舊處理器。
 
 ```go
 import spinectx "github.com/NARUBROWN/spine/pkg/spine"

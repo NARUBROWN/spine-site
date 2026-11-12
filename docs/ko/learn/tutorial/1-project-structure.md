@@ -58,14 +58,13 @@ package controller
 import (
 	"github.com/NARUBROWN/spine/pkg/api"
 	"github.com/NARUBROWN/spine/pkg/httpx"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type HealthController struct{}
 
 func (*HealthController) Constructor() *HealthController { return &HealthController{} }
 func (*HealthController) RegisterRoutes(r *api.Registry) {
-	r.GET("/health", func(ctx spinectx.Ctx) httpx.Response[map[string]string] {
+	r.GET("/health", func() httpx.Response[map[string]string] {
 		return httpx.Response[map[string]string]{Body: map[string]string{"status": "ok"}}
 	})
 }

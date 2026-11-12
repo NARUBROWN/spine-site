@@ -6,7 +6,7 @@
 
 ## 共通の入り口 {#public-context}
 
-ハンドラーとインターセプターは `github.com/NARUBROWN/spine/pkg/spine.Ctx` を受け取ります。ルートパッケージと併用するときは `spinectx` という別名を使います。サービスやリポジトリには `ctx.ExecutionContext().Context()` で得た標準 Go context を渡します。従来の context.Context 注入も互換対応しています。
+HTTP ハンドラーでリクエストコンテキストが必要な場合は、任意の位置に `spine.Ctx` パラメーターを宣言します。 インターセプターは `github.com/NARUBROWN/spine/pkg/spine.Ctx` を受け取ります。ルートパッケージと併用するときは `spinectx` という別名を使います。サービスやリポジトリには `ctx.ExecutionContext().Context()` で得た標準 Go context を渡します。従来の context.Context 注入も互換対応しています。
 
 ```go
 import spinectx "github.com/NARUBROWN/spine/pkg/spine"

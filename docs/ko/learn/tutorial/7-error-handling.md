@@ -34,7 +34,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/httperr"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type CreateUser struct {
@@ -53,13 +52,13 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) (httpx.Response[CreateUser], error) {
+	r.POST("/users", func(body input.Body[CreateUser]) (httpx.Response[CreateUser], error) {
 		if err := (*CreateUser)(body).Validate(); err != nil {
 			return httpx.Response[CreateUser]{}, httperr.BadRequest(err.Error())
 		}
 		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: http.StatusCreated}}, nil
 	})
-	r.GET("/users/:id", func(ctx spinectx.Ctx, id input.Path[int64]) (httpx.Response[map[string]any], error) {
+	r.GET("/users/:id", func(id input.Path[int64]) (httpx.Response[map[string]any], error) {
 		if *id <= 0 {
 			return httpx.Response[map[string]any]{}, httperr.BadRequest("invalid user ID")
 		}

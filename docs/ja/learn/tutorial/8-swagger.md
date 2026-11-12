@@ -25,7 +25,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/input"
 	"github.com/NARUBROWN/spine/pkg/openapi/ui/redoc"
 	"github.com/NARUBROWN/spine/pkg/openapi/ui/swaggerui"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -37,10 +36,10 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/hello", func(ctx spinectx.Ctx) httpx.Response[string] {
+	r.GET("/hello", func() httpx.Response[string] {
 		return httpx.Response[string]{Body: "hello"}
 	})
-	r.POST("/users", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[CreateUser] {
+	r.POST("/users", func(body input.Body[CreateUser]) httpx.Response[CreateUser] {
 		return httpx.Response[CreateUser]{Body: *body, Options: httpx.ResponseOptions{Status: 201}}
 	}, api.Summary("Create user"), api.Tags("Users"))
 }

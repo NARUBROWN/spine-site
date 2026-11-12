@@ -23,7 +23,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type SearchQuery struct {
@@ -40,7 +39,7 @@ type Controller struct{}
 
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/search", func(ctx spinectx.Ctx, q input.Query[SearchQuery]) httpx.Response[SearchResult] {
+	r.GET("/search", func(q input.Query[SearchQuery]) httpx.Response[SearchResult] {
 		page := 1
 		if q.Page != nil {
 			page = *q.Page

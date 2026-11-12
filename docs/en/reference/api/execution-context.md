@@ -6,7 +6,7 @@ This documentation targets the 0.7.5 API. Check [available versions](/en/communi
 
 ## Common entry point {#public-context}
 
-Handlers and interceptors receive `github.com/NARUBROWN/spine/pkg/spine.Ctx`. Use the `spinectx` alias alongside the root application package. Pass the standard Go context from `ctx.ExecutionContext().Context()` to services and repositories. Direct context.Context injection remains compatible.
+When an HTTP handler needs the request context, declare a `spine.Ctx` parameter at any position. Interceptors receive `github.com/NARUBROWN/spine/pkg/spine.Ctx`. Use the `spinectx` alias alongside the root application package. Pass the standard Go context from `ctx.ExecutionContext().Context()` to services and repositories. Direct context.Context injection remains compatible.
 
 ```go
 import spinectx "github.com/NARUBROWN/spine/pkg/spine"

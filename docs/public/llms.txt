@@ -30,7 +30,7 @@ Controllers implement RegisterRoutes(*api.Registry). Pass an inline handler to r
 
 ## Public context
 
-Handlers and all interceptor hooks use github.com/NARUBROWN/spine/pkg/spine.Ctx, commonly imported as spinectx alongside the root app package. Standard context.Context injection into handlers remains compatible.
+HTTP handlers can declare github.com/NARUBROWN/spine/pkg/spine.Ctx at any parameter position when they need the request context. All interceptor hooks receive this type, commonly imported as spinectx alongside the root app package. Standard context.Context injection into handlers remains compatible.
 
 - ctx.ExecutionContext().Set/Get shares values within one execution.
 - ctx.ExecutionContext().Context() supplies standard context to services, repositories and publish.Event.
@@ -86,7 +86,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -103,7 +102,7 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
+	r.GET("/greeting", func() httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }

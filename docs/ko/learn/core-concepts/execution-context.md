@@ -6,7 +6,7 @@
 
 ## 공통 진입점 {#public-context}
 
-핸들러와 인터셉터는 `github.com/NARUBROWN/spine/pkg/spine.Ctx`를 받습니다. 루트 앱 패키지와 함께 가져오면 `spinectx` 별칭을 사용합니다. 서비스와 저장소에는 `ctx.ExecutionContext().Context()`로 얻은 표준 Go context를 전달합니다. 직접 context.Context를 주입하는 기존 핸들러는 호환 지원합니다.
+HTTP 핸들러는 요청 컨텍스트가 필요할 때 `spine.Ctx`를 파라미터로 선언합니다. 파라미터의 위치는 자유롭습니다. 인터셉터는 `github.com/NARUBROWN/spine/pkg/spine.Ctx`를 받습니다. 루트 앱 패키지와 함께 가져오면 `spinectx` 별칭을 사용합니다. 서비스와 저장소에는 `ctx.ExecutionContext().Context()`로 얻은 표준 Go context를 전달합니다. 직접 context.Context를 주입하는 기존 핸들러는 호환 지원합니다.
 
 ```go
 import spinectx "github.com/NARUBROWN/spine/pkg/spine"

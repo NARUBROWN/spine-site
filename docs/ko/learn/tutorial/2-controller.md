@@ -43,7 +43,9 @@ func (r *CreateUserRequest) Validate() error {
 
 ## 실행할 앱
 
-main.go로 저장합니다. 공개 pkg/spine.Ctx는 spinectx라는 별칭으로 가져옵니다. 아래 기본 예제에는 추가 Validate 메서드가 없습니다.
+main.go로 저장합니다. 아래 기본 예제에는 추가 Validate 메서드가 없습니다.
+
+HTTP 핸들러는 요청 컨텍스트가 필요할 때 `spine.Ctx`를 파라미터로 선언합니다. 파라미터의 위치는 자유롭습니다.
 
 ```go
 package main
@@ -58,7 +60,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type UserController struct{}
@@ -82,13 +83,13 @@ type User struct {
 func (*UserController) Constructor() *UserController { return &UserController{} }
 func (c *UserController) RegisterRoutes(r *api.Registry) {
 	users := r.Group("/users", api.Tags("Users"))
-	users.GET("/search", func(ctx spinectx.Ctx, q input.Query[SearchQuery], h input.Header[RequestHeaders]) httpx.Response[map[string]string] {
+	users.GET("/search", func(q input.Query[SearchQuery], h input.Header[RequestHeaders]) httpx.Response[map[string]string] {
 		return httpx.Response[map[string]string]{Body: map[string]string{"name": q.Name, "request_id": h.RequestID}}
 	})
-	users.GET("/id/:id", func(ctx spinectx.Ctx, path input.Path[UserPath]) httpx.Response[User] {
+	users.GET("/id/:id", func(path input.Path[UserPath]) httpx.Response[User] {
 		return httpx.Response[User]{Body: User{ID: path.ID}}
 	}, api.Summary("Get user"))
-	users.POST("/", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[User] {
+	users.POST("/", func(body input.Body[CreateUser]) httpx.Response[User] {
 		return httpx.Response[User]{Body: User{Name: body.Name}, Options: httpx.ResponseOptions{Status: 201}}
 	})
 }

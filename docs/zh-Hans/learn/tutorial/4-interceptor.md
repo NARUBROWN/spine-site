@@ -53,13 +53,13 @@ type CreateUser struct {
 func (*Controller) Constructor() *Controller { return &Controller{} }
 func (*Controller) RegisterRoutes(r *api.Registry) {
 	users := r.Group("/users", api.Interceptors((*Auth)(nil)))
-	users.GET("/:id", func(ctx spinectx.Ctx, id input.Path[int64]) httpx.Response[map[string]int64] {
+	users.GET("/:id", func(id input.Path[int64]) httpx.Response[map[string]int64] {
 		return httpx.Response[map[string]int64]{Body: map[string]int64{"id": *id}}
 	})
-	users.POST("/", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[string] {
+	users.POST("/", func(body input.Body[CreateUser]) httpx.Response[string] {
 		return httpx.Response[string]{Body: body.Name}
 	})
-	r.GET("/profile", func(ctx spinectx.Ctx) httpx.Response[string] {
+	r.GET("/profile", func() httpx.Response[string] {
 		return httpx.Response[string]{Body: "profile"}
 	}, api.Interceptors((*Auth)(nil)))
 }

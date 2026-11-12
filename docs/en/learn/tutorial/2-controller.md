@@ -43,7 +43,9 @@ This method is not called automatically. Invoke (*body).Validate() or (*CreateUs
 
 ## Runnable app
 
-Save as main.go. Import the public pkg/spine.Ctx as spinectx. This basic example has no custom Validate method.
+Save as main.go. This basic example has no custom Validate method.
+
+When an HTTP handler needs the request context, declare a `spine.Ctx` parameter at any position.
 
 ```go
 package main
@@ -58,7 +60,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
 	"github.com/NARUBROWN/spine/pkg/input"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 )
 
 type UserController struct{}
@@ -82,13 +83,13 @@ type User struct {
 func (*UserController) Constructor() *UserController { return &UserController{} }
 func (c *UserController) RegisterRoutes(r *api.Registry) {
 	users := r.Group("/users", api.Tags("Users"))
-	users.GET("/search", func(ctx spinectx.Ctx, q input.Query[SearchQuery], h input.Header[RequestHeaders]) httpx.Response[map[string]string] {
+	users.GET("/search", func(q input.Query[SearchQuery], h input.Header[RequestHeaders]) httpx.Response[map[string]string] {
 		return httpx.Response[map[string]string]{Body: map[string]string{"name": q.Name, "request_id": h.RequestID}}
 	})
-	users.GET("/id/:id", func(ctx spinectx.Ctx, path input.Path[UserPath]) httpx.Response[User] {
+	users.GET("/id/:id", func(path input.Path[UserPath]) httpx.Response[User] {
 		return httpx.Response[User]{Body: User{ID: path.ID}}
 	}, api.Summary("Get user"))
-	users.POST("/", func(ctx spinectx.Ctx, body input.Body[CreateUser]) httpx.Response[User] {
+	users.POST("/", func(body input.Body[CreateUser]) httpx.Response[User] {
 		return httpx.Response[User]{Body: User{Name: body.Name}, Options: httpx.ResponseOptions{Status: 201}}
 	})
 }

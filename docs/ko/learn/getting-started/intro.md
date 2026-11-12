@@ -21,7 +21,6 @@ import (
 	"github.com/NARUBROWN/spine/pkg/boot"
 	"github.com/NARUBROWN/spine/pkg/constructor"
 	"github.com/NARUBROWN/spine/pkg/httpx"
-	spinectx "github.com/NARUBROWN/spine/pkg/spine"
 	"log"
 )
 
@@ -38,7 +37,7 @@ type Controller struct{ service *Service }
 
 func (*Controller) Constructor(service *Service) *Controller { return &Controller{service: service} }
 func (c *Controller) RegisterRoutes(r *api.Registry) {
-	r.GET("/greeting", func(ctx spinectx.Ctx) httpx.Response[string] {
+	r.GET("/greeting", func() httpx.Response[string] {
 		return httpx.Response[string]{Body: c.service.repository.Greeting()}
 	})
 }
@@ -64,7 +63,7 @@ func main() {
 
 ## 공통 개발 방식
 
-BuildApplication에서 플랫폼과 검증기를 선택하고 역할을 등록합니다. Constructor는 타입으로 DI를 해결하고 RegisterRoutes는 HTTP 경로를 선언합니다. 입력은 input.Path, Query, Header, Body로 출처를 명시하고 핸들러와 네 인터셉터 훅은 공개 spine.Ctx를 사용합니다. 등록한 검증기가 태그를 자동 검사하고 성공은 httpx 응답, 오류는 error로 표현합니다.
+BuildApplication에서 플랫폼과 검증기를 선택하고 역할을 등록합니다. Constructor는 타입으로 DI를 해결하고 RegisterRoutes는 HTTP 경로를 선언합니다. 입력은 input.Path, Query, Header, Body로 출처를 명시합니다. 등록한 검증기가 태그를 자동 검사하고 성공은 httpx 응답, 오류는 error로 표현합니다.
 
 ## 시작하기
 
