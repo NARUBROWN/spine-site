@@ -1,15 +1,23 @@
 {
   "schema_version": "spine.site-releases/v1",
-  "checked_at": "2026-11-13T11:02:39Z",
+  "checked_at": "2026-11-14T10:30:13Z",
   "repositories": [
     {
       "name": "spine",
-      "target_version": "v0.7.5",
+      "target_version": "v0.7.6",
       "policy_url": "https://github.com/NARUBROWN/spine/blob/preview/.github/release-policy.json",
       "tags_url": "https://github.com/NARUBROWN/spine/tags",
       "milestones_url": "https://github.com/NARUBROWN/spine/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine/actions",
       "tags": [
+        {
+          "version": "v0.7.6-preview.1",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.6-preview.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.7.5",
           "channel": "stable",
@@ -468,6 +476,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine-cli/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-cli/actions",
       "tags": [
+        {
+          "version": "v0.4.5-preview.4",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.5-preview.4",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.4.5-preview.3",
           "channel": "preview",
@@ -982,12 +998,20 @@
     },
     {
       "name": "spine-kafka-platform",
-      "target_version": "v0.2.0",
+      "target_version": "v0.3.0",
       "policy_url": "https://github.com/NARUBROWN/spine-kafka-platform/blob/preview/.github/release-policy.json",
       "tags_url": "https://github.com/NARUBROWN/spine-kafka-platform/tags",
       "milestones_url": "https://github.com/NARUBROWN/spine-kafka-platform/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-kafka-platform/actions",
       "tags": [
+        {
+          "version": "v0.3.0-preview.1",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-kafka-platform/tree/v0.3.0-preview.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.2.0",
           "channel": "stable",
@@ -1040,12 +1064,20 @@
     },
     {
       "name": "spine-rabbitmq-platform",
-      "target_version": "v0.2.0",
+      "target_version": "v0.3.0",
       "policy_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/blob/preview/.github/release-policy.json",
       "tags_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/tags",
       "milestones_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/actions",
       "tags": [
+        {
+          "version": "v0.3.0-preview.1",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/v0.3.0-preview.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.2.0",
           "channel": "stable",
@@ -1098,12 +1130,20 @@
     },
     {
       "name": "spine-nats-platform",
-      "target_version": "v0.1.0",
+      "target_version": "v0.2.0",
       "policy_url": "https://github.com/NARUBROWN/spine-nats-platform/blob/preview/.github/release-policy.json",
       "tags_url": "https://github.com/NARUBROWN/spine-nats-platform/tags",
       "milestones_url": "https://github.com/NARUBROWN/spine-nats-platform/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-nats-platform/actions",
       "tags": [
+        {
+          "version": "v0.2.0-preview.1",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-nats-platform/tree/v0.2.0-preview.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.1.0",
           "channel": "stable",
@@ -1140,12 +1180,20 @@
     },
     {
       "name": "spine-validator-playground",
-      "target_version": "v0.2.0",
+      "target_version": "v0.2.1",
       "policy_url": "https://github.com/NARUBROWN/spine-validator-playground/blob/preview/.github/release-policy.json",
       "tags_url": "https://github.com/NARUBROWN/spine-validator-playground/tags",
       "milestones_url": "https://github.com/NARUBROWN/spine-validator-playground/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-validator-playground/actions",
       "tags": [
+        {
+          "version": "v0.2.1-preview.1",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-validator-playground/tree/v0.2.1-preview.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.2.0",
           "channel": "stable",
