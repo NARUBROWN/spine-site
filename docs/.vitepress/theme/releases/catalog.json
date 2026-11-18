@@ -1,6 +1,6 @@
 {
   "schema_version": "spine.site-releases/v1",
-  "checked_at": "2026-11-17T11:55:44Z",
+  "checked_at": "2026-11-18T11:46:32Z",
   "repositories": [
     {
       "name": "spine",
@@ -10,6 +10,14 @@
       "milestones_url": "https://github.com/NARUBROWN/spine/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine/actions",
       "tags": [
+        {
+          "version": "v0.7.6-preview.2",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine/tree/v0.7.6-preview.2",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.7.6-preview.1",
           "channel": "preview",
@@ -470,12 +478,20 @@
     },
     {
       "name": "spine-cli",
-      "target_version": "v0.4.5",
+      "target_version": "v0.4.6",
       "policy_url": "https://github.com/NARUBROWN/spine-cli/blob/preview/.github/release-policy.json",
       "tags_url": "https://github.com/NARUBROWN/spine-cli/tags",
       "milestones_url": "https://github.com/NARUBROWN/spine-cli/milestones",
       "actions_url": "https://github.com/NARUBROWN/spine-cli/actions",
       "tags": [
+        {
+          "version": "v0.4.6-preview.1",
+          "channel": "preview",
+          "tag_url": "https://github.com/NARUBROWN/spine-cli/tree/v0.4.6-preview.1",
+          "published_at": null,
+          "notes_url": null,
+          "manifest_url": null
+        },
         {
           "version": "v0.4.5-preview.5",
           "channel": "preview",
